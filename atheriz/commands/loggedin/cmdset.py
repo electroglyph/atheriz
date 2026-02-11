@@ -5,7 +5,6 @@ from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.commands.loggedin.maze import MazeCommand
 from atheriz.commands.loggedin.save import SaveCommand
 from atheriz.commands.loggedin.spam import SpamCommand
-from atheriz.commands.loggedin.spam_reloc import SpamRelocCommand
 from atheriz.commands.loggedin.build import BuildCommand
 from atheriz.commands.loggedin.exam import ExamineCommand
 from atheriz.commands.loggedin.channel import ChannelCommand
@@ -33,7 +32,6 @@ class LoggedinCmdSet(CmdSet):
         self.add(MazeCommand())
         self.add(SaveCommand())
         self.add(SpamCommand())
-        self.add(SpamRelocCommand())
         self.add(BuildCommand())
         self.add(ExamineCommand())
         self.add(ChannelCommand())
