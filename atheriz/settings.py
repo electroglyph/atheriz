@@ -18,8 +18,8 @@ PERMISSION_HIERARCHY = [
     3,  # Builder
     4,  # Admin
 ]
-# If True, will allow guest characters to be created
-GUEST_ENABLED = True
+# If True, will allow guest characters to be created (not implemented yet)
+# GUEST_ENABLED = True
 FUNCPARSER_START_CHAR = "$"
 FUNCPARSER_ESCAPE_CHAR = "\\"
 FUNCPARSER_MAX_NESTING = 20
@@ -28,10 +28,8 @@ CLIENT_DEFAULT_HEIGHT = 45
 # print exceptions in-game
 DEBUG = True
 # possible values: debug, info, warning, error, critical
-# log level, debug will log all commands sent and received
+# log level debug will log all commands sent and received
 LOG_LEVEL = "info"
-# If True, will automatically commit saves to git on shutdown
-AUTO_COMMIT_SAVES = True
 SAVE_CHANNEL_HISTORY = True
 CHANNEL_HISTORY_LIMIT = 50
 # If you plan on changing object permission locks while they are in use, set this to True
