@@ -54,6 +54,7 @@ TODO:
 - more tests
 - node hooks
 - scripts
+- funcparser cleanup
 - tick system (already there, just need to activate it)
 - time system (already done, just needs to be added)
 - pathfinding (already done, just needs to be added)
