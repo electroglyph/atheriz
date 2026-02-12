@@ -330,7 +330,8 @@ class MapInfo:
     def render(self, force=False):
         # print("rendering map")
         if force or self.map_changed:
-            self.pre_render()
+            if self.pre_grid:
+                self.pre_render()
             self.map_changed = False
         t = time.time()
         with self.lock:

@@ -58,8 +58,8 @@ class MazeCommand(Command):
         # wrap_xterm256("!",fg=9)
         mi1 = MapInfo(
             "maze1",
+            None,
             map1,
-            {},
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze2", (maze1_exit.coord[1], maze1_exit.coord[2])
@@ -68,8 +68,8 @@ class MazeCommand(Command):
         )
         mi2 = MapInfo(
             "maze2",
+            None,
             map2,
-            {},
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze3", (maze2_exit.coord[1], maze2_exit.coord[2])
@@ -78,8 +78,8 @@ class MazeCommand(Command):
         )
         mi3 = MapInfo(
             "maze3",
+            None,
             map3,
-            {},
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze1", (maze3_exit.coord[1], maze3_exit.coord[2])
@@ -93,7 +93,6 @@ class MazeCommand(Command):
         maze1_exit.add_link(NodeLink("down", ("maze2", 0, 0, 0), ["d"]))
         maze2_exit.add_link(NodeLink("down", ("maze3", 0, 0, 0), ["d"]))
         maze3_exit.add_link(NodeLink("down", ("maze1", 0, 0, 0), ["d"]))
-        # TODO: node contents to dict? don't persist mapables in node contents
         node = nh.get_node(("maze1", 0, 0, 0))
         end = maze1_exit
         if node:
@@ -215,29 +214,29 @@ def create_map(maze: dict, width: int, height: int, area: str):
         if dirs[3]:
             node.add_link(NodeLink("west", (area, k[0] - 1, k[1], 0), ["w"]))
         grid.add_node(node)
-        map[(k[0], k[1])] = settings.DOUBLE_WALL_PLACEHOLDER
-        # if dirs[0] and dirs[1] and dirs[2] and dirs[3]:
-        #     map[(k[0], k[1])] = "╬"
-        # elif dirs[0] and dirs[1] and dirs[2]:
-        #     map[(k[0], k[1])] = "╠"
-        # elif dirs[0] and dirs[1] and dirs[3]:
-        #     map[(k[0], k[1])] = "╣"
-        # elif dirs[1] and dirs[2] and dirs[3]:
-        #     map[(k[0], k[1])] = "╦"
-        # elif dirs[0] and dirs[2] and dirs[3]:
-        #     map[(k[0], k[1])] = "╩"
-        # elif dirs[1] and dirs[2]:
-        #     map[(k[0], k[1])] = "╔"
-        # elif dirs[1] and dirs[3]:
-        #     map[(k[0], k[1])] = "╗"
-        # elif dirs[0] and dirs[2]:
-        #     map[(k[0], k[1])] = "╚"
-        # elif dirs[0] and dirs[3]:
-        #     map[(k[0], k[1])] = "╝"
-        # elif dirs[0] or dirs[1]:
-        #     map[(k[0], k[1])] = "║"
-        # elif dirs[2] or dirs[3]:
-        #     map[(k[0], k[1])] = "═"
+        # map[(k[0], k[1])] = settings.DOUBLE_WALL_PLACEHOLDER
+        if dirs[0] and dirs[1] and dirs[2] and dirs[3]:
+            map[(k[0], k[1])] = "╬"
+        elif dirs[0] and dirs[1] and dirs[2]:
+            map[(k[0], k[1])] = "╠"
+        elif dirs[0] and dirs[1] and dirs[3]:
+            map[(k[0], k[1])] = "╣"
+        elif dirs[1] and dirs[2] and dirs[3]:
+            map[(k[0], k[1])] = "╦"
+        elif dirs[0] and dirs[2] and dirs[3]:
+            map[(k[0], k[1])] = "╩"
+        elif dirs[1] and dirs[2]:
+            map[(k[0], k[1])] = "╔"
+        elif dirs[1] and dirs[3]:
+            map[(k[0], k[1])] = "╗"
+        elif dirs[0] and dirs[2]:
+            map[(k[0], k[1])] = "╚"
+        elif dirs[0] and dirs[3]:
+            map[(k[0], k[1])] = "╝"
+        elif dirs[0] or dirs[1]:
+            map[(k[0], k[1])] = "║"
+        elif dirs[2] or dirs[3]:
+            map[(k[0], k[1])] = "═"
     return map, grid
 
 
