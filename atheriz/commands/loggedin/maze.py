@@ -18,7 +18,6 @@ class MazeCommand(Command):
     key = "maze"
     desc = "Generate a maze."
     category = "Builder"
-    hide = True
 
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
