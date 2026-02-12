@@ -1378,7 +1378,7 @@ window.addEventListener('load', () => {
                     ws.send(JSON.stringify(['term_size', [termLeft.cols, termLeft.rows], {}]));
                     break;
                 case 'player_commands':
-                    historyManager.setPlayerCommands(msg[1]);
+                    historyManager.setPlayerCommands(msg[1][0]);
                     break;
                 case 'map_enable':
                     if (!screen_reader) {

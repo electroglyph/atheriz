@@ -7,6 +7,7 @@ from atheriz.singletons.get import (
     get_map_handler,
     get_server_channel,
     get_unique_id,
+    get_loggedin_cmdset
 )
 from atheriz.objects.persist import save
 from atheriz.objects.contents import search, group_by_name
@@ -683,6 +684,9 @@ class Object:
                     channel[0].add_listener(self)
         if channel := get_server_channel():
             channel.msg(f"{wrap_xterm256(self.name, fg=15, bold=True)} (#{self.id}) has logged in.")
+        cs = get_loggedin_cmdset()
+        commands = [cmd.key for cmd in cs.get_all() if cmd.access(self) and not cmd.hide]
+        self.msg(player_commands=commands)
         self.msg(f"You become {wrap_xterm256(self.name, fg=15, bold=True)}.")
         if self.location:
             if settings.MAP_ENABLED:
