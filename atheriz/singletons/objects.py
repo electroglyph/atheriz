@@ -175,8 +175,9 @@ def load_files() -> Any:
         if file.is_file() and not file.name.endswith(".tmp"):
             with file.open("r") as f:
                 d = json.load(f)
-            # print(f"d = {d}")
             for x in d:
+                if x.get("is_deleted", False):
+                    continue
                 obj = instance_from_string(x["__import_path__"])
                 obj.__setstate__(x)
                 add_object(obj)

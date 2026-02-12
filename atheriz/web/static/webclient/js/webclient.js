@@ -117,7 +117,7 @@ class HistoryManager {
 }
 
 window.addEventListener('load', () => {
-    const revision = 10;
+    const revision = 11;
     const font = new FontFaceObserver('Fira Custom');
     font.load().then(() => {
         console.log('Font loaded.');

@@ -125,7 +125,7 @@ class Node:
         self.links = links
         self._contents = set()
         self.lock = RLock()
-        self.desc_done = False
+        self.is_deleted = False
         self.nouns = {}
         self.locks: dict[str, list[Callable]] = {}
         if settings.SLOW_LOCKS:

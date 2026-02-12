@@ -48,6 +48,7 @@ class Object:
     def __init__(self):
         self.lock = RLock()
         self.id = -1
+        self.is_deleted = False
         self.name = ""
         self.desc = ""
         # symbol to be used on map

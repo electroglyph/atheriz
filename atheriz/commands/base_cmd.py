@@ -133,7 +133,7 @@ class Command:
         Returns:
             tuple[Callable[[Object | Connection, Any], None], Object | Connection, Any]: the run function, caller, and the parsed arguments
         """
-        if not self.use_parser:
+        if not self.use_parser or not args_string:
             return self.run, caller, args_string
         # Use shlex to split arguments respecting quotes
         # e.g. 'look "my stuff"' -> ['look', 'my stuff']

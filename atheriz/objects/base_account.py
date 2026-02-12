@@ -30,6 +30,7 @@ class Account:
         self.is_npc = False
         self.is_item = False
         self.is_account = True
+        self.is_deleted = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -66,6 +67,11 @@ class Account:
         """Add a character to the account."""
         with self.lock:
             self.characters.append(character.id)
+            
+    def remove_character(self, character: Object) -> None:
+        """Remove a character from the account."""
+        with self.lock:
+            self.characters.remove(character.id)
 
     @staticmethod
     def hash_password(password: str) -> str:

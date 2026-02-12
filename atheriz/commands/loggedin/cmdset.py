@@ -24,6 +24,7 @@ from atheriz.commands.loggedin.map import MapCommand
 from atheriz.commands.loggedin.emote import EmoteCommand
 from atheriz.commands.loggedin.desc import DescCommand
 from atheriz.commands.loggedin.set import SetCommand, UnsetCommand
+from atheriz.commands.loggedin.delete import DeleteCommand
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -55,3 +56,4 @@ class LoggedinCmdSet(CmdSet):
         self.add(DescCommand())
         self.add(SetCommand())
         self.add(UnsetCommand())
+        self.add(DeleteCommand())

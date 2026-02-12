@@ -39,6 +39,9 @@ class CreateCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
+        if not args:
+            caller.msg(self.print_help())
+            return
         obj = Object.create(
             session=caller.session,
             name=args.name,
