@@ -1,3 +1,4 @@
+from atheriz.logger import logger
 import argparse
 import signal
 import time
@@ -156,7 +157,6 @@ async def hot_reload_endpoint(request: Request):
     if token != expected_token:
         return {"status": "error", "message": "Invalid token."}
 
-    print("Hot reload triggered via Internal API.")
     do_reload()
     msg = reloader.reload_game_logic()
     return {"status": "ok", "message": msg}
@@ -721,7 +721,6 @@ def do_reload_command(args):
     t0 = time.time()
     req = urllib.request.Request(url, method="POST")
     req.add_header("X-Admin-Token", token)
-
     try:
         with urllib.request.urlopen(req) as response:
             if response.status == 200:

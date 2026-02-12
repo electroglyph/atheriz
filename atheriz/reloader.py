@@ -170,6 +170,9 @@ def reload_game_logic() -> str:
     Returns:
         str: A status message describing what was done.
     """
+    from atheriz.logger import logger
+    logger.info("Server reload initiated.")
+
     # Step 0: Discover new atheriz.* modules from disk (e.g. newly added command files)
     new_count = _discover_new_atheriz_modules()
     if new_count:
@@ -365,4 +368,5 @@ def reload_game_logic() -> str:
         result_msg += f"\nFirst Error: {errors[0]}"
 
     print(f"[HotReload] {result_msg}")
+    logger.info(f"Server reload complete: {result_msg}")
     return result_msg

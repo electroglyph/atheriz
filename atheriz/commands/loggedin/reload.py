@@ -1,11 +1,11 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.reloader import reload_game_logic
+from atheriz.logger import logger
 from atheriz.singletons.get import get_server_channel
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.websocket import Connection
     from atheriz.objects.base_channel import Channel
 
 
@@ -14,13 +14,17 @@ class ReloadCommand(Command):
     desc = "Reload game logic and modules."
     use_parser = False
 
-    def access(self, caller: Object | Connection) -> bool:
+    # pyrefly: ignore
+    def access(self, caller: Object) -> bool:
         return caller.is_superuser
 
-    def run(self, caller: Object | Connection, args):
+    # pyrefly: ignore
+    def run(self, caller: Object, args):
         channel: Channel | None = get_server_channel()
         if channel:
             channel.msg("Server is reloading...")
+        
+        logger.info(f"Reload triggered by {caller.name} ({caller.id})")
         result = reload_game_logic()
         if channel:
             channel.msg(f"{result}")
