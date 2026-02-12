@@ -5,9 +5,8 @@ from atheriz.singletons.map import MapInfo, LegendEntry
 from atheriz.commands.base_cmd import Command
 from atheriz.singletons.objects import get_by_type
 from atheriz.utils import wrap_xterm256
-import atheriz.settings as settings
 import time
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.websocket import Connection
@@ -19,7 +18,6 @@ class MazeCommand(Command):
     desc = "Generate a maze."
     category = "Builder"
     hide = True
-    aliases = ["-s", "-r"]
 
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
@@ -31,20 +29,13 @@ class MazeCommand(Command):
     # pyrefly: ignore
     def run(self, caller: Object, args):
         nh = get_node_handler()
-        width = 40
-        height = 15
-        
-        placeholder = settings.ROAD_PLACEHOLDER
-        if "-s" in args or "--single" in args:
-            placeholder = settings.SINGLE_WALL_PLACEHOLDER
-        elif "-r" in args or "--round" in args:
-            placeholder = settings.PATH_PLACEHOLDER
-
+        width = 80
+        height = 30
         # map returned is a rectangular outline around grid, so actual map size returned is +2
         start = time.time()
-        grid1, pre_grid1 = gen_map_and_grid(width, height, "maze1", placeholder)
-        grid2, pre_grid2 = gen_map_and_grid(width, height, "maze2", placeholder)
-        grid3, pre_grid3 = gen_map_and_grid(width, height, "maze3", placeholder)
+        map1, grid1 = gen_map_and_grid(width, height, "maze1")
+        map2, grid2 = gen_map_and_grid(width, height, "maze2")
+        map3, grid3 = gen_map_and_grid(width, height, "maze3")
         rooms = len(grid1) + len(grid2) + len(grid3)
         elapsed = (time.time() - start) * 1000
         caller.msg(
@@ -63,39 +54,64 @@ class MazeCommand(Command):
         maze1_exit = grid1.get_random_node()
         maze2_exit = grid2.get_random_node()
         maze3_exit = grid3.get_random_node()
-        
-        # Helper to create map info with legend
-        def create_map_info(name, pre_grid, exit_node, target_name):
-            legend_entries = {
-                -1: LegendEntry(
-                    wrap_xterm256("!", fg=9), 
-                    f"to {target_name}", 
-                    (exit_node.coord[1], exit_node.coord[2])
+        # wrap_xterm256("!",fg=9)
+        mi1 = MapInfo(
+            "maze1",
+            map1,
+            width,
+            height,
+            None,
+            [
+                LegendEntry(
+                    wrap_xterm256("!", fg=9), "to maze2", (maze1_exit.coord[1], maze1_exit.coord[2])
                 )
-            }
-            return MapInfo(
-                name=name,
-                pre_grid=pre_grid,
-                legend_entries=legend_entries
-            )
-
-        mi1 = create_map_info("maze1", pre_grid1, maze1_exit, "maze2")
-        mi2 = create_map_info("maze2", pre_grid2, maze2_exit, "maze3")
-        mi3 = create_map_info("maze3", pre_grid3, maze3_exit, "maze1")
-
+            ],
+        )
+        mi2 = MapInfo(
+            "maze2",
+            map2,
+            width,
+            height,
+            None,
+            [
+                LegendEntry(
+                    wrap_xterm256("!", fg=9), "to maze3", (maze2_exit.coord[1], maze2_exit.coord[2])
+                )
+            ],
+        )
+        mi3 = MapInfo(
+            "maze3",
+            map3,
+            width,
+            height,
+            None,
+            [
+                LegendEntry(
+                    wrap_xterm256("!", fg=9), "to maze1", (maze3_exit.coord[1], maze3_exit.coord[2])
+                )
+            ],
+        )
+        # mi.add_listener(caller)
         mh.set_mapinfo("maze1", 0, mi1)
         mh.set_mapinfo("maze2", 0, mi2)
         mh.set_mapinfo("maze3", 0, mi3)
-        
         maze1_exit.add_link(NodeLink("down", ("maze2", 0, 0, 0), ["d"]))
         maze2_exit.add_link(NodeLink("down", ("maze3", 0, 0, 0), ["d"]))
         maze3_exit.add_link(NodeLink("down", ("maze1", 0, 0, 0), ["d"]))
-        
+        # TODO: node contents to dict? don't persist mapables in node contents
         node = nh.get_node(("maze1", 0, 0, 0))
+        end = maze1_exit
         if node:
-            caller.map_enabled = True
             caller.msg(f"moving to: {node} ...")
             caller.move_to(node)
+            caller.map_enabled = True
+        # start = time.time()
+        # if node and end:
+        #     success, path, fail = astar3(node, end)
+        #     caller.msg(str(path))
+        # caller.msg(f"pathfind success = {success}, time = {(time.time() - start) * 1000:.2f} milliseconds")
+        # if success:
+        #     caller.ndb.path = path
 
 
 def create_maze(width: int, height: int) -> dict:
@@ -148,72 +164,106 @@ def create_maze(width: int, height: int) -> dict:
     return maze
 
 
-def create_map(maze: dict, width: int, height: int, area: str, placeholder: str) -> Tuple[NodeGrid, dict]:
-    pre_grid = {}
+def create_map(maze: dict, width: int, height: int, area: str):
+    def get_dirs(src: tuple, dest: list, maze: dict) -> tuple:
+        n = False
+        s = False
+        e = False
+        w = False
+        for d in dest:
+            if d == (src[0] + 1, src[1]):
+                e = True
+            if d == (src[0] - 1, src[1]):
+                w = True
+            if d == (src[0], src[1] + 1):
+                n = True
+            if d == (src[0], src[1] - 1):
+                s = True
+        if src[0] > 0:
+            nodes = maze.get((src[0] - 1, src[1]), [])
+            for node in nodes:
+                if node == src:
+                    w = True
+                    break
+        if src[0] < width - 1:
+            nodes = maze.get((src[0] + 1, src[1]), [])
+            for node in nodes:
+                if node == src:
+                    e = True
+                    break
+        if src[1] > 0:
+            nodes = maze.get((src[0], src[1] - 1), [])
+            for node in nodes:
+                if node == src:
+                    s = True
+                    break
+        if src[1] < height - 1:
+            nodes = maze.get((src[0], src[1] + 1), [])
+            for node in nodes:
+                if node == src:
+                    n = True
+                    break
+        return (n, s, e, w)
+
+    map = [" "] * width * height
     grid = NodeGrid(area, 0)
-    
-    def get_or_create_node(x, y):
-        # check if node exists in grid first
-        existing = grid.get_node((x, y))
-        if existing:
-            return existing
-        
-        node = Node((area, x, y, 0), "Somewhere in a mysterious maze.")
+    for k, v in maze.items():
+        dirs = get_dirs(k, v, maze)
+        node = Node((area, k[0], k[1], 0), "Somewhere in a mysterious maze.")
+        if dirs[0]:
+            node.add_link(NodeLink("north", (area, k[0], k[1] + 1, 0), ["n"]))
+        if dirs[1]:
+            node.add_link(NodeLink("south", (area, k[0], k[1] - 1, 0), ["s"]))
+        if dirs[2]:
+            node.add_link(NodeLink("east", (area, k[0] + 1, k[1], 0), ["e"]))
+        if dirs[3]:
+            node.add_link(NodeLink("west", (area, k[0] - 1, k[1], 0), ["w"]))
         grid.add_node(node)
-        pre_grid[(x, y)] = placeholder
-        return node
-
-    # iterate through maze cells and create corresponding map nodes and links
-    for cell, neighbors in maze.items():
-        cx, cy = cell
-        
-        # Room node at 2x coordinates
-        mx, my = cx * 2, cy * 2
-        room_node = get_or_create_node(mx, my)
-        
-        for nx, ny in neighbors:
-            mx_neighbor, my_neighbor = nx * 2, ny * 2
-            
-            # Intermediate "connector" node
-            connector_x = mx + (nx - cx)
-            connector_y = my + (ny - cy)
-            
-            connector_node = get_or_create_node(connector_x, connector_y)
-            neighbor_node = get_or_create_node(mx_neighbor, my_neighbor)
-            
-            # Link Room <-> Connector
-            if connector_x > mx:
-                room_node.add_link(NodeLink("east", (area, connector_x, connector_y, 0), ["e"]))
-                connector_node.add_link(NodeLink("west", (area, mx, my, 0), ["w"]))
-            elif connector_x < mx:
-                room_node.add_link(NodeLink("west", (area, connector_x, connector_y, 0), ["w"]))
-                connector_node.add_link(NodeLink("east", (area, mx, my, 0), ["e"]))
-            elif connector_y > my:
-                room_node.add_link(NodeLink("north", (area, connector_x, connector_y, 0), ["n"]))
-                connector_node.add_link(NodeLink("south", (area, mx, my, 0), ["s"]))
-            elif connector_y < my:
-                room_node.add_link(NodeLink("south", (area, connector_x, connector_y, 0), ["s"]))
-                connector_node.add_link(NodeLink("north", (area, mx, my, 0), ["n"]))
-                
-            # Link Connector <-> Neighbor
-            if mx_neighbor > connector_x:
-                connector_node.add_link(NodeLink("east", (area, mx_neighbor, my_neighbor, 0), ["e"]))
-                neighbor_node.add_link(NodeLink("west", (area, connector_x, connector_y, 0), ["w"]))
-            elif mx_neighbor < connector_x:
-                connector_node.add_link(NodeLink("west", (area, mx_neighbor, my_neighbor, 0), ["w"]))
-                neighbor_node.add_link(NodeLink("east", (area, connector_x, connector_y, 0), ["e"]))
-            elif my_neighbor > connector_y:
-                connector_node.add_link(NodeLink("north", (area, mx_neighbor, my_neighbor, 0), ["n"]))
-                neighbor_node.add_link(NodeLink("south", (area, connector_x, connector_y, 0), ["s"]))
-            elif my_neighbor < connector_y:
-                connector_node.add_link(NodeLink("south", (area, mx_neighbor, my_neighbor, 0), ["s"]))
-                neighbor_node.add_link(NodeLink("north", (area, connector_x, connector_y, 0), ["n"]))
-                
-    return grid, pre_grid
+        if dirs[0] and dirs[1] and dirs[2] and dirs[3]:
+            map[k[1] * width + k[0]] = "╬"
+        elif dirs[0] and dirs[1] and dirs[2]:
+            map[k[1] * width + k[0]] = "╠"
+        elif dirs[0] and dirs[1] and dirs[3]:
+            map[k[1] * width + k[0]] = "╣"
+        elif dirs[1] and dirs[2] and dirs[3]:
+            map[k[1] * width + k[0]] = "╦"
+        elif dirs[0] and dirs[2] and dirs[3]:
+            map[k[1] * width + k[0]] = "╩"
+        elif dirs[1] and dirs[2]:
+            map[k[1] * width + k[0]] = "╔"
+        elif dirs[1] and dirs[3]:
+            map[k[1] * width + k[0]] = "╗"
+        elif dirs[0] and dirs[2]:
+            map[k[1] * width + k[0]] = "╚"
+        elif dirs[0] and dirs[3]:
+            map[k[1] * width + k[0]] = "╝"
+        elif dirs[0] or dirs[1]:
+            map[k[1] * width + k[0]] = "║"
+        elif dirs[2] or dirs[3]:
+            map[k[1] * width + k[0]] = "═"
+    return map, grid
 
 
-def gen_map_and_grid(w: int, h: int, area: str, placeholder: str):
+def map_to_string(map: list, w: int, h: int):
+    s = ""
+    for iy in range(h - 1, -1, -1):
+        for ix in range(w):
+            s += "".join(map[iy * w + ix])
+        s += "\n"
+    return s
+
+
+def gen_map_and_grid(w: int, h: int, area: str):
     maze = create_maze(w, h)
-    grid, pre_grid = create_map(maze, w, h, area, placeholder)
-    return grid, pre_grid
+    map, grid = create_map(maze, w, h, area)
+    return map, grid
 
+
+# w = 75
+# h = 30
+# maze = create_maze(w, h)
+# map, grid = create_map(maze, w, h)
+# print(str(maze[(0, 0)]))
+# print(str(maze[(0, 1)]))
+# print(str(maze[(1, 0)]))
+# print(map_to_string(map, w, h))

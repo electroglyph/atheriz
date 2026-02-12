@@ -17,6 +17,9 @@ class NoneCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Connection, args):
+        if not args:
+            caller.msg("Command not found.")
+            return
         args.none = " ".join(args.none)
         commands = [cmd for cmd in get_unloggedin_cmdset().commands.keys() if cmd != "none"]
         scores = [levenshtein(args.none, cmd) for cmd in commands]

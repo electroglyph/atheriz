@@ -21,6 +21,9 @@ class NoneCommand(Command):
         self.parser.add_argument("none", type=str, help="None.", nargs="*")
 
     def run(self, caller: Connection | Object, args):
+        if not args:
+            caller.msg("Command not found.")
+            return
         args.none = " ".join(args.none)
         commands = [
             cmd for cmd in caller.internal_cmdset.commands.keys() if cmd not in _IGNORED_COMMANDS
