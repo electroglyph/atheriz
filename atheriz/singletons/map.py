@@ -328,7 +328,6 @@ class MapInfo:
                 l.at_legend_update(entries, self.name)
 
     def render(self, force=False):
-        # print("rendering map")
         if force or self.map_changed:
             if self.pre_grid:
                 self.pre_render()
@@ -541,31 +540,3 @@ class MapHandler:
         if from_map:
             from_map.remove_mapable(mapable)
             from_map.render_legend()
-
-
-# class FakeListener:
-#     def __init__(self):
-#         self.key = 'test'
-
-# poi: list[list] = []
-# poi.append([None, '↑', 't'])
-# poi.append([None, 'x', 'xxxxx'])
-# poi.append([None, 'y', 'yyy'])
-# poi.append([None, 'z', 'zzzzzzzzz'])
-# poi.append([None, '↑', 't'])
-# poi.append([None, 'x', 'x'])
-# poi.append([None, 'y', 'yyy'])
-# poi.append([None, 'z', 'z'])
-# poi.append([None, '↑', 't'])
-# poi.append([None, 'x', 'x'])
-# poi.append([None, 'y', 'yyy'])
-# poi.append([None, 'z', 'z'])
-# poi.append([None, '↑', 't'])
-# poi.append([None, 'x', 'xxxxx'])
-# poi.append([None, 'y', 'yyy'])
-# poi.append([None, 'z', 'zzzzzzzzz'])
-# listener = FakeListener()
-
-# mi = MapInfo([],0,0,poi,{})
-# legend = mi.gen_legend(listener,{},"Test map")
-# print(legend)

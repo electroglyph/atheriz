@@ -420,11 +420,12 @@ def create_game_folder(folder_name: str) -> None:
     
     # Override save path keys in the global settings to match the new game folder
     import atheriz.settings as global_settings
-    global_settings.SAVE_PATH = str(save_path)
+    global_settings.SAVE_PATH = str(save_path.resolve())
     
     secret_path = folder_path / "secret"
     secret_path.mkdir(parents=True, exist_ok=True)
-    global_settings.SECRET_PATH = str(secret_path)
+    global_settings.SECRET_PATH = str(secret_path.resolve())
+
 
     # Import and run initial_setup from the new game folder
     try:

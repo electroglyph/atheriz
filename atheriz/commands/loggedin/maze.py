@@ -99,13 +99,6 @@ class MazeCommand(Command):
             caller.msg(f"moving to: {node} ...")
             caller.move_to(node)
             caller.map_enabled = True
-        # start = time.time()
-        # if node and end:
-        #     success, path, fail = astar3(node, end)
-        #     caller.msg(str(path))
-        # caller.msg(f"pathfind success = {success}, time = {(time.time() - start) * 1000:.2f} milliseconds")
-        # if success:
-        #     caller.ndb.path = path
 
 
 def create_maze(width: int, height: int) -> dict:
@@ -253,13 +246,3 @@ def gen_map_and_grid(w: int, h: int, area: str):
     maze = create_maze(w, h)
     map, grid = create_map(maze, w, h, area)
     return map, grid
-
-
-# w = 75
-# h = 30
-# maze = create_maze(w, h)
-# map, grid = create_map(maze, w, h)
-# print(str(maze[(0, 0)]))
-# print(str(maze[(0, 1)]))
-# print(str(maze[(1, 0)]))
-# print(map_to_string(map, w, h))
