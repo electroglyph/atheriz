@@ -206,7 +206,6 @@ def create_map(maze: dict, width: int, height: int, area: str):
         if dirs[3]:
             node.add_link(NodeLink("west", (area, k[0] - 1, k[1], 0), ["w"]))
         grid.add_node(node)
-        # map[(k[0], k[1])] = settings.DOUBLE_WALL_PLACEHOLDER
         if dirs[0] and dirs[1] and dirs[2] and dirs[3]:
             map[(k[0], k[1])] = "╬"
         elif dirs[0] and dirs[1] and dirs[2]:

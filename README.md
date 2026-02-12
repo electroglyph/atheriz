@@ -1,5 +1,7 @@
 # AtheriZ
 
+Discord server here: https://discord.gg/hb62HEBzQT
+
 A text-based multiplayer game server.
 
 This is a very early draft and is not ready for production use.
