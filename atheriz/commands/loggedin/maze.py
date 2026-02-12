@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 class MazeCommand(Command):
     key = "maze"
     desc = "Generate a maze."
-    category = "Builder"
+    category = "Building"
 
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
