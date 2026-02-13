@@ -1,12 +1,11 @@
 from typing import Any, Iterable, Optional
 from threading import Lock, RLock
 from typing import TYPE_CHECKING
-from atheriz.utils import tuple_to_str, str_to_tuple
+from atheriz.utils import tuple_to_str, str_to_tuple, instance_from_string
 from atheriz.logger import logger
 import json
 from pathlib import Path
 from atheriz import settings
-from atheriz.objects.persist import instance_from_string
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
 
 if TYPE_CHECKING:
