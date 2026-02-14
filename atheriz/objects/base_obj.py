@@ -275,6 +275,12 @@ class Object:
         Called every tick.
         """
         pass
+    
+    def at_alarm(self, time: dict, data):
+        """
+        Called when an alarm goes off. See time.py for time format.
+        """
+        pass
 
     def at_disconnect(self):
         self.is_connected = False
