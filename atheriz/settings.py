@@ -81,7 +81,6 @@ TIME_UPDATE_SECONDS = 1.0
 START_YEAR = 888
 # minutes the clock should advance for every update tick above
 TICK_MINUTES = 1.0
-# current game tick is 1 second
 SECONDS_PER_MINUTE = 60
 MINUTES_PER_HOUR = 60
 HOURS_PER_DAY = 24
