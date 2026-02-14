@@ -22,7 +22,7 @@ This uses flat files instead of a database, simplifying things and mitigating mu
 
 3d room coordinates are built in, coords = ("area", x, y, z)
 
-onTick is possible for thousands of objects without slowing down the game. (will be added soon)
+at_tick() is possible for thousands of objects per second without slowing down the game.
 
 # More info
 
@@ -75,7 +75,7 @@ TODO:
 - node hooks
 - scripts
 - funcparser cleanup
-- tick system (already there, just need to activate it)
+- ~~tick system (already there, just need to activate it)~~
 - time system (already done, just needs to be added)
 - pathfinding (already done, just needs to be added)
 - door stuff + ability for custom doors
