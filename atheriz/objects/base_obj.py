@@ -75,6 +75,7 @@ class Object:
         self.is_account = False
         self.is_channel = False
         self.is_node = False
+        self._tick_seconds = settings.DEFAULT_TICK_SECONDS
         self.last_map_time = time.time()
         self.quelled = False
         self.map_enabled = True
@@ -105,6 +106,7 @@ class Object:
         is_mapable: bool = False,
         is_container: bool = False,
         is_tickable: bool = False,
+        tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ) -> Self:
         """
         Create a new object.
@@ -141,12 +143,13 @@ class Object:
         obj.is_tickable = is_tickable
         obj.name = name
         obj.desc = desc
+        obj._tick_seconds = tick_seconds
         obj.aliases = aliases if aliases else []
         obj.group_save = not is_pc
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
         if is_tickable:
-            get_async_ticker().add_coro(obj.at_tick, settings.TICK_SECONDS)
+            get_async_ticker().add_coro(obj.at_tick, tick_seconds)
         add_object(obj)
         return obj
 
@@ -225,8 +228,20 @@ class Object:
         self.home = str_to_tuple(state["home"]) if state["home"] else None
         if self._is_tickable:
             at = get_async_ticker()
-            at.add_coro(self.at_tick, settings.TICK_SECONDS)
+            at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
+
+    @property
+    def tick_seconds(self):
+        return self._tick_seconds
+
+    @tick_seconds.setter
+    def tick_seconds(self, value):
+        if self._is_tickable and value != self._tick_seconds:
+            at = get_async_ticker()
+            at.remove_coro(self.at_tick, self._tick_seconds)
+            at.add_coro(self.at_tick, value)
+        self._tick_seconds = value
 
     @property
     def is_tickable(self):
@@ -237,9 +252,9 @@ class Object:
         self._is_tickable = value
         at = get_async_ticker()
         if value:
-            at.add_coro(self.at_tick, settings.TICK_SECONDS)
+            at.add_coro(self.at_tick, self._tick_seconds)
         else:
-            at.remove_coro(self.at_tick, settings.TICK_SECONDS)
+            at.remove_coro(self.at_tick, self._tick_seconds)
 
     @property
     def seconds_played(self):

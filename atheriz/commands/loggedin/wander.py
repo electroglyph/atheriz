@@ -26,7 +26,7 @@ class Wanderer(Object):
 
 class WanderCommand(Command):
     key = "wander"
-    desc = "Spawn 100 NPCs to your location to wander around"
+    desc = "Spawn 10 NPCs to your location to wander around"
     use_parser = False
     category = "Building"
     
@@ -36,7 +36,7 @@ class WanderCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
-        count = 100
+        count = 10
         start = time.time()
         for i in range(count):
             npc = Wanderer.create(caller.session, f"Wanderer {i}", f"Wanderer {i}", is_npc=True, is_mapable=True, is_tickable=True)

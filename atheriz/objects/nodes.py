@@ -126,10 +126,12 @@ class Node:
         legend_desc: str = None,
         data: dict = None,
         links: list[NodeLink] = None,
+        tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ):
         self.coord = coord
         self.desc = desc
         self._is_tickable = False
+        self._tick_seconds = tick_seconds
         self.theme = theme
         self.symbol = symbol
         self.legend_desc = legend_desc
@@ -229,9 +231,21 @@ class Node:
             self.links = None
         if self._is_tickable:
             at = get_async_ticker()
-            at.add_coro(self.at_tick, settings.TICK_SECONDS)
+            at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
-            
+    
+    @property
+    def tick_seconds(self):
+        return self._tick_seconds
+
+    @tick_seconds.setter
+    def tick_seconds(self, value):
+        if self._is_tickable and value != self._tick_seconds:
+            at = get_async_ticker()
+            at.remove_coro(self.at_tick, self._tick_seconds)
+            at.add_coro(self.at_tick, value)
+        self._tick_seconds = value
+    
     @property
     def is_tickable(self):
         return self._is_tickable
@@ -241,9 +255,9 @@ class Node:
         self._is_tickable = value
         at = get_async_ticker()
         if value:
-            at.add_coro(self.at_tick, settings.TICK_SECONDS)
+            at.add_coro(self.at_tick, self._tick_seconds)
         else:
-            at.remove_coro(self.at_tick, settings.TICK_SECONDS)
+            at.remove_coro(self.at_tick, self._tick_seconds)
 
     def set_data(self, key, value):
         """save arbitrary data for this node... make sure it can be pickled"""

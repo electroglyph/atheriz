@@ -12,7 +12,7 @@ WEBSERVER_PORT = 8000
 WEBSERVER_INTERFACE = "0.0.0.0"
 THREADPOOL_LIMIT = os.cpu_count()
 MAX_CHARACTERS = 5
-TICK_SECONDS = 1.0
+DEFAULT_TICK_SECONDS = 1.0
 #TODO: remove this or figure out something useful to do with it:
 PERMISSION_HIERARCHY = [
     0,  # Guest, note-only used if GUEST_ENABLED=True
