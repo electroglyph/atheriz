@@ -1,6 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.singletons.objects import save_objects
-from atheriz.singletons.get import get_map_handler, get_node_handler
+from atheriz.singletons.get import get_map_handler, get_node_handler, get_game_time
+import atheriz.settings as settings
 from typing import TYPE_CHECKING
 import time
 
@@ -25,4 +26,6 @@ class SaveCommand(Command):
         save_objects()
         get_map_handler().save()
         get_node_handler().save()
+        if settings.TIME_SYSTEM_ENABLED:
+            get_game_time().save()
         caller.msg(f"Saved in {(time.time() - start) * 1000} milliseconds.")

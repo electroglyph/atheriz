@@ -32,8 +32,8 @@ def _discover_new_atheriz_modules():
     discovered = 0
 
     for root, dirs, files in os.walk(package_dir):
-        # skip __pycache__ and hidden folders
-        dirs[:] = [d for d in dirs if not d.startswith(("__", "."))]
+        # skip __pycache__, hidden folders, and tests
+        dirs[:] = [d for d in dirs if not d.startswith(("__", ".")) and d != "tests"]
 
         for filename in files:
             if not filename.endswith(".py") or filename.startswith("_"):
@@ -196,6 +196,9 @@ def reload_game_logic() -> str:
             continue
 
         if module_name in _EXCLUDED_MODULES:
+            continue
+
+        if not isinstance(module, types.ModuleType):
             continue
 
         modules_to_reload.append((module_name, module))
