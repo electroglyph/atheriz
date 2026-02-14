@@ -9,6 +9,8 @@ if TYPE_CHECKING:
     from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
     from atheriz.singletons.node import NodeHandler
     from atheriz.singletons.map import MapHandler
+    from atheriz.websocket import WebSocketManager
+    from atheriz.singletons.time import GameTime
 
     # from inflect import engine
     from atheriz.objects.base_channel import Channel
@@ -20,6 +22,8 @@ _NODE_HANDLER: NodeHandler | None = None
 _MAP_HANDLER: MapHandler | None = None
 _SERVER_CHANNEL: Channel | None = None
 _ASYNC_TICKER: AsyncTicker | None = None
+_WEBSOCKET_MANAGER: WebSocketManager | None = None
+_GAME_TIME: GameTime | None = None
 # _INFLECT_ENGINE: engine | None = None
 
 
@@ -47,6 +51,24 @@ def get_unique_id() -> int:
         global _ID
         _ID += 1
         return _ID
+
+
+def get_game_time() -> GameTime:
+    global _GAME_TIME
+    if not _GAME_TIME:
+        from atheriz.singletons.time import GameTime
+
+        _GAME_TIME = GameTime()
+    return _GAME_TIME
+
+
+def get_websocket_manager() -> WebSocketManager:
+    global _WEBSOCKET_MANAGER
+    if not _WEBSOCKET_MANAGER:
+        from atheriz.websocket import websocket_manager
+
+        _WEBSOCKET_MANAGER = websocket_manager
+    return _WEBSOCKET_MANAGER
 
 
 def get_async_ticker() -> AsyncTicker:

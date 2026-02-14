@@ -20,6 +20,7 @@ _IGNORE_FILES = [
     "doors",
     "mapdata",
     "spam_accounts.txt",
+    "time"
 ]
 # not persisted
 TEMP_BANNED_IPS = {}

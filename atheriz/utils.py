@@ -5,13 +5,22 @@ from string import punctuation
 import colorsys
 import math
 from typing import TYPE_CHECKING
-
+from atheriz.singletons.get import get_websocket_manager
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
 
 _ANSI_COLOR = r"\x1b\[[0-9;]+m"
 _COLOR_REGEX = re.compile(_ANSI_COLOR)
 
+
+def msg_all(msg: str) -> None:
+    """
+    send message to all connected clients
+
+    Args:
+        msg (str): message to send
+    """
+    get_websocket_manager().broadcast(msg)
 
 def ensure_thread_safe(obj):
     """Patches the class of the provided object if not already patched."""

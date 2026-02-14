@@ -1,4 +1,5 @@
 import os
+from enum import IntEnum
 
 SAVE_PATH = "save"
 SECRET_PATH = "secret"
@@ -71,3 +72,37 @@ ROUNDED_WALL_PLACEHOLDER = "⍮"
 ROOM_PLACEHOLDER = "℣"
 PATH_PLACEHOLDER = "߶"
 ROAD_PLACEHOLDER = "᭤"
+# time related settings
+TIME_SYSTEM_ENABLED = True
+# seconds between time updates
+# this is the resolution of the time system
+# every N seconds below, the time will advance by TICK_MINUTES below
+TIME_UPDATE_SECONDS = 1.0
+START_YEAR = 888
+# minutes the clock should advance for every update tick above
+TICK_MINUTES = 1.0
+# current game tick is 1 second
+SECONDS_PER_MINUTE = 60
+MINUTES_PER_HOUR = 60
+HOURS_PER_DAY = 24
+DAYS_PER_MONTH = 30
+MONTHS_PER_YEAR = 12
+DAYS_PER_YEAR = DAYS_PER_MONTH * MONTHS_PER_YEAR
+SECONDS_PER_HOUR = SECONDS_PER_MINUTE * MINUTES_PER_HOUR
+SECONDS_PER_DAY = SECONDS_PER_HOUR * HOURS_PER_DAY
+LUNAR_CYCLE_DAYS = 30
+DAYS_PER_WEEK = 7
+
+class Month(IntEnum):
+    Ianuarius = 1
+    Februarius = 2
+    Martius = 3
+    Aprilis = 4
+    Maius = 5
+    Iunius = 6
+    Iulius = 7
+    Augustus = 8
+    September = 9
+    October = 10
+    November = 11
+    December = 12

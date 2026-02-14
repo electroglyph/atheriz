@@ -1,6 +1,6 @@
 import pytest
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.utils import get_import_path
+# from atheriz.utils import get_import_path
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
 from atheriz.commands.cmdset import CmdSet
@@ -15,6 +15,10 @@ from atheriz.singletons.node import (
 )
 from atheriz.singletons.map import MapInfo, LegendEntry
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Door, Transition
+
+def get_import_path(obj: object) -> str:
+    return obj.__module__ + "." + obj.__class__.__name__
+
 
 
 @pytest.fixture(autouse=True)
@@ -172,7 +176,6 @@ class SimpleObject(Object):
 
 def test_object_serialization():
     obj = SimpleObject()
-    obj.at_object_creation()
     obj.internal_cmdset = CmdSet()
     obj.external_cmdset = CmdSet()
     obj.name = "TestObject"

@@ -93,7 +93,7 @@ class TestAsyncTicker:
     def test_ticker(self):
         """Test that the ticker periodically runs a task."""
         atp = AsyncThreadPool(max_threads=2)
-        ticker = AsyncTicker(atp)
+        ticker = AsyncTicker()
 
         counter = 0
         lock = threading.Lock()

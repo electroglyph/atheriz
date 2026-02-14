@@ -1,12 +1,12 @@
 from .objects import load_files
-from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker
+from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
 from atheriz.singletons.objects import filter_by, _ALL_OBJECTS, _ALL_OBJECTS_LOCK
 from atheriz.objects.persist import save
 import atheriz.settings as settings
 from atheriz.logger import logger
+from atheriz.utils import msg_all
 from typing import TYPE_CHECKING
 from atheriz.server_events import at_server_start, at_server_stop, at_server_reload
-from atheriz.websocket import websocket_manager
 if TYPE_CHECKING:
     from atheriz.objects.base_channel import Channel
     from atheriz.objects.base_obj import Object
@@ -19,6 +19,8 @@ def do_startup():
     get_node_handler()
     get_async_ticker()
     at_server_start()
+    if settings.TIME_SYSTEM_ENABLED:
+        get_game_time().start()
 
 
 def do_shutdown():
@@ -35,14 +37,10 @@ def do_shutdown():
         get_node_handler().save()
     get_async_ticker().stop()
     get_async_threadpool().stop(False)
-    websocket_manager.broadcast("Server is shutting down NOW!")
-    # players: list[Object] = filter_by(lambda x: x.is_pc and x.is_connected)
-    # for p in players:
-    #     p.msg("Server is shutting down NOW!")
-    #     if s := p.session:
-    #         if con := s.connection:
-    #             con.close()
+    msg_all("Server is shutting down NOW!")
     logger.info("Shutdown sequence completed.")
+    if settings.TIME_SYSTEM_ENABLED:
+        get_game_time().stop()
 
 
 def do_reload():
