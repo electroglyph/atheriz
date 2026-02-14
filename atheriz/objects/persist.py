@@ -1,7 +1,7 @@
-from typing import TYPE_CHECKING, Any, Iterable, List
+from typing import TYPE_CHECKING, Any, Iterable, Dict, List
 import atheriz.settings as settings
 from pathlib import Path
-from atheriz.utils import get_import_path
+from atheriz.utils import instance_from_string, get_import_path
 import json
 
 if TYPE_CHECKING:
