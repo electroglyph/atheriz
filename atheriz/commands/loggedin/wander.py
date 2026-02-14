@@ -36,9 +36,10 @@ class WanderCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
+        count = 100
         start = time.time()
-        for i in range(100):
-            npc = Wanderer.create(caller.session, f"Wanderer {i}", f"Wanderer {i}", is_npc=True, is_tickable=True, is_mapable=True)
+        for i in range(count):
+            npc = Wanderer.create(caller.session, f"Wanderer {i}", f"Wanderer {i}", is_npc=True, is_mapable=True, is_tickable=True)
             npc.move_to(caller.location)
         end = time.time()
-        caller.msg(f"Spawned 100 NPCs in {(end - start) * 1000:.2f} milliseconds")
+        caller.msg(f"Spawned {count} NPCs in {(end - start) * 1000:.2f} milliseconds")

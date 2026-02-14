@@ -66,12 +66,14 @@ def _discover_new_game_modules():
     cwd = Path.cwd().resolve()
     atheriz_dir = str(_get_atheriz_package_dir())
 
-    # Folders to skip (not user code)
-    skip_dirs = {"__pycache__", "save", "secret", ".git", ".venv"}
     discovered = 0
 
     for root, dirs, files in os.walk(cwd):
-        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith(".")]
+        # At the top level, only descend into directories that are Python packages
+        if Path(root).resolve() == cwd:
+            dirs[:] = [d for d in dirs if (Path(root) / d / "__init__.py").exists()]
+        else:
+            dirs[:] = [d for d in dirs if d != "__pycache__"]
 
         # Don't walk into the atheriz package itself
         if str(Path(root).resolve()).startswith(atheriz_dir):
@@ -112,8 +114,13 @@ def _reload_game_folder_modules():
     if new_count:
         print(f"[HotReload] Discovered {new_count} new game module(s).")
 
-    cwd = str(Path.cwd().resolve())
+    cwd = Path.cwd().resolve()
+    cwd_str = str(cwd)
     atheriz_dir = str(_get_atheriz_package_dir())
+
+    # Only consider top-level subdirectories that are Python packages
+    valid_packages = {str(cwd / d) for d in os.listdir(cwd)
+                      if (cwd / d).is_dir() and (cwd / d / "__init__.py").exists()}
 
     game_modules = []
     for module_name, module in list(sys.modules.items()):
@@ -122,7 +129,10 @@ def _reload_game_folder_modules():
             continue
         mod_path = str(Path(mod_file).resolve())
         # Module is in the game folder (CWD) but NOT part of the atheriz package
-        if mod_path.startswith(cwd) and not mod_path.startswith(atheriz_dir):
+        if mod_path.startswith(cwd_str) and not mod_path.startswith(atheriz_dir):
+            # Must be inside a top-level directory that has __init__.py
+            if not any(mod_path.startswith(pkg) for pkg in valid_packages):
+                continue
             game_modules.append((module_name, module))
 
     # Sort so dependencies come before dependents (e.g. test.py before loggedin.py)
