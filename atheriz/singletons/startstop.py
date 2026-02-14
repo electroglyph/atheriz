@@ -6,7 +6,7 @@ import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
 from typing import TYPE_CHECKING
-from atheriz.server_events import at_server_start, at_server_stop, at_server_reload
+# from atheriz.server_events import at_server_start, at_server_stop, at_server_reload
 if TYPE_CHECKING:
     from atheriz.objects.base_channel import Channel
     from atheriz.objects.base_obj import Object
@@ -18,7 +18,12 @@ def do_startup():
     get_map_handler()
     get_node_handler()
     get_async_ticker()
-    at_server_start()
+    
+    try:
+        import server_events
+    except ImportError:
+        import atheriz.server_events as server_events
+    server_events.at_server_start()
     if settings.TIME_SYSTEM_ENABLED:
         get_game_time().start()
 
@@ -28,7 +33,11 @@ def do_shutdown():
     if channel:
         channel.msg("Server is shutting down!")
     logger.info("Starting shutdown sequence...")
-    at_server_stop()
+    try:
+        import server_events
+    except ImportError:
+        import atheriz.server_events as server_events
+    server_events.at_server_stop()
     if settings.AUTOSAVE_ON_SHUTDOWN:
         with _ALL_OBJECTS_LOCK:
             objs = list(_ALL_OBJECTS.values())
@@ -48,8 +57,14 @@ def do_reload():
     if channel:
         channel.msg("Server is reloading...")
     logger.info("Starting reload sequence...")
+    try:
+        import server_events
+        import importlib
+        importlib.reload(server_events)
+    except ImportError:
+        import atheriz.server_events as server_events
+    server_events.at_server_reload()
     get_async_ticker().clear()
-    at_server_reload()
     if settings.AUTOSAVE_ON_RELOAD:
         with _ALL_OBJECTS_LOCK:
             objs = list(_ALL_OBJECTS.values())

@@ -395,6 +395,12 @@ def create_game_folder(folder_name: str) -> None:
     connection_screen_src = Path(atheriz.connection_screen.__file__)
     (folder_path / "connection_screen.py").write_text(connection_screen_src.read_text())
 
+    # Copy server_events.py
+    print(f"  Copying server_events.py...")
+    import atheriz.server_events
+    server_events_src = Path(atheriz.server_events.__file__)
+    (folder_path / "server_events.py").write_text(server_events_src.read_text())
+
     # Copy web folder (templates + static files)
     print(f"  Copying web folder...")
     import shutil

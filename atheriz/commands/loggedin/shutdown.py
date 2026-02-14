@@ -9,6 +9,13 @@ import json
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+try:
+    import server_events
+    import importlib
+
+    importlib.reload(server_events)
+except ImportError:
+    import atheriz.server_events as server_events
 
 
 class ShutdownCommand(Command):
@@ -24,6 +31,7 @@ class ShutdownCommand(Command):
     # pyrefly: ignore
     def run(self, caller: Object, args):
         caller.msg("Initiating server shutdown...")
+        server_events.at_server_shutdown()
 
         port = settings.WEBSERVER_PORT
         secret_path = Path(settings.SECRET_PATH)
