@@ -347,18 +347,6 @@ class Node:
     def name(self):
         return str(self.coord)
 
-    # def get_random_exit(self) -> Node | None:
-    #     """
-    #     randomly select a NodeLink, resolve it to a Node, and return it
-    #     Returns:
-    #         Node | None: Node if this Node has any NodeLinks, otherwise None
-    #     """
-    #     if self.links:
-    #         nh = get_node_handler()
-    #         link = random.choice(self.links)
-    #         return nh.get_node(link.coord)
-    #     return None
-
     def get_random_link(self) -> NodeLink | None:
         """
         randomly select a NodeLink (exit) from this Node
@@ -483,6 +471,51 @@ class Node:
             self._contents.discard(obj.id)
         obj.internal_cmdset.remove_by_tag("exits")
 
+    def msg_contents_unsafe(
+        self,
+        text=None,
+        exclude=None,
+        from_obj=None,
+        mapping=None,
+        raise_funcparse_errors=False,
+        **kwargs,
+    ):
+        is_outcmd = text and is_iter(text)
+        inmessage = text[0] if is_outcmd else text
+        outkwargs = text[1] if is_outcmd and len(text) > 1 else {}
+        mapping = mapping or {}
+        you = from_obj or self
+
+        if "you" not in mapping:
+            mapping["you"] = you
+        contents = get(self._contents)
+        if exclude:
+            exclude = make_iter(exclude)
+            contents = [obj for obj in contents if obj not in exclude]
+
+        for receiver in contents:
+            # actor-stance replacements
+            outmessage = _MSG_CONTENTS_PARSER.parse(
+                inmessage,
+                raise_errors=raise_funcparse_errors,
+                return_string=True,
+                caller=you,
+                receiver=receiver,
+                mapping=mapping,
+            )
+            outmessage = outmessage.format_map(
+                {
+                    key: (
+                        obj.get_display_name(looker=receiver)
+                        if hasattr(obj, "get_display_name")
+                        else str(obj)
+                    )
+                    for key, obj in mapping.items()
+                }
+            )
+            receiver.msg(outmessage)
+
+
     def msg_contents(
         self,
         text=None,
@@ -525,9 +558,7 @@ class Node:
                     for key, obj in mapping.items()
                 }
             )
-            # debug_msg(outmessage)
-            # receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
-            receiver.msg(text=outmessage, from_obj=from_obj, **kwargs)
+            receiver.msg(outmessage)
 
     # def at_pre_object_leave(self, leaving_object, destination, **kwargs):
     #     return True

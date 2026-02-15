@@ -129,7 +129,6 @@ class Object:
         obj.id = get_unique_id()
         obj.date_created = time.time()
         if session:
-            obj.session = session
             obj.created_by = session.account.id if session.account else -1
             if is_pc and session.account:
                 obj.has_account = True
@@ -624,15 +623,17 @@ class Object:
         if not destination.access(self, "put"):
             return False
         loc = self.location
+
         def sort_locks(a, b):
             """Helper to sort objects for locking order to avoid deadlocks."""
+
             def get_key(o):
                 # (is_node (0=Object, 1=Node), unique_val)
                 # Objects locked before Nodes.
                 if getattr(o, "is_node", False):
                     return (1, o.coord)
                 return (0, o.id)
-            
+
             return sorted([a, b], key=get_key)
 
         def do_item_move():
@@ -698,7 +699,7 @@ class Object:
             if settings.MAP_ENABLED:
                 mh = get_map_handler()
                 if self.is_pc:
-                    # PCs are always listeners (they view the map)
+                    # PCs are always listeners (they get map updates)
                     mh.move_listener(self, destination.coord, old_coord)
                 if self.is_mapable:
                     # mapables appear on the map
@@ -794,11 +795,11 @@ class Object:
         """
         pass
 
-    def announce_move_from(self, destination: Node | Object, from_exit: str | None):
+    def announce_move_from(self, destination: Node, from_exit: str | None):
         if not destination:
             return
         if not from_exit:
-            destination.msg_contents(
+            destination.msg_contents_unsafe(
                 f"$You(mover) $conj({self.move_verb}) in.",
                 mapping={"mover": self},
                 from_obj=self,
@@ -812,7 +813,7 @@ class Object:
             from_str = "from below"
         else:
             from_str = f"from the {from_exit}"
-        destination.msg_contents(
+        destination.msg_contents_unsafe(
             f"$You(mover) $conj({self.move_verb}) in {from_str}.",
             mapping={"mover": self},
             from_obj=self,
@@ -820,11 +821,11 @@ class Object:
             type="move",
         )
 
-    def announce_move_to(self, source_location: Node | Object, to_exit: str | None):
+    def announce_move_to(self, source_location: Node, to_exit: str | None):
         if not source_location:
             return
         if not to_exit:
-            source_location.msg_contents(
+            source_location.msg_contents_unsafe(
                 f"$You(mover) $conj({self.move_verb}) away.",
                 mapping={"mover": self},
                 from_obj=self,
@@ -838,7 +839,7 @@ class Object:
             to_str = "downwards"
         else:
             to_str = f"to the {to_exit}"
-        source_location.msg_contents(
+        source_location.msg_contents_unsafe(
             f"$You(mover) $conj({self.move_verb}) {to_str}.",
             mapping={"mover": self},
             from_obj=self,
