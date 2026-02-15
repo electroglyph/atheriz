@@ -653,11 +653,13 @@ class Object:
                 do_item_move()
             return True
 
-        from_exit = (
+        # from_exit is NodeLink | None
+        reverse_link = (
             get_reverse_link(loc, destination)
             if (loc and loc.is_node and destination.is_node)
             else None
         )
+        from_exit = reverse_link.name if reverse_link else None
 
         def do_move():
             # update to be atomic and bypass thread-safety patch
@@ -780,10 +782,10 @@ class Object:
         pass
 
     def announce_move_from(self, destination: Node | Object, from_exit: str | None):
-        if not self.location:
+        if not destination:
             return
         if not from_exit:
-            self.location.msg_contents(
+            destination.msg_contents(
                 f"$You(mover) $conj({self.move_verb}) in.",
                 mapping={"mover": self},
                 from_obj=self,
@@ -797,7 +799,7 @@ class Object:
             from_str = "from below"
         else:
             from_str = f"from the {from_exit}"
-        self.location.msg_contents(
+        destination.msg_contents(
             f"$You(mover) $conj({self.move_verb}) in {from_str}.",
             mapping={"mover": self},
             from_obj=self,
@@ -806,11 +808,10 @@ class Object:
         )
 
     def announce_move_to(self, source_location: Node | Object, to_exit: str | None):
-        loc = self.location
-        if not loc:
+        if not source_location:
             return
         if not to_exit:
-            loc.msg_contents(
+            source_location.msg_contents(
                 f"$You(mover) $conj({self.move_verb}) away.",
                 mapping={"mover": self},
                 from_obj=self,
@@ -824,7 +825,7 @@ class Object:
             to_str = "downwards"
         else:
             to_str = f"to the {to_exit}"
-        loc.msg_contents(
+        source_location.msg_contents(
             f"$You(mover) $conj({self.move_verb}) {to_str}.",
             mapping={"mover": self},
             from_obj=self,

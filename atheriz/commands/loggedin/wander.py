@@ -22,7 +22,7 @@ class Wanderer(Object):
         node = nh.get_node(link.coord)
         if not node:
             return
-        self.move_to(node)
+        self.move_to(node, link.name)
 
 class WanderCommand(Command):
     key = "wander"
