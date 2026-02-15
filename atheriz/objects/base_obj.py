@@ -675,7 +675,7 @@ class Object:
         from_exit = reverse_link.name if reverse_link else None
 
         def do_move():
-            # update to be atomic and bypass thread-safety patch
+            # update to be atomic
             old_coord = loc.coord if loc and loc.is_node else None
             if loc:
                 ordered = sort_locks(loc, destination)
