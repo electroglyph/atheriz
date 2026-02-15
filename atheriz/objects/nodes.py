@@ -403,6 +403,33 @@ class Node:
                 nh = get_node_handler()
                 nh.remove_transition(found.coord)
 
+    def _add_exits(self, obj: Object):
+        """
+        internal version for bypassing thread-safety patch
+        add this node's exits to obj's cmdset
+
+        Args:
+            obj (DefaultObject): object, character, etc. to add exit commands to
+        """
+        cmdset = object.__getattribute__(obj, "internal_cmdset")
+        cmdset.remove_by_tag("exits")
+        try:
+            if links := object.__getattribute__(self, "links"):
+                cmds = []
+                for n in links:
+                    ec = ExitCommand()
+                    ec.key = n.name
+                    ec.caller_id = obj.id
+                    ec.location = self.coord
+                    ec.destination = n.coord
+                    ec.name = n.name
+                    ec.aliases = n.aliases
+                    ec.tag = "exits"
+                    cmds.append(ec)
+                cmdset.adds(cmds)
+        except AttributeError:
+            pass
+
     def add_exits(self, obj: Object):
         """
         add this node's exits to obj's cmdset
@@ -410,10 +437,8 @@ class Node:
         Args:
             obj (DefaultObject): object, character, etc. to add exit commands to
         """
-        # logger.info(f"add_exits at {self} for {obj}, links = {self.links}")
-        # if "character" in obj._content_types:
+        obj.internal_cmdset.remove_by_tag("exits")
         if self.links:
-            obj.internal_cmdset.remove_by_tag("exits")
             cmds = []
             for n in self.links:
                 ec = ExitCommand()
@@ -426,7 +451,6 @@ class Node:
                 ec.tag = "exits"
                 cmds.append(ec)
             obj.internal_cmdset.adds(cmds)
-        # logger.log_info(f"end add_exits at {self} for {obj}, links = {self.links}")
 
     def add_objects(self, objs: list[Object]):
         """
@@ -476,8 +500,7 @@ class Node:
 
         if "you" not in mapping:
             mapping["you"] = you
-        with self.lock:
-            contents = self.contents
+        contents = self.contents
         if exclude:
             exclude = make_iter(exclude)
             contents = [obj for obj in contents if obj not in exclude]

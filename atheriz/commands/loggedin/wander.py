@@ -27,8 +27,11 @@ class Wanderer(Object):
 class WanderCommand(Command):
     key = "wander"
     desc = "Spawn 10 NPCs to your location to wander around"
-    use_parser = False
+    use_parser = True
     category = "Building"
+
+    def setup_parser(self):
+        self.parser.add_argument("count", nargs="?", type=int, default=10, help="Number of wanderers to spawn")
     
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
@@ -36,10 +39,14 @@ class WanderCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
-        count = 10
+        count = args.count if args.count else 10
+        
         start = time.time()
         for i in range(count):
-            npc = Wanderer.create(caller.session, f"Wanderer {i}", f"Wanderer {i}", is_npc=True, is_mapable=True, is_tickable=True)
-            npc.move_to(caller.location)
+            # Create a unique name for each wanderer to avoid collisions if called multiple times
+            name = f"Wanderer {random.randint(1000, 9999)}"
+            npc = Wanderer.create(session=caller.session, name=name, is_npc=True, is_mapable=True, is_tickable=True)
+            if npc:
+                npc.move_to(caller.location)
         end = time.time()
         caller.msg(f"Spawned {count} NPCs in {(end - start) * 1000:.2f} milliseconds")

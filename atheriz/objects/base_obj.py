@@ -1,3 +1,4 @@
+import _pytest.doctest
 from atheriz.utils import compress_whitespace
 from typing import Callable
 from atheriz.utils import get_import_path
@@ -275,7 +276,7 @@ class Object:
         Called every tick.
         """
         pass
-    
+
     def at_alarm(self, time: dict, data):
         """
         Called when an alarm goes off. See time.py for time format.
@@ -316,7 +317,10 @@ class Object:
         return search(self, query)
 
     def at_legend_update(
-        self, legend: list[tuple[str, str, tuple[int, int]]], show_legend: bool = True, area: str = "Somewhere"
+        self,
+        legend: list[tuple[str, str, tuple[int, int]]],
+        show_legend: bool = True,
+        area: str = "Somewhere",
     ):
         self.msg(legend={"area": area, "legend": legend, "show_legend": show_legend})
 
@@ -610,26 +614,33 @@ class Object:
     def move_to(
         self,
         destination: Node | Object | None,
-        from_exit: str | None = None,
+        to_exit: str | None = None,
         force=False,
         announce=True,
     ) -> bool:
         """Move this object to a new location."""
-        if not destination:
+        if destination is None:
             return False
         if not destination.access(self, "put"):
             return False
-        with self.lock:
-            if destination is None:
-                self.location = None
-                return True
-
+        loc = self.location
         def do_item_move():
-            if self.location:
-                self.location.remove_object(self)
-            self.location = destination
-            destination.add_object(self)
-            self.last_touched_by = destination.id
+            # update to be atomic and bypass thread-safety patch
+            if loc:
+                with loc.lock:
+                    with destination.lock:
+                        loc._contents.discard(self.id)
+                        object.__setattr__(self, "location", destination)
+                        destination._contents.add(self.id)
+                        object.__setattr__(self, "last_touched_by", destination.id)
+            else:
+                with destination.lock:
+                    object.__setattr__(self, "location", destination)
+                    destination._contents.add(self.id)
+                    object.__setattr__(self, "last_touched_by", destination.id)
+            with self.lock:
+                object.__setattr__(self, "location", destination)
+                object.__setattr__(self, "last_touched_by", destination.id)
 
         if not destination.is_node:
             pre = self.at_pre_move(destination, None)
@@ -642,21 +653,33 @@ class Object:
                 do_item_move()
             return True
 
-        to_exit = (
-            get_reverse_link(self.location, destination)
-            if (self.location and self.location.is_node and destination.is_node)
+        from_exit = (
+            get_reverse_link(loc, destination)
+            if (loc and loc.is_node and destination.is_node)
             else None
         )
 
         def do_move():
-            if announce and to_exit:
-                self.announce_move_to(destination, to_exit.name)
-            # Capture old location BEFORE setting the new one
-            old_coord = self.location.coord if self.location and self.location.is_node else None
-            if self.location:
-                self.location.remove_object(self)
-            self.location = destination
-            destination.add_object(self)
+            # update to be atomic and bypass thread-safety patch
+            old_coord = loc.coord if loc and loc.is_node else None
+            if loc:
+                with loc.lock:
+                    with destination.lock:
+                        if announce:
+                            self.announce_move_to(loc, to_exit)
+                        loc._contents.discard(self.id)
+                        destination._contents.add(self.id)
+                        destination._add_exits(self)
+                        self.location = destination
+                        if announce:
+                            self.announce_move_from(destination, from_exit)
+            else:
+                with destination.lock:
+                    destination._contents.add(self.id)
+                    destination._add_exits(self)
+                    self.location = destination
+                    if announce:
+                        self.announce_move_from(destination, from_exit)
             if settings.MAP_ENABLED:
                 mh = get_map_handler()
                 if self.is_pc:
@@ -666,8 +689,6 @@ class Object:
                     # mapables appear on the map
                     mh.move_mapable(self, destination.coord, old_coord)
             self.at_post_move(destination, to_exit)
-            if announce and from_exit:
-                self.announce_move_from(self.location, from_exit)
 
         pre = self.at_pre_move(destination, to_exit)
         if not force:
@@ -761,6 +782,15 @@ class Object:
     def announce_move_from(self, destination: Node | Object, from_exit: str | None):
         if not self.location:
             return
+        if not from_exit:
+            self.location.msg_contents(
+                f"$You(mover) $conj({self.move_verb}) in.",
+                mapping={"mover": self},
+                from_obj=self,
+                exclude=self,
+                type="move",
+            )
+            return
         if from_exit == "up":
             from_str = "from above"
         elif from_exit == "down":
@@ -776,7 +806,17 @@ class Object:
         )
 
     def announce_move_to(self, source_location: Node | Object, to_exit: str | None):
-        if not self.location:
+        loc = self.location
+        if not loc:
+            return
+        if not to_exit:
+            loc.msg_contents(
+                f"$You(mover) $conj({self.move_verb}) away.",
+                mapping={"mover": self},
+                from_obj=self,
+                exclude=self,
+                type="move",
+            )
             return
         if to_exit == "up":
             to_str = "upwards"
@@ -784,7 +824,7 @@ class Object:
             to_str = "downwards"
         else:
             to_str = f"to the {to_exit}"
-        self.location.msg_contents(
+        loc.msg_contents(
             f"$You(mover) $conj({self.move_verb}) {to_str}.",
             mapping={"mover": self},
             from_obj=self,

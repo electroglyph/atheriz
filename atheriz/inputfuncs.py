@@ -8,6 +8,8 @@ if TYPE_CHECKING:
     from atheriz.websocket import Connection
     from atheriz.objects.nodes import Node
     from atheriz.objects.base_obj import Object
+    
+_IGNORE_KEYS = ["save", "quit"]
 
 def inputfunc(name: str | None = None):
     """
@@ -111,6 +113,8 @@ class InputFuncs:
                 if not cmd and settings.AUTO_COMMAND_ALIASING:
                     keys = get_loggedin_cmdset().get_keys()
                     for key in keys:
+                        if key in _IGNORE_KEYS:
+                            continue
                         if key.startswith(cmd_key):
                             cmd = get_loggedin_cmdset().get(key)
                             # using the execute below, so set our args properly
@@ -133,6 +137,8 @@ class InputFuncs:
                 if settings.AUTO_COMMAND_ALIASING:
                     keys = get_unloggedin_cmdset().get_keys()
                     for key in keys:
+                        if key in _IGNORE_KEYS:
+                            continue
                         if key.startswith(cmd_key):
                             cmd = get_unloggedin_cmdset().get(key)
                             # using the execute below, so set our args properly
