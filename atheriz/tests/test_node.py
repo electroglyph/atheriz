@@ -19,6 +19,10 @@ def setup_teardown():
     TEST_SAVE_DIR.mkdir()
 
     obj_singleton._ALL_OBJECTS.clear()
+    
+    # Clear NodeHandler state
+    from atheriz.singletons.get import get_node_handler
+    get_node_handler().clear()
 
     yield
 

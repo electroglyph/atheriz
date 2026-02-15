@@ -216,6 +216,10 @@ class NodeHandler:
             for v in self.areas.values():
                 v.clear()
             self.areas.clear()
+        with self.lock2:
+            self.transitions.clear()
+        with self.lock3:
+            self.doors.clear()
 
     def get_area(self, name: str) -> NodeArea | None:
         with self.lock:
