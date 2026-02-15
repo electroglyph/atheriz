@@ -1,4 +1,4 @@
-from .objects import load_files
+from .objects import load_files, load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
 from atheriz.singletons.objects import filter_by, _ALL_OBJECTS, _ALL_OBJECTS_LOCK
 from atheriz.objects.persist import save
@@ -13,7 +13,8 @@ if TYPE_CHECKING:
 
 
 def do_startup():
-    load_files()
+    # load_files()
+    load_objects()
     get_async_threadpool()
     get_map_handler()
     get_node_handler()

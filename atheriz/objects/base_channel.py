@@ -166,14 +166,16 @@ class Channel:
         with self.lock:
             self.history.clear()
 
-    def __getstate__(self) -> dict:
-        d = self.__dict__.copy()
-        del d["lock"]
-        del d["command"]
-        del d["listeners"]
-        d["__import_path__"] = get_import_path(self)
-        d["history"] = list(d["history"])
-        return d
+    # def __getstate__(self) -> dict:
+    #     d = self.__dict__.copy()
+    #     del d["lock"]
+    #     del d["command"]
+    #     del d["listeners"]
+    #     d["__import_path__"] = get_import_path(self)
+    #     d["history"] = list(d["history"])
+    #     return d
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)
+        self.lock = RLock()
+        

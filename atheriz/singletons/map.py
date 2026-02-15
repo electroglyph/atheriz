@@ -14,6 +14,7 @@ from pathlib import Path
 from atheriz.logger import logger
 import atheriz.settings as settings
 import json
+import dill
 import time
 import copy
 from typing import TYPE_CHECKING, Any
@@ -39,15 +40,15 @@ class LegendEntry:
         self.fg = 170.0
         self.bg = None
 
-    def __getstate__(self):
-        d = self.__dict__.copy()
-        d["coord"] = tuple_to_str(d["coord"])
-        return d
+    # def __getstate__(self):
+    #     d = self.__dict__.copy()
+    #     d["coord"] = tuple_to_str(d["coord"])
+    #     return d
 
-    def __setstate__(self, state):
-        if state:
-            self.__dict__.update(state)
-            self.coord = str_to_tuple(state["coord"])
+    # def __setstate__(self, state):
+    #     if state:
+    #         self.__dict__.update(state)
+    #         self.coord = str_to_tuple(state["coord"])
 
 
 class MapInfo:
@@ -69,54 +70,60 @@ class MapInfo:
         self.listeners: dict[int, Object] = {}
         self.lock = RLock()
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        del state["lock"]
-        del state["objects"]
-        del state["listeners"]
-        state["__import_path__"] = get_import_path(self)
-        if self.legend_entries:
-            entries = []
-            for entry in self.legend_entries:
-                entries.append(entry.__getstate__())
-            state["legend_entries"] = entries
-        if self.pre_grid:
-            pre_grid = {}
-            for k, v in self.pre_grid.items():
-                pre_grid[tuple_to_str(k)] = v
-            state["pre_grid"] = pre_grid
-        if self.post_grid:
-            post_grid = {}
-            for k, v in self.post_grid.items():
-                post_grid[tuple_to_str(k)] = v
-            state["post_grid"] = post_grid
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
+    #     del state["lock"]
+    #     del state["objects"]
+    #     del state["listeners"]
+    #     state["__import_path__"] = get_import_path(self)
+    #     if self.legend_entries:
+    #         entries = []
+    #         for entry in self.legend_entries:
+    #             entries.append(entry.__getstate__())
+    #         state["legend_entries"] = entries
+    #     if self.pre_grid:
+    #         pre_grid = {}
+    #         for k, v in self.pre_grid.items():
+    #             pre_grid[tuple_to_str(k)] = v
+    #         state["pre_grid"] = pre_grid
+    #     if self.post_grid:
+    #         post_grid = {}
+    #         for k, v in self.post_grid.items():
+    #             post_grid[tuple_to_str(k)] = v
+    #         state["post_grid"] = post_grid
 
-        return state
+    #     return state
 
+    # def __setstate__(self, state):
+    #     self.__dict__.update(state)
+    #     self.lock = RLock()
+    #     self.objects: dict[int, Object] = {}
+    #     self.listeners: dict[int, Object] = {}
+    #     if state.get("legend_entries"):
+    #         entries = []
+    #         for entry_state in state["legend_entries"]:
+    #             entry = LegendEntry()
+    #             entry.__setstate__(entry_state)
+    #             entries.append(entry)
+    #         self.legend_entries = entries
+    #     else:
+    #         self.legend_entries = []
+    #     if state.get("pre_grid"):
+    #         pre_grid = {}
+    #         for k, v in state["pre_grid"].items():
+    #             pre_grid[str_to_tuple(k)] = v
+    #         self.pre_grid = pre_grid
+    #     if state.get("post_grid"):
+    #         post_grid = {}
+    #         for k, v in state["post_grid"].items():
+    #             post_grid[str_to_tuple(k)] = v
+    #         self.post_grid = post_grid
+    
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.lock = RLock()
         self.objects: dict[int, Object] = {}
         self.listeners: dict[int, Object] = {}
-        if state.get("legend_entries"):
-            entries = []
-            for entry_state in state["legend_entries"]:
-                entry = LegendEntry()
-                entry.__setstate__(entry_state)
-                entries.append(entry)
-            self.legend_entries = entries
-        else:
-            self.legend_entries = []
-        if state.get("pre_grid"):
-            pre_grid = {}
-            for k, v in state["pre_grid"].items():
-                pre_grid[str_to_tuple(k)] = v
-            self.pre_grid = pre_grid
-        if state.get("post_grid"):
-            post_grid = {}
-            for k, v in state["post_grid"].items():
-                post_grid[str_to_tuple(k)] = v
-            self.post_grid = post_grid
 
     def place_walls(self, coord: tuple[int, int], char: str):
         """
@@ -414,25 +421,37 @@ def _save_file(data: Any, filename: str):
 
 class MapHandler:
     def __init__(self) -> None:
-        mapdata = _load_file("mapdata")
-        if mapdata:
-            new_data = {}
-            for k, v in mapdata.items():
-                mi = MapInfo()
-                mi.__setstate__(v)
-                new_data[str_to_tuple(k)] = mi
-            self.data = new_data
+        self.lock = RLock()
+        p = Path(settings.SAVE_PATH) / "mapdata"
+        if p.exists():
+            with p.open("rb") as f:
+                self.data = dill.load(f)
         else:
             self.data: dict[tuple[str, int], MapInfo] = {}
-        self.lock = RLock()
+    # def __init__(self) -> None:
+    #     mapdata = _load_file("mapdata")
+    #     if mapdata:
+    #         new_data = {}
+    #         for k, v in mapdata.items():
+    #             mi = MapInfo()
+    #             mi.__setstate__(v)
+    #             new_data[str_to_tuple(k)] = mi
+    #         self.data = new_data
+    #     else:
+    #         self.data: dict[tuple[str, int], MapInfo] = {}
+    #     self.lock = RLock()
 
     def save(self):
-        logger.info("Saving map data...")
-        data = {}
         with self.lock:
-            for k, v in self.data.items():
-                data[tuple_to_str(k)] = v.__getstate__()
-        _save_file(data, "mapdata")
+            dill.dump(self.data, open(Path(settings.SAVE_PATH) / "mapdata", "wb"))
+
+    # def save(self):
+    #     logger.info("Saving map data...")
+    #     data = {}
+    #     with self.lock:
+    #         for k, v in self.data.items():
+    #             data[tuple_to_str(k)] = v.__getstate__()
+    #     _save_file(data, "mapdata")
 
     def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo):
         with self.lock:

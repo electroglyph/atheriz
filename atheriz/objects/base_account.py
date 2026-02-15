@@ -94,10 +94,12 @@ class Account:
                 return True
             return False
 
-    def __getstate__(self):
-        d = {k: v for k, v in self.__dict__.items() if k not in IGNORE_FIELDS}
-        d["__import_path__"] = get_import_path(self)
-        return d
+    # def __getstate__(self):
+    #     d = {k: v for k, v in self.__dict__.items() if k not in IGNORE_FIELDS}
+    #     d["__import_path__"] = get_import_path(self)
+    #     return d
+    
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.lock = RLock()

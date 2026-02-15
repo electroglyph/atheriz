@@ -4,7 +4,7 @@ from threading import Lock, RLock
 from atheriz.utils import get_import_path, instance_from_string
 import atheriz.settings as settings
 from pathlib import Path
-import json
+import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
@@ -167,7 +167,20 @@ def load_files() -> Any:
     set_id(biggest_id)
 
 
+# def save_objects():
+#     with _ALL_OBJECTS_LOCK:
+#         objs = list(_ALL_OBJECTS.values())
+#     save(objs)
+
+def load_objects():
+    global _ALL_OBJECTS, _OBJECT_MAP
+    with _ALL_OBJECTS_LOCK:
+        _ALL_OBJECTS = dill.load(open(Path(settings.SAVE_PATH) / "objects", "rb"))
+    with _OBJECT_MAP_LOCK:
+        _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
+
 def save_objects():
     with _ALL_OBJECTS_LOCK:
-        objs = list(_ALL_OBJECTS.values())
-    save(objs)
+        dill.dump(_ALL_OBJECTS, open(Path(settings.SAVE_PATH) / "objects", "wb"))
+    with _OBJECT_MAP_LOCK:
+        dill.dump(_OBJECT_MAP, open(Path(settings.SAVE_PATH) / "object_map", "wb"))

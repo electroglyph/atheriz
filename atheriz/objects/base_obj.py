@@ -171,65 +171,76 @@ class Object:
             if not lock(accessing_obj):
                 return False
         return True
-
+    
     def __getstate__(self):
-        d = self.__dict__.copy()
-        for field in IGNORE_FIELDS:
-            d.pop(field, None)
-        d["_contents"] = list(self._contents)
-        if self.internal_cmdset:
-            d["internal_cmdset"] = self.internal_cmdset.__getstate__()
-        else:
-            d["internal_cmdset"] = None
-        if self.external_cmdset:
-            d["external_cmdset"] = self.external_cmdset.__getstate__()
-        else:
-            d["external_cmdset"] = None
-        d["__import_path__"] = get_import_path(self)
-        d["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
-        if self.location and self.location.is_node:
-            d["location"] = tuple_to_str(self.location.coord)
-        elif self.location:
-            d["location"] = self.location.id
-        else:
-            d["location"] = None
-        d["home"] = tuple_to_str(self.home) if self.home else None
-        return d
-
+        state = self.__dict__.copy()
+        state.pop("session", None)
+        return state
+    
     def __setstate__(self, state):
-        self.locks = dill.loads(base64.b64decode(state["locks"]))
-        del state["locks"]
-        self._contents = set(state["_contents"])
-        del state["_contents"]
         self.__dict__.update(state)
-        if state.get("internal_cmdset"):
-            self.internal_cmdset = CmdSet()
-            self.internal_cmdset.__setstate__(state["internal_cmdset"])
-        else:
-            self.internal_cmdset = None
-
-        if state.get("external_cmdset"):
-            self.external_cmdset = CmdSet()
-            self.external_cmdset.__setstate__(state["external_cmdset"])
-        else:
-            self.external_cmdset = None
-        nh = get_node_handler()
-        if state["location"]:
-            if isinstance(state["location"], str):
-                self.location = nh.get_node(str_to_tuple(state["location"]))
-            else:
-                loc = get(state["location"])
-                if loc:
-                    self.location = loc[0]
-                else:
-                    self.location = None
-        else:
-            self.location = None
-        self.home = str_to_tuple(state["home"]) if state["home"] else None
-        if self._is_tickable:
-            at = get_async_ticker()
-            at.add_coro(self.at_tick, self._tick_seconds)
+        self.session = None
+        self.lock = RLock()
         self.at_init()
+    
+    # def __getstate__(self):
+    #     d = self.__dict__.copy()
+    #     for field in IGNORE_FIELDS:
+    #         d.pop(field, None)
+    #     d["_contents"] = list(self._contents)
+    #     if self.internal_cmdset:
+    #         d["internal_cmdset"] = self.internal_cmdset.__getstate__()
+    #     else:
+    #         d["internal_cmdset"] = None
+    #     if self.external_cmdset:
+    #         d["external_cmdset"] = self.external_cmdset.__getstate__()
+    #     else:
+    #         d["external_cmdset"] = None
+    #     d["__import_path__"] = get_import_path(self)
+    #     d["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
+    #     if self.location and self.location.is_node:
+    #         d["location"] = tuple_to_str(self.location.coord)
+    #     elif self.location:
+    #         d["location"] = self.location.id
+    #     else:
+    #         d["location"] = None
+    #     d["home"] = tuple_to_str(self.home) if self.home else None
+    #     return d
+
+    # def __setstate__(self, state):
+    #     self.locks = dill.loads(base64.b64decode(state["locks"]))
+    #     del state["locks"]
+    #     self._contents = set(state["_contents"])
+    #     del state["_contents"]
+    #     self.__dict__.update(state)
+    #     if state.get("internal_cmdset"):
+    #         self.internal_cmdset = CmdSet()
+    #         self.internal_cmdset.__setstate__(state["internal_cmdset"])
+    #     else:
+    #         self.internal_cmdset = None
+
+    #     if state.get("external_cmdset"):
+    #         self.external_cmdset = CmdSet()
+    #         self.external_cmdset.__setstate__(state["external_cmdset"])
+    #     else:
+    #         self.external_cmdset = None
+    #     nh = get_node_handler()
+    #     if state["location"]:
+    #         if isinstance(state["location"], str):
+    #             self.location = nh.get_node(str_to_tuple(state["location"]))
+    #         else:
+    #             loc = get(state["location"])
+    #             if loc:
+    #                 self.location = loc[0]
+    #             else:
+    #                 self.location = None
+    #     else:
+    #         self.location = None
+    #     self.home = str_to_tuple(state["home"]) if state["home"] else None
+    #     if self._is_tickable:
+    #         at = get_async_ticker()
+    #         at.add_coro(self.at_tick, self._tick_seconds)
+    #     self.at_init()
 
     @property
     def tick_seconds(self):
