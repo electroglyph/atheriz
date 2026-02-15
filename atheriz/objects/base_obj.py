@@ -624,11 +624,23 @@ class Object:
         if not destination.access(self, "put"):
             return False
         loc = self.location
+        def sort_locks(a, b):
+            """Helper to sort objects for locking order to avoid deadlocks."""
+            def get_key(o):
+                # (is_node (0=Object, 1=Node), unique_val)
+                # Objects locked before Nodes.
+                if getattr(o, "is_node", False):
+                    return (1, o.coord)
+                return (0, o.id)
+            
+            return sorted([a, b], key=get_key)
+
         def do_item_move():
             # update to be atomic and bypass thread-safety patch
             if loc:
-                with loc.lock:
-                    with destination.lock:
+                ordered = sort_locks(loc, destination)
+                with ordered[0].lock:
+                    with ordered[1].lock:
                         loc._contents.discard(self.id)
                         object.__setattr__(self, "location", destination)
                         destination._contents.add(self.id)
@@ -665,8 +677,9 @@ class Object:
             # update to be atomic and bypass thread-safety patch
             old_coord = loc.coord if loc and loc.is_node else None
             if loc:
-                with loc.lock:
-                    with destination.lock:
+                ordered = sort_locks(loc, destination)
+                with ordered[0].lock:
+                    with ordered[1].lock:
                         if announce:
                             self.announce_move_to(loc, to_exit)
                         loc._contents.discard(self.id)
