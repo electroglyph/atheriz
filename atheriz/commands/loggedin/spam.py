@@ -1,8 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
-from atheriz.objects.persist import save
-from atheriz.singletons.objects import add_object
+from atheriz.singletons.objects import add_object, save_objects
 from atheriz.singletons.get import get_node_handler
 from atheriz import settings
 from pathlib import Path
@@ -62,8 +61,7 @@ class SpamCommand(Command):
             account.add_character(character)
             add_object(account)
             add_object(character)
-            save(account)
-            save(character)
+            save_objects()
 
             created.append((account_name, password, char_name))
 

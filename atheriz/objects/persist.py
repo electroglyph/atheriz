@@ -12,7 +12,7 @@ def get_save_path(obj: Any, append_id: bool = True) -> Path:
     return Path(settings.SAVE_PATH) / (get_import_path(obj) + ("." + str(obj.id) if append_id else ""))
 
 
-def save_iterable(objs: Iterable[Any]) -> None:
+def save_iterable(objs: Iterable[Any]) -> None: 
     all_objs = []
     save_path: Path | None = None
     for obj in objs:

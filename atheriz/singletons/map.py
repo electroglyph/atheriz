@@ -120,11 +120,12 @@ class MapInfo:
     #         self.post_grid = post_grid
     
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state.pop("lock", None)
-        state.pop("objects", None)
-        state.pop("listeners", None)
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            state.pop("objects", None)
+            state.pop("listeners", None)
+            return state
     
     def __setstate__(self, state):
         self.__dict__.update(state)

@@ -1,3 +1,4 @@
+from atheriz.singletons.objects import save_objects
 import _pytest.doctest
 from atheriz.utils import compress_whitespace
 from typing import Callable
@@ -173,9 +174,10 @@ class Object:
         return True
     
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state.pop("session", None)
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("session", None)
+            return state
     
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -300,10 +302,7 @@ class Object:
         if channel:
             channel.msg(f"{self.name} has disconnected.")
         if settings.AUTOSAVE_PLAYERS_ON_DISCONNECT:
-            with self.lock:
-                save(self)
-            if self._contents:
-                save(self.contents)
+            save_objects()
 
     def subscribe(self, channel: Channel):
         """Subscribe to a channel."""
