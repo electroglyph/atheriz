@@ -180,7 +180,22 @@ def load_objects():
         _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
 
 def save_objects():
-    with _ALL_OBJECTS_LOCK:
-        dill.dump(_ALL_OBJECTS, open(Path(settings.SAVE_PATH) / "objects", "wb"))
-    with _OBJECT_MAP_LOCK:
-        dill.dump(_OBJECT_MAP, open(Path(settings.SAVE_PATH) / "object_map", "wb"))
+    save_path = Path(settings.SAVE_PATH)
+    save_path.mkdir(parents=True, exist_ok=True)
+
+    def _atomic_save(data, filename, lock):
+        path = save_path / filename
+        temp_path = path.with_suffix(path.suffix + ".tmp")
+        with lock:
+            try:
+                with temp_path.open("wb") as f:
+                    dill.dump(data, f)
+                temp_path.replace(path)
+            except Exception as e:
+                from atheriz.logger import logger
+                logger.error(f"Error saving {filename}: {e}")
+                if temp_path.exists():
+                    temp_path.unlink()
+
+    _atomic_save(_ALL_OBJECTS, "objects", _ALL_OBJECTS_LOCK)
+    _atomic_save(_OBJECT_MAP, "object_map", _OBJECT_MAP_LOCK)

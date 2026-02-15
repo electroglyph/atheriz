@@ -424,8 +424,12 @@ class MapHandler:
         self.lock = RLock()
         p = Path(settings.SAVE_PATH) / "mapdata"
         if p.exists():
-            with p.open("rb") as f:
-                self.data = dill.load(f)
+            try:
+                with p.open("rb") as f:
+                    self.data = dill.load(f)
+            except Exception as e:
+                logger.error(f"Error loading map data from {p}: {e}")
+                self.data: dict[tuple[str, int], MapInfo] = {}
         else:
             self.data: dict[tuple[str, int], MapInfo] = {}
     # def __init__(self) -> None:
@@ -443,7 +447,17 @@ class MapHandler:
 
     def save(self):
         with self.lock:
-            dill.dump(self.data, open(Path(settings.SAVE_PATH) / "mapdata", "wb"))
+            path = Path(settings.SAVE_PATH) / "mapdata"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            temp_path = path.with_suffix(path.suffix + ".tmp")
+            try:
+                with temp_path.open("wb") as f:
+                    dill.dump(self.data, f)
+                temp_path.replace(path)
+            except Exception as e:
+                logger.error(f"Error saving map data: {e}")
+                if temp_path.exists():
+                    temp_path.unlink()
 
     # def save(self):
     #     logger.info("Saving map data...")
