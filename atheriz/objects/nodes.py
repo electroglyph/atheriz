@@ -93,6 +93,9 @@ class Node:
     is_node = True
     is_pc = False
     is_object = False
+    _is_tickable = False
+    _tick_seconds = settings.DEFAULT_TICK_SECONDS
+
 
     def at_desc(self, *args, **kwargs):
         return self.desc

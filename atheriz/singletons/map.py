@@ -119,6 +119,13 @@ class MapInfo:
     #             post_grid[str_to_tuple(k)] = v
     #         self.post_grid = post_grid
     
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("lock", None)
+        state.pop("objects", None)
+        state.pop("listeners", None)
+        return state
+    
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.lock = RLock()
@@ -399,24 +406,6 @@ class MapInfo:
         with self.lock:
             self.objects.update(dict([(m.id, m) for m in mapables]))
         self.render_legend()
-
-
-def _load_file(filename: str) -> dict[str, Any]:
-    path = Path(settings.SAVE_PATH) / filename
-    if not path.exists():
-        logger.warning(f"File {filename} does not exist.")
-        return {}
-    with path.open("r") as f:
-        return json.load(f)
-
-
-def _save_file(data: Any, filename: str):
-    path = Path(settings.SAVE_PATH) / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    with temp_path.open("w") as f:
-        json.dump(data, f)
-    temp_path.replace(path)
 
 
 class MapHandler:
