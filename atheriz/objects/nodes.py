@@ -196,46 +196,6 @@ class Node:
         """
         with self.lock:
             self.locks.pop(lock_name, None)
-
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     state["_contents"] = list(state["_contents"])
-    #     del state["lock"]
-    #     if "access" in state:
-    #         del state["access"]
-    #     if self.links:
-    #         state["links"] = [l.__getstate__() for l in self.links]
-    #     state["__import_path__"] = get_import_path(self)
-    #     state["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
-    #     state["coord"] = tuple_to_str(state["coord"])
-    #     return state
-
-    # def __setstate__(self, state):
-    #     self.lock = RLock()
-    #     self.locks = dill.loads(base64.b64decode(state["locks"]))
-    #     del state["locks"]
-    #     self._contents = set(state["_contents"])
-    #     del state["_contents"]
-    #     links = state["links"]
-    #     del state["links"]
-    #     state["coord"] = str_to_tuple(state["coord"])
-    #     self.__dict__.update(state)
-    #     if settings.SLOW_LOCKS:
-    #         self.access = self._safe_access
-    #     else:
-    #         self.access = self._fast_access
-    #     if links:
-    #         self.links = []
-    #         for l in links:
-    #             link = instance_from_string(l["__import_path__"])
-    #             link.__setstate__(l)
-    #             self.links.append(link)
-    #     else:
-    #         self.links = None
-    #     if self._is_tickable:
-    #         at = get_async_ticker()
-    #         at.add_coro(self.at_tick, self._tick_seconds)
-    #     self.at_init()
     
     def __getstate__(self):
         with self.lock:

@@ -34,7 +34,6 @@ import dill
 import base64
 
 if TYPE_CHECKING:
-    from atheriz.commands.cmdset import CmdSet
     from atheriz.objects.session import Session
     from atheriz.singletons.node import Node, NodeLink
     from atheriz.objects.base_account import Account
