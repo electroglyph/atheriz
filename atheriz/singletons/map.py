@@ -40,6 +40,18 @@ class LegendEntry:
         self.fg = 170.0
         self.bg = None
 
+    def __eq__(self, other):
+        if not isinstance(other, LegendEntry):
+            return False
+        return (
+            self.symbol == other.symbol and
+            self.desc == other.desc and
+            self.coord == other.coord and
+            self.show == other.show and
+            self.fg == other.fg and
+            self.bg == other.bg
+        )
+
     # def __getstate__(self):
     #     d = self.__dict__.copy()
     #     d["coord"] = tuple_to_str(d["coord"])
@@ -132,6 +144,16 @@ class MapInfo:
         self.lock = RLock()
         self.objects: dict[int, Object] = {}
         self.listeners: dict[int, Object] = {}
+
+    def __eq__(self, other):
+        if not isinstance(other, MapInfo):
+            return False
+        return (
+            self.name == other.name and
+            self.pre_grid == other.pre_grid and
+            self.post_grid == other.post_grid and
+            self.legend_entries == other.legend_entries
+        )
 
     def place_walls(self, coord: tuple[int, int], char: str):
         """

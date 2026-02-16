@@ -19,7 +19,8 @@ from pyatomix import AtomicInt
 # atheriz.settings — everything else (object system, websockets, utils)
 # is irrelevant for these unit tests.
 # ---------------------------------------------------------------------------
-for _mod in [
+# Save original sys.modules state to prevent poisoning other tests
+_mods_to_mock = [
     "atheriz.singletons.get",
     "atheriz.singletons.objects",
     "atheriz.utils",
@@ -28,7 +29,10 @@ for _mod in [
     "atheriz.objects.session",
     "atheriz.objects.base_account",
     "atheriz.objects.base_obj",
-]:
+]
+_original_modules = {m: sys.modules.get(m) for m in _mods_to_mock}
+
+for _mod in _mods_to_mock:
     if _mod == "atheriz.objects.base_obj":
         mod_mock = MagicMock()
         # Object needs to be a type for isinstance() checks to work
@@ -39,6 +43,15 @@ for _mod in [
 
 import atheriz.settings as settings
 from atheriz.singletons.time import GameTime
+
+# RESTORE sys.modules immediately after import. GameTime has its references,
+# and we stop poisoning the global state for other tests (like serialization).
+for m, val in _original_modules.items():
+    if val is None:
+        if m in sys.modules:
+            del sys.modules[m]
+    else:
+        sys.modules[m] = val
 
 # ========================== Helpers / Fixtures ==============================
 

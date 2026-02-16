@@ -34,11 +34,13 @@ def ensure_thread_safe(obj):
     orig_set = object.__setattr__
 
     def __getattribute__(self, name):
-        # always allow access to the lock itself
-        if name == "lock":
+        # always allow access to the lock itself and other essentials
+        if name in ("lock", "__dict__", "__class__"):
             return orig_get(self, name)
-        # wrap everything else in the lock
-        with orig_get(self, "lock"):
+        
+        lock = orig_get(self, "lock")
+
+        with lock:
             return orig_get(self, name)
 
     def __setattr__(self, name, value):

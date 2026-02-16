@@ -168,7 +168,9 @@ class Channel:
 
     def __getstate__(self) -> dict:
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __setstate__(self, state: dict) -> None:
         self.__dict__.update(state)

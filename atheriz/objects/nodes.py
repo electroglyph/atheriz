@@ -239,7 +239,9 @@ class Node:
     
     def __getstate__(self):
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
     
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -689,6 +691,16 @@ class NodeGrid:
     def __str__(self):
         return f"NodeGrid(z = {self.z}, area = {self.area})"
 
+    def __eq__(self, other):
+        if not isinstance(other, NodeGrid):
+            return False
+        return (
+            self.area == other.area and
+            self.z == other.z and
+            self.nodes == other.nodes and
+            self.data == other.data
+        )
+
     def __len__(self):
         return len(self.nodes)
 
@@ -743,7 +755,9 @@ class NodeGrid:
 
     def __getstate__(self):
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -787,6 +801,17 @@ class NodeArea:
     def __str__(self):
         return f"Area {self.name}: ".join(
             f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items()
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, NodeArea):
+            return False
+        return (
+            self.name == other.name and
+            self.theme == other.theme and
+            self.grids == other.grids and
+            self.data == other.data and
+            self.linked_areas == other.linked_areas
         )
 
     def get_nodes(self, coords: list[tuple[int, int, int]]) -> list[Node]:
@@ -886,7 +911,9 @@ class NodeArea:
     
     def __getstate__(self):
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
     
     def __setstate__(self, state):
         self.__dict__.update(state)
@@ -925,10 +952,13 @@ class Transition:
         self.from_coord = from_coord
         self.to_coord = to_coord
         self.from_link = from_link  # exit name
+        self.lock = RLock()
     
     def __getstate__(self):
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
     
     def __setstate__(self, state):
         self.__dict__.update(state)

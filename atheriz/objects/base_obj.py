@@ -177,6 +177,7 @@ class Object:
         with self.lock:
             state = self.__dict__.copy()
             state.pop("session", None)
+            state.pop("lock", None)
             return state
     
     def __setstate__(self, state):

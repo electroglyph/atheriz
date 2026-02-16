@@ -96,7 +96,9 @@ class Account:
 
     def __getstate__(self):
         with self.lock:
-            return self.__dict__.copy()
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
     
 
     def __setstate__(self, state):
