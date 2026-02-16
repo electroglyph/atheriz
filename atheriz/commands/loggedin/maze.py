@@ -96,8 +96,8 @@ class MazeCommand(Command):
         end = maze1_exit
         if node:
             caller.msg(f"moving to: {node} ...")
-            caller.move_to(node)
             caller.map_enabled = True
+            caller.move_to(node)
 
 
 def create_maze(width: int, height: int) -> dict:

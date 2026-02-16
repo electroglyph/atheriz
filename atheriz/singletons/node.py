@@ -76,14 +76,14 @@ class NodeHandler:
     #     with self.lock3:
     #         _save_doors(self.doors)
 
-    def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
-        result = []
-        with self.lock:
-            for v in self.areas.values():
-                o = v.get_objects(include_objects, include_npcs, include_pcs)
-                if o:
-                    result.extend(o)
-        return result
+    # def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
+    #     result = []
+    #     with self.lock:
+    #         for v in self.areas.values():
+    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
+    #             if o:
+    #                 result.extend(o)
+    #     return result
 
     def get_doors(self, coord: tuple[str, int, int, int]) -> dict[str, Door] | None:
         with self.lock3:

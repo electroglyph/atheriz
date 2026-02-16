@@ -92,9 +92,13 @@ class Node:
 
     is_node = True
     is_pc = False
-    is_object = False
-    _is_tickable = False
-    _tick_seconds = settings.DEFAULT_TICK_SECONDS
+    is_item = False
+    is_connected = False
+    is_npc = False
+    is_mapable = False
+    is_container = False
+    is_channel = False
+    is_account = False
 
     def at_desc(self, *args, **kwargs):
         return self.desc
@@ -256,39 +260,39 @@ class Node:
         with self.lock:
             del self.data[key]
 
-    def pre_emit_sound(
-        self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
-    ) -> tuple:
-        """set sound_msg to '' to cancel sound propagation"""
-        return emitter, sound_desc, sound_msg, loud, is_say
+    # def pre_emit_sound(
+    #     self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
+    # ) -> tuple:
+    #     """set sound_msg to '' to cancel sound propagation"""
+    #     return emitter, sound_desc, sound_msg, loud, is_say
 
-    def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool):
-        emitter, sound_desc, sound_msg, loud, is_say = self.pre_emit_sound(
-            emitter, sound_desc, sound_msg, loud, is_say
-        )
-        if not sound_msg:
-            return
-        objs = self.get_objects(True, True, True)
-        for o in objs:
-            if o.can_hear:
-                o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
+    # def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool):
+    #     emitter, sound_desc, sound_msg, loud, is_say = self.pre_emit_sound(
+    #         emitter, sound_desc, sound_msg, loud, is_say
+    #     )
+    #     if not sound_msg:
+    #         return
+    #     objs = self.get_objects(True, True, True)
+    #     for o in objs:
+    #         if o.can_hear:
+    #             o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
 
-    def get_objects(
-        self, include_objects=True, include_npcs=False, include_pcs=False
-    ) -> list[Object]:
-        if not self._contents:
-            return []
-        result = []
-        with self.lock:
-            for o in self.contents:
-                if (
-                    (include_objects and o.is_object)
-                    or (include_npcs and o.is_npc)
-                    or (include_pcs and o.is_pc)
-                ):
-                    # result.append((o, self))
-                    result.append(o)
-        return result
+    # def get_objects(
+    #     self, include_objects=True, include_npcs=False, include_pcs=False
+    # ) -> list[Object]:
+    #     if not self._contents:
+    #         return []
+    #     result = []
+    #     with self.lock:
+    #         for o in self.contents:
+    #             if (
+    #                 (include_objects and o.is_object)
+    #                 or (include_npcs and o.is_npc)
+    #                 or (include_pcs and o.is_pc)
+    #             ):
+    #                 # result.append((o, self))
+    #                 result.append(o)
+    #     return result
 
     def at_init(self):
         """
@@ -382,7 +386,7 @@ class Node:
         Args:
             obj (DefaultObject): object, character, etc. to add exit commands to
         """
-        cmdset = object.__getattribute__(obj, "internal_cmdset")
+        cmdset = obj.internal_cmdset
         cmdset.remove_by_tag("exits")
         try:
             if links := object.__getattribute__(self, "links"):
@@ -780,29 +784,29 @@ class NodeArea:
         with self.lock:
             del self.data[key]
 
-    def get_objects(
-        self,
-        include_objects=True,
-        include_npcs=False,
-        include_pcs=False,
-        include_linked_areas=False,
-    ):
-        result = []
-        with self.lock:
-            for v in self.grids.values():
-                o = v.get_objects(include_objects, include_npcs, include_pcs)
-                if o:
-                    result.extend(o)
-            if include_linked_areas:
-                if self.linked_areas:
-                    nh = get_node_handler()
-                    for a in self.linked_areas:
-                        area = nh.get_area(a)
-                        if area:
-                            o = area.get_objects(include_objects, include_npcs, include_pcs, True)
-                            if o:
-                                result.extend(o)
-        return result
+    # def get_objects(
+    #     self,
+    #     include_objects=True,
+    #     include_npcs=False,
+    #     include_pcs=False,
+    #     include_linked_areas=False,
+    # ):
+    #     result = []
+    #     with self.lock:
+    #         for v in self.grids.values():
+    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
+    #             if o:
+    #                 result.extend(o)
+    #         if include_linked_areas:
+    #             if self.linked_areas:
+    #                 nh = get_node_handler()
+    #                 for a in self.linked_areas:
+    #                     area = nh.get_area(a)
+    #                     if area:
+    #                         o = area.get_objects(include_objects, include_npcs, include_pcs, True)
+    #                         if o:
+    #                             result.extend(o)
+    #     return result
 
     def remove_linked_area(self, area: str):
         with self.lock:

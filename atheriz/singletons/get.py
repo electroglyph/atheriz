@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 from atheriz.settings import THREADPOOL_LIMIT
 from atheriz.logger import logger
-from threading import RLock
+from threading import Lock
 
 if TYPE_CHECKING:
     from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
@@ -34,7 +34,7 @@ _GAME_TIME: GameTime | None = None
 #         _INFLECT_ENGINE = engine()
 #     return _INFLECT_ENGINE
 
-_ID_LOCK = RLock()
+_ID_LOCK = Lock()
 _ID = -1
 
 
