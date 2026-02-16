@@ -121,3 +121,77 @@ def test_npc_move_announcements():
     assert "MoverNPC" in msg_text2
     assert "walks" in msg_text2 or "arrives" in msg_text2
     assert "south" in msg_text2
+
+def test_move_into_container():
+    container = Object.create(None, "Backpack", is_item=True, is_container=True)
+    item = Object.create(None, "Apple", is_item=True)
+    
+    success = item.move_to(container)
+    
+    assert success is True
+    assert item.location == container
+    assert item.id in container._contents
+    assert item in container.contents
+
+def test_move_between_containers():
+    c1 = Object.create(None, "Backpack", is_item=True, is_container=True)
+    c2 = Object.create(None, "Chest", is_item=True, is_container=True)
+    item = Object.create(None, "Apple", is_item=True)
+    
+    item.move_to(c1)
+    assert item.location == c1
+    
+    success = item.move_to(c2)
+    assert success is True
+    assert item.location == c2
+    assert item.id not in c1._contents
+    assert item.id in c2._contents
+
+def test_move_into_object_with_lock():
+    container = Object.create(None, "LockedBox", is_item=True, is_container=True)
+    item = Object.create(None, "Gold", is_item=True)
+    
+    # Add a lock that always fails
+    container.add_lock("put", lambda x: False)
+    
+    success = item.move_to(container)
+    assert success is False
+    assert item.location is None
+
+def test_move_hooks():
+    container = Object.create(None, "MagicBox", is_item=True, is_container=True)
+    item = Object.create(None, "Wand", is_item=True)
+    
+    item.at_pre_move = MagicMock(return_value=True)
+    item.at_post_move = MagicMock()
+    
+    success = item.move_to(container)
+    
+    assert success is True
+    item.at_pre_move.assert_called_with(container, None)
+    # Note: at_post_move is NOT called in non-node moves in base_obj.py
+    # So we don't assert it here for container moves.
+    
+    # Test pre_move blocking
+    item2 = Object.create(None, "CursedSword", is_item=True)
+    item2.at_pre_move = MagicMock(return_value=False)
+    
+    success2 = item2.move_to(container)
+    assert success2 is False
+    assert item2.location is None
+
+def test_nested_containers():
+    outer = Object.create(None, "LargeChest", is_item=True, is_container=True)
+    inner = Object.create(None, "SmallBox", is_item=True, is_container=True)
+    item = Object.create(None, "Gem", is_item=True)
+    
+    # item -> inner
+    item.move_to(inner)
+    # inner -> outer
+    success = inner.move_to(outer)
+    
+    assert success is True
+    assert inner.location == outer
+    assert item.location == inner
+    assert inner.id in outer._contents
+    assert item.id in inner._contents

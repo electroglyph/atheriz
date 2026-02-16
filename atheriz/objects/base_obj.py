@@ -643,14 +643,10 @@ class Object:
                 with ordered[0].lock:
                     with ordered[1].lock:
                         loc._contents.discard(self.id)
-                        object.__setattr__(self, "location", destination)
                         destination._contents.add(self.id)
-                        object.__setattr__(self, "last_touched_by", destination.id)
             else:
                 with destination.lock:
-                    object.__setattr__(self, "location", destination)
                     destination._contents.add(self.id)
-                    object.__setattr__(self, "last_touched_by", destination.id)
             with self.lock:
                 object.__setattr__(self, "location", destination)
                 object.__setattr__(self, "last_touched_by", destination.id)
