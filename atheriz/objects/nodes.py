@@ -18,7 +18,7 @@ from atheriz.objects import funcparser
 from atheriz.singletons.objects import get, filter_by
 from atheriz.objects.contents import search
 from atheriz.singletons.get import get_node_handler, get_async_ticker
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
 from atheriz.utils import wrap_truecolor

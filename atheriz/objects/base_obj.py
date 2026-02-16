@@ -14,7 +14,7 @@ from atheriz.singletons.get import (
 )
 from atheriz.objects.persist import save
 from atheriz.objects.contents import search, group_by_name
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.utils import (
     make_iter,
     is_iter,
