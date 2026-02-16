@@ -205,6 +205,7 @@ class Object:
             return state
 
     def __setstate__(self, state):
+        # this object.__setattr__ bullshit is for bypassing the thread-safety patch
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
         if hasattr(self, "_contents") and not isinstance(self._contents, set):

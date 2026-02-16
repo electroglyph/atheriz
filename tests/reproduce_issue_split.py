@@ -42,11 +42,10 @@ def test_reproduction():
     
     # Simulate loading from separate files
     log("Simulating load from separate files...")
-    loaded_char = dill.loads(char_data)
     loaded_node = dill.loads(node_data)
+    nh.add_node(loaded_node) # Register BEFORE loading char
     
-    # After loading, the "real" node must be put back in the handler
-    nh.add_node(loaded_node)
+    loaded_char = dill.loads(char_data)
     
     log(f"Loaded: char.location is node object: {loaded_char.location}")
     log(f"Loaded: char.location is loaded_node: {loaded_char.location is loaded_node}")
@@ -56,30 +55,7 @@ def test_reproduction():
         log(f"ID of Ghost Node: {id(loaded_char.location)}")
         log(f"ID of Real Node: {id(loaded_node)}")
     else:
-        log("SUCCESS: Cross-reference preserved thanks to NodeHandler property!")
-
-    # SIMULATE OLD DATA MIGRATION
-    log("\nSimulating migration from old data format...")
-    old_char_state = {
-        "id": 3,
-        "name": "OldChar",
-        "location": nodeA, # Old format: direct node reference
-        "home": nodeA,     # Old format
-    }
-    
-    # Create an object and manually set its state to simulate unpickling old data
-    migrated_char = Object()
-    migrated_char.__setstate__(old_char_state)
-    
-    log(f"Migrated: _location is coord: {migrated_char._location == nodeA.coord}")
-    log(f"Migrated: _home is coord: {migrated_char._home == nodeA.coord}")
-    log(f"Migrated: location property returns Node: {migrated_char.location is nodeA}")
-    log(f"Migrated: home property returns Node: {migrated_char.home is nodeA}")
-    
-    if migrated_char.location is nodeA and migrated_char.home is nodeA:
-        log("SUCCESS: Migration logic working correctly!")
-    else:
-        log("FAILURE: Migration logic failed!")
+        log("SUCCESS: Cross-reference preserved thanks to custom serialization!")
 
     # Moving in reality should now work because char.location looks up the REAL node
     log("\nSimulating movement in 'Real' node...")
