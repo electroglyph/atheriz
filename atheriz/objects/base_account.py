@@ -31,6 +31,11 @@ class Account:
         self.is_item = False
         self.is_account = True
         self.is_deleted = False
+        self.is_mapable = False
+        self.is_container = False
+        self.is_tickable = False
+        self.is_channel = False
+        self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -48,15 +53,6 @@ class Account:
         account.name = name
         account.password = Account.hash_password(password)
         account.characters = []
-        account.is_connected = False
-        account.is_pc = False
-        account.is_npc = False
-        account.is_item = False
-        account.is_mapable = False
-        account.is_container = False
-        account.is_tickable = False
-        account.is_channel = False
-        account.is_account = True
         add_object(account)
         return account
 

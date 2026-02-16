@@ -1,19 +1,16 @@
-from .objects import load_files, load_objects
+from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
 from atheriz.singletons.objects import save_objects, load_objects
-# from atheriz.objects.persist import save
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
 from typing import TYPE_CHECKING
-# from atheriz.server_events import at_server_start, at_server_stop, at_server_reload
 if TYPE_CHECKING:
     from atheriz.objects.base_channel import Channel
     from atheriz.objects.base_obj import Object
 
 
 def do_startup():
-    # load_files()
     load_objects()
     get_async_threadpool()
     get_map_handler()

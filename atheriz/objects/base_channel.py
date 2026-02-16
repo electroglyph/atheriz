@@ -92,6 +92,7 @@ class Channel:
         self.is_account = False
         self.is_channel = True
         self.is_deleted = False
+        self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
