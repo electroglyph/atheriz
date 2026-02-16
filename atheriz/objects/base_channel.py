@@ -173,8 +173,8 @@ class Channel:
             state.pop("lock", None)
             state.pop("command", None)
             state.pop("listeners", None)
-            state["history"] = list(state.get("history", []))
             return state
+
 
     def __setstate__(self, state: dict) -> None:
         object.__setattr__(self, "lock", RLock())
