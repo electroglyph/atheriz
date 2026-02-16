@@ -96,10 +96,9 @@ class Node:
     _is_tickable = False
     _tick_seconds = settings.DEFAULT_TICK_SECONDS
 
-
     def at_desc(self, *args, **kwargs):
         return self.desc
-    
+
     def at_tick(self):
         """
         Called every tick.
@@ -196,26 +195,28 @@ class Node:
         """
         with self.lock:
             self.locks.pop(lock_name, None)
-    
+
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
             state.pop("lock", None)
+            state.pop("access", None)
             return state
-    
+
     def __setstate__(self, state):
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        self.lock = RLock()
+        if hasattr(self, "_contents") and not isinstance(self._contents, set):
+            object.__setattr__(self, "_contents", set(self._contents))
         if settings.SLOW_LOCKS:
-            self.access = self._safe_access
+            object.__setattr__(self, "access", self._safe_access)
         else:
-            self.access = self._fast_access
+            object.__setattr__(self, "access", self._fast_access)
         if self._is_tickable:
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
-    
-    
+
     @property
     def tick_seconds(self):
         return self._tick_seconds
@@ -227,7 +228,7 @@ class Node:
             at.remove_coro(self.at_tick, self._tick_seconds)
             at.add_coro(self.at_tick, value)
         self._tick_seconds = value
-    
+
     @property
     def is_tickable(self):
         return self._is_tickable
@@ -497,7 +498,6 @@ class Node:
             )
             receiver.msg(outmessage)
 
-
     def msg_contents(
         self,
         text=None,
@@ -655,10 +655,10 @@ class NodeGrid:
         if not isinstance(other, NodeGrid):
             return False
         return (
-            self.area == other.area and
-            self.z == other.z and
-            self.nodes == other.nodes and
-            self.data == other.data
+            self.area == other.area
+            and self.z == other.z
+            and self.nodes == other.nodes
+            and self.data == other.data
         )
 
     def __len__(self):
@@ -723,27 +723,6 @@ class NodeGrid:
         self.__dict__.update(state)
         self.lock = RLock()
 
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     del state["lock"]
-    #     nodes = {}
-    #     for k, v in self.nodes.items():
-    #         nodes[_tuple_to_str(k)] = v.__getstate__()
-    #     state["nodes"] = nodes
-    #     state["__import_path__"] = get_import_path(self)
-    #     return state
-
-    # def __setstate__(self, state):
-    #     self.lock = RLock()
-    #     nodes = state["nodes"]
-    #     del state["nodes"]
-    #     self.__dict__.update(state)
-    #     self.nodes = {}
-    #     for k, v in nodes.items():
-    #         n = Node()
-    #         n.__setstate__(v)
-    #         self.nodes[_str_to_tuple(k)] = n
-
 
 class NodeArea:
     # name actually IS required, this is just to simplify deserialization
@@ -767,11 +746,11 @@ class NodeArea:
         if not isinstance(other, NodeArea):
             return False
         return (
-            self.name == other.name and
-            self.theme == other.theme and
-            self.grids == other.grids and
-            self.data == other.data and
-            self.linked_areas == other.linked_areas
+            self.name == other.name
+            and self.theme == other.theme
+            and self.grids == other.grids
+            and self.data == other.data
+            and self.linked_areas == other.linked_areas
         )
 
     def get_nodes(self, coords: list[tuple[int, int, int]]) -> list[Node]:
@@ -868,37 +847,16 @@ class NodeArea:
             for v in self.grids.values():
                 v.clear()
             self.grids.clear()
-    
+
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
             state.pop("lock", None)
             return state
-    
+
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.lock = RLock()
-
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     del state["lock"]
-    #     state["grids"] = {k: v.__getstate__() for k, v in self.grids.items()}
-    #     state["__import_path__"] = get_import_path(self)
-    #     return state
-
-    # def __setstate__(self, state):
-    #     grids = state["grids"]
-    #     del state["grids"]
-    #     self.__dict__.update(state)
-    #     self.lock = RLock()
-    #     self.grids = {}
-    #     for k, v in grids.items():
-    #         if k == "null":
-    #             continue
-    #         g = NodeGrid()
-    #         g.__setstate__(v)
-    #         # JSON keys are always strings, so convert back to int if needed
-    #         self.grids[int(k)] = g
 
 
 class Transition:
@@ -913,29 +871,16 @@ class Transition:
         self.to_coord = to_coord
         self.from_link = from_link  # exit name
         self.lock = RLock()
-    
+
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
             state.pop("lock", None)
             return state
-    
+
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.lock = RLock()
-
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     state["__import_path__"] = get_import_path(self)
-    #     return state
-
-    # def __setstate__(self, state):
-    #     self.__dict__.update(state)
-    #     # Convert coords from list to tuple (JSON serializes tuples as lists)
-    #     if isinstance(self.from_coord, list):
-    #         self.from_coord = tuple(self.from_coord)
-    #     if isinstance(self.to_coord, list):
-    #         self.to_coord = tuple(self.to_coord)
 
 
 class Door:
@@ -972,7 +917,6 @@ class Door:
         self.max_hp = AtomicInt(100)
         self.hp = AtomicInt(100)
 
-    
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.locked = AtomicFlag(state["locked"])
@@ -987,22 +931,6 @@ class Door:
         state["hp"] = self.hp.load()
         state["max_hp"] = self.max_hp.load()
         return state
-
-    # def __setstate__(self, state):
-    #     self.__dict__.update(state)
-    #     self.locked = AtomicFlag(state["locked"])
-    #     self.closed = AtomicFlag(state["closed"])
-    #     self.hp = AtomicInt(state["hp"])
-    #     self.max_hp = AtomicInt(state["max_hp"])
-    #     # convert coords from list to tuple (JSON serializes tuples as lists)
-    #     if isinstance(self.from_coord, list):
-    #         self.from_coord = tuple(self.from_coord)
-    #     if isinstance(self.to_coord, list):
-    #         self.to_coord = tuple(self.to_coord)
-    #     if isinstance(self.from_symbol_coord, list):
-    #         self.from_symbol_coord = tuple(self.from_symbol_coord)
-    #     if isinstance(self.to_symbol_coord, list):
-    #         self.to_symbol_coord = tuple(self.to_symbol_coord)
 
     def __str__(self):
         return (

@@ -1,0 +1,1035 @@
+diff --git a/atheriz/atheriz.py b/atheriz/atheriz.py
+index 67a3414..d554acb 100644
+--- a/atheriz/atheriz.py
++++ b/atheriz/atheriz.py
+@@ -11,10 +11,9 @@ from fastapi.templating import Jinja2Templates
+ from fastapi.responses import HTMLResponse
+ from atheriz import settings
+ from atheriz.websocket import websocket_endpoint, websocket_manager
+-from atheriz.objects.persist import save
+ from atheriz.objects.base_account import Account
+ from atheriz.objects.base_obj import Object
+-from atheriz.singletons.objects import add_object, get, load_files, get_by_type
++from atheriz.singletons.objects import add_object, get, load_objects, get_by_type, save_objects
+ from atheriz.singletons.startstop import do_shutdown, do_startup, do_reload
+ from atheriz.singletons.get import get_node_handler, get_unique_id
+ import secrets
+@@ -658,7 +657,7 @@ def create_game_data(args):
+     if not save_path.exists():
+         save_path.mkdir(parents=True)
+ 
+-    load_files()
++    load_objects()
+ 
+     result: list[Account] = get_by_type("account")
+     if result:
+@@ -678,8 +677,7 @@ def create_game_data(args):
+                 r.add_character(character)
+                 r.at_post_create_character(character)
+                 add_object(character)
+-                save(character)
+-                save(r)
++                save_objects()
+                 print("Success! Character created.")
+                 return
+ 
+@@ -693,8 +691,7 @@ def create_game_data(args):
+     account.add_character(character)
+     add_object(account)
+     add_object(character)
+-    save(account)
+-    save(character)
++    save_objects()
+     print("Success! Account and character created.")
+ 
+ 
+diff --git a/atheriz/commands/base_cmd.py b/atheriz/commands/base_cmd.py
+index a5e03e7..d795c00 100644
+--- a/atheriz/commands/base_cmd.py
++++ b/atheriz/commands/base_cmd.py
+@@ -148,11 +148,11 @@ class Command:
+             return None, None, None
+         return self.run, caller, parsed_args
+ 
+-    def __getstate__(self):
+-        state = self.__dict__.copy()
+-        state["__import_path__"] = get_import_path(self)
+-        del state["_parser"]
+-        return state
++    # def __getstate__(self):
++    #     state = self.__dict__.copy()
++    #     state["__import_path__"] = get_import_path(self)
++    #     del state["_parser"]
++    #     return state
+ 
+     def __setstate__(self, state):
+         self.__dict__.update(state)
+diff --git a/atheriz/commands/cmdset.py b/atheriz/commands/base_cmdset.py
+similarity index 89%
+rename from atheriz/commands/cmdset.py
+rename to atheriz/commands/base_cmdset.py
+index f601908..0a69667 100644
+--- a/atheriz/commands/cmdset.py
++++ b/atheriz/commands/base_cmdset.py
+@@ -76,13 +76,9 @@ class CmdSet:
+             return list(self.commands.keys())
+ 
+     def __getstate__(self):
+-        commands = {}
+         with self.lock:
+-            for key, command in self.commands.items():
+-                commands[key] = command.__getstate__()
+-        return {"commands": commands, "lock": None}
++            return self.__dict__.copy()
+ 
+     def __setstate__(self, state):
+-        for key, command in state["commands"].items():
+-            self.commands[key] = instance_from_string(command["__import_path__"])
+-            self.commands[key].__setstate__(command)
++        self.__dict__.update(state)
++        self.lock = RLock()
+\ No newline at end of file
+diff --git a/atheriz/commands/loggedin/cmdset.py b/atheriz/commands/loggedin/cmdset.py
+index 961dd02..9be7224 100644
+--- a/atheriz/commands/loggedin/cmdset.py
++++ b/atheriz/commands/loggedin/cmdset.py
+@@ -1,4 +1,4 @@
+-from atheriz.commands.cmdset import CmdSet
++from atheriz.commands.base_cmdset import CmdSet
+ from atheriz.commands.loggedin.look import LookCommand
+ from atheriz.commands.loggedin.none import NoneCommand
+ from atheriz.commands.loggedin.exit import ExitCommand
+diff --git a/atheriz/commands/loggedin/spam.py b/atheriz/commands/loggedin/spam.py
+index ff564ac..feb4a25 100644
+--- a/atheriz/commands/loggedin/spam.py
++++ b/atheriz/commands/loggedin/spam.py
+@@ -1,8 +1,7 @@
+ from atheriz.commands.base_cmd import Command
+ from atheriz.objects.base_account import Account
+ from atheriz.objects.base_obj import Object
+-from atheriz.objects.persist import save
+-from atheriz.singletons.objects import add_object
++from atheriz.singletons.objects import add_object, save_objects
+ from atheriz.singletons.get import get_node_handler
+ from atheriz import settings
+ from pathlib import Path
+@@ -62,8 +61,7 @@ class SpamCommand(Command):
+             account.add_character(character)
+             add_object(account)
+             add_object(character)
+-            save(account)
+-            save(character)
++            save_objects()
+ 
+             created.append((account_name, password, char_name))
+ 
+diff --git a/atheriz/commands/unloggedin/cmdset.py b/atheriz/commands/unloggedin/cmdset.py
+index 254d2df..eae6e60 100644
+--- a/atheriz/commands/unloggedin/cmdset.py
++++ b/atheriz/commands/unloggedin/cmdset.py
+@@ -1,4 +1,4 @@
+-from atheriz.commands.cmdset import CmdSet
++from atheriz.commands.base_cmdset import CmdSet
+ from atheriz.commands.unloggedin.connect import ConnectCommand
+ from atheriz.commands.unloggedin.none import NoneCommand
+ from atheriz.commands.unloggedin.screenreader import ScreenReaderCommand
+diff --git a/atheriz/objects/base_account.py b/atheriz/objects/base_account.py
+index 8604fdd..dd3efb8 100644
+--- a/atheriz/objects/base_account.py
++++ b/atheriz/objects/base_account.py
+@@ -95,9 +95,12 @@ class Account:
+             return False
+ 
+     def __getstate__(self):
+-        d = {k: v for k, v in self.__dict__.items() if k not in IGNORE_FIELDS}
+-        d["__import_path__"] = get_import_path(self)
+-        return d
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
++    
+ 
+     def __setstate__(self, state):
+         self.__dict__.update(state)
++        self.lock = RLock()
+diff --git a/atheriz/objects/base_channel.py b/atheriz/objects/base_channel.py
+index e7391fb..cd757e8 100644
+--- a/atheriz/objects/base_channel.py
++++ b/atheriz/objects/base_channel.py
+@@ -167,13 +167,12 @@ class Channel:
+             self.history.clear()
+ 
+     def __getstate__(self) -> dict:
+-        d = self.__dict__.copy()
+-        del d["lock"]
+-        del d["command"]
+-        del d["listeners"]
+-        d["__import_path__"] = get_import_path(self)
+-        d["history"] = list(d["history"])
+-        return d
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
+ 
+     def __setstate__(self, state: dict) -> None:
+         self.__dict__.update(state)
++        self.lock = RLock()
++        
+\ No newline at end of file
+diff --git a/atheriz/objects/base_obj.py b/atheriz/objects/base_obj.py
+index b5b9680..abb89b0 100644
+--- a/atheriz/objects/base_obj.py
++++ b/atheriz/objects/base_obj.py
+@@ -1,3 +1,4 @@
++from atheriz.singletons.objects import save_objects
+ import _pytest.doctest
+ from atheriz.utils import compress_whitespace
+ from typing import Callable
+@@ -13,7 +14,7 @@ from atheriz.singletons.get import (
+ )
+ from atheriz.objects.persist import save
+ from atheriz.objects.contents import search, group_by_name
+-from atheriz.commands.cmdset import CmdSet
++from atheriz.commands.base_cmdset import CmdSet
+ from atheriz.utils import (
+     make_iter,
+     is_iter,
+@@ -171,65 +172,78 @@ class Object:
+             if not lock(accessing_obj):
+                 return False
+         return True
+-
++    
+     def __getstate__(self):
+-        d = self.__dict__.copy()
+-        for field in IGNORE_FIELDS:
+-            d.pop(field, None)
+-        d["_contents"] = list(self._contents)
+-        if self.internal_cmdset:
+-            d["internal_cmdset"] = self.internal_cmdset.__getstate__()
+-        else:
+-            d["internal_cmdset"] = None
+-        if self.external_cmdset:
+-            d["external_cmdset"] = self.external_cmdset.__getstate__()
+-        else:
+-            d["external_cmdset"] = None
+-        d["__import_path__"] = get_import_path(self)
+-        d["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
+-        if self.location and self.location.is_node:
+-            d["location"] = tuple_to_str(self.location.coord)
+-        elif self.location:
+-            d["location"] = self.location.id
+-        else:
+-            d["location"] = None
+-        d["home"] = tuple_to_str(self.home) if self.home else None
+-        return d
+-
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("session", None)
++            state.pop("lock", None)
++            return state
++    
+     def __setstate__(self, state):
+-        self.locks = dill.loads(base64.b64decode(state["locks"]))
+-        del state["locks"]
+-        self._contents = set(state["_contents"])
+-        del state["_contents"]
+         self.__dict__.update(state)
+-        if state.get("internal_cmdset"):
+-            self.internal_cmdset = CmdSet()
+-            self.internal_cmdset.__setstate__(state["internal_cmdset"])
+-        else:
+-            self.internal_cmdset = None
+-
+-        if state.get("external_cmdset"):
+-            self.external_cmdset = CmdSet()
+-            self.external_cmdset.__setstate__(state["external_cmdset"])
+-        else:
+-            self.external_cmdset = None
+-        nh = get_node_handler()
+-        if state["location"]:
+-            if isinstance(state["location"], str):
+-                self.location = nh.get_node(str_to_tuple(state["location"]))
+-            else:
+-                loc = get(state["location"])
+-                if loc:
+-                    self.location = loc[0]
+-                else:
+-                    self.location = None
+-        else:
+-            self.location = None
+-        self.home = str_to_tuple(state["home"]) if state["home"] else None
+-        if self._is_tickable:
+-            at = get_async_ticker()
+-            at.add_coro(self.at_tick, self._tick_seconds)
++        self.session = None
++        self.lock = RLock()
+         self.at_init()
++    
+
+     @property
+     def tick_seconds(self):
+@@ -289,10 +303,7 @@ class Object:
+         if channel:
+             channel.msg(f"{self.name} has disconnected.")
+         if settings.AUTOSAVE_PLAYERS_ON_DISCONNECT:
+-            with self.lock:
+-                save(self)
+-            if self._contents:
+-                save(self.contents)
++            save_objects()
+ 
+     def subscribe(self, channel: Channel):
+         """Subscribe to a channel."""
+diff --git a/atheriz/objects/nodes.py b/atheriz/objects/nodes.py
+index b0843cc..19a93d4 100644
+--- a/atheriz/objects/nodes.py
++++ b/atheriz/objects/nodes.py
+@@ -18,7 +18,7 @@ from atheriz.objects import funcparser
+ from atheriz.singletons.objects import get, filter_by
+ from atheriz.objects.contents import search
+ from atheriz.singletons.get import get_node_handler, get_async_ticker
+-from atheriz.commands.cmdset import CmdSet
++from atheriz.commands.base_cmdset import CmdSet
+ from atheriz.commands.loggedin.exit import ExitCommand
+ from atheriz.objects.contents import filter_contents, group_by_name
+ from atheriz.utils import wrap_truecolor
+@@ -93,6 +93,9 @@ class Node:
+     is_node = True
+     is_pc = False
+     is_object = False
++    _is_tickable = False
++    _tick_seconds = settings.DEFAULT_TICK_SECONDS
++
+ 
+     def at_desc(self, *args, **kwargs):
+         return self.desc
+@@ -194,46 +197,65 @@ class Node:
+         with self.lock:
+             self.locks.pop(lock_name, None)
+ 
+  
+     def __getstate__(self):
+-        state = self.__dict__.copy()
+-        state["_contents"] = list(state["_contents"])
+-        del state["lock"]
+-        if "access" in state:
+-            del state["access"]
+-        if self.links:
+-            state["links"] = [l.__getstate__() for l in self.links]
+-        state["__import_path__"] = get_import_path(self)
+-        state["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
+-        state["coord"] = tuple_to_str(state["coord"])
+-        return state
+-
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
++    
+     def __setstate__(self, state):
+-        self.lock = RLock()
+-        self.locks = dill.loads(base64.b64decode(state["locks"]))
+-        del state["locks"]
+-        self._contents = set(state["_contents"])
+-        del state["_contents"]
+-        links = state["links"]
+-        del state["links"]
+-        state["coord"] = str_to_tuple(state["coord"])
+         self.__dict__.update(state)
++        self.lock = RLock()
+         if settings.SLOW_LOCKS:
+             self.access = self._safe_access
+         else:
+             self.access = self._fast_access
+-        if links:
+-            self.links = []
+-            for l in links:
+-                link = instance_from_string(l["__import_path__"])
+-                link.__setstate__(l)
+-                self.links.append(link)
+-        else:
+-            self.links = None
+         if self._is_tickable:
+             at = get_async_ticker()
+             at.add_coro(self.at_tick, self._tick_seconds)
+         self.at_init()
+     
++    
+     @property
+     def tick_seconds(self):
+         return self._tick_seconds
+@@ -669,6 +691,16 @@ class NodeGrid:
+     def __str__(self):
+         return f"NodeGrid(z = {self.z}, area = {self.area})"
+ 
++    def __eq__(self, other):
++        if not isinstance(other, NodeGrid):
++            return False
++        return (
++            self.area == other.area and
++            self.z == other.z and
++            self.nodes == other.nodes and
++            self.data == other.data
++        )
++
+     def __len__(self):
+         return len(self.nodes)
+ 
+@@ -722,25 +754,35 @@ class NodeGrid:
+             self.nodes.clear()
+ 
+     def __getstate__(self):
+-        state = self.__dict__.copy()
+-        del state["lock"]
+-        nodes = {}
+-        for k, v in self.nodes.items():
+-            nodes[_tuple_to_str(k)] = v.__getstate__()
+-        state["nodes"] = nodes
+-        state["__import_path__"] = get_import_path(self)
+-        return state
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
+ 
+     def __setstate__(self, state):
+-        self.lock = RLock()
+-        nodes = state["nodes"]
+-        del state["nodes"]
+         self.__dict__.update(state)
+-        self.nodes = {}
+-        for k, v in nodes.items():
+-            n = Node()
+-            n.__setstate__(v)
+-            self.nodes[_str_to_tuple(k)] = n
++        self.lock = RLock()
++
+
+ 
+ class NodeArea:
+@@ -761,6 +803,17 @@ class NodeArea:
+             f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items()
+         )
+ 
++    def __eq__(self, other):
++        if not isinstance(other, NodeArea):
++            return False
++        return (
++            self.name == other.name and
++            self.theme == other.theme and
++            self.grids == other.grids and
++            self.data == other.data and
++            self.linked_areas == other.linked_areas
++        )
++
+     def get_nodes(self, coords: list[tuple[int, int, int]]) -> list[Node]:
+         """optimized for getting nodes from list of coords"""
+         result = []
+@@ -855,27 +908,37 @@ class NodeArea:
+             for v in self.grids.values():
+                 v.clear()
+             self.grids.clear()
+-
++    
+     def __getstate__(self):
+-        state = self.__dict__.copy()
+-        del state["lock"]
+-        state["grids"] = {k: v.__getstate__() for k, v in self.grids.items()}
+-        state["__import_path__"] = get_import_path(self)
+-        return state
+-
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
++    
+     def __setstate__(self, state):
+-        grids = state["grids"]
+-        del state["grids"]
+         self.__dict__.update(state)
+         self.lock = RLock()
+-        self.grids = {}
+-        for k, v in grids.items():
+-            if k == "null":
+-                continue
+-            g = NodeGrid()
+-            g.__setstate__(v)
+-            # JSON keys are always strings, so convert back to int if needed
+-            self.grids[int(k)] = g
+ 
+ 
+ class Transition:
+@@ -889,19 +952,30 @@ class Transition:
+         self.from_coord = from_coord
+         self.to_coord = to_coord
+         self.from_link = from_link  # exit name
+-
++        self.lock = RLock()
++    
+     def __getstate__(self):
+-        state = self.__dict__.copy()
+-        state["__import_path__"] = get_import_path(self)
+-        return state
+-
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            return state
++    
+     def __setstate__(self, state):
+         self.__dict__.update(state)
+-        # Convert coords from list to tuple (JSON serializes tuples as lists)
+-        if isinstance(self.from_coord, list):
+-            self.from_coord = tuple(self.from_coord)
+-        if isinstance(self.to_coord, list):
+-            self.to_coord = tuple(self.to_coord)
++        self.lock = RLock()
++
+ 
+ 
+ class Door:
+@@ -938,30 +1012,37 @@ class Door:
+         self.max_hp = AtomicInt(100)
+         self.hp = AtomicInt(100)
+ 
++    
++    def __setstate__(self, state):
++        self.__dict__.update(state)
++        self.locked = AtomicFlag(state["locked"])
++        self.closed = AtomicFlag(state["closed"])
++        self.hp = AtomicInt(state["hp"])
++        self.max_hp = AtomicInt(state["max_hp"])
++
+     def __getstate__(self):
+         state = self.__dict__.copy()
+         state["closed"] = self.closed.test()
+         state["locked"] = self.locked.test()
+         state["hp"] = self.hp.load()
+         state["max_hp"] = self.max_hp.load()
+-        state["__import_path__"] = get_import_path(self)
+         return state
+ 
+-    def __setstate__(self, state):
+-        self.__dict__.update(state)
+-        self.locked = AtomicFlag(state["locked"])
+-        self.closed = AtomicFlag(state["closed"])
+-        self.hp = AtomicInt(state["hp"])
+-        self.max_hp = AtomicInt(state["max_hp"])
+-        # convert coords from list to tuple (JSON serializes tuples as lists)
+-        if isinstance(self.from_coord, list):
+-            self.from_coord = tuple(self.from_coord)
+-        if isinstance(self.to_coord, list):
+-            self.to_coord = tuple(self.to_coord)
+-        if isinstance(self.from_symbol_coord, list):
+-            self.from_symbol_coord = tuple(self.from_symbol_coord)
+-        if isinstance(self.to_symbol_coord, list):
+-            self.to_symbol_coord = tuple(self.to_symbol_coord)
+ 
+     def __str__(self):
+         return (
+diff --git a/atheriz/objects/persist.py b/atheriz/objects/persist.py
+index c663833..ea850dd 100644
+--- a/atheriz/objects/persist.py
++++ b/atheriz/objects/persist.py
+@@ -12,7 +12,7 @@ def get_save_path(obj: Any, append_id: bool = True) -> Path:
+     return Path(settings.SAVE_PATH) / (get_import_path(obj) + ("." + str(obj.id) if append_id else ""))
+ 
+ 
+-def save_iterable(objs: Iterable[Any]) -> None:
++def save_iterable(objs: Iterable[Any]) -> None: 
+     all_objs = []
+     save_path: Path | None = None
+     for obj in objs:
+diff --git a/atheriz/singletons/map.py b/atheriz/singletons/map.py
+index 24db1eb..5f46d4d 100644
+--- a/atheriz/singletons/map.py
++++ b/atheriz/singletons/map.py
+@@ -14,6 +14,7 @@ from pathlib import Path
+ from atheriz.logger import logger
+ import atheriz.settings as settings
+ import json
++import dill
+ import time
+ import copy
+ from typing import TYPE_CHECKING, Any
+@@ -39,15 +40,27 @@ class LegendEntry:
+         self.fg = 170.0
+         self.bg = None
+ 
+-    def __getstate__(self):
+-        d = self.__dict__.copy()
+-        d["coord"] = tuple_to_str(d["coord"])
+-        return d
+-
+-    def __setstate__(self, state):
+-        if state:
+-            self.__dict__.update(state)
+-            self.coord = str_to_tuple(state["coord"])
++    def __eq__(self, other):
++        if not isinstance(other, LegendEntry):
++            return False
++        return (
++            self.symbol == other.symbol and
++            self.desc == other.desc and
++            self.coord == other.coord and
++            self.show == other.show and
++            self.fg == other.fg and
++            self.bg == other.bg
++        )
++
++    # def __getstate__(self):
++    #     d = self.__dict__.copy()
++    #     d["coord"] = tuple_to_str(d["coord"])
++    #     return d
++
++    # def __setstate__(self, state):
++    #     if state:
++    #         self.__dict__.update(state)
++    #         self.coord = str_to_tuple(state["coord"])
+ 
+ 
+ class MapInfo:
+@@ -69,54 +82,78 @@ class MapInfo:
+         self.listeners: dict[int, Object] = {}
+         self.lock = RLock()
+ 
++    
+     def __getstate__(self):
+-        state = self.__dict__.copy()
+-        del state["lock"]
+-        del state["objects"]
+-        del state["listeners"]
+-        state["__import_path__"] = get_import_path(self)
+-        if self.legend_entries:
+-            entries = []
+-            for entry in self.legend_entries:
+-                entries.append(entry.__getstate__())
+-            state["legend_entries"] = entries
+-        if self.pre_grid:
+-            pre_grid = {}
+-            for k, v in self.pre_grid.items():
+-                pre_grid[tuple_to_str(k)] = v
+-            state["pre_grid"] = pre_grid
+-        if self.post_grid:
+-            post_grid = {}
+-            for k, v in self.post_grid.items():
+-                post_grid[tuple_to_str(k)] = v
+-            state["post_grid"] = post_grid
+-
+-        return state
+-
++        with self.lock:
++            state = self.__dict__.copy()
++            state.pop("lock", None)
++            state.pop("objects", None)
++            state.pop("listeners", None)
++            return state
++    
+     def __setstate__(self, state):
+         self.__dict__.update(state)
+         self.lock = RLock()
+         self.objects: dict[int, Object] = {}
+         self.listeners: dict[int, Object] = {}
+-        if state.get("legend_entries"):
+-            entries = []
+-            for entry_state in state["legend_entries"]:
+-                entry = LegendEntry()
+-                entry.__setstate__(entry_state)
+-                entries.append(entry)
+-            self.legend_entries = entries
+-        else:
+-            self.legend_entries = []
+-        if state.get("pre_grid"):
+-            pre_grid = {}
+-            for k, v in state["pre_grid"].items():
+-                pre_grid[str_to_tuple(k)] = v
+-            self.pre_grid = pre_grid
+-        if state.get("post_grid"):
+-            post_grid = {}
+-            for k, v in state["post_grid"].items():
+-                post_grid[str_to_tuple(k)] = v
+-            self.post_grid = post_grid
++
++    def __eq__(self, other):
++        if not isinstance(other, MapInfo):
++            return False
++        return (
++            self.name == other.name and
++            self.pre_grid == other.pre_grid and
++            self.post_grid == other.post_grid and
++            self.legend_entries == other.legend_entries
++        )
+ 
+     def place_walls(self, coord: tuple[int, int], char: str):
+         """
+@@ -394,45 +431,53 @@ class MapInfo:
+         self.render_legend()
+ 
+ 
+-def _load_file(filename: str) -> dict[str, Any]:
+-    path = Path(settings.SAVE_PATH) / filename
+-    if not path.exists():
+-        logger.warning(f"File {filename} does not exist.")
+-        return {}
+-    with path.open("r") as f:
+-        return json.load(f)
+-
+-
+-def _save_file(data: Any, filename: str):
+-    path = Path(settings.SAVE_PATH) / filename
+-    path.parent.mkdir(parents=True, exist_ok=True)
+-    temp_path = path.with_suffix(path.suffix + ".tmp")
+-    with temp_path.open("w") as f:
+-        json.dump(data, f)
+-    temp_path.replace(path)
+-
+-
+ class MapHandler:
+     def __init__(self) -> None:
+-        mapdata = _load_file("mapdata")
+-        if mapdata:
+-            new_data = {}
+-            for k, v in mapdata.items():
+-                mi = MapInfo()
+-                mi.__setstate__(v)
+-                new_data[str_to_tuple(k)] = mi
+-            self.data = new_data
++        self.lock = RLock()
++        p = Path(settings.SAVE_PATH) / "mapdata"
++        if p.exists():
++            try:
++                with p.open("rb") as f:
++                    self.data = dill.load(f)
++            except Exception as e:
++                logger.error(f"Error loading map data from {p}: {e}")
++                self.data: dict[tuple[str, int], MapInfo] = {}
+         else:
+             self.data: dict[tuple[str, int], MapInfo] = {}
+-        self.lock = RLock()
++    # def __init__(self) -> None:
++    #     mapdata = _load_file("mapdata")
++    #     if mapdata:
++    #         new_data = {}
++    #         for k, v in mapdata.items():
++    #             mi = MapInfo()
++    #             mi.__setstate__(v)
++    #             new_data[str_to_tuple(k)] = mi
++    #         self.data = new_data
++    #     else:
++    #         self.data: dict[tuple[str, int], MapInfo] = {}
++    #     self.lock = RLock()
+ 
+     def save(self):
+-        logger.info("Saving map data...")
+-        data = {}
+         with self.lock:
+-            for k, v in self.data.items():
+-                data[tuple_to_str(k)] = v.__getstate__()
+-        _save_file(data, "mapdata")
++            path = Path(settings.SAVE_PATH) / "mapdata"
++            path.parent.mkdir(parents=True, exist_ok=True)
++            temp_path = path.with_suffix(path.suffix + ".tmp")
++            try:
++                with temp_path.open("wb") as f:
++                    dill.dump(self.data, f)
++                temp_path.replace(path)
++            except Exception as e:
++                logger.error(f"Error saving map data: {e}")
++                if temp_path.exists():
++                    temp_path.unlink()
++
++    # def save(self):
++    #     logger.info("Saving map data...")
++    #     data = {}
++    #     with self.lock:
++    #         for k, v in self.data.items():
++    #             data[tuple_to_str(k)] = v.__getstate__()
++    #     _save_file(data, "mapdata")
+ 
+     def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo):
+         with self.lock:
+diff --git a/atheriz/singletons/node.py b/atheriz/singletons/node.py
+index 7caae26..976fb11 100644
+--- a/atheriz/singletons/node.py
++++ b/atheriz/singletons/node.py
+@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
+ from atheriz.utils import tuple_to_str, str_to_tuple
+ from atheriz.logger import logger
+ import json
++import dill
+ from pathlib import Path
+ from atheriz import settings
+ from atheriz.objects.persist import instance_from_string
+@@ -14,104 +15,6 @@ if TYPE_CHECKING:
+     from atheriz.objects.nodes import NodeLink, Door, Transition
+ from time import sleep
+ 
+-
+-def _load_file(filename: str) -> dict[str, Any]:
+-    path = Path(settings.SAVE_PATH) / filename
+-    if not path.exists():
+-        logger.warning(f"File {filename} does not exist.")
+-        return {}
+-    with path.open("r") as f:
+-        return json.load(f)
+-
+-
+-def _load_file(filename: str) -> dict[str, Any]:
+-    path = Path(settings.SAVE_PATH) / filename
+-    if not path.exists():
+-        logger.warning(f"File {filename} does not exist.")
+-        return {}
+-    with path.open("r") as f:
+-        return json.load(f)
+-
+-
+-def _serialize_areas(areas: dict[str, NodeArea]) -> dict[str, Any]:
+-    return {k: v.__getstate__() for k, v in areas.items()}
+-
+-
+-# def _tuple_to_str(t: tuple) -> str:
+-#     return repr(t)
+-
+-# def _str_to_tuple(s: str) -> tuple:
+-#     import ast
+-#     return ast.literal_eval(s)
+-
+-
+-def _serialize_transitions(
+-    transitions: dict[tuple[str, int, int, int], Transition],
+-) -> dict[str, Any]:
+-    return {tuple_to_str(k): v.__getstate__() for k, v in transitions.items()}
+-
+-
+-def _serialize_doors(
+-    doors: dict[tuple[str, int, int, int], dict[str, Door]],
+-) -> dict[str, dict[str, Any]]:
+-    return {
+-        tuple_to_str(k): {k2: v2.__getstate__() for k2, v2 in v.items()} for k, v in doors.items()
+-    }
+-
+-
+-def _restore(data: dict[str, Any]) -> Any:
+-    obj = instance_from_string(data["__import_path__"])
+-    obj.__setstate__(data)
+-    return obj
+-
+-
+-def _deserialize_areas(d: dict[str, Any]) -> dict[str, NodeArea]:
+-    return {k: _restore(v) for k, v in d.items()}
+-
+-
+-def _deserialize_transitions(d: dict[str, Any]) -> dict[tuple[str, int, int, int], Transition]:
+-    return {str_to_tuple(k): _restore(v) for k, v in d.items()}
+-
+-
+-def _deserialize_doors(
+-    d: dict[str, dict[str, Any]],
+-) -> dict[tuple[str, int, int, int], dict[str, Door]]:
+-    return {str_to_tuple(k): {k2: _restore(v2) for k2, v2 in v.items()} for k, v in d.items()}
+-
+-
+-def _load_areas() -> dict[str, NodeArea]:
+-    return _deserialize_areas(_load_file("areas"))
+-
+-
+-def _load_transitions() -> dict[tuple[str, int, int, int], Transition]:
+-    return _deserialize_transitions(_load_file("transitions"))
+-
+-
+-def _load_doors() -> dict[tuple[str, int, int, int], dict[str, Door]]:
+-    return _deserialize_doors(_load_file("doors"))
+-
+-
+-def _save_file(data: Any, filename: str):
+-    path = Path(settings.SAVE_PATH) / filename
+-    path.parent.mkdir(parents=True, exist_ok=True)
+-    temp_path = path.with_suffix(path.suffix + ".tmp")
+-    with temp_path.open("w") as f:
+-        json.dump(data, f)
+-    temp_path.replace(path)
+-
+-
+-def _save_areas(areas: dict[str, NodeArea]):
+-    _save_file(_serialize_areas(areas), "areas")
+-
+-
+-def _save_transitions(transitions: dict[tuple[str, int, int, int], Transition]):
+-    _save_file(_serialize_transitions(transitions), "transitions")
+-
+-
+-def _save_doors(doors: dict[tuple[str, int, int, int], dict[str, Door]]):
+-    _save_file(_serialize_doors(doors), "doors")
+-
+-
+ class NodeHandler:
+     def __init__(self):
+         # this guards self.areas:
+@@ -124,17 +27,54 @@ class NodeHandler:
+         # guards self.doors:
+         self.lock3 = RLock()
+         self.doors: dict[tuple[str, int, int, int], dict[str, Door]] = {}
+-        self.areas = _load_areas()
+-        self.transitions = _load_transitions()
+-        self.doors = _load_doors()
++        # self.areas = _load_areas()
++        # self.transitions = _load_transitions()
++        # self.doors = _load_doors()
++        self.areas = {}
++        self.transitions = {}
++        self.doors = {}
++        ap = Path(settings.SAVE_PATH) / "areas"
++        if ap.exists():
++            with ap.open("rb") as f:
++                self.areas = dill.load(f)
++        pt = Path(settings.SAVE_PATH) / "transitions"
++        if pt.exists():
++            with pt.open("rb") as f:
++                self.transitions = dill.load(f)
++        pd = Path(settings.SAVE_PATH) / "doors"
++        if pd.exists():
++            with pd.open("rb") as f:
++                self.doors = dill.load(f)
+ 
+     def save(self):
+-        with self.lock:
+-            _save_areas(self.areas)
+-        with self.lock2:
+-            _save_transitions(self.transitions)
+-        with self.lock3:
+-            _save_doors(self.doors)
++        save_path = Path(settings.SAVE_PATH)
++        save_path.mkdir(parents=True, exist_ok=True)
++
++        def _atomic_save(data, filename, lock):
++            path = save_path / filename
++            temp_path = path.with_suffix(path.suffix + ".tmp")
++            with lock:
++                try:
++                    with temp_path.open("wb") as f:
++                        dill.dump(data, f)
++                    temp_path.replace(path)
++                except Exception as e:
++                    logger.error(f"Error saving {filename}: {e}")
++                    if temp_path.exists():
++                        temp_path.unlink()
++
++        _atomic_save(self.areas, "areas", self.lock)
++        _atomic_save(self.transitions, "transitions", self.lock2)
++        _atomic_save(self.doors, "doors", self.lock3)
++
++
++    # def save(self):
++    #     with self.lock:
++    #         _save_areas(self.areas)
++    #     with self.lock2:
++    #         _save_transitions(self.transitions)
++    #     with self.lock3:
++    #         _save_doors(self.doors)
+ 
+     def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
+         result = []
+diff --git a/atheriz/singletons/objects.py b/atheriz/singletons/objects.py
+index 0dc7377..953f050 100644
+--- a/atheriz/singletons/objects.py
++++ b/atheriz/singletons/objects.py
+@@ -4,7 +4,7 @@ from threading import Lock, RLock
+ from atheriz.utils import get_import_path, instance_from_string
+ import atheriz.settings as settings
+ from pathlib import Path
+-import json
++import dill
+ from typing import Any, Callable, TYPE_CHECKING, Iterable
+ 
+ if TYPE_CHECKING:
+@@ -167,7 +167,35 @@ def load_files() -> Any:
+     set_id(biggest_id)
+ 
+ 
+-def save_objects():
++# def save_objects():
++#     with _ALL_OBJECTS_LOCK:
++#         objs = list(_ALL_OBJECTS.values())
++#     save(objs)
++
++def load_objects():
++    global _ALL_OBJECTS, _OBJECT_MAP
+     with _ALL_OBJECTS_LOCK:
+-        objs = list(_ALL_OBJECTS.values())
+-    save(objs)
++        _ALL_OBJECTS = dill.load(open(Path(settings.SAVE_PATH) / "objects", "rb"))
++    with _OBJECT_MAP_LOCK:
++        _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
++
++def save_objects():
++    save_path = Path(settings.SAVE_PATH)
++    save_path.mkdir(parents=True, exist_ok=True)
++
++    def _atomic_save(data, filename, lock):
++        path = save_path / filename
++        temp_path = path.with_suffix(path.suffix + ".tmp")
++        with lock:
++            try:
++                with temp_path.open("wb") as f:
++                    dill.dump(data, f)
++                temp_path.replace(path)
++            except Exception as e:
++                from atheriz.logger import logger
++                logger.error(f"Error saving {filename}: {e}")
++                if temp_path.exists():
++                    temp_path.unlink()
++
++    _atomic_save(_ALL_OBJECTS, "objects", _ALL_OBJECTS_LOCK)
++    _atomic_save(_OBJECT_MAP, "object_map", _OBJECT_MAP_LOCK)
+\ No newline at end of file
+diff --git a/atheriz/singletons/startstop.py b/atheriz/singletons/startstop.py
+index b22d735..9dc8636 100644
+--- a/atheriz/singletons/startstop.py
++++ b/atheriz/singletons/startstop.py
+@@ -1,7 +1,7 @@
+-from .objects import load_files
++from .objects import load_files, load_objects
+ from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
+-from atheriz.singletons.objects import filter_by, _ALL_OBJECTS, _ALL_OBJECTS_LOCK
+-from atheriz.objects.persist import save
++from atheriz.singletons.objects import save_objects, load_objects
++# from atheriz.objects.persist import save
+ import atheriz.settings as settings
+ from atheriz.logger import logger
+ from atheriz.utils import msg_all
+@@ -13,7 +13,8 @@ if TYPE_CHECKING:
+ 
+ 
+ def do_startup():
+-    load_files()
++    # load_files()
++    load_objects()
+     get_async_threadpool()
+     get_map_handler()
+     get_node_handler()
+@@ -39,9 +40,7 @@ def do_shutdown():
+         import atheriz.server_events as server_events
+     server_events.at_server_stop()
+     if settings.AUTOSAVE_ON_SHUTDOWN:
+-        with _ALL_OBJECTS_LOCK:
+-            objs = list(_ALL_OBJECTS.values())
+-        save(objs)
++        save_objects()
+         get_map_handler().save()
+         get_node_handler().save()
+     get_async_ticker().stop()
+@@ -66,9 +65,7 @@ def do_reload():
+     server_events.at_server_reload()
+     get_async_ticker().clear()
+     if settings.AUTOSAVE_ON_RELOAD:
+-        with _ALL_OBJECTS_LOCK:
+-            objs = list(_ALL_OBJECTS.values())
+-        save(objs)
++        save_objects()
+         get_map_handler().save()
+         get_node_handler().save()
+     if channel:

@@ -170,9 +170,15 @@ class Channel:
         with self.lock:
             state = self.__dict__.copy()
             state.pop("lock", None)
+            state.pop("command", None)
+            state.pop("listeners", None)
+            state["history"] = list(state.get("history", []))
             return state
 
     def __setstate__(self, state: dict) -> None:
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        self.lock = RLock()
-        
+        self.listeners = {}
+        self.command = None
+        if not isinstance(self.history, deque):
+            self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)

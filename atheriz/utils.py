@@ -35,7 +35,7 @@ def ensure_thread_safe(obj):
 
     def __getattribute__(self, name):
         # always allow access to the lock itself and other essentials
-        if name in ("lock", "__dict__", "__class__"):
+        if name in ("lock", "__dict__", "__class__", "__setstate__", "__getstate__"):
             return orig_get(self, name)
         
         lock = orig_get(self, "lock")
