@@ -18,7 +18,7 @@ from atheriz.objects import funcparser
 from atheriz.singletons.objects import get, filter_by
 from atheriz.objects.contents import search
 from atheriz.singletons.get import get_node_handler, get_async_ticker
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
 from atheriz.utils import wrap_truecolor
@@ -92,11 +92,17 @@ class Node:
 
     is_node = True
     is_pc = False
-    is_object = False
+    is_item = False
+    is_connected = False
+    is_npc = False
+    is_mapable = False
+    is_container = False
+    is_channel = False
+    is_account = False
 
     def at_desc(self, *args, **kwargs):
         return self.desc
-    
+
     def at_tick(self):
         """
         Called every tick.
@@ -195,45 +201,26 @@ class Node:
             self.locks.pop(lock_name, None)
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state["_contents"] = list(state["_contents"])
-        del state["lock"]
-        if "access" in state:
-            del state["access"]
-        if self.links:
-            state["links"] = [l.__getstate__() for l in self.links]
-        state["__import_path__"] = get_import_path(self)
-        state["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
-        state["coord"] = tuple_to_str(state["coord"])
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            state.pop("access", None)
+            return state
 
     def __setstate__(self, state):
-        self.lock = RLock()
-        self.locks = dill.loads(base64.b64decode(state["locks"]))
-        del state["locks"]
-        self._contents = set(state["_contents"])
-        del state["_contents"]
-        links = state["links"]
-        del state["links"]
-        state["coord"] = str_to_tuple(state["coord"])
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
+        if hasattr(self, "_contents") and not isinstance(self._contents, set):
+            object.__setattr__(self, "_contents", set(self._contents))
         if settings.SLOW_LOCKS:
-            self.access = self._safe_access
+            object.__setattr__(self, "access", self._safe_access)
         else:
-            self.access = self._fast_access
-        if links:
-            self.links = []
-            for l in links:
-                link = instance_from_string(l["__import_path__"])
-                link.__setstate__(l)
-                self.links.append(link)
-        else:
-            self.links = None
+            object.__setattr__(self, "access", self._fast_access)
         if self._is_tickable:
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
-    
+
     @property
     def tick_seconds(self):
         return self._tick_seconds
@@ -245,7 +232,7 @@ class Node:
             at.remove_coro(self.at_tick, self._tick_seconds)
             at.add_coro(self.at_tick, value)
         self._tick_seconds = value
-    
+
     @property
     def is_tickable(self):
         return self._is_tickable
@@ -273,39 +260,39 @@ class Node:
         with self.lock:
             del self.data[key]
 
-    def pre_emit_sound(
-        self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
-    ) -> tuple:
-        """set sound_msg to '' to cancel sound propagation"""
-        return emitter, sound_desc, sound_msg, loud, is_say
+    # def pre_emit_sound(
+    #     self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
+    # ) -> tuple:
+    #     """set sound_msg to '' to cancel sound propagation"""
+    #     return emitter, sound_desc, sound_msg, loud, is_say
 
-    def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool):
-        emitter, sound_desc, sound_msg, loud, is_say = self.pre_emit_sound(
-            emitter, sound_desc, sound_msg, loud, is_say
-        )
-        if not sound_msg:
-            return
-        objs = self.get_objects(True, True, True)
-        for o in objs:
-            if o.can_hear:
-                o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
+    # def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool):
+    #     emitter, sound_desc, sound_msg, loud, is_say = self.pre_emit_sound(
+    #         emitter, sound_desc, sound_msg, loud, is_say
+    #     )
+    #     if not sound_msg:
+    #         return
+    #     objs = self.get_objects(True, True, True)
+    #     for o in objs:
+    #         if o.can_hear:
+    #             o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
 
-    def get_objects(
-        self, include_objects=True, include_npcs=False, include_pcs=False
-    ) -> list[Object]:
-        if not self._contents:
-            return []
-        result = []
-        with self.lock:
-            for o in self.contents:
-                if (
-                    (include_objects and o.is_object)
-                    or (include_npcs and o.is_npc)
-                    or (include_pcs and o.is_pc)
-                ):
-                    # result.append((o, self))
-                    result.append(o)
-        return result
+    # def get_objects(
+    #     self, include_objects=True, include_npcs=False, include_pcs=False
+    # ) -> list[Object]:
+    #     if not self._contents:
+    #         return []
+    #     result = []
+    #     with self.lock:
+    #         for o in self.contents:
+    #             if (
+    #                 (include_objects and o.is_object)
+    #                 or (include_npcs and o.is_npc)
+    #                 or (include_pcs and o.is_pc)
+    #             ):
+    #                 # result.append((o, self))
+    #                 result.append(o)
+    #     return result
 
     def at_init(self):
         """
@@ -399,7 +386,7 @@ class Node:
         Args:
             obj (DefaultObject): object, character, etc. to add exit commands to
         """
-        cmdset = object.__getattribute__(obj, "internal_cmdset")
+        cmdset = obj.internal_cmdset
         cmdset.remove_by_tag("exits")
         try:
             if links := object.__getattribute__(self, "links"):
@@ -514,7 +501,6 @@ class Node:
                 }
             )
             receiver.msg(outmessage)
-
 
     def msg_contents(
         self,
@@ -669,6 +655,16 @@ class NodeGrid:
     def __str__(self):
         return f"NodeGrid(z = {self.z}, area = {self.area})"
 
+    def __eq__(self, other):
+        if not isinstance(other, NodeGrid):
+            return False
+        return (
+            self.area == other.area
+            and self.z == other.z
+            and self.nodes == other.nodes
+            and self.data == other.data
+        )
+
     def __len__(self):
         return len(self.nodes)
 
@@ -722,25 +718,14 @@ class NodeGrid:
             self.nodes.clear()
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        del state["lock"]
-        nodes = {}
-        for k, v in self.nodes.items():
-            nodes[_tuple_to_str(k)] = v.__getstate__()
-        state["nodes"] = nodes
-        state["__import_path__"] = get_import_path(self)
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __setstate__(self, state):
-        self.lock = RLock()
-        nodes = state["nodes"]
-        del state["nodes"]
         self.__dict__.update(state)
-        self.nodes = {}
-        for k, v in nodes.items():
-            n = Node()
-            n.__setstate__(v)
-            self.nodes[_str_to_tuple(k)] = n
+        self.lock = RLock()
 
 
 class NodeArea:
@@ -759,6 +744,17 @@ class NodeArea:
     def __str__(self):
         return f"Area {self.name}: ".join(
             f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items()
+        )
+
+    def __eq__(self, other):
+        if not isinstance(other, NodeArea):
+            return False
+        return (
+            self.name == other.name
+            and self.theme == other.theme
+            and self.grids == other.grids
+            and self.data == other.data
+            and self.linked_areas == other.linked_areas
         )
 
     def get_nodes(self, coords: list[tuple[int, int, int]]) -> list[Node]:
@@ -788,29 +784,29 @@ class NodeArea:
         with self.lock:
             del self.data[key]
 
-    def get_objects(
-        self,
-        include_objects=True,
-        include_npcs=False,
-        include_pcs=False,
-        include_linked_areas=False,
-    ):
-        result = []
-        with self.lock:
-            for v in self.grids.values():
-                o = v.get_objects(include_objects, include_npcs, include_pcs)
-                if o:
-                    result.extend(o)
-            if include_linked_areas:
-                if self.linked_areas:
-                    nh = get_node_handler()
-                    for a in self.linked_areas:
-                        area = nh.get_area(a)
-                        if area:
-                            o = area.get_objects(include_objects, include_npcs, include_pcs, True)
-                            if o:
-                                result.extend(o)
-        return result
+    # def get_objects(
+    #     self,
+    #     include_objects=True,
+    #     include_npcs=False,
+    #     include_pcs=False,
+    #     include_linked_areas=False,
+    # ):
+    #     result = []
+    #     with self.lock:
+    #         for v in self.grids.values():
+    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
+    #             if o:
+    #                 result.extend(o)
+    #         if include_linked_areas:
+    #             if self.linked_areas:
+    #                 nh = get_node_handler()
+    #                 for a in self.linked_areas:
+    #                     area = nh.get_area(a)
+    #                     if area:
+    #                         o = area.get_objects(include_objects, include_npcs, include_pcs, True)
+    #                         if o:
+    #                             result.extend(o)
+    #     return result
 
     def remove_linked_area(self, area: str):
         with self.lock:
@@ -857,25 +853,14 @@ class NodeArea:
             self.grids.clear()
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        del state["lock"]
-        state["grids"] = {k: v.__getstate__() for k, v in self.grids.items()}
-        state["__import_path__"] = get_import_path(self)
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __setstate__(self, state):
-        grids = state["grids"]
-        del state["grids"]
         self.__dict__.update(state)
         self.lock = RLock()
-        self.grids = {}
-        for k, v in grids.items():
-            if k == "null":
-                continue
-            g = NodeGrid()
-            g.__setstate__(v)
-            # JSON keys are always strings, so convert back to int if needed
-            self.grids[int(k)] = g
 
 
 class Transition:
@@ -889,19 +874,17 @@ class Transition:
         self.from_coord = from_coord
         self.to_coord = to_coord
         self.from_link = from_link  # exit name
+        self.lock = RLock()
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state["__import_path__"] = get_import_path(self)
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
-        # Convert coords from list to tuple (JSON serializes tuples as lists)
-        if isinstance(self.from_coord, list):
-            self.from_coord = tuple(self.from_coord)
-        if isinstance(self.to_coord, list):
-            self.to_coord = tuple(self.to_coord)
+        self.lock = RLock()
 
 
 class Door:
@@ -938,30 +921,20 @@ class Door:
         self.max_hp = AtomicInt(100)
         self.hp = AtomicInt(100)
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state["closed"] = self.closed.test()
-        state["locked"] = self.locked.test()
-        state["hp"] = self.hp.load()
-        state["max_hp"] = self.max_hp.load()
-        state["__import_path__"] = get_import_path(self)
-        return state
-
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.locked = AtomicFlag(state["locked"])
         self.closed = AtomicFlag(state["closed"])
         self.hp = AtomicInt(state["hp"])
         self.max_hp = AtomicInt(state["max_hp"])
-        # convert coords from list to tuple (JSON serializes tuples as lists)
-        if isinstance(self.from_coord, list):
-            self.from_coord = tuple(self.from_coord)
-        if isinstance(self.to_coord, list):
-            self.to_coord = tuple(self.to_coord)
-        if isinstance(self.from_symbol_coord, list):
-            self.from_symbol_coord = tuple(self.from_symbol_coord)
-        if isinstance(self.to_symbol_coord, list):
-            self.to_symbol_coord = tuple(self.to_symbol_coord)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state["closed"] = self.closed.test()
+        state["locked"] = self.locked.test()
+        state["hp"] = self.hp.load()
+        state["max_hp"] = self.max_hp.load()
+        return state
 
     def __str__(self):
         return (

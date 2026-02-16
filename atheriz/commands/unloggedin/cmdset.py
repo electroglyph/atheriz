@@ -1,4 +1,4 @@
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.unloggedin.connect import ConnectCommand
 from atheriz.commands.unloggedin.none import NoneCommand
 from atheriz.commands.unloggedin.screenreader import ScreenReaderCommand

@@ -1,4 +1,4 @@
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.look import LookCommand
 from atheriz.commands.loggedin.none import NoneCommand
 from atheriz.commands.loggedin.exit import ExitCommand

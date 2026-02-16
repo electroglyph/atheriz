@@ -1,7 +1,6 @@
-import _pytest.doctest
+from atheriz.singletons.objects import save_objects
 from atheriz.utils import compress_whitespace
 from typing import Callable
-from atheriz.utils import get_import_path
 from atheriz.singletons.objects import get, add_object
 from atheriz.singletons.get import (
     get_node_handler,
@@ -11,16 +10,13 @@ from atheriz.singletons.get import (
     get_loggedin_cmdset,
     get_async_ticker,
 )
-from atheriz.objects.persist import save
 from atheriz.objects.contents import search, group_by_name
-from atheriz.commands.cmdset import CmdSet
+from atheriz.commands.base_cmdset import CmdSet
 from atheriz.utils import (
     make_iter,
     is_iter,
     get_reverse_link,
     wrap_xterm256,
-    tuple_to_str,
-    str_to_tuple,
     ensure_thread_safe,
 )
 from typing import TYPE_CHECKING, Self
@@ -29,11 +25,8 @@ from atheriz.objects import funcparser
 import atheriz.settings as settings
 from threading import Lock, RLock
 import time
-import dill
-import base64
 
 if TYPE_CHECKING:
-    from atheriz.commands.cmdset import CmdSet
     from atheriz.objects.session import Session
     from atheriz.singletons.node import Node, NodeLink
     from atheriz.objects.base_account import Account
@@ -42,7 +35,6 @@ if TYPE_CHECKING:
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 _LEGEND_ENTRY = None
-
 
 class Object:
     appearance_template = "{name}: {desc}{things}"
@@ -93,6 +85,28 @@ class Object:
             self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
+
+    # @property
+    # def location(self) -> None | Node:
+    #     return _NODE_HANDLER.get_node(self._location) if self._location else None
+
+    # @location.setter
+    # def location(self, value: None | Node):
+    #     if value:
+    #         self._location = value.coord
+    #     else:
+    #         self._location = None
+
+    # @property
+    # def home(self) -> None | Node:
+    #     return _NODE_HANDLER.get_node(self._home) if self._home else None
+
+    # @home.setter
+    # def home(self, value: None | Node):
+    #     if value:
+    #         self._home = value.coord
+    #     else:
+    #         self._home = None
 
     @classmethod
     def create(
@@ -173,60 +187,49 @@ class Object:
         return True
 
     def __getstate__(self):
-        d = self.__dict__.copy()
-        for field in IGNORE_FIELDS:
-            d.pop(field, None)
-        d["_contents"] = list(self._contents)
-        if self.internal_cmdset:
-            d["internal_cmdset"] = self.internal_cmdset.__getstate__()
-        else:
-            d["internal_cmdset"] = None
-        if self.external_cmdset:
-            d["external_cmdset"] = self.external_cmdset.__getstate__()
-        else:
-            d["external_cmdset"] = None
-        d["__import_path__"] = get_import_path(self)
-        d["locks"] = base64.b64encode(dill.dumps(self.locks)).decode("utf-8")
-        if self.location and self.location.is_node:
-            d["location"] = tuple_to_str(self.location.coord)
-        elif self.location:
-            d["location"] = self.location.id
-        else:
-            d["location"] = None
-        d["home"] = tuple_to_str(self.home) if self.home else None
-        return d
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("session", None)
+            state.pop("lock", None)
+            state.pop("access", None)
+            # state.pop("internal_cmdset", None)
+            # state.pop("external_cmdset", None)
+            if loc:=state.get("location"):
+                if loc.is_node:
+                    state["location"] = loc.coord
+                else:
+                    state["location"] = loc.id
+            if home:=state.get("home"):
+                if home.is_node:
+                    state["home"] = home.coord
+                else:
+                    state["home"] = home.id
+            return state
 
     def __setstate__(self, state):
-        self.locks = dill.loads(base64.b64decode(state["locks"]))
-        del state["locks"]
-        self._contents = set(state["_contents"])
-        del state["_contents"]
+        # this object.__setattr__ bullshit is for bypassing the thread-safety patch
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        if state.get("internal_cmdset"):
-            self.internal_cmdset = CmdSet()
-            self.internal_cmdset.__setstate__(state["internal_cmdset"])
-        else:
-            self.internal_cmdset = None
-
-        if state.get("external_cmdset"):
-            self.external_cmdset = CmdSet()
-            self.external_cmdset.__setstate__(state["external_cmdset"])
-        else:
-            self.external_cmdset = None
-        nh = get_node_handler()
-        if state["location"]:
-            if isinstance(state["location"], str):
-                self.location = nh.get_node(str_to_tuple(state["location"]))
+        # object.__setattr__(self, "internal_cmdset", CmdSet())
+        # object.__setattr__(self, "external_cmdset", CmdSet())
+        if hasattr(self, "_contents") and not isinstance(self._contents, set):
+            object.__setattr__(self, "_contents", set(self._contents))
+        object.__setattr__(self, "session", None)
+        if loc:=state.get("location"):
+            if isinstance(loc, int):
+                object.__setattr__(self, "location", get(loc))
             else:
-                loc = get(state["location"])
-                if loc:
-                    self.location = loc[0]
-                else:
-                    self.location = None
+                object.__setattr__(self, "location", get_node_handler().get_node(loc))
+        if home:=state.get("home"):
+            if isinstance(home, int):
+                object.__setattr__(self, "home", get(home))
+            else:
+                object.__setattr__(self, "home", get_node_handler().get_node(home))
+        if settings.SLOW_LOCKS:
+            object.__setattr__(self, "access", self._safe_access)
         else:
-            self.location = None
-        self.home = str_to_tuple(state["home"]) if state["home"] else None
-        if self._is_tickable:
+            object.__setattr__(self, "access", self._fast_access)
+        if hasattr(self, "_is_tickable") and self._is_tickable:
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
@@ -289,10 +292,7 @@ class Object:
         if channel:
             channel.msg(f"{self.name} has disconnected.")
         if settings.AUTOSAVE_PLAYERS_ON_DISCONNECT:
-            with self.lock:
-                save(self)
-            if self._contents:
-                save(self.contents)
+            save_objects()
 
     def subscribe(self, channel: Channel):
         """Subscribe to a channel."""
@@ -628,11 +628,11 @@ class Object:
             """Helper to sort objects for locking order to avoid deadlocks."""
 
             def get_key(o):
-                # (is_node (0=Object, 1=Node), unique_val)
-                # Objects locked before Nodes.
+                # (is_node (0=Node, 1=Object), unique_val)
+                # Nodes locked before Objects.
                 if getattr(o, "is_node", False):
-                    return (1, o.coord)
-                return (0, o.id)
+                    return (0, o.coord)
+                return (1, o.id)
 
             return sorted([a, b], key=get_key)
 

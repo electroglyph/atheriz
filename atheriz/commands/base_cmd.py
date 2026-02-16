@@ -148,11 +148,11 @@ class Command:
             return None, None, None
         return self.run, caller, parsed_args
 
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state["__import_path__"] = get_import_path(self)
-        del state["_parser"]
-        return state
+    # def __getstate__(self):
+    #     state = self.__dict__.copy()
+    #     state["__import_path__"] = get_import_path(self)
+    #     del state["_parser"]
+    #     return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)

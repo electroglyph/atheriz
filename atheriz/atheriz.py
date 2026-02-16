@@ -11,10 +11,9 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from atheriz import settings
 from atheriz.websocket import websocket_endpoint, websocket_manager
-from atheriz.objects.persist import save
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import add_object, get, load_files, get_by_type
+from atheriz.singletons.objects import add_object, get, load_objects, get_by_type, save_objects
 from atheriz.singletons.startstop import do_shutdown, do_startup, do_reload
 from atheriz.singletons.get import get_node_handler, get_unique_id
 import secrets
@@ -658,7 +657,7 @@ def create_game_data(args):
     if not save_path.exists():
         save_path.mkdir(parents=True)
 
-    load_files()
+    load_objects()
 
     result: list[Account] = get_by_type("account")
     if result:
@@ -678,8 +677,7 @@ def create_game_data(args):
                 r.add_character(character)
                 r.at_post_create_character(character)
                 add_object(character)
-                save(character)
-                save(r)
+                save_objects()
                 print("Success! Character created.")
                 return
 
@@ -693,8 +691,7 @@ def create_game_data(args):
     account.add_character(character)
     add_object(account)
     add_object(character)
-    save(account)
-    save(character)
+    save_objects()
     print("Success! Account and character created.")
 
 

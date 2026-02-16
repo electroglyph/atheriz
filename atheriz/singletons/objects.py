@@ -4,7 +4,7 @@ from threading import Lock, RLock
 from atheriz.utils import get_import_path, instance_from_string
 import atheriz.settings as settings
 from pathlib import Path
-import json
+import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
@@ -138,36 +138,37 @@ def remove_object(obj: object) -> None:
         _OBJECT_MAP[get_import_path(obj)] = s
 
 
-def load_files() -> Any:
-    """
-    Load all objects from the save directory.
-    """
-    biggest_id = -1
-
-    # Clean up any leftover temp files from crashed saves
-    tmp_files = list(Path(settings.SAVE_PATH).glob("*.tmp"))
-    for tmp_file in tmp_files:
-        print(f"Cleaning up stale temp file: {tmp_file.name}")
-        tmp_file.unlink()
-
-    for file in Path(settings.SAVE_PATH).iterdir():
-        if file.name in _IGNORE_FILES:
-            continue
-        if file.is_file() and not file.name.endswith(".tmp"):
-            with file.open("r") as f:
-                d = json.load(f)
-            for x in d:
-                if x.get("is_deleted", False):
-                    continue
-                obj = instance_from_string(x["__import_path__"])
-                obj.__setstate__(x)
-                add_object(obj)
-                if obj.id > biggest_id:
-                    biggest_id = obj.id
+def load_objects():
+    global _ALL_OBJECTS, _OBJECT_MAP
+    with _ALL_OBJECTS_LOCK:
+        _ALL_OBJECTS = dill.load(open(Path(settings.SAVE_PATH) / "objects", "rb"))
+    with _OBJECT_MAP_LOCK:
+        _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
+    with _ALL_OBJECTS_LOCK:
+        biggest_id = max(v.id for v in _ALL_OBJECTS.values() if not v.is_node)
     set_id(biggest_id)
 
-
 def save_objects():
+    save_path = Path(settings.SAVE_PATH)
+    save_path.mkdir(parents=True, exist_ok=True)
+
     with _ALL_OBJECTS_LOCK:
-        objs = list(_ALL_OBJECTS.values())
-    save(objs)
+        objects_snapshot = dict(_ALL_OBJECTS)
+    with _OBJECT_MAP_LOCK:
+        object_map_snapshot = dict(_OBJECT_MAP)
+
+    def _atomic_save(data, filename):
+        path = save_path / filename
+        temp_path = path.with_suffix(path.suffix + ".tmp")
+        try:
+            with temp_path.open("wb") as f:
+                dill.dump(data, f)
+            temp_path.replace(path)
+        except Exception as e:
+            from atheriz.logger import logger
+            logger.error(f"Error saving {filename}: {e}")
+            if temp_path.exists():
+                temp_path.unlink()
+
+    _atomic_save(objects_snapshot, "objects")
+    _atomic_save(object_map_snapshot, "object_map")

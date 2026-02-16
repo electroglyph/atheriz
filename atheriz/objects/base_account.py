@@ -31,6 +31,11 @@ class Account:
         self.is_item = False
         self.is_account = True
         self.is_deleted = False
+        self.is_mapable = False
+        self.is_container = False
+        self.is_tickable = False
+        self.is_channel = False
+        self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -48,15 +53,6 @@ class Account:
         account.name = name
         account.password = Account.hash_password(password)
         account.characters = []
-        account.is_connected = False
-        account.is_pc = False
-        account.is_npc = False
-        account.is_item = False
-        account.is_mapable = False
-        account.is_container = False
-        account.is_tickable = False
-        account.is_channel = False
-        account.is_account = True
         add_object(account)
         return account
 
@@ -95,9 +91,12 @@ class Account:
             return False
 
     def __getstate__(self):
-        d = {k: v for k, v in self.__dict__.items() if k not in IGNORE_FIELDS}
-        d["__import_path__"] = get_import_path(self)
-        return d
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
+    
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.lock = RLock()

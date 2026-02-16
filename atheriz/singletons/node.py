@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 from atheriz.utils import tuple_to_str, str_to_tuple
 from atheriz.logger import logger
 import json
+import dill
 from pathlib import Path
 from atheriz import settings
 from atheriz.objects.persist import instance_from_string
@@ -13,104 +14,6 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import NodeLink, Door, Transition
 from time import sleep
-
-
-def _load_file(filename: str) -> dict[str, Any]:
-    path = Path(settings.SAVE_PATH) / filename
-    if not path.exists():
-        logger.warning(f"File {filename} does not exist.")
-        return {}
-    with path.open("r") as f:
-        return json.load(f)
-
-
-def _load_file(filename: str) -> dict[str, Any]:
-    path = Path(settings.SAVE_PATH) / filename
-    if not path.exists():
-        logger.warning(f"File {filename} does not exist.")
-        return {}
-    with path.open("r") as f:
-        return json.load(f)
-
-
-def _serialize_areas(areas: dict[str, NodeArea]) -> dict[str, Any]:
-    return {k: v.__getstate__() for k, v in areas.items()}
-
-
-# def _tuple_to_str(t: tuple) -> str:
-#     return repr(t)
-
-# def _str_to_tuple(s: str) -> tuple:
-#     import ast
-#     return ast.literal_eval(s)
-
-
-def _serialize_transitions(
-    transitions: dict[tuple[str, int, int, int], Transition],
-) -> dict[str, Any]:
-    return {tuple_to_str(k): v.__getstate__() for k, v in transitions.items()}
-
-
-def _serialize_doors(
-    doors: dict[tuple[str, int, int, int], dict[str, Door]],
-) -> dict[str, dict[str, Any]]:
-    return {
-        tuple_to_str(k): {k2: v2.__getstate__() for k2, v2 in v.items()} for k, v in doors.items()
-    }
-
-
-def _restore(data: dict[str, Any]) -> Any:
-    obj = instance_from_string(data["__import_path__"])
-    obj.__setstate__(data)
-    return obj
-
-
-def _deserialize_areas(d: dict[str, Any]) -> dict[str, NodeArea]:
-    return {k: _restore(v) for k, v in d.items()}
-
-
-def _deserialize_transitions(d: dict[str, Any]) -> dict[tuple[str, int, int, int], Transition]:
-    return {str_to_tuple(k): _restore(v) for k, v in d.items()}
-
-
-def _deserialize_doors(
-    d: dict[str, dict[str, Any]],
-) -> dict[tuple[str, int, int, int], dict[str, Door]]:
-    return {str_to_tuple(k): {k2: _restore(v2) for k2, v2 in v.items()} for k, v in d.items()}
-
-
-def _load_areas() -> dict[str, NodeArea]:
-    return _deserialize_areas(_load_file("areas"))
-
-
-def _load_transitions() -> dict[tuple[str, int, int, int], Transition]:
-    return _deserialize_transitions(_load_file("transitions"))
-
-
-def _load_doors() -> dict[tuple[str, int, int, int], dict[str, Door]]:
-    return _deserialize_doors(_load_file("doors"))
-
-
-def _save_file(data: Any, filename: str):
-    path = Path(settings.SAVE_PATH) / filename
-    path.parent.mkdir(parents=True, exist_ok=True)
-    temp_path = path.with_suffix(path.suffix + ".tmp")
-    with temp_path.open("w") as f:
-        json.dump(data, f)
-    temp_path.replace(path)
-
-
-def _save_areas(areas: dict[str, NodeArea]):
-    _save_file(_serialize_areas(areas), "areas")
-
-
-def _save_transitions(transitions: dict[tuple[str, int, int, int], Transition]):
-    _save_file(_serialize_transitions(transitions), "transitions")
-
-
-def _save_doors(doors: dict[tuple[str, int, int, int], dict[str, Door]]):
-    _save_file(_serialize_doors(doors), "doors")
-
 
 class NodeHandler:
     def __init__(self):
@@ -124,26 +27,63 @@ class NodeHandler:
         # guards self.doors:
         self.lock3 = RLock()
         self.doors: dict[tuple[str, int, int, int], dict[str, Door]] = {}
-        self.areas = _load_areas()
-        self.transitions = _load_transitions()
-        self.doors = _load_doors()
+        # self.areas = _load_areas()
+        # self.transitions = _load_transitions()
+        # self.doors = _load_doors()
+        self.areas = {}
+        self.transitions = {}
+        self.doors = {}
+        ap = Path(settings.SAVE_PATH) / "areas"
+        if ap.exists():
+            with ap.open("rb") as f:
+                self.areas = dill.load(f)
+        pt = Path(settings.SAVE_PATH) / "transitions"
+        if pt.exists():
+            with pt.open("rb") as f:
+                self.transitions = dill.load(f)
+        pd = Path(settings.SAVE_PATH) / "doors"
+        if pd.exists():
+            with pd.open("rb") as f:
+                self.doors = dill.load(f)
 
     def save(self):
-        with self.lock:
-            _save_areas(self.areas)
-        with self.lock2:
-            _save_transitions(self.transitions)
-        with self.lock3:
-            _save_doors(self.doors)
+        save_path = Path(settings.SAVE_PATH)
+        save_path.mkdir(parents=True, exist_ok=True)
 
-    def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
-        result = []
-        with self.lock:
-            for v in self.areas.values():
-                o = v.get_objects(include_objects, include_npcs, include_pcs)
-                if o:
-                    result.extend(o)
-        return result
+        def _atomic_save(data, filename, lock):
+            path = save_path / filename
+            temp_path = path.with_suffix(path.suffix + ".tmp")
+            with lock:
+                try:
+                    with temp_path.open("wb") as f:
+                        dill.dump(data, f)
+                    temp_path.replace(path)
+                except Exception as e:
+                    logger.error(f"Error saving {filename}: {e}")
+                    if temp_path.exists():
+                        temp_path.unlink()
+
+        _atomic_save(self.areas, "areas", self.lock)
+        _atomic_save(self.transitions, "transitions", self.lock2)
+        _atomic_save(self.doors, "doors", self.lock3)
+
+
+    # def save(self):
+    #     with self.lock:
+    #         _save_areas(self.areas)
+    #     with self.lock2:
+    #         _save_transitions(self.transitions)
+    #     with self.lock3:
+    #         _save_doors(self.doors)
+
+    # def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
+    #     result = []
+    #     with self.lock:
+    #         for v in self.areas.values():
+    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
+    #             if o:
+    #                 result.extend(o)
+    #     return result
 
     def get_doors(self, coord: tuple[str, int, int, int]) -> dict[str, Door] | None:
         with self.lock3:

@@ -1,19 +1,17 @@
-from .objects import load_files
+from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
-from atheriz.singletons.objects import filter_by, _ALL_OBJECTS, _ALL_OBJECTS_LOCK
-from atheriz.objects.persist import save
+from atheriz.singletons.objects import save_objects, load_objects
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
 from typing import TYPE_CHECKING
-# from atheriz.server_events import at_server_start, at_server_stop, at_server_reload
 if TYPE_CHECKING:
     from atheriz.objects.base_channel import Channel
     from atheriz.objects.base_obj import Object
 
 
 def do_startup():
-    load_files()
+    load_objects()
     get_async_threadpool()
     get_map_handler()
     get_node_handler()
@@ -39,9 +37,7 @@ def do_shutdown():
         import atheriz.server_events as server_events
     server_events.at_server_stop()
     if settings.AUTOSAVE_ON_SHUTDOWN:
-        with _ALL_OBJECTS_LOCK:
-            objs = list(_ALL_OBJECTS.values())
-        save(objs)
+        save_objects()
         get_map_handler().save()
         get_node_handler().save()
     get_async_ticker().stop()
@@ -66,9 +62,7 @@ def do_reload():
     server_events.at_server_reload()
     get_async_ticker().clear()
     if settings.AUTOSAVE_ON_RELOAD:
-        with _ALL_OBJECTS_LOCK:
-            objs = list(_ALL_OBJECTS.values())
-        save(objs)
+        save_objects()
         get_map_handler().save()
         get_node_handler().save()
     if channel:

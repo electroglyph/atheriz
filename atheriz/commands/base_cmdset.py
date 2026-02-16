@@ -76,13 +76,9 @@ class CmdSet:
             return list(self.commands.keys())
 
     def __getstate__(self):
-        commands = {}
         with self.lock:
-            for key, command in self.commands.items():
-                commands[key] = command.__getstate__()
-        return {"commands": commands, "lock": None}
+            return self.__dict__.copy()
 
     def __setstate__(self, state):
-        for key, command in state["commands"].items():
-            self.commands[key] = instance_from_string(command["__import_path__"])
-            self.commands[key].__setstate__(command)
+        self.__dict__.update(state)
+        self.lock = RLock()

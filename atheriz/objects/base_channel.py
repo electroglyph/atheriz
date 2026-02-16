@@ -92,6 +92,7 @@ class Channel:
         self.is_account = False
         self.is_channel = True
         self.is_deleted = False
+        self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -167,13 +168,18 @@ class Channel:
             self.history.clear()
 
     def __getstate__(self) -> dict:
-        d = self.__dict__.copy()
-        del d["lock"]
-        del d["command"]
-        del d["listeners"]
-        d["__import_path__"] = get_import_path(self)
-        d["history"] = list(d["history"])
-        return d
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            state.pop("command", None)
+            state.pop("listeners", None)
+            return state
+
 
     def __setstate__(self, state: dict) -> None:
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
+        self.listeners = {}
+        self.command = None
+        if not isinstance(self.history, deque):
+            self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)
