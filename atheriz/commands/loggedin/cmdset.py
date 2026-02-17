@@ -16,6 +16,7 @@ from atheriz.commands.loggedin.say import SayCommand
 from atheriz.commands.loggedin.drop import DropCommand
 from atheriz.commands.loggedin.put import PutCommand
 from atheriz.commands.loggedin.get import GetCommand
+from atheriz.commands.loggedin.give import GiveCommand
 from atheriz.commands.loggedin.shutdown import ShutdownCommand
 from atheriz.commands.unloggedin.screenreader import ScreenReaderCommand
 from atheriz.commands.loggedin.help import HelpCommand
@@ -50,6 +51,7 @@ class LoggedinCmdSet(CmdSet):
         self.add(DropCommand())
         self.add(PutCommand())
         self.add(GetCommand())
+        self.add(GiveCommand())
         self.add(ShutdownCommand())
         self.add(ScreenReaderCommand())
         self.add(HelpCommand())
