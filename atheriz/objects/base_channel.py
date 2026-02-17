@@ -20,8 +20,6 @@ class BaseChannelCommand(Command):
 
     def __init__(self):
         super().__init__()
-        self._channel: Channel | None = None
-        self.id: int = -1
 
     @property
     def channel(self) -> Channel:
@@ -53,12 +51,18 @@ class BaseChannelCommand(Command):
         # elif args.subscribe:
         #     caller.subscribe(self.channel)
         elif args.replay:
+            if not self.channel.access(caller, "view"):
+                caller.msg("You do not have permission to view this channel.")
+                return
             h = self.channel.get_history()
             if h:
                 caller.msg(h)
             else:
                 caller.msg("No history available.")
         elif args.message:
+            if not self.channel.access(caller, "send"):
+                caller.msg("You do not have permission to send to this channel.")
+                return
             self.channel.msg(args.message, caller)
         else:
             caller.msg(self.parser.format_help())
@@ -232,7 +236,7 @@ class Channel:
         with self.lock:
             state = self.__dict__.copy()
             state.pop("lock", None)
-            state.pop("command", None)
+            # state.pop("command", None)
             state.pop("access", None)
             state.pop("listeners", None)
             return state
@@ -242,7 +246,7 @@ class Channel:
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
         self.listeners = {}
-        self.command = None
+        # self.command = None
         if not isinstance(self.history, deque):
             self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)
         if settings.SLOW_LOCKS:

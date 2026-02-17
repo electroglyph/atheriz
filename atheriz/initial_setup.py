@@ -86,6 +86,8 @@ def do_setup(username=None, password=None):
     button.move_to(home)
     account.add_character(character)
     c = Channel.create("Server")
+    c.add_lock("send", lambda x: x.is_builder)
+    c.add_lock("view", lambda x: x.is_builder)
     c.desc = "for server announcements"
     character.subscribe(c)
     save_objects()
