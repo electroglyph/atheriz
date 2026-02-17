@@ -198,9 +198,6 @@ class Channel:
 
     def msg(self, message: str, sender: Object | None = None) -> None:
         """Send a message to the channel."""
-        if sender and not self.access_send(sender):
-            sender.msg(f"You do not have permission to send messages to {self.name} channel.")
-            return
         with self.lock:
             timestamp = int(datetime.now().timestamp())
             if sender:

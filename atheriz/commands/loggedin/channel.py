@@ -71,22 +71,25 @@ class ChannelCommand(Command):
                 caller.msg("No channels found.")
             return
         if args.channel:
-            channel = filter_by_type("channel", lambda x: x.name == args.channel)
+            channel = filter_by_type("channel", lambda x: x.name.lower() == args.channel.lower())
             if not channel:
                 caller.msg(f"Channel {args.channel} not found.")
                 return
             self.channel = channel[0]
-            if not self.channel.access(caller, "view"):
-                caller.msg("You do not have permission to view this channel.")
-                return
         else:
             caller.msg(f"{self.parser.format_help()}")
             return
         if args.unsubscribe:
             caller.unsubscribe(self.channel)
         elif args.subscribe:
+            if not self.channel.access(caller, "view"):
+                caller.msg("You do not have permission to view this channel.")
+                return
             caller.subscribe(self.channel)
         elif args.replay:
+            if not self.channel.access(caller, "view"):
+                caller.msg("You do not have permission to view this channel.")
+                return
             caller.msg(self.channel.get_history())
         elif args.message:
             if not self.channel.access(caller, "send"):
