@@ -43,7 +43,7 @@ class GetCommand(Command):
                 source = loc
 
             for obj in list(source.contents):
-                if not obj.access(caller, "get") or obj.id == caller.id:
+                if not obj.at_pre_get(caller) or obj.id == caller.id:
                     continue
                 obj.move_to(caller)
                 loc.msg_contents(
@@ -52,6 +52,7 @@ class GetCommand(Command):
                     exclude=caller,
                 )
                 caller.msg(f"You picked up: {obj.name}")
+                obj.at_get(caller)
             return
 
         # Get specific object from a container or from the room
@@ -76,7 +77,7 @@ class GetCommand(Command):
                 return
 
         for f in found:
-            if not f.access(caller, "get"):
+            if not f.at_pre_get(caller):
                 caller.msg(f"You can't get {f.name}.")
                 continue
             f.move_to(caller)
@@ -86,3 +87,4 @@ class GetCommand(Command):
                 exclude=caller,
             )
             caller.msg(f"You picked up: {f.name}")
+            f.at_get(caller)

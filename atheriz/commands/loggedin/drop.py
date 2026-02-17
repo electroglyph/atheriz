@@ -29,6 +29,8 @@ class DropCommand(Command):
             obj = " ".join(args.object)
             if obj == "all":
                 for obj in list(caller.contents):
+                    if not obj.at_pre_drop(caller):
+                        continue
                     obj.move_to(loc)
                     loc.msg_contents(
                         text=(f"{caller.name} dropped {obj.name}.", {"type": "drop"}),
@@ -36,12 +38,15 @@ class DropCommand(Command):
                         exclude=caller,
                     )
                     caller.msg(f"You dropped: {obj.name}")
+                    obj.at_drop(caller)
                 return
             found = caller.search(obj)
             if not found:
                 caller.msg("Object not found.")
                 return
             for f in found:
+                if not f.at_pre_drop(caller):
+                    continue
                 f.move_to(loc)
                 loc.msg_contents(
                     text=(f"{caller.name} dropped {f.name}.", {"type": "drop"}),
@@ -49,5 +54,6 @@ class DropCommand(Command):
                     exclude=caller,
                 )
                 caller.msg(f"You dropped: {f.name}")
+                f.at_drop(caller)
         else:
             caller.msg(self.print_help())

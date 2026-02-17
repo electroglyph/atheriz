@@ -879,210 +879,50 @@ class Object:
             **kwargs
         )
 
-    def at_msg_receive(self, text=None, from_obj: Object | None = None, **kwargs):
-        """
-        This hook is called whenever someone sends a message to this
-        object using the `msg` method.
-
-        Note that from_obj may be None if the sender did not include
-        itself as an argument to the obj.msg() call - so you have to
-        check for this. .
-
-        Consider this a pre-processing method before msg is passed on
-        to the user session. If this method returns False, the msg
-        will not be passed on.
-
-        Args:
-            text (str, optional): The message received.
-            from_obj (any, optional): The object sending the message.
-            **kwargs: This includes any keywords sent to the `msg` method.
-
-        Returns:
-            receive (bool): If this message should be received.
-
-        Notes:
-            If this method returns False, the `msg` operation
-            will abort without sending the message.
-
-        """
+    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs):
+        """Called by the default `msg` command when this object has received a message."""
         return True
 
-    def at_msg_send(self, text=None, to_obj=None, **kwargs):
-        """
-        This is a hook that is called when *this* object sends a
-        message to another object with `obj.msg(text, to_obj=obj)`.
-
-        Args:
-            text (str, optional): Text to send.
-            to_obj (any, optional): The object to send to.
-            **kwargs: Keywords passed from msg().
-
-        Notes:
-            Since this method is executed by `from_obj`, if no `from_obj`
-            was passed to `DefaultCharacter.msg` this hook will never
-            get called.
-
-        """
+    def at_msg_send(self, text: str | None = None, to_obj: Object | None = None, **kwargs):
+        """Called by the default `msg` command when this object sends a message."""
         pass
 
-    def at_desc(self, looker=None, **kwargs):
-        """
-        This is called whenever someone looks at this object.
-
-        Args:
-            looker (Object, optional): The object requesting the description.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        """
+    def at_desc(self, looker: Object | None = None, **kwargs):
+        """Called by the default `look` command when this object is looked at."""
         pass
 
-    def at_pre_get(self, getter, **kwargs):
-        """
-        Called by the default `get` command before this object has been
-        picked up.
+    def at_pre_get(self, getter: Object, **kwargs):
+        """Called by the default `get` command before this object has been picked up."""
+        return self.access(getter, "get")
 
-        Args:
-            getter (DefaultObject): The object about to get this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Returns:
-            bool: If the object should be gotten or not.
-
-        Notes:
-            If this method returns False/None, the getting is cancelled
-            before it is even started.
-        """
-        return True
-
-    def at_get(self, getter, **kwargs):
-        """
-        Called by the default `get` command when this object has been
-        picked up.
-
-        Args:
-            getter (DefaultObject): The object getting this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Notes:
-            This hook cannot stop the pickup from happening. Use
-            permissions or the at_pre_get() hook for that.
-
-        """
+    def at_get(self, getter: Object, **kwargs):
+        """Called by the default `get` command when this object has been picked up."""
         pass
 
-    def at_pre_give(self, giver, getter, **kwargs):
-        """
-        Called by the default `give` command before this object has been
-        given.
+    def at_pre_give(self, giver: Object, getter: Object, **kwargs):
+        """Called by the default `give` command before this object has been given."""
+        return self.access(getter, "give")
 
-        Args:
-            giver (DefaultObject): The object about to give this object.
-            getter (DefaultObject): The object about to get this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Returns:
-            shouldgive (bool): If the object should be given or not.
-
-        Notes:
-            If this method returns `False` or `None`, the giving is cancelled
-            before it is even started.
-
-        """
-        return True
-
-    def at_give(self, giver, getter, **kwargs):
-        """
-        Called by the default `give` command when this object has been
-        given.
-
-        Args:
-            giver (DefaultObject): The object giving this object.
-            getter (DefaultObject): The object getting this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Notes:
-            This hook cannot stop the give from happening. Use
-            permissions or the at_pre_give() hook for that.
-
-        """
+    def at_give(self, giver: Object, getter: Object, **kwargs):
+        """Called by the default `give` command when this object has been given."""
         pass
 
-    def at_pre_drop(self, dropper, **kwargs):
-        """
-        Called by the default `drop` command before this object has been
-        dropped.
+    def at_pre_drop(self, dropper: Object, **kwargs):
+        """Called by the default `drop` command before this object has been dropped."""
+        return self.access(dropper, "drop")
 
-        Args:
-            dropper (DefaultObject): The object which will drop this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Returns:
-            bool: If the object should be dropped or not.
-
-        Notes:
-            If this method returns `False` or `None`, the dropping is cancelled
-            before it is even started.
-
-        """
-        if not self.locks.get("drop"):
-            # TODO: This if-statment will be removed in Evennia 1.0
-            return True
-        if not self.access(dropper, "drop", default=False):
-            dropper.msg("You cannot drop {obj}").format(obj=self.get_display_name(dropper))
-            return False
-        return True
-
-    def at_drop(self, dropper, **kwargs):
-        """
-        Called by the default `drop` command when this object has been
-        dropped.
-
-        Args:
-            dropper (DefaultObject): The object which just dropped this object.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        Notes:
-            This hook cannot stop the drop from happening. Use
-            permissions or the at_pre_drop() hook for that.
-
-        """
+    def at_drop(self, dropper: Object, **kwargs):
+        """Called by the default `drop` command when this object has been dropped."""
         pass
 
-    def at_pre_say(self, message, **kwargs):
-        """
-        Before the object says something.
-
-        This hook is by default used by the 'say' and 'whisper'
-        commands as used by this command it is called before the text
-        is said/whispered and can be used to customize the outgoing
-        text from the object. Returning `None` aborts the command.
-
-        Args:
-            message (str): The suggested say/whisper text spoken by self.
-        Keyword Args:
-            whisper (bool): If True, this is a whisper rather than
-                a say. This is sent by the whisper command by default.
-                Other verbal commands could use this hook in similar
-                ways.
-            receivers (DefaultObject or iterable): If set, this is the target or targets for the
-                say/whisper.
-
-        Returns:
-            str: The (possibly modified) text to be spoken.
-
-        """
+    def at_pre_say(self, message: str, **kwargs):
+        """Called by the default `say` command before this object says something."""
         return message
 
+    # this is from Evennia, see EVENNIA_LICENSE.txt
     def at_say(
         self,
-        message,
+        message: str,
         msg_self=None,
         msg_location=None,
         receivers=None,
