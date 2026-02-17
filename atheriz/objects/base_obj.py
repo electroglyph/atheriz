@@ -160,12 +160,6 @@ class Object:
             return 0
 
         def _delete_object(obj: Object):
-            if not obj.access(caller, "delete"):
-                caller.msg(f"You cannot delete {obj.get_display_name(caller)}.")
-                logger.info(
-                    f"{caller.name} ({caller.id}) tried to delete {obj.get_display_name(caller)} ({obj.id}) but failed."
-                )
-                return
             if obj.location:
                 obj.location.remove_object(obj)
                 obj.location = None
@@ -199,6 +193,12 @@ class Object:
 
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
+        if not self.access(caller, "delete"):
+            caller.msg(f"You cannot delete {self.get_display_name(caller)}.")
+            logger.info(
+                f"{caller.name} ({caller.id}) tried to delete {self.get_display_name(caller)} ({self.id}) but failed."
+            )
+            return False
         return True
 
     def at_create(self):
@@ -650,7 +650,7 @@ class Object:
 
     def at_pre_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
         """Called before moving the object."""
-        return True
+        return destination.access(self, "put") if destination else True
 
     def at_post_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
         """Called after moving the object."""
@@ -673,8 +673,6 @@ class Object:
                 self.location = None
             self.at_post_move(destination, to_exit, **kwargs)
             return True
-        if not destination.access(self, "put"):
-            return False
         loc = self.location
 
         def sort_locks(a, b):
@@ -695,10 +693,18 @@ class Object:
                 ordered = sort_locks(loc, destination)
                 with ordered[0].lock:
                     with ordered[1].lock:
+                        if loc.is_node:
+                            if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
+                                return False
+                            loc.at_object_leave(destination, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
             else:
                 with destination.lock:
+                    if destination.is_node:
+                        if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                            return False
+                        destination.at_object_receive(loc, to_exit, **kwargs)
                     destination._contents.add(self.id)
             with self.lock:
                 object.__setattr__(self, "location", destination)
@@ -1223,7 +1229,7 @@ class Object:
         target.at_desc(looker=self, **kwargs)
         return desc
 
-    def at_desc(self, looker=None, **kwargs):
+    def at_desc(self, looker: Object | None = None, **kwargs):
         """
         This is called whenever someone looks at this object.
 

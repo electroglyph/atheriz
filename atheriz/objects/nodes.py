@@ -1,21 +1,18 @@
 from typing import Callable
-from atheriz.utils import is_iter, make_iter, iter_to_str
-from typing import Any, Iterable, Optional
+from atheriz.utils import is_iter, make_iter
+from typing import Any, Optional
 from atheriz.singletons.objects import get
 import random
-from threading import Lock, RLock
+from threading import RLock
 from typing import TYPE_CHECKING
 from pyatomix import AtomicFlag, AtomicInt
 from atheriz.utils import (
     wrap_truecolor,
     get_import_path,
-    instance_from_string,
     wrap_xterm256,
-    tuple_to_str,
-    str_to_tuple,
 )
 from atheriz.objects import funcparser
-from atheriz.singletons.objects import get, filter_by
+from atheriz.singletons.objects import get
 from atheriz.objects.contents import search
 from atheriz.singletons.get import get_node_handler, get_async_ticker
 from atheriz.commands.base_cmdset import CmdSet
@@ -24,8 +21,6 @@ from atheriz.objects.contents import filter_contents, group_by_name
 from atheriz.utils import wrap_truecolor
 from atheriz.logger import logger
 import atheriz.settings as settings
-import dill
-import base64
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -101,8 +96,9 @@ class Node:
     is_account = False
     home = None
 
-    def at_desc(self, *args, **kwargs):
-        return self.desc
+    def at_desc(self, looker: Object | None = None, **kwargs):
+        """Called when the node is looked at."""
+        pass
 
     def at_tick(self):
         """
@@ -295,6 +291,30 @@ class Node:
     #                 result.append(o)
     #     return result
 
+    def at_pre_object_leave(
+        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
+    ) -> bool:
+        """Called before leaving the object, return False to cancel."""
+        return True
+
+    def at_object_leave(
+        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
+    ) -> None:
+        """Called after leaving the object."""
+        pass
+
+    def at_pre_object_receive(
+        self, source: Node | Object | None, from_exit: str | None = None, **kwargs
+    ) -> bool:
+        """Called before receiving the object, return False to cancel."""
+        return True
+
+    def at_object_receive(
+        self, source: Node | Object | None, from_exit: str | None = None, **kwargs
+    ) -> None:
+        """Called after receiving the object."""
+        pass
+
     def at_init(self):
         """
         Called after this object is deserialized and all attributes are set.
@@ -331,18 +351,20 @@ class Node:
             self.is_deleted = True
 
         if not self.at_delete(caller):
-            _self_delete()
             return 0
-        
+
         count = _delete_recursive(self) if recursive else _move_contents(self)
         _self_delete()
         return count
 
     def at_delete(self, caller: Object) -> bool:
-        """
-        Called before this object is deleted.
-        Return False to cancel deletion.
-        """
+        """Called before an object is deleted, aborts deletion if False"""
+        if not self.access(caller, "delete"):
+            caller.msg(f"You cannot delete {self.get_display_name(caller)}.")
+            logger.info(
+                f"{caller.name} ({caller.id}) tried to delete {self.get_display_name(caller)} ({self.id}) but failed."
+            )
+            return False
         return True
 
     def add_noun(self, noun: str, desc: str):
@@ -534,14 +556,14 @@ class Node:
             )
             receiver.msg(text=outmessage, from_obj=from_obj, **outkwargs)
 
-    def get_display_things(self, looker, **kwargs):
+    def get_display_things(self, looker: Object | None = None, **kwargs) -> str:
         things = filter_contents(self, lambda x: x.is_item)
         thing_names = group_by_name(things, looker)
         return (
             f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n" if thing_names else ""
         )
 
-    def get_display_characters(self, looker, **kwargs):
+    def get_display_characters(self, looker: Object | None = None, **kwargs) -> str:
         characters = filter_contents(self, lambda x: (x.is_pc or x.is_npc) and x != looker)
         character_names = group_by_name(characters, looker)
         return (
@@ -550,7 +572,7 @@ class Node:
             else ""
         )
 
-    def get_display_exits(self, looker, **kwargs):
+    def get_display_exits(self, looker: Object | None = None, **kwargs) -> str:
         if self.links is None:
             return ""
         exit_names = ""
@@ -565,7 +587,7 @@ class Node:
             else ""
         )
 
-    def get_display_doors(self, looker, **kwargs) -> str:
+    def get_display_doors(self, looker: Object | None = None, **kwargs) -> str:
         result = f"{wrap_xterm256('Doors:', fg=15, bold=True)} "
         nh = get_node_handler()
         d = nh.get_doors(self.coord)
@@ -583,7 +605,7 @@ class Node:
         else:
             return ""
 
-    def get_display_desc(self, looker, **kwargs):
+    def get_display_desc(self, looker: Object | None = None, **kwargs):
         with self.lock:
             return self.desc + "\n" if self.desc else "You see nothing special.\n"
 
@@ -595,7 +617,7 @@ class Node:
                 )
         return ""
 
-    def return_appearance(self, looker, **kwargs):
+    def return_appearance(self, looker: Object | None = None, **kwargs):
         if not looker:
             return "You see nothing here."
         return appearance_template.format(
@@ -606,16 +628,6 @@ class Node:
             things=self.get_display_things(looker, **kwargs),
             doors=self.get_display_doors(looker, **kwargs),
         )
-
-
-def _tuple_to_str(t: tuple) -> str:
-    return repr(t)
-
-
-def _str_to_tuple(s: str) -> tuple:
-    import ast
-
-    return ast.literal_eval(s)
 
 
 class NodeGrid:
