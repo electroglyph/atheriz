@@ -77,9 +77,7 @@ class Object:
         # list of channel ids subscribed to
         self.channels: list[int] = []
         self.session: Session | None = None
-        # self.account: Account | None = None
         self.locks: dict[str, list[Callable]] = {}
-        self.group_save = True
         if settings.SLOW_LOCKS:
             self.access = self._safe_access
         else:
@@ -136,7 +134,6 @@ class Object:
         obj.desc = desc
         obj._tick_seconds = tick_seconds
         obj.aliases = aliases if aliases else []
-        obj.group_save = not is_pc
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
         if is_tickable:

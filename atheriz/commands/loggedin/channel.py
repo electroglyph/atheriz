@@ -56,7 +56,7 @@ class ChannelCommand(Command):
         if args.list:
             channels: list[Channel] = get_by_type("channel")
             if channels:
-                visible = [channel for channel in channels if channel.access_view(caller)]
+                visible = [channel for channel in channels if channel.access(caller, "view")]
                 if visible:
                     msg = "\n".join(
                         [
@@ -76,6 +76,9 @@ class ChannelCommand(Command):
                 caller.msg(f"Channel {args.channel} not found.")
                 return
             self.channel = channel[0]
+            if not self.channel.access(caller, "view"):
+                caller.msg("You do not have permission to view this channel.")
+                return
         else:
             caller.msg(f"{self.parser.format_help()}")
             return
@@ -86,4 +89,7 @@ class ChannelCommand(Command):
         elif args.replay:
             caller.msg(self.channel.get_history())
         elif args.message:
+            if not self.channel.access(caller, "send"):
+                caller.msg("You do not have permission to send to this channel.")
+                return
             self.channel.msg(args.message, caller)

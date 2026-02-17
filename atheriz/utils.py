@@ -4,7 +4,7 @@ from random import randint
 from string import punctuation
 import colorsys
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from atheriz.singletons.get import get_websocket_manager
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
@@ -405,7 +405,6 @@ def iter_to_str(iterable, sep=",", endsep=", and", addquote=False):
         Default is to use 'Oxford comma', like 1, 2, 3, and 4.
 
     Examples:
-
         ```python
         >>> iter_to_string([1,2,3], endsep=',')
         '1, 2, 3'
@@ -448,3 +447,80 @@ def iter_to_str(iterable, sep=",", endsep=", and", addquote=False):
         return f"{endsep} ".join(str(v) for v in iterable)
     else:
         return f"{sep} ".join(str(v) for v in iterable[:-1]) + f"{endsep} {iterable[-1]}"
+
+
+def is_empty_method(method) -> bool:
+    """
+    Check if a method body is effectively empty (only contains 'pass' or 'return None').
+    """
+    import inspect
+    import dis
+
+    try:
+        # Get the underlying function if it's a bound method
+        func = getattr(method, "__func__", method)
+        if not func or not hasattr(func, "__code__"):
+            return False
+        code = func.__code__
+        
+        # A pass/return None method in Python 3.11+ looks like:
+        # RESUME 0
+        # LOAD_CONST None
+        # RETURN_VALUE
+        
+        # Get bytecode instructions
+        instructions = list(dis.get_instructions(code))
+        
+        # Filter out informational opcodes like RESUME, CACHE, EXTENDED_ARG (if any)
+        # We only care about actual logic.
+        meaningful_ops = [i.opname for i in instructions if i.opname not in ("RESUME", "CACHE", "EXTENDED_ARG", "NOP")]
+        
+        if meaningful_ops == ["LOAD_CONST", "RETURN_VALUE"]:
+            # Check if LOAD_CONST is loading None
+            for i in instructions:
+                if i.opname == "LOAD_CONST":
+                    return i.argval is None
+        
+        return False
+    except Exception:
+        return False
+
+
+def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
+    """
+    Inspect a class to extract methods meant to be overridden (hooks).
+    Handles cases where inspect.signature might fail due to NameErrors in type hints.
+
+    Returns:
+        List of tuples: (method_name, signature, docstring, is_empty)
+    """
+    import inspect
+    
+    methods = []
+    # Patterns for hooks
+    OVERRIDE_PATTERNS = ("at_", "access_", "format_", "pre_", "post_")
+    ALWAYS_INCLUDE = ("setup_parser", "run")
+
+    for name, method in inspect.getmembers(cls, predicate=inspect.isfunction):
+        # Skip private methods
+        if name.startswith("_") and name not in ALWAYS_INCLUDE:
+            continue
+
+        should_include = any(name.startswith(p) for p in OVERRIDE_PATTERNS) or name in ALWAYS_INCLUDE
+
+        if should_include:
+            sig = None
+            try:
+                # Use eval_str=False to avoid evaluating forward references
+                sig = inspect.signature(method, eval_str=False)
+            except Exception:
+                # If signature fails, we still want to include it.
+                # We can't easily rebuild the signature here without more effort,
+                # but we can return None or a dummy.
+                pass
+            
+            doc = inspect.getdoc(method)
+            is_empty = is_empty_method(method)
+            methods.append((name, sig, doc, is_empty))
+
+    return methods

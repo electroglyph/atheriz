@@ -13,45 +13,18 @@ from typing import Any, Callable
 class ClassInspector:
     """Inspects a class to extract methods meant to be overridden."""
 
-    # Method name patterns that indicate override-able methods
-    OVERRIDE_PATTERNS = ("at_", "access_", "format_", "pre_")
-
-    # Specific methods to always include
-    ALWAYS_INCLUDE = ("setup_parser", "run")
-
     def __init__(self, cls: type):
         self.cls = cls
 
-    def get_override_methods(self) -> list[tuple[str, inspect.Signature, str | None]]:
+    def get_override_methods(self) -> list[tuple[str, Any, str | None, bool]]:
         """
         Get all methods that are meant to be overridden.
 
         Returns:
-            List of tuples: (method_name, signature, docstring)
+            List of tuples: (method_name, signature, docstring, is_empty)
         """
-        methods = []
-
-        for name, method in inspect.getmembers(self.cls, predicate=inspect.isfunction):
-            # Skip private/magic methods (except those we explicitly want)
-            if name.startswith("_") and name not in self.ALWAYS_INCLUDE:
-                continue
-
-            # Check if method matches override patterns
-            should_include = any(name.startswith(p) for p in self.OVERRIDE_PATTERNS)
-            should_include = should_include or name in self.ALWAYS_INCLUDE
-
-            if should_include:
-                try:
-                    # Use eval_str=False to avoid evaluating forward reference annotations
-                    sig = inspect.signature(method, eval_str=False)
-                    doc = inspect.getdoc(method)
-                    methods.append((name, sig, doc))
-                except (ValueError, TypeError, NameError):
-                    # Some methods may not have inspectable signatures or have
-                    # forward references that can't be resolved
-                    pass
-
-        return methods
+        from atheriz.utils import get_class_hooks
+        return get_class_hooks(self.cls)
 
 
 class TemplateGenerator:
@@ -67,14 +40,18 @@ class TemplateGenerator:
         self.class_name = class_name
         self.base_import = base_import
         self.base_class = base_class
-        self.methods: list[tuple[str, inspect.Signature, str | None]] = []
+        self.methods: list[tuple[str, Any, str | None, bool]] = []
 
-    def add_methods(self, methods: list[tuple[str, inspect.Signature, str | None]]):
+    def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
         """Add methods to generate stubs for."""
         self.methods = methods
 
-    def _format_signature(self, name: str, sig: inspect.Signature) -> str:
+    def _format_signature(self, name: str, sig: Any) -> str:
         """Format a method signature for the template."""
+        if sig is None:
+            # Fallback if signature couldn't be inspected
+            return f"def {name}(self, *args, **kwargs):"
+
         params = []
         for param_name, param in sig.parameters.items():
             if param_name == "self":
@@ -98,8 +75,14 @@ class TemplateGenerator:
 
         return f"def {name}({', '.join(params)}):"
 
-    def _format_super_call(self, name: str, sig: inspect.Signature) -> str:
-        """Format the super() call."""
+    def _format_body(self, name: str, sig: Any, is_empty: bool) -> str:
+        """Format the method body."""
+        if is_empty:
+            return "        pass"
+
+        if sig is None:
+            return f"        return super().{name}(*args, **kwargs)"
+
         args = []
         for param_name, param in sig.parameters.items():
             if param_name == "self":
@@ -114,7 +97,7 @@ class TemplateGenerator:
             else:
                 args.append(param_name)
 
-        return f"return super().{name}({', '.join(args)})"
+        return f"        return super().{name}({', '.join(args)})"
 
     def generate(self) -> str:
         """Generate the complete template file content."""
@@ -129,7 +112,7 @@ class TemplateGenerator:
         if not self.methods:
             lines.append("    pass")
         else:
-            for name, sig, doc in self.methods:
+            for name, sig, doc, is_empty in self.methods:
                 lines.append("")
                 lines.append(f"    {self._format_signature(name, sig)}")
                 if doc:
@@ -137,7 +120,7 @@ class TemplateGenerator:
                     first_line = doc.split("\n")[0].strip()
                     if first_line:
                         lines.append(f'        """{first_line}"""')
-                lines.append(f"        {self._format_super_call(name, sig)}")
+                lines.append(self._format_body(name, sig, is_empty))
 
         lines.append("")
         return "\n".join(lines)

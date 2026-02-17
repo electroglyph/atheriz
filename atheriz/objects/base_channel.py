@@ -1,3 +1,4 @@
+from typing import Callable
 from collections import deque
 from threading import Lock, RLock
 import atheriz.settings as settings
@@ -83,6 +84,7 @@ class Channel:
         self.command: Command | None = None
         self.history: deque[tuple[int, str, str]] = deque(maxlen=settings.CHANNEL_HISTORY_LIMIT)
         self.listeners: dict[int, Object] = {}
+        self.locks: dict[str, list[Callable]] = {}
         self.is_pc = False
         self.is_npc = False
         self.is_item = False
@@ -93,8 +95,31 @@ class Channel:
         self.is_channel = True
         self.is_deleted = False
         self.is_node = False
+        if settings.SLOW_LOCKS:
+            self.access = self._safe_access
+        else:
+            self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
+            
+    def _safe_access(self, accessing_obj: Object, name: str):
+        if accessing_obj.is_superuser:
+            return True
+        with self.lock:
+            lock_list = self.locks.get(name, [])
+            for lock in lock_list:
+                if not lock(accessing_obj):
+                    return False
+            return True
+
+    def _fast_access(self, accessing_obj: Object, name: str):
+        if accessing_obj.is_superuser:
+            return True
+        lock_list = self.locks.get(name, [])
+        for lock in lock_list:
+            if not lock(accessing_obj):
+                return False
+        return True
 
     @classmethod
     def create(cls, name: str) -> 'Channel':
@@ -107,6 +132,34 @@ class Channel:
         add_object(c)
         c.at_create()
         return c
+    
+    def add_lock(self, lock_name: str, callable: Callable):
+        """
+        Add a lock to this object.
+
+        For example:
+        ```python
+        obj.add_lock("control", lambda x: x.is_builder)
+        ```
+
+        Args:
+            lock_name (str): The name of the lock to add.
+            callable (Callable): The callable to add to the lock.
+        """
+        with self.lock:
+            l = self.locks.get(lock_name, [])
+            l.append(callable)
+            self.locks[lock_name] = l
+
+    def clear_locks_by_name(self, lock_name: str):
+        """
+        Clear all locks by name.
+
+        Args:
+            lock_name (str): The name of the lock to clear.
+        """
+        with self.lock:
+            self.locks.pop(lock_name, None)
     
     def delete(self, caller: Object, unused: bool) -> int:
         del unused
@@ -123,12 +176,6 @@ class Channel:
     def at_create(self):
         """Called after an object is created."""
         pass
-
-    def access_view(self, caller: Object) -> bool:
-        return True
-
-    def access_send(self, caller: Object) -> bool:
-        return True
 
     def add_listener(self, listener: Object) -> None:
         with self.lock:
@@ -189,6 +236,7 @@ class Channel:
             state = self.__dict__.copy()
             state.pop("lock", None)
             state.pop("command", None)
+            state.pop("access", None)
             state.pop("listeners", None)
             return state
 
@@ -200,3 +248,7 @@ class Channel:
         self.command = None
         if not isinstance(self.history, deque):
             self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)
+        if settings.SLOW_LOCKS:
+            object.__setattr__(self, "access", self._safe_access)
+        else:
+            object.__setattr__(self, "access", self._fast_access)
