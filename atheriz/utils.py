@@ -9,8 +9,17 @@ from atheriz.singletons.get import get_websocket_manager
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
 
+import os
+from pathlib import Path
+
 _ANSI_COLOR = r"\x1b\[[0-9;]+m"
 _COLOR_REGEX = re.compile(_ANSI_COLOR)
+
+
+def is_in_game_folder() -> bool:
+    """Check if the current directory is a game folder."""
+    cwd = Path.cwd()
+    return (cwd / "settings.py").exists() and (cwd / "save").is_dir() and (cwd / "__init__.py").exists()
 
 
 def msg_all(msg: str) -> None:

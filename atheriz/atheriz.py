@@ -66,10 +66,12 @@ def setup_game_folder():
     import os
     import importlib
     
-    # Check if we are in a game folder (looks for settings.py and save directory)
+    from atheriz.utils import is_in_game_folder
+    
+    # Check if we are in a game folder (looks for settings.py, save directory, and __init__.py)
     cwd = Path.cwd()
-    if not (cwd / "settings.py").exists() or not (cwd / "save").is_dir():
-        print("Error: 'atheriz start' must be run from a game folder (containing settings.py and save/).")
+    if not is_in_game_folder():
+        print("Error: 'atheriz start' must be run from a game folder (containing settings.py, save/, and __init__.py).")
         print(f"Current directory: {cwd}")
         sys.exit(1)
 
