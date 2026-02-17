@@ -532,7 +532,7 @@ class Node:
                     for key, obj in mapping.items()
                 }
             )
-            receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
+            receiver.msg(text=outmessage, from_obj=from_obj, **outkwargs)
 
     def get_display_things(self, looker, **kwargs):
         things = filter_contents(self, lambda x: x.is_item)
