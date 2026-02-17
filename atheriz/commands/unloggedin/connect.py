@@ -19,7 +19,8 @@ class ConnectCommand(Command):
         self.parser.add_argument("account_name", help="The name of the account to connect to.")
         self.parser.add_argument("password", help="The password for the account.")
 
-    async def run(self, caller: Connection | Object, args):
+    # pyrefly: ignore
+    async def run(self, caller: Connection, args):
         account_name = args.account_name
         password = args.password
         accounts = filter_by_type("account", lambda x: x.name == account_name)
@@ -51,13 +52,13 @@ class ConnectCommand(Command):
                     )
             return
 
-        caller.session.account = account
         if account.is_banned:
             caller.msg(
                 f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}"
             )
             caller.close()
             return
+        caller.session.account = account
         caller.send_command("logged_in")
         if account.characters is None:
             caller.msg("Character creation not implemented yet.")
@@ -76,6 +77,9 @@ class ConnectCommand(Command):
                 continue
             if choice >= len(chars) or choice < 0:
                 caller.msg("Invalid choice.")
+                continue
+            if not account.at_pre_puppet(chars[choice]):
+                caller.msg("This character is not available.")
                 continue
             caller.session.puppet = chars[choice]
             caller.session.puppet.session = caller.session

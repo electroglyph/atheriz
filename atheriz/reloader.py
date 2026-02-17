@@ -286,8 +286,6 @@ def reload_game_logic() -> str:
                         obj.session = saved_session
 
                     objects_patched += 1
-                    if hasattr(obj, "at_server_reload"):
-                        obj.at_server_reload()
         except Exception as e:
             print(f"[HotReload] Error patching object {obj}: {e}")
 

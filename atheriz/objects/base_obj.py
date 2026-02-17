@@ -162,7 +162,9 @@ class Object:
         def _delete_object(obj: Object):
             if not obj.access(caller, "delete"):
                 caller.msg(f"You cannot delete {obj.get_display_name(caller)}.")
-                logger.info(f"{caller.name} ({caller.id}) tried to delete {obj.get_display_name(caller)} ({obj.id}) but failed.")
+                logger.info(
+                    f"{caller.name} ({caller.id}) tried to delete {obj.get_display_name(caller)} ({obj.id}) but failed."
+                )
                 return
             if obj.location:
                 obj.location.remove_object(obj)
@@ -646,18 +648,30 @@ class Object:
 
             receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
+    def at_pre_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
+        """Called before moving the object."""
+        return True
+
+    def at_post_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
+        """Called after moving the object."""
+        pass
+
     def move_to(
         self,
         destination: Node | Object | None,
         to_exit: str | None = None,
         force=False,
         announce=True,
+        **kwargs
     ) -> bool:
         """Move this object to a new location."""
+        if not force and not self.at_pre_move(destination, to_exit, **kwargs):
+            return False
         if destination is None:
             if loc := self.location:
                 loc.remove_object(self)
                 self.location = None
+            self.at_post_move(destination, to_exit, **kwargs)
             return True
         if not destination.access(self, "put"):
             return False
@@ -689,16 +703,10 @@ class Object:
             with self.lock:
                 object.__setattr__(self, "location", destination)
                 object.__setattr__(self, "last_touched_by", destination.id)
+            self.at_post_move(destination, to_exit, **kwargs)
 
         if not destination.is_node:
-            pre = self.at_pre_move(destination, None)
-            if not force:
-                if not pre:
-                    return False
-                else:
-                    do_item_move()
-            else:
-                do_item_move()
+            do_item_move()
             return True
 
         # from_exit is NodeLink | None
@@ -717,20 +725,20 @@ class Object:
                 with ordered[0].lock:
                     with ordered[1].lock:
                         if announce:
-                            self.announce_move_to(loc, to_exit)
+                            self.announce_move_to(loc, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
                         destination.add_exits(self, internal=True)
                         self.location = destination
                         if announce:
-                            self.announce_move_from(destination, from_exit)
+                            self.announce_move_from(destination, from_exit, **kwargs)
             else:
                 with destination.lock:
                     destination._contents.add(self.id)
                     destination.add_exits(self, internal=True)
                     self.location = destination
                     if announce:
-                        self.announce_move_from(destination, from_exit)
+                        self.announce_move_from(destination, from_exit, **kwargs)
             if settings.MAP_ENABLED:
                 mh = get_map_handler()
                 if self.is_pc:
@@ -739,16 +747,9 @@ class Object:
                 if self.is_mapable:
                     # mapables appear on the map
                     mh.move_mapable(self, destination.coord, old_coord)
-            self.at_post_move(destination, to_exit)
+            self.at_post_move(destination, to_exit, **kwargs)
 
-        pre = self.at_pre_move(destination, to_exit)
-        if not force:
-            if not pre:
-                return False
-            else:
-                do_move()
-        else:
-            do_move()
+        do_move()
         if self.is_pc:
             msg = self.at_look(destination)
             if msg:
@@ -812,25 +813,7 @@ class Object:
                     mi.render(True)
             self.move_to(self.location)
 
-    def at_server_reload(self):
-        """
-        This hook is called after the server is reloaded.
-        """
-        # reloading resets channel listeners, so we need to re-add them
-        with self.lock:
-            for c in self.channels:
-                if channel := get(c):
-                    channel[0].add_listener(self)
-
-    def at_server_shutdown(self):
-        """
-        This hook is called whenever the server is shutting down fully
-        (i.e. not for a restart).
-
-        """
-        pass
-
-    def announce_move_from(self, destination: Node, from_exit: str | None):
+    def announce_move_from(self, destination: Node, from_exit: str | None, **kwargs):
         if not destination:
             return
         if not from_exit:
@@ -841,6 +824,7 @@ class Object:
                 exclude=self,
                 type="move",
                 internal=True,
+                **kwargs
             )
             return
         if from_exit == "up":
@@ -856,9 +840,10 @@ class Object:
             exclude=self,
             type="move",
             internal=True,
+            **kwargs
         )
 
-    def announce_move_to(self, source_location: Node, to_exit: str | None):
+    def announce_move_to(self, source_location: Node, to_exit: str | None, **kwargs):
         if not source_location:
             return
         if not to_exit:
@@ -869,6 +854,7 @@ class Object:
                 exclude=self,
                 type="move",
                 internal=True,
+                **kwargs
             )
             return
         if to_exit == "up":
@@ -884,15 +870,8 @@ class Object:
             exclude=self,
             type="move",
             internal=True,
+            **kwargs
         )
-
-    def at_pre_move(self, destination: Node | Self, to_exit: str | None) -> bool:
-        """Called before the object is moved."""
-        return True
-
-    def at_post_move(self, destination: Node | Self, to_exit: str | None) -> None:
-        """Called after the object is moved."""
-        pass
 
     def at_msg_receive(self, text=None, from_obj: Object | None = None, **kwargs):
         """

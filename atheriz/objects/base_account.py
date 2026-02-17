@@ -65,6 +65,10 @@ class Account:
         remove_object(self)
         return 1
     
+    def at_pre_puppet(self, character: Object) -> bool:
+        """Called before a character is puppeted, return False to cancel puppeting."""
+        return True
+    
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, return False to cancel deletion."""
         return True
