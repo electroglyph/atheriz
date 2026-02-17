@@ -71,12 +71,12 @@ in folder_name you'll see some basic template classes and a placeholder website.
 TODO:
 
 - docs
-- more tests
-- node hooks
+- more tests (getting there!)
+- ~~node hooks~~
 - scripts
 - funcparser cleanup
-- ~~tick system (already there, just need to activate it)~~
-- ~~time system (already done, just needs to be added)~~
+- ~~tick system~~
+- ~~time system~~
 - pathfinding (already done, just needs to be added)
 - door stuff + ability for custom doors
 - build command colors
