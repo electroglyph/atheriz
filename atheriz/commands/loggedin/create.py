@@ -43,7 +43,7 @@ class CreateCommand(Command):
             caller.msg(self.print_help())
             return
         obj = Object.create(
-            session=caller.session,
+            caller=caller,
             name=args.name,
             desc=" ".join(args.desc) if args.desc else "",
             is_pc=args.is_pc,

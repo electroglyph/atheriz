@@ -99,6 +99,7 @@ class Node:
     is_container = False
     is_channel = False
     is_account = False
+    home = None
 
     def at_desc(self, *args, **kwargs):
         return self.desc
@@ -300,6 +301,50 @@ class Node:
         """
         pass
 
+    def delete(self, caller: Object, recursive: bool = False) -> int:
+        """Delete this node.
+
+        Args:
+            recursive (bool, optional): Delete all objects in this node. Defaults to False.
+
+        Returns:
+            int: Number of objects deleted, not including the Node itself.
+        """
+
+        def _delete_recursive(obj: Node) -> int:
+            count = 0
+            if obj.contents:
+                for content in list(obj.contents):
+                    count += content.delete(caller, True)
+            return count
+
+        def _move_contents(obj: Node) -> int:
+            count = 0
+            if obj.contents:
+                for content in list(obj.contents):
+                    content.move_to(content.home)
+                    count += 1
+            return count
+
+        def _self_delete():
+            get_node_handler().remove_node(self.coord)
+            self.is_deleted = True
+
+        if not self.at_delete(caller):
+            _self_delete()
+            return 0
+        
+        count = _delete_recursive(self) if recursive else _move_contents(self)
+        _self_delete()
+        return count
+
+    def at_delete(self, caller: Object) -> bool:
+        """
+        Called before this object is deleted.
+        Return False to cancel deletion.
+        """
+        return True
+
     def add_noun(self, noun: str, desc: str):
         with self.lock:
             self.nouns[noun] = desc
@@ -315,7 +360,7 @@ class Node:
     def __str__(self):
         return f"Node: {self.coord}"
 
-    def search(self, query: str):
+    def search(self, query: str) -> list[Any]:
         return search(self, query)
 
     @property
@@ -378,34 +423,7 @@ class Node:
                 nh = get_node_handler()
                 nh.remove_transition(found.coord)
 
-    def _add_exits(self, obj: Object):
-        """
-        internal version for bypassing thread-safety patch
-        add this node's exits to obj's cmdset
-
-        Args:
-            obj (DefaultObject): object, character, etc. to add exit commands to
-        """
-        cmdset = obj.internal_cmdset
-        cmdset.remove_by_tag("exits")
-        try:
-            if links := object.__getattribute__(self, "links"):
-                cmds = []
-                for n in links:
-                    ec = ExitCommand()
-                    ec.key = n.name
-                    ec.caller_id = obj.id
-                    ec.location = self.coord
-                    ec.destination = n.coord
-                    ec.name = n.name
-                    ec.aliases = n.aliases
-                    ec.tag = "exits"
-                    cmds.append(ec)
-                cmdset.adds(cmds)
-        except AttributeError:
-            pass
-
-    def add_exits(self, obj: Object):
+    def add_exits(self, obj: Object, internal: bool = False):
         """
         add this node's exits to obj's cmdset
 
@@ -413,9 +431,10 @@ class Node:
             obj (DefaultObject): object, character, etc. to add exit commands to
         """
         obj.internal_cmdset.remove_by_tag("exits")
-        if self.links:
+        links = object.__getattribute__(self, "links") if internal else self.links
+        if links:
             cmds = []
-            for n in self.links:
+            for n in links:
                 ec = ExitCommand()
                 ec.key = n.name
                 ec.caller_id = obj.id
@@ -458,50 +477,7 @@ class Node:
             self._contents.discard(obj.id)
         obj.internal_cmdset.remove_by_tag("exits")
 
-    def msg_contents_unsafe(
-        self,
-        text=None,
-        exclude=None,
-        from_obj=None,
-        mapping=None,
-        raise_funcparse_errors=False,
-        **kwargs,
-    ):
-        is_outcmd = text and is_iter(text)
-        inmessage = text[0] if is_outcmd else text
-        outkwargs = text[1] if is_outcmd and len(text) > 1 else {}
-        mapping = mapping or {}
-        you = from_obj or self
-
-        if "you" not in mapping:
-            mapping["you"] = you
-        contents = get(self._contents)
-        if exclude:
-            exclude = make_iter(exclude)
-            contents = [obj for obj in contents if obj not in exclude]
-
-        for receiver in contents:
-            # actor-stance replacements
-            outmessage = _MSG_CONTENTS_PARSER.parse(
-                inmessage,
-                raise_errors=raise_funcparse_errors,
-                return_string=True,
-                caller=you,
-                receiver=receiver,
-                mapping=mapping,
-            )
-            outmessage = outmessage.format_map(
-                {
-                    key: (
-                        obj.get_display_name(looker=receiver)
-                        if hasattr(obj, "get_display_name")
-                        else str(obj)
-                    )
-                    for key, obj in mapping.items()
-                }
-            )
-            receiver.msg(outmessage)
-
+    # this is mostly from Evennia, see EVENNIA_LICENSE.txt
     def msg_contents(
         self,
         text=None,
@@ -509,8 +485,20 @@ class Node:
         from_obj=None,
         mapping=None,
         raise_funcparse_errors=False,
+        internal: bool = False,
         **kwargs,
     ):
+        """send a message to all objects in this node
+
+        Args:
+            text (str | tuple, optional): message to send. Defaults to None.
+            exclude (list, optional): objects to exclude from message. Defaults to None.
+            from_obj (Object, optional): object sending message. Defaults to None.
+            mapping (dict, optional): mapping for funcparse. Defaults to None.
+            raise_funcparse_errors (bool, optional): raise funcparse errors. Defaults to False.
+            internal (bool, optional): internal message, bypass lock if True. Defaults to False.
+            **kwargs: additional keyword arguments to pass to msg
+        """
         is_outcmd = text and is_iter(text)
         inmessage = text[0] if is_outcmd else text
         outkwargs = text[1] if is_outcmd and len(text) > 1 else {}
@@ -519,7 +507,7 @@ class Node:
 
         if "you" not in mapping:
             mapping["you"] = you
-        contents = self.contents
+        contents = get(self._contents) if internal else self.contents
         if exclude:
             exclude = make_iter(exclude)
             contents = [obj for obj in contents if obj not in exclude]
@@ -544,20 +532,7 @@ class Node:
                     for key, obj in mapping.items()
                 }
             )
-            receiver.msg(outmessage)
-
-    # def at_pre_object_leave(self, leaving_object, destination, **kwargs):
-    #     return True
-
-    # def at_pre_object_receive(self, arriving_object, source_location, **kwargs):
-    #     return True
-
-    # def at_object_leave(self, moved_obj, target_location, move_type="move", **kwargs):
-    #     pass
-
-    # def at_object_receive(self, moved_obj, source_location, move_type="move", **kwargs):
-    #     # this is just here to fake compatibility with Evennia
-    #     pass
+            receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
     def get_display_things(self, looker, **kwargs):
         things = filter_contents(self, lambda x: x.is_item)

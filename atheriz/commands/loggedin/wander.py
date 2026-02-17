@@ -45,7 +45,7 @@ class WanderCommand(Command):
         for i in range(count):
             # Create a unique name for each wanderer to avoid collisions if called multiple times
             name = f"Wanderer {random.randint(1000, 9999)}"
-            npc = Wanderer.create(session=caller.session, name=name, is_npc=True, is_mapable=True, is_tickable=True)
+            npc = Wanderer.create(caller=caller, name=name, is_npc=True, is_mapable=True, is_tickable=True)
             if npc:
                 npc.move_to(caller.location)
         end = time.time()

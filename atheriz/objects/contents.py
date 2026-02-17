@@ -62,7 +62,7 @@ def filter_contents(obj: Object | Node, l: Callable[[Any], bool]) -> list[Any]:
     return [o for o in obj.contents if l(o)]
 
 
-def search(obj: Object | Node, query: str) -> list:
+def search(obj: Object | Node, query: str) -> list[Any]:
     """
     search for matching objects
     example queries:

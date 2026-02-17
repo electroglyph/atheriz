@@ -1,7 +1,7 @@
 from atheriz.singletons.objects import save_objects
 from atheriz.utils import compress_whitespace
 from typing import Callable
-from atheriz.singletons.objects import get, add_object
+from atheriz.singletons.objects import get, add_object, remove_object
 from atheriz.singletons.get import (
     get_node_handler,
     get_map_handler,
@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 _LEGEND_ENTRY = None
+
 
 class Object:
     appearance_template = "{name}: {desc}{things}"
@@ -86,32 +87,10 @@ class Object:
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
-    # @property
-    # def location(self) -> None | Node:
-    #     return _NODE_HANDLER.get_node(self._location) if self._location else None
-
-    # @location.setter
-    # def location(self, value: None | Node):
-    #     if value:
-    #         self._location = value.coord
-    #     else:
-    #         self._location = None
-
-    # @property
-    # def home(self) -> None | Node:
-    #     return _NODE_HANDLER.get_node(self._home) if self._home else None
-
-    # @home.setter
-    # def home(self, value: None | Node):
-    #     if value:
-    #         self._home = value.coord
-    #     else:
-    #         self._home = None
-
     @classmethod
     def create(
         cls,
-        session: Session | None,
+        caller: Object | None,
         name: str,
         desc: str = "",
         aliases: list[str] | None = None,
@@ -142,10 +121,8 @@ class Object:
         obj = cls()
         obj.id = get_unique_id()
         obj.date_created = time.time()
-        if session:
-            obj.created_by = session.account.id if session.account else -1
-            if is_pc and session.account:
-                obj.has_account = True
+        if caller:
+            obj.created_by = caller.id
         obj.is_pc = is_pc
         obj.is_mapable = is_mapable
         obj.is_container = is_container
@@ -165,7 +142,66 @@ class Object:
         if is_tickable:
             get_async_ticker().add_coro(obj.at_tick, tick_seconds)
         add_object(obj)
+        obj.at_create()
+        obj.add_lock("delete", lambda x: x.id != obj.id)
         return obj
+
+    def delete(self, caller: Object, recursive: bool = True) -> int:
+        """Delete this object. If recursive, delete contents recursively.
+        If not, move contents to container location.
+
+        Args:
+            recursive (bool, optional): Delete contents recursively. Defaults to True.
+
+        Returns:
+            int: The number of objects deleted or moved.
+        """
+        if not self.at_delete(caller):
+            return 0
+
+        def _delete_object(obj: Object):
+            if not obj.access(caller, "delete"):
+                caller.msg(f"You cannot delete {obj.get_display_name(caller)}.")
+                logger.info(f"{caller.name} ({caller.id}) tried to delete {obj.get_display_name(caller)} ({obj.id}) but failed.")
+                return
+            if obj.location:
+                obj.location.remove_object(obj)
+                obj.location = None
+
+            if obj.is_connected and obj.session and obj.session.connection:
+                obj.session.account.remove_character(obj)
+                obj.session.connection.close()
+            obj.is_deleted = True
+            remove_object(obj)
+
+        def _delete_recursive(obj: Object) -> int:
+            count = 0
+            if obj.contents:
+                for content in list(obj.contents):
+                    count += _delete_recursive(content)
+            _delete_object(obj)
+            count += 1
+            return count
+
+        def _move_contents(obj: Object, loc: Object | Node | None) -> int:
+            count = 0
+            if obj.contents:
+                for content in list(obj.contents):
+                    content.move_to(loc)
+                    count += 1
+            _delete_object(obj)
+            count += 1
+            return count
+
+        return _delete_recursive(self) if recursive else _move_contents(self, self.location)
+
+    def at_delete(self, caller: Object) -> bool:
+        """Called before an object is deleted, aborts deletion if False"""
+        return True
+
+    def at_create(self):
+        """Called after an object is created."""
+        pass
 
     def _safe_access(self, accessing_obj: Object, name: str):
         if accessing_obj.is_superuser:
@@ -194,12 +230,12 @@ class Object:
             state.pop("access", None)
             # state.pop("internal_cmdset", None)
             # state.pop("external_cmdset", None)
-            if loc:=state.get("location"):
+            if loc := state.get("location"):
                 if loc.is_node:
                     state["location"] = loc.coord
                 else:
                     state["location"] = loc.id
-            if home:=state.get("home"):
+            if home := state.get("home"):
                 if home.is_node:
                     state["home"] = home.coord
                 else:
@@ -215,12 +251,12 @@ class Object:
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
-        if loc:=state.get("location"):
+        if loc := state.get("location"):
             if isinstance(loc, int):
                 object.__setattr__(self, "location", get(loc))
             else:
                 object.__setattr__(self, "location", get_node_handler().get_node(loc))
-        if home:=state.get("home"):
+        if home := state.get("home"):
             if isinstance(home, int):
                 object.__setattr__(self, "home", get(home))
             else:
@@ -619,7 +655,10 @@ class Object:
     ) -> bool:
         """Move this object to a new location."""
         if destination is None:
-            return False
+            if loc := self.location:
+                loc.remove_object(self)
+                self.location = None
+            return True
         if not destination.access(self, "put"):
             return False
         loc = self.location
@@ -681,14 +720,14 @@ class Object:
                             self.announce_move_to(loc, to_exit)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
-                        destination._add_exits(self)
+                        destination.add_exits(self, internal=True)
                         self.location = destination
                         if announce:
                             self.announce_move_from(destination, from_exit)
             else:
                 with destination.lock:
                     destination._contents.add(self.id)
-                    destination._add_exits(self)
+                    destination.add_exits(self, internal=True)
                     self.location = destination
                     if announce:
                         self.announce_move_from(destination, from_exit)
@@ -795,12 +834,13 @@ class Object:
         if not destination:
             return
         if not from_exit:
-            destination.msg_contents_unsafe(
+            destination.msg_contents(
                 f"$You(mover) $conj({self.move_verb}) in.",
                 mapping={"mover": self},
                 from_obj=self,
                 exclude=self,
                 type="move",
+                internal=True,
             )
             return
         if from_exit == "up":
@@ -809,24 +849,26 @@ class Object:
             from_str = "from below"
         else:
             from_str = f"from the {from_exit}"
-        destination.msg_contents_unsafe(
+        destination.msg_contents(
             f"$You(mover) $conj({self.move_verb}) in {from_str}.",
             mapping={"mover": self},
             from_obj=self,
             exclude=self,
             type="move",
+            internal=True,
         )
 
     def announce_move_to(self, source_location: Node, to_exit: str | None):
         if not source_location:
             return
         if not to_exit:
-            source_location.msg_contents_unsafe(
+            source_location.msg_contents(
                 f"$You(mover) $conj({self.move_verb}) away.",
                 mapping={"mover": self},
                 from_obj=self,
                 exclude=self,
                 type="move",
+                internal=True,
             )
             return
         if to_exit == "up":
@@ -835,12 +877,13 @@ class Object:
             to_str = "downwards"
         else:
             to_str = f"to the {to_exit}"
-        source_location.msg_contents_unsafe(
+        source_location.msg_contents(
             f"$You(mover) $conj({self.move_verb}) {to_str}.",
             mapping={"mover": self},
             from_obj=self,
             exclude=self,
             type="move",
+            internal=True,
         )
 
     def at_pre_move(self, destination: Node | Self, to_exit: str | None) -> bool:

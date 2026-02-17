@@ -2,7 +2,7 @@ from collections import deque
 from threading import Lock, RLock
 import atheriz.settings as settings
 from atheriz.utils import get_import_path, wrap_truecolor, ensure_thread_safe
-from atheriz.singletons.objects import get, add_object, filter_by_type
+from atheriz.singletons.objects import get, add_object, filter_by_type, remove_object
 from atheriz.singletons.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
@@ -105,7 +105,24 @@ class Channel:
         c.name = name
         c.id = get_unique_id()
         add_object(c)
+        c.at_create()
         return c
+    
+    def delete(self, caller: Object, unused: bool) -> int:
+        del unused
+        if not self.at_delete(caller):
+            return 0
+        self.is_deleted = True
+        remove_object(self)
+        return 1
+    
+    def at_delete(self, caller: Object) -> bool:
+        """Called before an object is deleted, aborts deletion if False"""
+        return True
+    
+    def at_create(self):
+        """Called after an object is created."""
+        pass
 
     def access_view(self, caller: Object) -> bool:
         return True

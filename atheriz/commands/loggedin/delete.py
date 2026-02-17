@@ -1,5 +1,6 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
+from atheriz.singletons.get import get_node_handler
 from atheriz.singletons.objects import remove_object
 import argparse
 from typing import TYPE_CHECKING
@@ -31,50 +32,61 @@ class DeleteCommand(Command):
             caller.msg("Delete what?")
             return
             
-        target_name = " ".join(args.target)
+        target_name = " ".join(args.target).strip()
         
-        # Search in inventory first
-        target = caller.search(target_name)
-        
-        # If not found in inventory, search in location
-        if not target:
-            loc: Node = caller.location
-            if loc and loc.access(caller, "view"):
-                target = loc.search(target_name)
-                if not target:
-                    caller.msg(f"No match found for '{target_name}'.")
-                    return
-                elif len(target) > 1:
-                    caller.msg(f"Multiple matches for '{target_name}'.")
-                    return
-                else:
-                    target = target[0]
-        elif len(target) > 1:
-            caller.msg(f"Multiple matches for '{target_name}'.")
-            return
+        target = None
+        if target_name.lower() == "here":
+            target = caller.location
         else:
-            target = target[0]
+            raw = target_name
+            if raw.startswith("(") and raw.endswith(")"):
+                raw = raw[1:-1]
+            
+            if "," in raw:
+                parts = [p.strip() for p in raw.split(",")]
+                if len(parts) == 4:
+                    try:
+                        area = parts[0]
+                        x = int(parts[1])
+                        y = int(parts[2])
+                        z = int(parts[3])
+                        coord = (area, x, y, z)
+                        target = get_node_handler().get_node(coord)
+                    except ValueError:
+                        pass
 
-        # Prevent deleting self or vital objects if necessary (optional safeguard)
+        if not target:
+            # Search in inventory first
+            target = caller.search(target_name)
+            
+            # If not found in inventory, search in location
+            if not target:
+                loc: Node = caller.location
+                if loc and loc.access(caller, "view"):
+                    target = loc.search(target_name)
+                    if not target:
+                        caller.msg(f"No match found for '{target_name}'.")
+                        return
+                    elif len(target) > 1:
+                        caller.msg(f"Multiple matches for '{target_name}'.")
+                        return
+                    else:
+                        target = target[0]
+            elif len(target) > 1:
+                caller.msg(f"Multiple matches for '{target_name}'.")
+                return
+            else:
+                target = target[0]
+
         if target == caller:
             caller.msg("You cannot delete yourself.")
             return
 
         full_name = target.get_display_name(caller)
-        if args.recursive:
-            count = self._delete_recursive(target)
-            caller.msg(f"Deleted {full_name} and {count-1} contained objects.")
+        count = target.delete(caller, args.recursive)
+        if count > 1:
+            caller.msg(f"Deleted or moved {full_name}, {count} objects total.")
         else:
-            # Move contents to current location
-            if target.contents:
-                location = target.location
-                if location:
-                    for obj in list(target.contents):
-                        obj.move_to(location)
-                    caller.msg(f"Moved contents of {full_name} to {location.get_display_name(caller)}.")
-            
-            # Delete the object
-            self._delete_object(target)
             caller.msg(f"Deleted {full_name}.")
 
     def _delete_recursive(self, obj: Object) -> int:

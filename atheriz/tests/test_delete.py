@@ -1,163 +1,157 @@
 import pytest
-import argparse
-from unittest.mock import MagicMock, patch
 from atheriz.objects.base_obj import Object
-from atheriz.singletons import objects
-from atheriz.commands.loggedin.delete import DeleteCommand
+from atheriz.objects.base_account import Account
+from atheriz.objects.base_channel import Channel
 from atheriz.objects.nodes import Node
-from atheriz import settings
-
-# Mock the Channel system to avoid errors during object creation/deletion
-@pytest.fixture(autouse=True)
-def mock_channels():
-    with patch("atheriz.objects.base_obj.get_server_channel") as mock_get_channel:
-        mock_channel = MagicMock()
-        mock_get_channel.return_value = mock_channel
-        yield mock_channel
+from atheriz.singletons import objects
+from atheriz.singletons.get import get_node_handler
 
 @pytest.fixture(autouse=True)
 def clear_registry():
     objects._ALL_OBJECTS.clear()
+    objects._OBJECT_MAP.clear()
     objects.set_id(0)
+    get_node_handler().clear()
 
-class MockCaller(Object):
-    def __init__(self):
-        super().__init__()
-        self.msgs = []
-        self.privilege_level = 5  # Superuser, so is_builder is True
-        self.location = None
+class DeletionTestBase:
+    def setup_method(self):
+        # We need a caller for delete(caller, ...)
+        self.caller = Object.create(None, "Caller")
+        self.caller.privilege_level = 5 # superuser
 
-    def msg(self, text=None, **kwargs):
-        if text:
-            self.msgs.append(text)
-        super().msg(text, **kwargs)
+def test_object_delete_basic():
+    obj = Object.create(None, "Item")
+    obj_id = obj.id
+    assert objects.get(obj_id) == [obj]
+    
+    # Object.delete returns number of objects deleted
+    caller = Object.create(None, "Caller")
+    count = obj.delete(caller)
+    assert count == 1
+    assert objects.get(obj_id) == []
+    assert obj.is_deleted is True
 
-    @property
-    def is_builder(self):
-        return True
-
-def setup_test_env():
-    # Create caller and location
-    # We pretend location is a Node for search purposes, but it can be an Object for simplicity
-    # or we can mock it.
-    # The delete command expects caller.location to be a Node if searching in room.
-    # But Object.search handles simple location contents too.
+def test_object_delete_location_cleanup():
+    container = Object.create(None, "Container", is_container=True)
+    item = Object.create(None, "Item")
+    item.move_to(container)
+    assert item in container.contents
     
-    # We'll use Objects for everything to separate from Node logic dependencies if possible.
-    # But DeleteCommand type hints location as Node.
-    
-    room = Object.create(None, "Room", "A test room")
-    caller = MockCaller()
-    caller.name = "Caller"
-    objects.add_object(caller)
-    
-    caller.move_to(room)
-    
-    return caller, room
-
-def run_cmd(cmd_class, caller, args_str):
-    cmd = cmd_class()
-    # Mocking parser setup and parsing because Command.run expects parsed args usually
-    # But DeleteCommand uses self.parser. It inherits from Command.
-    # Command.parse() usually populates self.args.
-    # However, DeleteCommand.run takes (caller, args) where args is the namespace.
-    
-    parser = argparse.ArgumentParser()
-    cmd.parser = parser
-    cmd.setup_parser()
-    
-    # Split args_str properly
-    import shlex
-    split_args = shlex.split(args_str)
-    try:
-        parsed_args = parser.parse_args(split_args)
-    except SystemExit:
-        raise Exception("Argument parser failed")
-        
-    cmd.run(caller, parsed_args)
-
-def test_delete_basic():
-    caller, room = setup_test_env()
-    
-    # Create item in room
-    item = Object.create(None, "box", "A box")
-    item.move_to(room)
-    item_id = item.id
-    
-    assert objects.get(item_id) == [item]
-    
-    run_cmd(DeleteCommand, caller, "box")
-    
-    assert objects.get(item_id) == []
+    caller = Object.create(None, "Caller")
+    item.delete(caller)
+    assert item not in container.contents
     assert item.location is None
-    # Check "Deleted box." message
-    assert any("Deleted box" in m for m in caller.msgs)
 
-def test_delete_inventory():
-    caller, room = setup_test_env()
+def test_object_delete_recursive():
+    container = Object.create(None, "Container", is_container=True)
+    item1 = Object.create(None, "Item1")
+    item2 = Object.create(None, "Item2")
+    item1.move_to(container)
+    item2.move_to(container)
     
-    # Create item in inventory
-    item = Object.create(None, "sword", "A sword")
-    item.move_to(caller)
-    item_id = item.id
-    
-    assert objects.get(item_id) == [item]
-    
-    run_cmd(DeleteCommand, caller, "sword")
-    
-    assert objects.get(item_id) == []
-    assert any("Deleted sword" in m for m in caller.msgs)
+    caller = Object.create(None, "Caller")
+    count = container.delete(caller, recursive=True)
+    assert count == 3 # container + 2 items
+    assert objects.get(container.id) == []
+    assert objects.get(item1.id) == []
+    assert objects.get(item2.id) == []
 
-def test_delete_recursive():
-    caller, room = setup_test_env()
+def test_object_delete_non_recursive():
+    room = Object.create(None, "Room", is_container=True)
+    container = Object.create(None, "Container", is_container=True)
+    item = Object.create(None, "Item")
     
-    # Create container with items
-    container = Object.create(None, "chest", "A chest", is_container=True)
-    assert container.move_to(room)
-    
-    inner = Object.create(None, "coin", "A coin", is_container=True) # Making it a container explicitly
-    assert inner.move_to(container)
-    
-    inner_inner = Object.create(None, "gem", "A gem")
-    assert inner_inner.move_to(inner) # Weird but possible in object model
-    
-    container_id = container.id
-    inner_id = inner.id
-    inner_inner_id = inner_inner.id
-    
-    # Ensure hierarchy is correct
-    assert inner in container.contents
-    assert inner_inner in inner.contents
-    
-    assert len(objects.get([container_id, inner_id, inner_inner_id])) == 3
-    
-    run_cmd(DeleteCommand, caller, "chest -r")
-    
-    remaining = objects.get([container_id, inner_id, inner_inner_id])
-    assert remaining == [], f"Remaining objects: {remaining}"
-    assert any("Deleted chest and 2 contained objects" in m for m in caller.msgs)
-
-def test_delete_non_recursive_moves_contents():
-    caller, room = setup_test_env()
-    
-    # Create container with items
-    container = Object.create(None, "bag", "A bag", is_container=True)
     container.move_to(room)
-    
-    item = Object.create(None, "apple", "An apple")
     item.move_to(container)
     
-    container_id = container.id
-    item_id = item.id
+    assert item in container.contents
     
-    run_cmd(DeleteCommand, caller, "bag")
+    caller = Object.create(None, "Caller")
+    # Non-recursive delete moves contents to container's location
+    count = container.delete(caller, recursive=False)
+    assert count == 2 # Moved item + deleted container
+    assert objects.get(container.id) == []
+    assert item.location == room
+    assert item in room.contents
+
+def test_object_delete_at_delete_block():
+    class BlockedObject(Object):
+        def at_delete(self, caller):
+            return False
+            
+    obj = BlockedObject.create(None, "Blocked")
+    caller = Object.create(None, "Caller")
+    count = obj.delete(caller)
+    assert count == 0
+    assert objects.get(obj.id) == [obj]
+
+def test_account_delete():
+    acc = Account.create("TestAcc", "password")
+    assert objects.get(acc.id) == [acc]
     
-    # Container deleted
-    assert objects.get(container_id) == []
+    caller = Object.create(None, "Caller")
+    count = acc.delete(caller, False)
+    assert count == 1
+    assert objects.get(acc.id) == []
+    assert acc.is_deleted is True
+
+def test_channel_delete():
+    chan = Channel.create("TestChan")
+    assert objects.get(chan.id) == [chan]
     
-    # Item preserved and moved to room
-    item_ref = objects.get(item_id)
-    assert len(item_ref) == 1
-    assert item_ref[0].location == room
+    caller = Object.create(None, "Caller")
+    count = chan.delete(caller, False)
+    assert count == 1
+    assert objects.get(chan.id) == []
+    assert chan.is_deleted is True
+
+def test_node_delete_basic():
+    nh = get_node_handler()
+    coord = ("test", 0, 0, 0)
+    node = Node(coord=coord, desc="Test Node")
+    nh.add_node(node)
+    assert nh.get_node(coord) == node
     
-    assert any("Moved contents of bag to Room" in m for m in caller.msgs)
+    caller = Object.create(None, "Caller")
+    node.delete(caller)
+    assert nh.get_node(coord) is None
+    assert node.is_deleted is True
+
+def test_node_delete_recursive():
+    nh = get_node_handler()
+    coord = ("test", 1, 1, 1)
+    node = Node(coord=coord)
+    nh.add_node(node)
+    
+    item = Object.create(None, "Item")
+    item.move_to(node)
+    assert item in node.contents
+    
+    caller = Object.create(None, "Caller")
+    # Node.delete(recursive=True) deletes all objects in the node
+    # Note: Node.delete(recursive=True) calls item.delete(True)
+    count = node.delete(caller, recursive=True)
+    assert count == 1 # number of objects deleted (the item)
+    assert nh.get_node(coord) is None
+    assert objects.get(item.id) == []
+
+def test_node_delete_non_recursive():
+    nh = get_node_handler()
+    coord = ("test", 2, 2, 2)
+    node = Node(coord=coord)
+    nh.add_node(node)
+    
+    home_node = Node(coord=("test", 0, 0, 0))
+    nh.add_node(home_node)
+    
+    item = Object.create(None, "Item")
+    item.home = home_node
+    item.move_to(node)
+    
+    caller = Object.create(None, "Caller")
+    # Node.delete(recursive=False) moves objects back home
+    count = node.delete(caller, recursive=False)
+    assert count == 1 # object moved home
+    assert nh.get_node(coord) is None
+    assert item.location == home_node
+    assert objects.get(item.id) == [item]

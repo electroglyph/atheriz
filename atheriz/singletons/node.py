@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import NodeLink, Door, Transition
 from time import sleep
 
+
 class NodeHandler:
     def __init__(self):
         # this guards self.areas:
@@ -66,7 +67,6 @@ class NodeHandler:
         _atomic_save(self.areas, "areas", self.lock)
         _atomic_save(self.transitions, "transitions", self.lock2)
         _atomic_save(self.doors, "doors", self.lock3)
-
 
     # def save(self):
     #     with self.lock:
@@ -176,6 +176,13 @@ class NodeHandler:
             if grid:
                 return grid.get_node((coord[1], coord[2]))
         return None
+
+    def remove_node(self, coord: tuple[str, int, int, int]):
+        area = self.get_area(coord[0])
+        if area:
+            grid = area.get_grid(coord[3])
+            if grid:
+                grid.remove_node((coord[1], coord[2]))
 
     def get_nodes(self, coords: list[tuple[str, int, int, int]]) -> list:
         result = []

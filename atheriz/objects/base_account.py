@@ -1,4 +1,4 @@
-from atheriz.singletons.objects import filter_by_type, add_object
+from atheriz.singletons.objects import filter_by_type, add_object, remove_object
 from atheriz.utils import get_import_path, ensure_thread_safe
 from atheriz.singletons.salt import get_salt
 from atheriz.singletons.get import get_unique_id
@@ -54,7 +54,24 @@ class Account:
         account.password = Account.hash_password(password)
         account.characters = []
         add_object(account)
+        account.at_create()
         return account
+    
+    def delete(self, caller: Object, unused: bool) -> int:
+        del unused
+        if not self.at_delete(caller):
+            return 0
+        self.is_deleted = True
+        remove_object(self)
+        return 1
+    
+    def at_delete(self, caller: Object) -> bool:
+        """Called before an object is deleted, return False to cancel deletion."""
+        return True
+    
+    def at_create(self):
+        """Called after an object is created."""
+        pass
 
     def at_disconnect(self):
         pass
