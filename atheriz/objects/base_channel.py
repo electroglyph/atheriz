@@ -3,8 +3,8 @@ from typing import Callable
 from collections import deque
 from threading import Lock, RLock
 import atheriz.settings as settings
-from atheriz.utils import get_import_path, wrap_truecolor, ensure_thread_safe
-from atheriz.singletons.objects import get, add_object, filter_by_type, remove_object
+from atheriz.utils import wrap_truecolor, ensure_thread_safe
+from atheriz.singletons.objects import get, add_object, filter_by, remove_object
 from atheriz.singletons.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
@@ -129,7 +129,7 @@ class Channel:
 
     @classmethod
     def create(cls, name: str) -> "Channel":
-        results = filter_by_type("channel", lambda x: x.name == name)
+        results = filter_by(lambda x: x.is_channel and x.name == name)
         if results:
             raise ValueError(f"Channel {name} already exists.")
         c = cls()

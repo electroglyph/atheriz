@@ -1,7 +1,5 @@
-from atheriz.singletons.objects import filter_by
-from atheriz.singletons.get import get_node_handler
+from atheriz.singletons.objects import filter_by, get
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get_by_type, filter_by_type, get
 from atheriz.utils import wrap_xterm256
 from atheriz.logger import logger
 from typing import TYPE_CHECKING
@@ -72,7 +70,7 @@ class ChannelCommand(Command):
                 caller.msg("No channels found.")
             return
         if args.channel:
-            channel = filter_by_type("channel", lambda x: x.name.lower() == args.channel.lower())
+            channel = filter_by(lambda x: x.is_channel and x.name.lower() == args.channel.lower())
             if not channel:
                 caller.msg(f"Channel {args.channel} not found.")
                 return

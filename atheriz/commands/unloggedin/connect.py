@@ -1,7 +1,7 @@
 import time
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
-from atheriz.singletons.objects import filter_by_type, TEMP_BANNED_IPS, TEMP_BANNED_LOCK, get
+from atheriz.singletons.objects import filter_by, TEMP_BANNED_IPS, TEMP_BANNED_LOCK, get
 from atheriz.objects.base_account import Account
 import atheriz.settings as settings
 from atheriz.logger import logger
@@ -23,7 +23,7 @@ class ConnectCommand(Command):
     async def run(self, caller: Connection, args):
         account_name = args.account_name
         password = args.password
-        accounts = filter_by_type("account", lambda x: x.name == account_name)
+        accounts = filter_by(lambda x: x.is_account and x.name == account_name)
 
         if not accounts:
             # don't say "account not found" for security reasons

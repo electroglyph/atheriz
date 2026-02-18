@@ -1,6 +1,6 @@
 import dill
-from atheriz.singletons.objects import filter_by_type, add_object, remove_object
-from atheriz.utils import get_import_path, ensure_thread_safe
+from atheriz.singletons.objects import add_object, remove_object, filter_by
+from atheriz.utils import ensure_thread_safe
 from atheriz.singletons.salt import get_salt
 from atheriz.singletons.get import get_unique_id
 from atheriz.logger import logger
@@ -46,7 +46,7 @@ class Account:
         """Create a new account."""
         if not name or not password:
             raise ValueError("Name and password must not be empty.")
-        existing = filter_by_type("account", lambda x: x.name == name)
+        existing = filter_by(lambda x: x.is_account and x.name == name)
         if existing:
             logger.error(f"Account with this name ({name}) already exists.")
             return None
