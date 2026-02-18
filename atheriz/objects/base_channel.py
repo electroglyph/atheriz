@@ -90,6 +90,7 @@ class Channel:
         self.listeners: dict[int, Object] = {}
         self.locks: dict[str, list[Callable]] = {}
         self.is_pc = False
+        self.is_modified = False
         self.is_npc = False
         self.is_item = False
         self.is_mapable = False

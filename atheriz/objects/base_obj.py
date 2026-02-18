@@ -227,8 +227,6 @@ class Object:
             state.pop("session", None)
             state.pop("lock", None)
             state.pop("access", None)
-            # state.pop("internal_cmdset", None)
-            # state.pop("external_cmdset", None)
             if loc := state.get("location"):
                 if loc.is_node:
                     state["location"] = loc.coord
@@ -245,8 +243,6 @@ class Object:
         # this object.__setattr__ bullshit is for bypassing the thread-safety patch
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        # object.__setattr__(self, "internal_cmdset", CmdSet())
-        # object.__setattr__(self, "external_cmdset", CmdSet())
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)

@@ -26,6 +26,7 @@ class Account:
         self.is_connected = False
         self.is_banned = False
         self.ban_reason = ""
+        self.is_modified = False
         self.is_pc = False
         self.is_npc = False
         self.is_item = False

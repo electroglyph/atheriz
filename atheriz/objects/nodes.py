@@ -635,6 +635,7 @@ class NodeGrid:
     def __init__(self, area: str | None = None, z: int | None = None, data: dict | None = None):
         self.area: str | None = area
         self.z = z
+        self.is_modified = False
         self.nodes: dict[tuple[int, int], Node] = {}  # x,y coord: Node
         self.lock = RLock()
         self.data = data if data else {}
@@ -720,6 +721,7 @@ class NodeArea:
     def __init__(self, name: str = None, theme: str = None):
         self.name = name
         self.theme = theme
+        self.is_modified = False
         self.grids: dict[int, NodeGrid] = {}  # {z: map}
         self.lock = RLock()
         self.data = {}
