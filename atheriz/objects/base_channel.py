@@ -70,7 +70,7 @@ class BaseChannelCommand(Command):
 
     def __getstate__(self):
         d = super().__getstate__()
-        del d["_channel"]
+        d.pop("_channel", None)
         return d
 
     def __setstate__(self, state):

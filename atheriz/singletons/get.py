@@ -83,9 +83,9 @@ def get_async_ticker() -> AsyncTicker:
 def get_server_channel() -> Channel | None:
     global _SERVER_CHANNEL
     if not _SERVER_CHANNEL:
-        from atheriz.singletons.objects import filter_by_type
+        from atheriz.singletons.objects import filter_by
 
-        c = filter_by_type("channel", lambda x: x.name.lower() == "server")
+        c = filter_by(lambda x: x.is_channel and x.name.lower() == "server")
         if c:
             _SERVER_CHANNEL = c[0]
         else:
