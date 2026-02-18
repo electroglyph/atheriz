@@ -16,9 +16,9 @@ This isn't meant as a knock against Evennia, btw, I love it a lot.
 
 Object creation and deletion is slow in Evennia, which limits ability to create lots of things on the fly.
 
-Because Evennia is single-threaded, you are limited in how much computation you can do on objects without slowing down the game.
+Object creation doesn't touch the database in AtheriZ, and saving and deletion happen in the background.
 
-This uses flat files instead of a database, simplifying things and mitigating multithreading issues.
+Because Evennia is single-threaded, you are limited in how much computation you can do on objects without slowing down the game.
 
 3d room coordinates are built in, coords = ("area", x, y, z)
 
@@ -37,10 +37,29 @@ This doesn't cover mutables likes lists and dicts tho.
 If you have a game object foo, with dict attribute bar, you should use it like this:
 
 ```python
+
+# DON'T DO THIS:
 with foo.lock:
+  # this won't trigger my setattr hook to catch object changes
 	foo.bar['key'] = cool_value
 
+# DO THIS:
+with foo.lock:
+    d = foo.bar
+    d['key'] = cool_value
+    foo.bar = d
+
+# OR DO THIS:
+with foo.lock:
+	foo.bar['key'] = cool_value
+	foo.is_modified = True
+
 ```
+
+All 3 ways are thread-safe, but the last two mark the object as modified, which will make sure it gets saved.
+
+Same thing goes for lists and other mutables.
+
 
 pip install this repo and run 'atheriz':
 
@@ -72,6 +91,7 @@ TODO:
 
 - docs
 - more tests (getting there!)
+- sqlite (using flat files for now)
 - ~~node hooks~~
 - scripts
 - funcparser cleanup
