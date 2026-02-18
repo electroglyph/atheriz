@@ -1,3 +1,4 @@
+import dill
 from typing import Callable
 from collections import deque
 from threading import Lock, RLock
@@ -137,6 +138,15 @@ class Channel:
         add_object(c)
         c.at_create()
         return c
+    
+    def get_save_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for saving this object.
+        """
+        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
+        with self.lock:
+            params = (self.id, dill.dumps(self))
+        return sql, params
     
     def add_lock(self, lock_name: str, callable: Callable):
         """

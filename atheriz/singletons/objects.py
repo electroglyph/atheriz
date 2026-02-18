@@ -1,9 +1,9 @@
 from atheriz.singletons.get import set_id
-from atheriz.objects.persist import save
-from threading import Lock, RLock
-from atheriz.utils import get_import_path, instance_from_string
+from threading import RLock
+from atheriz.utils import get_import_path
 import atheriz.settings as settings
 from pathlib import Path
+from atheriz.database_setup import get_database
 import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
@@ -138,37 +138,87 @@ def remove_object(obj: object) -> None:
         _OBJECT_MAP[get_import_path(obj)] = s
 
 
+# def load_objects():
+#     global _ALL_OBJECTS, _OBJECT_MAP
+#     with _ALL_OBJECTS_LOCK:
+#         _ALL_OBJECTS = dill.load(open(Path(settings.SAVE_PATH) / "objects", "rb"))
+#     with _OBJECT_MAP_LOCK:
+#         _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
+#     with _ALL_OBJECTS_LOCK:
+#         biggest_id = max(v.id for v in _ALL_OBJECTS.values() if not v.is_node)
+#     set_id(biggest_id)
+
 def load_objects():
     global _ALL_OBJECTS, _OBJECT_MAP
+    db = get_database()
+    cursor = db.connection.cursor()
+    cursor.execute("SELECT id, data FROM objects")
+    objects = {}
+    object_map = {}
+    max_id = -1
+    for obj_id, blob in cursor:
+        obj = dill.loads(blob)
+        objects[obj_id] = obj
+        path = get_import_path(obj)
+        s = object_map.get(path, set())
+        s.add(obj_id)
+        object_map[path] = s
+        max_id = max(max_id, obj_id)
     with _ALL_OBJECTS_LOCK:
-        _ALL_OBJECTS = dill.load(open(Path(settings.SAVE_PATH) / "objects", "rb"))
+        _ALL_OBJECTS = objects
     with _OBJECT_MAP_LOCK:
-        _OBJECT_MAP = dill.load(open(Path(settings.SAVE_PATH) / "object_map", "rb"))
-    with _ALL_OBJECTS_LOCK:
-        biggest_id = max(v.id for v in _ALL_OBJECTS.values() if not v.is_node)
-    set_id(biggest_id)
-
+        _OBJECT_MAP = object_map
+    set_id(max_id)
+    
 def save_objects():
-    save_path = Path(settings.SAVE_PATH)
-    save_path.mkdir(parents=True, exist_ok=True)
-
+    db = get_database()
+    cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
-        objects_snapshot = dict(_ALL_OBJECTS)
-    with _OBJECT_MAP_LOCK:
-        object_map_snapshot = dict(_OBJECT_MAP)
+        snapshot = list(_ALL_OBJECTS.values())
+    to_save = [s for s in snapshot if s.is_modified]
+    with db.lock:
+        cursor.execute("BEGIN TRANSACTION")
+        for obj in to_save:
+            ops = obj.get_save_ops()
+            cursor.execute(ops[0], ops[1])
+            obj.is_modified = False
+        cursor.execute("COMMIT")
 
-    def _atomic_save(data, filename):
-        path = save_path / filename
-        temp_path = path.with_suffix(path.suffix + ".tmp")
-        try:
-            with temp_path.open("wb") as f:
-                dill.dump(data, f)
-            temp_path.replace(path)
-        except Exception as e:
-            from atheriz.logger import logger
-            logger.error(f"Error saving {filename}: {e}")
-            if temp_path.exists():
-                temp_path.unlink()
+def delete_objects(ops: list[tuple[str, tuple]]):
+    """
+    Execute a list of SQL operations in a transaction.
+    """
+    if not ops:
+        return
+    db = get_database()
+    cursor = db.connection.cursor()
+    with db.lock:
+        cursor.execute("BEGIN TRANSACTION")
+        for op in ops:
+            cursor.execute(op[0], op[1])
+        cursor.execute("COMMIT")
 
-    _atomic_save(objects_snapshot, "objects")
-    _atomic_save(object_map_snapshot, "object_map")
+# def save_objects():
+#     save_path = Path(settings.SAVE_PATH)
+#     save_path.mkdir(parents=True, exist_ok=True)
+
+#     with _ALL_OBJECTS_LOCK:
+#         objects_snapshot = dict(_ALL_OBJECTS)
+#     with _OBJECT_MAP_LOCK:
+#         object_map_snapshot = dict(_OBJECT_MAP)
+
+#     def _atomic_save(data, filename):
+#         path = save_path / filename
+#         temp_path = path.with_suffix(path.suffix + ".tmp")
+#         try:
+#             with temp_path.open("wb") as f:
+#                 dill.dump(data, f)
+#             temp_path.replace(path)
+#         except Exception as e:
+#             from atheriz.logger import logger
+#             logger.error(f"Error saving {filename}: {e}")
+#             if temp_path.exists():
+#                 temp_path.unlink()
+
+#     _atomic_save(objects_snapshot, "objects")
+#     _atomic_save(object_map_snapshot, "object_map")

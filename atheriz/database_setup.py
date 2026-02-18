@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sqlite3 import Connection
 
+_INIT_LOCK = Lock()
+
 class Database:
     def __init__(self, connection: Connection):
         self.lock = Lock()
@@ -22,13 +24,15 @@ def get_database():
     """
     global _DATABASE
     if _DATABASE is None:
-        if not os.path.exists(settings.SAVE_PATH):
-            os.makedirs(settings.SAVE_PATH)
-        db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
-        c = sqlite3.connect(db_path, check_same_thread=False)
-        c.execute("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
-        c.commit()
-        _DATABASE = Database(c)
+        with _INIT_LOCK:
+            if _DATABASE is not None:
+                return _DATABASE
+            if not os.path.exists(settings.SAVE_PATH):
+                os.makedirs(settings.SAVE_PATH)
+            db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
+            c = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
+            c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+            _DATABASE = Database(c)
     return _DATABASE
 
 def do_setup():

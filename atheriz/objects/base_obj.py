@@ -35,7 +35,7 @@ if TYPE_CHECKING:
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 _LEGEND_ENTRY = None
-
+import dill
 
 class Object:
     appearance_template = "{name}: {desc}{things}"
@@ -144,7 +144,22 @@ class Object:
         obj.add_lock("delete", lambda x: x.id != obj.id)
         return obj
 
-    def delete(self, caller: Object, recursive: bool = True) -> int:
+    def get_save_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for saving this object.
+        """
+        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
+        with self.lock:
+            params = (self.id, dill.dumps(self))
+        return sql, params
+
+    def get_del_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for deleting this object.
+        """
+        return "DELETE FROM objects WHERE id = ?", (self.id,)
+
+    def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
         """Delete this object. If recursive, delete contents recursively.
         If not, move contents to container location.
 
@@ -152,10 +167,12 @@ class Object:
             recursive (bool, optional): Delete contents recursively. Defaults to True.
 
         Returns:
-            int: The number of objects deleted or moved.
+            list[tuple[str, tuple]] | None: A list of SQL operations to execute, or None if deletion was aborted.
         """
         if not self.at_delete(caller):
-            return 0
+            return None
+
+        ops = []
 
         def _delete_object(obj: Object):
             if obj.location:
@@ -166,28 +183,27 @@ class Object:
                 obj.session.account.remove_character(obj)
                 obj.session.connection.close()
             obj.is_deleted = True
+            ops.append(obj.get_del_ops())
             remove_object(obj)
 
-        def _delete_recursive(obj: Object) -> int:
-            count = 0
+        def _delete_recursive(obj: Object):
             if obj.contents:
                 for content in list(obj.contents):
-                    count += _delete_recursive(content)
+                    _delete_recursive(content)
             _delete_object(obj)
-            count += 1
-            return count
 
-        def _move_contents(obj: Object, loc: Object | Node | None) -> int:
-            count = 0
+        def _move_contents(obj: Object, loc: Object | Node | None):
             if obj.contents:
                 for content in list(obj.contents):
                     content.move_to(loc)
-                    count += 1
             _delete_object(obj)
-            count += 1
-            return count
 
-        return _delete_recursive(self) if recursive else _move_contents(self, self.location)
+        if recursive:
+            _delete_recursive(self)
+        else:
+            _move_contents(self, self.location)
+        
+        return ops
 
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""

@@ -1,3 +1,4 @@
+import dill
 from atheriz.singletons.objects import filter_by_type, add_object, remove_object
 from atheriz.utils import get_import_path, ensure_thread_safe
 from atheriz.singletons.salt import get_salt
@@ -57,6 +58,15 @@ class Account:
         add_object(account)
         account.at_create()
         return account
+    
+    def get_save_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for saving this object.
+        """
+        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
+        with self.lock:
+            params = (self.id, dill.dumps(self))
+        return sql, params
     
     def delete(self, caller: Object, unused: bool) -> int:
         del unused
