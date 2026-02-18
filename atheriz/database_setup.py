@@ -42,4 +42,8 @@ def do_setup():
     conn = get_database().connection
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS objects (id INTEGER PRIMARY KEY, data BLOB)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS mapdata (area TEXT, z INTEGER, data BLOB, PRIMARY KEY (area, z))")
+    cursor.execute("CREATE TABLE IF NOT EXISTS areas (name TEXT PRIMARY KEY, data BLOB)")
+    cursor.execute("CREATE TABLE IF NOT EXISTS transitions (to_area TEXT, to_x INTEGER, to_y INTEGER, to_z INTEGER, data BLOB, PRIMARY KEY (to_area, to_x, to_y, to_z))")
+    cursor.execute("CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))")
     conn.commit()

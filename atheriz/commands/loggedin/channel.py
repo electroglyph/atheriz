@@ -1,3 +1,4 @@
+from atheriz.singletons.objects import filter_by
 from atheriz.singletons.get import get_node_handler
 from atheriz.commands.base_cmd import Command
 from atheriz.singletons.objects import get_by_type, filter_by_type, get
@@ -54,7 +55,7 @@ class ChannelCommand(Command):
             caller.msg(self.print_help())
             return
         if args.list:
-            channels: list[Channel] = get_by_type("channel")
+            channels: list[Channel] = filter_by(lambda x: x.is_channel)
             if channels:
                 visible = [channel for channel in channels if channel.access(caller, "view")]
                 if visible:

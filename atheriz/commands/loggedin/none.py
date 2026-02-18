@@ -1,7 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get_by_type
 from atheriz.singletons.get import get_loggedin_cmdset
-import atheriz.settings as settings
 from polyleven import levenshtein
 from typing import TYPE_CHECKING
 

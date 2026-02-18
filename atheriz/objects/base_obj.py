@@ -37,6 +37,7 @@ _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 _LEGEND_ENTRY = None
 import dill
 
+
 class Object:
     appearance_template = "{name}: {desc}{things}"
 
@@ -202,7 +203,7 @@ class Object:
             _delete_recursive(self)
         else:
             _move_contents(self, self.location)
-        
+
         return ops
 
     def at_delete(self, caller: Object) -> bool:
@@ -658,11 +659,15 @@ class Object:
 
             receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
-    def at_pre_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
+    def at_pre_move(
+        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
+    ) -> bool:
         """Called before moving the object."""
         return destination.access(self, "put") if destination else True
 
-    def at_post_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
+    def at_post_move(
+        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
+    ) -> None:
         """Called after moving the object."""
         pass
 
@@ -672,7 +677,7 @@ class Object:
         to_exit: str | None = None,
         force=False,
         announce=True,
-        **kwargs
+        **kwargs,
     ) -> bool:
         """Move this object to a new location."""
         if not force and not self.at_pre_move(destination, to_exit, **kwargs):
@@ -840,7 +845,7 @@ class Object:
                 exclude=self,
                 type="move",
                 internal=True,
-                **kwargs
+                **kwargs,
             )
             return
         if from_exit == "up":
@@ -856,7 +861,7 @@ class Object:
             exclude=self,
             type="move",
             internal=True,
-            **kwargs
+            **kwargs,
         )
 
     def announce_move_to(self, source_location: Node, to_exit: str | None, **kwargs):
@@ -870,7 +875,7 @@ class Object:
                 exclude=self,
                 type="move",
                 internal=True,
-                **kwargs
+                **kwargs,
             )
             return
         if to_exit == "up":
@@ -886,7 +891,7 @@ class Object:
             exclude=self,
             type="move",
             internal=True,
-            **kwargs
+            **kwargs,
         )
 
     def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs):

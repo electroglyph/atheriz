@@ -107,7 +107,7 @@ class Channel:
             self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
-            
+
     def _safe_access(self, accessing_obj: Object, name: str):
         if accessing_obj.is_superuser:
             return True
@@ -128,7 +128,7 @@ class Channel:
         return True
 
     @classmethod
-    def create(cls, name: str) -> 'Channel':
+    def create(cls, name: str) -> "Channel":
         results = filter_by_type("channel", lambda x: x.name == name)
         if results:
             raise ValueError(f"Channel {name} already exists.")
@@ -138,7 +138,7 @@ class Channel:
         add_object(c)
         c.at_create()
         return c
-    
+
     def get_save_ops(self) -> tuple[str, tuple]:
         """
         Returns a tuple of (sql, params) for saving this object.
@@ -147,7 +147,7 @@ class Channel:
         with self.lock:
             params = (self.id, dill.dumps(self))
         return sql, params
-    
+
     def add_lock(self, lock_name: str, callable: Callable):
         """
         Add a lock to this object.
@@ -175,7 +175,7 @@ class Channel:
         """
         with self.lock:
             self.locks.pop(lock_name, None)
-    
+
     def delete(self, caller: Object, unused: bool) -> int:
         del unused
         if not self.at_delete(caller):
@@ -183,11 +183,11 @@ class Channel:
         self.is_deleted = True
         remove_object(self)
         return 1
-    
+
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
         return True
-    
+
     def at_create(self):
         """Called after an object is created."""
         pass
@@ -251,7 +251,6 @@ class Channel:
             state.pop("access", None)
             state.pop("listeners", None)
             return state
-
 
     def __setstate__(self, state: dict) -> None:
         object.__setattr__(self, "lock", RLock())

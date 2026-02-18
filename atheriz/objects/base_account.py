@@ -42,7 +42,7 @@ class Account:
             ensure_thread_safe(self)
 
     @classmethod
-    def create(cls, name: str, password: str) -> 'Account | None':
+    def create(cls, name: str, password: str) -> "Account | None":
         """Create a new account."""
         if not name or not password:
             raise ValueError("Name and password must not be empty.")
@@ -58,7 +58,7 @@ class Account:
         add_object(account)
         account.at_create()
         return account
-    
+
     def get_save_ops(self) -> tuple[str, tuple]:
         """
         Returns a tuple of (sql, params) for saving this object.
@@ -67,7 +67,7 @@ class Account:
         with self.lock:
             params = (self.id, dill.dumps(self))
         return sql, params
-    
+
     def delete(self, caller: Object, unused: bool) -> int:
         del unused
         if not self.at_delete(caller):
@@ -75,15 +75,15 @@ class Account:
         self.is_deleted = True
         remove_object(self)
         return 1
-    
+
     def at_pre_puppet(self, character: Object) -> bool:
         """Called before a character is puppeted, return False to cancel puppeting."""
         return True
-    
+
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, return False to cancel deletion."""
         return True
-    
+
     def at_create(self):
         """Called after an object is created."""
         pass
@@ -95,7 +95,7 @@ class Account:
         """Add a character to the account."""
         with self.lock:
             self.characters.append(character.id)
-            
+
     def remove_character(self, character: Object) -> None:
         """Remove a character from the account."""
         with self.lock:
@@ -127,7 +127,6 @@ class Account:
             state = self.__dict__.copy()
             state.pop("lock", None)
             return state
-    
 
     def __setstate__(self, state):
         self.__dict__.update(state)
