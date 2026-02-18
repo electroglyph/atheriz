@@ -17,6 +17,7 @@ from atheriz.objects.base_obj import Object
 from atheriz.singletons.objects import add_object, get, load_objects, save_objects
 from atheriz.singletons.startstop import do_shutdown, do_startup, do_reload
 from atheriz.singletons.get import get_node_handler, get_unique_id
+from atheriz.database_setup import get_database
 import secrets
 import shutil
 import atheriz.reloader as reloader
@@ -291,7 +292,10 @@ def start_server():
     try:
         server_state.uvicorn_server.run()
     finally:
-        do_shutdown()
+        try:
+            do_shutdown()
+        except Exception:
+            get_database().close()
         print("Server stopped.")
         if pid_file.exists():
             pid_file.unlink()

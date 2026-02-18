@@ -1,6 +1,7 @@
 from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
 from atheriz.singletons.objects import save_objects, load_objects
+from atheriz.database_setup import get_database
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
@@ -16,7 +17,6 @@ def do_startup():
     get_map_handler()
     get_node_handler()
     get_async_ticker()
-    
     try:
         import server_events
     except ImportError:
@@ -46,6 +46,7 @@ def do_shutdown():
     logger.info("Shutdown sequence completed.")
     if settings.TIME_SYSTEM_ENABLED:
         get_game_time().stop()
+    get_database().close()
 
 
 def do_reload():

@@ -1,4 +1,3 @@
-
 import sqlite3
 import os
 from . import settings
@@ -9,14 +8,21 @@ if TYPE_CHECKING:
     from sqlite3 import Connection
 
 _INIT_LOCK = Lock()
+_DATABASE: Database | None = None
+
 
 class Database:
     def __init__(self, connection: Connection):
         self.lock = Lock()
         self.connection = connection
 
+    def close(self):
+        with self.lock:
+            self.connection.close()
+        with _INIT_LOCK:
+            global _DATABASE
+            _DATABASE = None
 
-_DATABASE: Database | None = None
 
 def get_database():
     """
@@ -35,6 +41,7 @@ def get_database():
             _DATABASE = Database(c)
     return _DATABASE
 
+
 def do_setup():
     """
     Creates a sqlite db at save folder/database.sqlite3 (check settings).
@@ -42,8 +49,14 @@ def do_setup():
     conn = get_database().connection
     cursor = conn.cursor()
     cursor.execute("CREATE TABLE IF NOT EXISTS objects (id INTEGER PRIMARY KEY, data BLOB)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS mapdata (area TEXT, z INTEGER, data BLOB, PRIMARY KEY (area, z))")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS mapdata (area TEXT, z INTEGER, data BLOB, PRIMARY KEY (area, z))"
+    )
     cursor.execute("CREATE TABLE IF NOT EXISTS areas (name TEXT PRIMARY KEY, data BLOB)")
-    cursor.execute("CREATE TABLE IF NOT EXISTS transitions (to_area TEXT, to_x INTEGER, to_y INTEGER, to_z INTEGER, data BLOB, PRIMARY KEY (to_area, to_x, to_y, to_z))")
-    cursor.execute("CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))")
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS transitions (to_area TEXT, to_x INTEGER, to_y INTEGER, to_z INTEGER, data BLOB, PRIMARY KEY (to_area, to_x, to_y, to_z))"
+    )
+    cursor.execute(
+        "CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))"
+    )
     conn.commit()
