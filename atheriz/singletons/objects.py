@@ -83,14 +83,15 @@ def remove_object(obj: Object) -> None:
 def load_objects():
     global _ALL_OBJECTS
     db = get_database()
-    cursor = db.connection.cursor()
-    cursor.execute("SELECT id, data FROM objects")
     objects = {}
     max_id = -1
-    for obj_id, blob in cursor:
-        obj = dill.loads(blob)
-        objects[obj_id] = obj
-        max_id = max(max_id, obj_id)
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT id, data FROM objects")
+        for obj_id, blob in cursor:
+            obj = dill.loads(blob)
+            objects[obj_id] = obj
+            max_id = max(max_id, obj_id)
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS = objects
     set_id(max_id)
