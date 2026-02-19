@@ -98,13 +98,13 @@ def load_objects():
     set_id(max_id)
 
 
-def save_objects():
+def save_objects(force: bool = False):
     """Save modified objects to the database."""
     db = get_database()
     cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
-    to_save = [s for s in snapshot if s.is_modified]
+    to_save = [s for s in snapshot if s.is_modified] if not force else snapshot
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")
         for obj in to_save:
