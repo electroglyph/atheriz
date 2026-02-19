@@ -53,6 +53,7 @@ with foo.lock:
 with foo.lock:
   foo.bar['key'] = cool_value
 # Because like this the setattr hook won't detect the change, and the object might not get saved
+# * if ALWAYS_SAVE_ALL = True in settings, then this is fine, because all objects are saved anyway
 ```
 
 pip install this repo and run 'atheriz':
