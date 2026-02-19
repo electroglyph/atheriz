@@ -81,6 +81,7 @@ def remove_object(obj: Object) -> None:
 
 
 def load_objects():
+    """Load objects from the database."""
     global _ALL_OBJECTS
     db = get_database()
     objects = {}
@@ -98,6 +99,7 @@ def load_objects():
 
 
 def save_objects():
+    """Save modified objects to the database."""
     db = get_database()
     cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
@@ -113,8 +115,10 @@ def save_objects():
 
 
 def delete_objects(ops: list[tuple[str, tuple]]):
-    """
-    Execute a list of SQL operations in a transaction.
+    """Delete objects using a list of SQL operations in a transaction.
+
+    Args:
+        ops (list[tuple[str, tuple]]): The list of SQL operations to execute.
     """
     if not ops:
         return

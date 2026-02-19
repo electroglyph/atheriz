@@ -45,7 +45,7 @@ class Object:
         self.lock = RLock()
         self.id = -1
         self.is_deleted = False
-        self.is_modified = False
+        self.is_modified = True
         self.name = ""
         self.desc = ""
         # symbol to be used on map
@@ -138,6 +138,7 @@ class Object:
         obj.aliases = aliases if aliases else []
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
+        obj.is_modified = True
         if is_tickable:
             get_async_ticker().add_coro(obj.at_tick, tick_seconds)
         add_object(obj)
@@ -281,6 +282,7 @@ class Object:
         if hasattr(self, "_is_tickable") and self._is_tickable:
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
+        object.__setattr__(self, "is_modified", False)
         self.at_init()
 
     @property
