@@ -2,6 +2,7 @@ from atheriz.singletons.get import set_id
 from threading import RLock
 from atheriz.utils import get_import_path
 from atheriz.database_setup import get_database
+import atheriz.settings as settings
 import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
@@ -104,7 +105,7 @@ def save_objects(force: bool = False):
     cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
-    to_save = [s for s in snapshot if s.is_modified] if not force else snapshot
+    to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if s.is_modified]
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")
         for obj in to_save:

@@ -43,6 +43,8 @@ SLOW_LOCKS = True
 MAX_LOGIN_ATTEMPTS = 3
 # Cooldown in seconds for temporary ban
 LOGIN_ATTEMPT_COOLDOWN = 100
+# if true, save all objects instead of only modified ones
+ALWAYS_SAVE_ALL = False
 DEFAULT_HOME = ("limbo", 0, 0, 0)
 MAP_ENABLED = True
 LEGEND_ENABLED = True
