@@ -432,6 +432,7 @@ class Object:
         """
         with self.lock:
             self._contents.add(obj.id)
+            self.is_modified = True
 
     def remove_object(self, obj):
         """
@@ -441,6 +442,7 @@ class Object:
         """
         with self.lock:
             self._contents.discard(obj.id)
+            self.is_modified = True
 
     def add_lock(self, lock_name: str, callable: Callable):
         """
@@ -716,6 +718,8 @@ class Object:
                             loc.at_object_leave(destination, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
+                        object.__setattr__(loc, "is_modified", True)
+                        object.__setattr__(destination, "is_modified", True)
             else:
                 with destination.lock:
                     if destination.is_node:
@@ -723,9 +727,11 @@ class Object:
                             return False
                         destination.at_object_receive(loc, to_exit, **kwargs)
                     destination._contents.add(self.id)
+                    object.__setattr__(destination, "is_modified", True)
             with self.lock:
                 object.__setattr__(self, "location", destination)
                 object.__setattr__(self, "last_touched_by", destination.id)
+                object.__setattr__(self, "is_modified", True)
             self.at_post_move(destination, to_exit, **kwargs)
 
         if not destination.is_node:
@@ -742,6 +748,7 @@ class Object:
 
         def do_move():
             # update to be atomic
+            object.__setattr__(self, "is_modified", True)
             old_coord = loc.coord if loc and loc.is_node else None
             if loc:
                 ordered = sort_locks(loc, destination)
@@ -751,6 +758,8 @@ class Object:
                             self.announce_move_to(loc, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
+                        object.__setattr__(loc, "is_modified", True)
+                        object.__setattr__(destination, "is_modified", True)
                         destination.add_exits(self, internal=True)
                         self.location = destination
                         if announce:
@@ -758,6 +767,7 @@ class Object:
             else:
                 with destination.lock:
                     destination._contents.add(self.id)
+                    object.__setattr__(destination, "is_modified", True)
                     destination.add_exits(self, internal=True)
                     self.location = destination
                     if announce:

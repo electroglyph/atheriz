@@ -6,6 +6,7 @@ import colorsys
 import math
 from typing import TYPE_CHECKING, Any
 from atheriz.singletons.get import get_websocket_manager
+
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
 
@@ -19,7 +20,11 @@ _COLOR_REGEX = re.compile(_ANSI_COLOR)
 def is_in_game_folder() -> bool:
     """Check if the current directory is a game folder."""
     cwd = Path.cwd()
-    return (cwd / "settings.py").exists() and (cwd / "save").is_dir() and (cwd / "__init__.py").exists()
+    return (
+        (cwd / "settings.py").exists()
+        and (cwd / "save").is_dir()
+        and (cwd / "__init__.py").exists()
+    )
 
 
 def msg_all(msg: str) -> None:
@@ -30,6 +35,7 @@ def msg_all(msg: str) -> None:
         msg (str): message to send
     """
     get_websocket_manager().broadcast(msg)
+
 
 def ensure_thread_safe(obj):
     """Patches the class of the provided object if not already patched."""
@@ -46,7 +52,7 @@ def ensure_thread_safe(obj):
         # always allow access to the lock itself and other essentials
         if name in ("lock", "__dict__", "__class__", "__setstate__", "__getstate__"):
             return orig_get(self, name)
-        
+
         lock = orig_get(self, "lock")
 
         with lock:
@@ -463,25 +469,29 @@ def is_empty_method(method) -> bool:
         if not func or not hasattr(func, "__code__"):
             return False
         code = func.__code__
-        
+
         # A pass/return None method in Python 3.11+ looks like:
         # RESUME 0
         # LOAD_CONST None
         # RETURN_VALUE
-        
+
         # Get bytecode instructions
         instructions = list(dis.get_instructions(code))
-        
+
         # Filter out informational opcodes like RESUME, CACHE, EXTENDED_ARG (if any)
         # We only care about actual logic.
-        meaningful_ops = [i.opname for i in instructions if i.opname not in ("RESUME", "CACHE", "EXTENDED_ARG", "NOP")]
-        
+        meaningful_ops = [
+            i.opname
+            for i in instructions
+            if i.opname not in ("RESUME", "CACHE", "EXTENDED_ARG", "NOP")
+        ]
+
         if meaningful_ops == ["LOAD_CONST", "RETURN_VALUE"]:
             # Check if LOAD_CONST is loading None
             for i in instructions:
                 if i.opname == "LOAD_CONST":
                     return i.argval is None
-        
+
         return False
     except Exception:
         return False
@@ -496,7 +506,7 @@ def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
         List of tuples: (method_name, signature, docstring, is_empty)
     """
     import inspect
-    
+
     methods = []
     # Patterns for hooks
     OVERRIDE_PATTERNS = ("at_", "access_", "format_", "pre_", "post_")
@@ -507,7 +517,9 @@ def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
         if name.startswith("_") and name not in ALWAYS_INCLUDE:
             continue
 
-        should_include = any(name.startswith(p) for p in OVERRIDE_PATTERNS) or name in ALWAYS_INCLUDE
+        should_include = (
+            any(name.startswith(p) for p in OVERRIDE_PATTERNS) or name in ALWAYS_INCLUDE
+        )
 
         if should_include:
             sig = None
@@ -519,7 +531,7 @@ def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
                 # We can't easily rebuild the signature here without more effort,
                 # but we can return None or a dummy.
                 pass
-            
+
             doc = inspect.getdoc(method)
             is_empty = is_empty_method(method)
             methods.append((name, sig, doc, is_empty))

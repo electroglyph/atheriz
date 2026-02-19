@@ -142,6 +142,7 @@ class Node:
         self.links = links
         self._contents = set()
         self.lock = RLock()
+        self.is_modified = True
         self.is_deleted = False
         self.nouns = {}
         self.locks: dict[str, list[Callable]] = {}
@@ -476,7 +477,9 @@ class Node:
         """
         with self.lock:
             self._contents.update([obj.id for obj in objs])
+            self.is_modified = True
             for o in objs:
+                o.is_modified = True
                 self.add_exits(o)
 
     def add_object(self, obj: Object):
@@ -487,6 +490,8 @@ class Node:
         """
         with self.lock:
             self._contents.add(obj.id)
+            obj.is_modified = True
+            self.is_modified = True
             self.add_exits(obj)
 
     def remove_object(self, obj):
@@ -497,6 +502,7 @@ class Node:
         """
         with self.lock:
             self._contents.discard(obj.id)
+            self.is_modified = True
         obj.internal_cmdset.remove_by_tag("exits")
 
     # this is mostly from Evennia, see EVENNIA_LICENSE.txt
@@ -681,6 +687,7 @@ class NodeGrid:
     def add_node(self, node: Node):
         with self.lock:
             self.nodes[(node.coord[1], node.coord[2])] = node
+            self.is_modified = True
         if node.links:
             nh = get_node_handler()
             for l in node.links:
@@ -690,6 +697,7 @@ class NodeGrid:
     def remove_node(self, coord: tuple[int, int]):
         with self.lock:
             node = self.nodes.pop(coord, None)
+            self.is_modified = True
         if node:
             if node.links:
                 nh = get_node_handler()
@@ -824,6 +832,7 @@ class NodeArea:
         grid.area = self.name
         with self.lock:
             self.grids[grid.z] = grid
+            self.is_modified = True
 
     def get_grid(self, z: int) -> NodeGrid | None:
         with self.lock:
@@ -834,6 +843,7 @@ class NodeArea:
             m = self.grids[z]
             m.clear()
             del self.grids[z]
+            self.is_modified = True
 
     def clear(self):
         with self.lock:
