@@ -1,7 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
 from atheriz.singletons.get import get_node_handler
-from atheriz.singletons.objects import remove_object
+from atheriz.singletons.objects import delete_objects
 import argparse
 from typing import TYPE_CHECKING
 
@@ -76,47 +76,30 @@ class DeleteCommand(Command):
                 caller.msg(f"Multiple matches for '{target_name}'.")
                 return
             else:
-                target = target[0]
+                target: Object = target[0]
 
-        if target == caller:
-            caller.msg("You cannot delete yourself.")
+        if not target.access(caller, "delete"):
+            caller.msg("You do not have permission to delete that.")
             return
 
         full_name = target.get_display_name(caller)
-        count = target.delete(caller, args.recursive)
+        result = target.delete(caller, args.recursive)
+        
+        if result is None:
+            caller.msg("Deletion aborted.")
+            return
+
+        if isinstance(result, list):
+            delete_objects(result)
+            count = len(result)
+        else:
+            node_count, ops = result
+            if ops:
+                delete_objects(ops)
+            count = node_count + len(ops) + 1
+
         if count > 1:
             caller.msg(f"Deleted or moved {full_name}, {count} objects total.")
         else:
             caller.msg(f"Deleted {full_name}.")
-
-    def _delete_recursive(self, obj: Object) -> int:
-        """
-        Recursively delete an object and its contents.
-        Returns the number of objects deleted.
-        """
-        count = 0
-        if obj.contents:
-             # Iterate over a copy since we are modifying the list
-            for content in list(obj.contents):
-                count += self._delete_recursive(content)
-        
-        self._delete_object(obj)
-        count += 1
-        return count
-
-    def _delete_object(self, obj: Object):
-        """
-        Perform the actual deletion of an object.
-        """
-        # Remove from location
-        if obj.location:
-            obj.location.remove_object(obj)
-            obj.location = None
-            
-        if obj.is_connected and obj.session and obj.session.connection:
-            obj.is_deleted = True
-            obj.session.account.remove_character(obj)
-            obj.session.connection.close()
-            
-        # Remove from global registry
-        remove_object(obj)
+        return

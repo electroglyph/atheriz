@@ -322,41 +322,45 @@ class Node:
         """
         pass
 
-    def delete(self, caller: Object, recursive: bool = False) -> int:
+    def delete(self, caller: Object, recursive: bool = False) -> tuple[int, list] | None:
         """Delete this node.
 
         Args:
             recursive (bool, optional): Delete all objects in this node. Defaults to False.
 
         Returns:
-            int: Number of objects deleted, not including the Node itself.
+            tuple[int, list] | None: (count of nodes deleted/moved, list of object ops), or None if aborted.
         """
 
-        def _delete_recursive(obj: Node) -> int:
-            count = 0
+        def _delete_recursive(obj: Node) -> list:
+            all_ops = []
             if obj.contents:
                 for content in list(obj.contents):
-                    count += content.delete(caller, True)
-            return count
+                    res = content.delete(caller, True)
+                    if res is None:
+                        continue
+                    # result of Object.delete is a list of ops
+                    all_ops.extend(res)
+            return all_ops
 
-        def _move_contents(obj: Node) -> int:
-            count = 0
+        def _move_contents(obj: Node) -> list:
             if obj.contents:
                 for content in list(obj.contents):
                     content.move_to(content.home)
-                    count += 1
-            return count
+            return []
 
         def _self_delete():
+            from atheriz.singletons.get import get_node_handler
             get_node_handler().remove_node(self.coord)
             self.is_deleted = True
 
         if not self.at_delete(caller):
-            return 0
+            return None
 
-        count = _delete_recursive(self) if recursive else _move_contents(self)
+        all_ops = _delete_recursive(self) if recursive else _move_contents(self)
         _self_delete()
-        return count
+        # count of other nodes deleted is 0, since nodes can't contain nodes
+        return 0, all_ops
 
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""

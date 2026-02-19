@@ -36,6 +36,7 @@ class Account:
         self.is_mapable = False
         self.is_container = False
         self.is_tickable = False
+        self.is_script = False
         self.is_channel = False
         self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:

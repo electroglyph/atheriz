@@ -23,19 +23,17 @@ from typing import TYPE_CHECKING, Self
 from atheriz.logger import logger
 from atheriz.objects import funcparser
 import atheriz.settings as settings
-from threading import Lock, RLock
+from threading import RLock
 import time
+import dill
 
 if TYPE_CHECKING:
     from atheriz.objects.session import Session
-    from atheriz.singletons.node import Node, NodeLink
-    from atheriz.objects.base_account import Account
+    from atheriz.singletons.node import Node
     from atheriz.objects.base_channel import Channel
     from atheriz.singletons.map import MapInfo
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
-_LEGEND_ENTRY = None
-import dill
 
 
 class Object:
@@ -67,6 +65,7 @@ class Object:
         self.is_item = False
         self.is_mapable = False
         self.is_container = False
+        self.is_script = False
         self._is_tickable = False
         self.is_account = False
         self.is_channel = False
@@ -223,7 +222,7 @@ class Object:
         pass
 
     def _safe_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
+        if accessing_obj.is_superuser and name != "delete":
             return True
         with self.lock:
             lock_list = self.locks.get(name, [])
@@ -233,7 +232,7 @@ class Object:
             return True
 
     def _fast_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
+        if accessing_obj.is_superuser and name != "delete":
             return True
         lock_list = self.locks.get(name, [])
         for lock in lock_list:
@@ -471,17 +470,6 @@ class Object:
         """
         with self.lock:
             self.locks.pop(lock_name, None)
-
-    @property
-    def legend_entry(self):
-        global _LEGEND_ENTRY
-        if not _LEGEND_ENTRY:
-            from atheriz.singletons.map import LegendEntry as _LEGEND_ENTRY
-        loc: Node | None = self.location
-        if loc and loc.is_node:  # full coord is (area(str),x,y,z) ... but maps only want about x,y
-            return _LEGEND_ENTRY(self.symbol, self.name, (loc.coord[1], loc.coord[2]))
-        else:
-            return None
 
     @property
     def contents(self) -> list[Object]:

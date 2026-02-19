@@ -96,6 +96,7 @@ class Channel:
         self.is_item = False
         self.is_mapable = False
         self.is_container = False
+        self.is_script = False
         self.is_tickable = False
         self.is_account = False
         self.is_channel = True
