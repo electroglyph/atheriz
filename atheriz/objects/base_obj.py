@@ -282,7 +282,6 @@ class Object:
         if hasattr(self, "_is_tickable") and self._is_tickable:
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
-        object.__setattr__(self, "is_modified", False)
         self.at_init()
 
     @property
