@@ -339,7 +339,6 @@ class Node:
                     res = content.delete(caller, True)
                     if res is None:
                         continue
-                    # result of Object.delete is a list of ops
                     all_ops.extend(res)
             return all_ops
 
