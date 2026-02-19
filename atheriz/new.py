@@ -152,84 +152,139 @@ CLASS_INJECTIONS = [
 '''
 
 
+def generate_module_wrapper_template(module_path: str) -> str:
+    """
+    Generate a thin wrapper template for a module by inspecting it dynamically.
+
+    Discovers all public symbols (functions, classes, constants) and generates
+    re-export imports plus commented-out override examples for each function.
+
+    Args:
+        module_path: Dotted import path, e.g. "atheriz.singletons.objects"
+    """
+    import importlib
+    import types
+
+    module = importlib.import_module(module_path)
+
+    # Collect public names grouped by kind
+    functions: list[str] = []
+    classes: list[str] = []
+    constants: list[str] = []
+
+    for name in sorted(dir(module)):
+        if name.startswith("_"):
+            continue
+        obj = getattr(module, name)
+        # Skip module objects (e.g. imported 'os', 'dill', 'sqlite3')
+        if isinstance(obj, types.ModuleType):
+            continue
+        # For callables and classes, only include if defined in THIS module
+        if hasattr(obj, "__module__") and obj.__module__ is not None:
+            if obj.__module__ != module_path:
+                continue
+        # Skip re-exported constants like TYPE_CHECKING
+        if name == "TYPE_CHECKING":
+            continue
+        if isinstance(obj, type):
+            classes.append(name)
+        elif callable(obj):
+            functions.append(name)
+        else:
+            constants.append(name)
+
+    all_names = classes + functions + constants
+    if not all_names:
+        return f"# Wrapper for {module_path} (no public symbols found)\n"
+
+    lines = [
+        f"# Re-export everything from {module_path}.",
+        "# Override or extend functions below to customize behavior.",
+        f"from {module_path} import (  # noqa: F401",
+    ]
+    for name in all_names:
+        lines.append(f"    {name},")
+    lines.append(")")
+
+    # Generate commented-out override examples for each function
+    for func_name in functions:
+        func = getattr(module, func_name)
+        try:
+            sig = inspect.signature(func)
+            param_str = ", ".join(sig.parameters.keys())
+            arg_str = ", ".join(
+                f"*{p}" if sig.parameters[p].kind == inspect.Parameter.VAR_POSITIONAL
+                else f"**{p}" if sig.parameters[p].kind == inspect.Parameter.VAR_KEYWORD
+                else p
+                for p in sig.parameters
+            )
+        except (ValueError, TypeError, NameError):
+            param_str = "*args, **kwargs"
+            arg_str = "*args, **kwargs"
+
+        lines.append("")
+        lines.append(f"# def {func_name}({param_str}):")
+        lines.append(f"#     from {module_path} import {func_name} as _base_{func_name}")
+        lines.append(f"#     return _base_{func_name}({arg_str})")
+
+    lines.append("")
+    return "\n".join(lines) + "\n"
+
+
 def generate_objects_template() -> str:
     """Generate the objects.py template (thin wrapper around atheriz.singletons.objects)."""
-    return '''# Re-export everything from the base objects module.
-# Override or extend functions below to customize behavior.
-from atheriz.singletons.objects import (  # noqa: F401
-    filter_by,
-    get,
-    add_object,
-    remove_object,
-    load_objects,
-    save_objects,
-    delete_objects,
-    TEMP_BANNED_IPS,
-    TEMP_BANNED_LOCK,
-)
-from atheriz.database_setup import get_database  # noqa: F401
-
-# Example: override save_objects to add custom logic
-# def save_objects():
-#     from atheriz.singletons.objects import save_objects as _base_save
-#     print("Custom pre-save hook")
-#     _base_save()
-'''
+    return generate_module_wrapper_template("atheriz.singletons.objects")
 
 
 def generate_database_setup_template() -> str:
     """Generate the database_setup.py template (thin wrapper around atheriz.database_setup)."""
-    return '''# Re-export everything from the base database_setup module.
-# Override or extend functions below to customize behavior.
-from atheriz.database_setup import (  # noqa: F401
-    Database,
-    get_database,
-    do_setup,
-)
-
-# Example: override do_setup to add custom tables
-# def do_setup():
-#     from atheriz.database_setup import do_setup as _base_setup
-#     _base_setup()
-#     conn = get_database().connection
-#     cursor = conn.cursor()
-#     cursor.execute("CREATE TABLE IF NOT EXISTS my_table (id INTEGER PRIMARY KEY, data TEXT)")
-#     conn.commit()
-'''
+    return generate_module_wrapper_template("atheriz.database_setup")
 
 
 def generate_inputfuncs_template() -> str:
-    """Generate the inputfuncs.py template."""
-    return '''from atheriz.inputfuncs import InputFuncs as BaseInputFuncs, inputfunc
+    """Generate the inputfuncs.py template by inspecting InputFuncs class."""
+    from atheriz.inputfuncs import InputFuncs
 
+    inspector = ClassInspector(InputFuncs)
+    methods = inspector.get_override_methods()
 
-class InputFuncs(BaseInputFuncs):
-    """Custom InputFuncs class. Add new input handlers below."""
+    generator = TemplateGenerator("InputFuncs", "atheriz.inputfuncs", "InputFuncs")
+    generator.add_methods(methods)
 
-    # Example custom handler:
-    # @inputfunc()
-    # def my_custom_handler(self, connection, args, kwargs):
-    #     """Handle 'my_custom_handler' messages from client."""
-    #     pass
-'''
+    content = generator.generate()
+    # Add inputfunc decorator import
+    content = content.replace(
+        "from atheriz.inputfuncs import InputFuncs",
+        "from atheriz.inputfuncs import InputFuncs",
+    )
+    # Append usage example
+    content += """
+# To add a custom input handler, use the @inputfunc decorator:
+# from atheriz.inputfuncs import inputfunc
+#
+# @inputfunc()
+# def my_custom_handler(self, connection, args, kwargs):
+#     \"\"\"Handle 'my_custom_handler' messages from client.\"\"\"
+#     pass
+"""
+    return content
 
 
 def generate_command_base_template() -> str:
-    """Generate the commands/command.py template."""
-    return '''from atheriz.commands.base_cmd import Command as BaseCommand
+    """Generate the commands/command.py template by inspecting Command class."""
+    from atheriz.commands.base_cmd import Command
 
+    inspector = ClassInspector(Command)
+    methods = inspector.get_override_methods()
 
-class Command(BaseCommand):
-    """
-    Base command class for all custom commands.
-    Inherit from this class to ensure your commands have access to custom functionality.
-    """
-    pass
-'''
+    generator = TemplateGenerator("Command", "atheriz.commands.base_cmd", "Command")
+    generator.add_methods(methods)
+
+    return generator.generate()
 
 
 def generate_command_template() -> str:
-    """Generate the command.py template with class attributes."""
+    """Generate the command.py template with class attributes (scaffolding for new commands)."""
     return '''from .command import Command
 
 
@@ -252,36 +307,53 @@ class MyCommand(Command):
 
 
 def generate_loggedin_cmdset_template() -> str:
-    """Generate the commands/loggedin.py template."""
-    return '''from atheriz.commands.loggedin.cmdset import LoggedinCmdSet as BaseLoggedinCmdSet
-from .test import TestCommand
+    """Generate the commands/loggedin.py template by inspecting LoggedinCmdSet class."""
+    from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
 
+    inspector = ClassInspector(LoggedinCmdSet)
+    methods = inspector.get_override_methods()
 
-class LoggedinCmdSet(BaseLoggedinCmdSet):
-    """Custom LoggedinCmdSet class. Add logged-in commands here."""
-    
-    def __init__(self):
-        super().__init__()
-        self.add(TestCommand())
-'''
+    generator = TemplateGenerator("LoggedinCmdSet", "atheriz.commands.loggedin.cmdset", "LoggedinCmdSet")
+    generator.add_methods(methods)
+
+    content = generator.generate()
+    # Add TestCommand import after the first import line
+    lines = content.split("\n")
+    lines.insert(1, "from .test import TestCommand")
+    content = "\n".join(lines)
+    # Replace 'pass' with __init__ that registers TestCommand
+    init_body = "\n".join([
+        "    def __init__(self):",
+        "        super().__init__()",
+        "        self.add(TestCommand())",
+    ])
+    content = content.replace("    pass", init_body)
+    return content
 
 
 def generate_unloggedin_cmdset_template() -> str:
-    """Generate the commands/unloggedin.py template."""
-    return '''from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet as BaseUnloggedinCmdSet
+    """Generate the commands/unloggedin.py template by inspecting UnloggedinCmdSet class."""
+    from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
 
+    inspector = ClassInspector(UnloggedinCmdSet)
+    methods = inspector.get_override_methods()
 
-class UnloggedinCmdSet(BaseUnloggedinCmdSet):
-    """Custom UnloggedinCmdSet class. Add unlogged-in commands here."""
-    
-    def __init__(self):
-        super().__init__()
-        # self.add(MyUnloggedinCommand())
-'''
+    generator = TemplateGenerator("UnloggedinCmdSet", "atheriz.commands.unloggedin.cmdset", "UnloggedinCmdSet")
+    generator.add_methods(methods)
+
+    content = generator.generate()
+    # Replace 'pass' with __init__ with commented example
+    init_body = "\n".join([
+        "    def __init__(self):",
+        "        super().__init__()",
+        "        # self.add(MyUnloggedinCommand())",
+    ])
+    content = content.replace("    pass", init_body)
+    return content
 
 
 def generate_test_command_template() -> str:
-    """Generate the commands/test.py template."""
+    """Generate the commands/test.py template (scaffolding for a test command)."""
     return '''from atheriz.commands.base_cmd import Command
 
 
