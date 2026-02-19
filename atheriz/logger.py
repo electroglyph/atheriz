@@ -13,25 +13,31 @@ import logging
 
 from atheriz import settings
 
-# Create the shared logger
 logger = logging.getLogger("atheriz")
+FORMATTER = logging.Formatter("%(levelname)s: %(name)s: %(message)s")
 
-# Set default level (will inherit uvicorn's handlers when server is running)
-if settings.LOG_LEVEL == "debug":
-    logger.setLevel(logging.DEBUG)
-elif settings.LOG_LEVEL == "info":
-    logger.setLevel(logging.INFO)
-elif settings.LOG_LEVEL == "warning":
-    logger.setLevel(logging.WARNING)
-elif settings.LOG_LEVEL == "error":
-    logger.setLevel(logging.ERROR)
-elif settings.LOG_LEVEL == "critical":
-    logger.setLevel(logging.CRITICAL)
-else:
-    logger.setLevel(logging.INFO)
+def apply_settings():
+    """Apply current settings to the logger."""
+    level_map = {
+        "debug": logging.DEBUG,
+        "info": logging.INFO,
+        "warning": logging.WARNING,
+        "error": logging.ERROR,
+        "critical": logging.CRITICAL,
+    }
+    level = level_map.get(settings.LOG_LEVEL.lower(), logging.INFO)
+    logger.setLevel(level)
 
-if not logger.handlers:
+def _setup_logger():
+    """Ensure the logger has a default handler with the preferred formatter."""
+    for h in logger.handlers:
+        if isinstance(h.formatter, logging.Formatter) and h.formatter._fmt == FORMATTER._fmt:
+            return
+    
     handler = logging.StreamHandler()
-    formatter = logging.Formatter("%(levelname)s: %(name)s: %(message)s")
-    handler.setFormatter(formatter)
+    handler.setFormatter(FORMATTER)
     logger.addHandler(handler)
+    logger.propagate = False
+
+apply_settings()
+_setup_logger()

@@ -69,3 +69,41 @@ def test_logger_level_filtering(tmp_path):
         logger.setLevel(original_level)
         logger.removeHandler(file_handler)
         file_handler.close()
+
+def test_debug_level_capture(tmp_path):
+    """
+    Verify that when LOG_LEVEL is set to "debug", logger.debug() messages are captured.
+    """
+    import atheriz.settings as settings
+    from importlib import reload
+    import atheriz.logger as atheriz_logger
+    
+    log_file = tmp_path / "debug_test.log"
+    file_handler = logging.FileHandler(log_file)
+    formatter = logging.Formatter("%(levelname)s: %(name)s: %(message)s")
+    file_handler.setFormatter(formatter)
+    atheriz_logger.logger.addHandler(file_handler)
+    
+    # Save original settings/level
+    original_level_setting = settings.LOG_LEVEL
+    original_logger_level = atheriz_logger.logger.level
+    
+    try:
+        # Simulate setting LOG_LEVEL to "debug" and applying it via the new helper
+        settings.LOG_LEVEL = "debug"
+        atheriz_logger.apply_settings()
+        atheriz_logger._setup_logger()
+            
+        atheriz_logger.logger.debug("Test DEBUG message")
+        
+        file_handler.flush()
+        content = log_file.read_text()
+        
+        assert "DEBUG: atheriz: Test DEBUG message" in content
+        
+    finally:
+        # Restore
+        settings.LOG_LEVEL = original_level_setting
+        atheriz_logger.logger.setLevel(original_logger_level)
+        atheriz_logger.logger.removeHandler(file_handler)
+        file_handler.close()
