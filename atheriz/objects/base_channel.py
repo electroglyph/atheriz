@@ -1,9 +1,10 @@
+import dill
 from typing import Callable
 from collections import deque
 from threading import Lock, RLock
 import atheriz.settings as settings
-from atheriz.utils import get_import_path, wrap_truecolor, ensure_thread_safe
-from atheriz.singletons.objects import get, add_object, filter_by_type, remove_object
+from atheriz.utils import wrap_truecolor, ensure_thread_safe
+from atheriz.singletons.objects import get, add_object, filter_by, remove_object
 from atheriz.singletons.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
@@ -69,7 +70,7 @@ class BaseChannelCommand(Command):
 
     def __getstate__(self):
         d = super().__getstate__()
-        del d["_channel"]
+        d.pop("_channel", None)
         return d
 
     def __setstate__(self, state):
@@ -90,6 +91,7 @@ class Channel:
         self.listeners: dict[int, Object] = {}
         self.locks: dict[str, list[Callable]] = {}
         self.is_pc = False
+        self.is_modified = False
         self.is_npc = False
         self.is_item = False
         self.is_mapable = False
@@ -105,7 +107,7 @@ class Channel:
             self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
-            
+
     def _safe_access(self, accessing_obj: Object, name: str):
         if accessing_obj.is_superuser:
             return True
@@ -126,8 +128,8 @@ class Channel:
         return True
 
     @classmethod
-    def create(cls, name: str) -> 'Channel':
-        results = filter_by_type("channel", lambda x: x.name == name)
+    def create(cls, name: str) -> "Channel":
+        results = filter_by(lambda x: x.is_channel and x.name == name)
         if results:
             raise ValueError(f"Channel {name} already exists.")
         c = cls()
@@ -136,7 +138,16 @@ class Channel:
         add_object(c)
         c.at_create()
         return c
-    
+
+    def get_save_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for saving this object.
+        """
+        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
+        with self.lock:
+            params = (self.id, dill.dumps(self))
+        return sql, params
+
     def add_lock(self, lock_name: str, callable: Callable):
         """
         Add a lock to this object.
@@ -164,7 +175,7 @@ class Channel:
         """
         with self.lock:
             self.locks.pop(lock_name, None)
-    
+
     def delete(self, caller: Object, unused: bool) -> int:
         del unused
         if not self.at_delete(caller):
@@ -172,11 +183,11 @@ class Channel:
         self.is_deleted = True
         remove_object(self)
         return 1
-    
+
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
         return True
-    
+
     def at_create(self):
         """Called after an object is created."""
         pass
@@ -240,7 +251,6 @@ class Channel:
             state.pop("access", None)
             state.pop("listeners", None)
             return state
-
 
     def __setstate__(self, state: dict) -> None:
         object.__setattr__(self, "lock", RLock())

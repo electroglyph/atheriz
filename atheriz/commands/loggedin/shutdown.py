@@ -31,7 +31,7 @@ class ShutdownCommand(Command):
     # pyrefly: ignore
     def run(self, caller: Object, args):
         caller.msg("Initiating server shutdown...")
-        server_events.at_server_shutdown()
+        server_events.at_server_stop()
 
         port = settings.WEBSERVER_PORT
         secret_path = Path(settings.SECRET_PATH)

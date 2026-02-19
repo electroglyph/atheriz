@@ -1,3 +1,4 @@
+from atheriz.singletons.objects import filter_by
 from atheriz.logger import logger
 import argparse
 import signal
@@ -13,9 +14,10 @@ from atheriz import settings
 from atheriz.websocket import websocket_endpoint, websocket_manager
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import add_object, get, load_objects, get_by_type, save_objects
+from atheriz.singletons.objects import add_object, get, load_objects, save_objects
 from atheriz.singletons.startstop import do_shutdown, do_startup, do_reload
 from atheriz.singletons.get import get_node_handler, get_unique_id
+from atheriz.database_setup import get_database
 import secrets
 import shutil
 import atheriz.reloader as reloader
@@ -290,7 +292,10 @@ def start_server():
     try:
         server_state.uvicorn_server.run()
     finally:
-        do_shutdown()
+        try:
+            do_shutdown()
+        except Exception:
+            get_database().close()
         print("Server stopped.")
         if pid_file.exists():
             pid_file.unlink()
@@ -661,7 +666,7 @@ def create_game_data(args):
 
     load_objects()
 
-    result: list[Account] = get_by_type("account")
+    result: list[Account] = filter_by(lambda x: x.is_account)
     if result:
         for r in result:
             if r.name == args.accountname:

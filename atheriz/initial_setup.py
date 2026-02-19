@@ -6,6 +6,7 @@ from atheriz.objects.base_obj import Object
 from atheriz.objects.base_account import Account
 from atheriz.singletons.objects import add_object, save_objects
 import atheriz.settings as settings
+from atheriz.database_setup import do_setup as do_db_setup
 from atheriz.logger import logger
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
@@ -29,6 +30,7 @@ class PushCommand(Command):
 
 def do_setup(username=None, password=None):
     logger.info("Setting up initial world state...")
+    do_db_setup()
     nh = get_node_handler()
     n = Node(
         settings.DEFAULT_HOME,

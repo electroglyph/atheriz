@@ -3,8 +3,6 @@ from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea
 from atheriz.singletons.get import get_node_handler, get_map_handler
 from atheriz.singletons.map import MapInfo, LegendEntry
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get_by_type
-import atheriz.settings as settings
 from atheriz.utils import wrap_xterm256
 import time
 from typing import TYPE_CHECKING

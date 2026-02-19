@@ -41,7 +41,7 @@ def test_channel_list_no_message(caller, channel):
     cmd = GlobalChannelCommand()
     args = MockArgs(list=True)
 
-    with patch("atheriz.commands.loggedin.channel.get_by_type") as mock_get:
+    with patch("atheriz.commands.loggedin.channel.filter_by") as mock_get:
         mock_get.return_value = [channel]
         cmd.run(caller, args)
 
@@ -56,7 +56,7 @@ def test_channel_send_message(caller, channel):
     """Test 'channel -c <channel> <message>' sends a message to the channel."""
     cmd = GlobalChannelCommand()
 
-    with patch("atheriz.commands.loggedin.channel.filter_by_type") as mock_filter:
+    with patch("atheriz.commands.loggedin.channel.filter_by") as mock_filter:
         mock_filter.return_value = [channel]
         with patch.object(channel, "msg") as mock_msg:
             args = MockArgs(channel="public", message="hello")
@@ -84,7 +84,7 @@ def test_channel_target_and_message(caller, channel):
 
     args = MockArgs(channel="public", message="hello")
 
-    with patch("atheriz.commands.loggedin.channel.filter_by_type") as mock_filter:
+    with patch("atheriz.commands.loggedin.channel.filter_by") as mock_filter:
         mock_filter.return_value = [channel]
         with patch.object(channel, "msg") as mock_msg:
             cmd.run(caller, args)

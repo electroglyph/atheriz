@@ -1,19 +1,13 @@
-from typing import Any, Iterable, Optional
-from threading import Lock, RLock
+from threading import RLock
 from typing import TYPE_CHECKING
-from atheriz.utils import tuple_to_str, str_to_tuple
 from atheriz.logger import logger
-import json
 import dill
-from pathlib import Path
-from atheriz import settings
-from atheriz.objects.persist import instance_from_string
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
 
 if TYPE_CHECKING:
-    from atheriz.objects.base_obj import Object
-    from atheriz.objects.nodes import NodeLink, Door, Transition
-from time import sleep
+    from atheriz.objects.nodes import Door, Transition
+
+from atheriz.database_setup import get_database
 
 
 class NodeHandler:
@@ -28,53 +22,69 @@ class NodeHandler:
         # guards self.doors:
         self.lock3 = RLock()
         self.doors: dict[tuple[str, int, int, int], dict[str, Door]] = {}
-        # self.areas = _load_areas()
-        # self.transitions = _load_transitions()
-        # self.doors = _load_doors()
-        self.areas = {}
-        self.transitions = {}
-        self.doors = {}
-        ap = Path(settings.SAVE_PATH) / "areas"
-        if ap.exists():
-            with ap.open("rb") as f:
-                self.areas = dill.load(f)
-        pt = Path(settings.SAVE_PATH) / "transitions"
-        if pt.exists():
-            with pt.open("rb") as f:
-                self.transitions = dill.load(f)
-        pd = Path(settings.SAVE_PATH) / "doors"
-        if pd.exists():
-            with pd.open("rb") as f:
-                self.doors = dill.load(f)
+
+        try:
+            db = get_database()
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT name, data FROM areas")
+            for name, blob in cursor:
+                try:
+                    self.areas[name] = dill.loads(blob)
+                except Exception as e:
+                    logger.error(f"Error loading area {name}: {e}")
+
+            cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
+            for area, x, y, z, blob in cursor:
+                try:
+                    self.transitions[(area, x, y, z)] = dill.loads(blob)
+                except Exception as e:
+                    logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
+
+            cursor.execute("SELECT area, x, y, z, data FROM doors")
+            for area, x, y, z, blob in cursor:
+                try:
+                    self.doors[(area, x, y, z)] = dill.loads(blob)
+                except Exception as e:
+                    logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
+
+        except Exception as e:
+            logger.error(f"Error loading node data from DB: {e}")
 
     def save(self):
-        save_path = Path(settings.SAVE_PATH)
-        save_path.mkdir(parents=True, exist_ok=True)
+        db = get_database()
+        cursor = db.connection.cursor()
 
-        def _atomic_save(data, filename, lock):
-            path = save_path / filename
-            temp_path = path.with_suffix(path.suffix + ".tmp")
-            with lock:
-                try:
-                    with temp_path.open("wb") as f:
-                        dill.dump(data, f)
-                    temp_path.replace(path)
-                except Exception as e:
-                    logger.error(f"Error saving {filename}: {e}")
-                    if temp_path.exists():
-                        temp_path.unlink()
+        with self.lock:
+            areas_snapshot = list(self.areas.values())
+        with self.lock2:
+            transitions_snapshot = list(self.transitions.values())
+        with self.lock3:
+            doors_snapshot = list(self.doors.items())
 
-        _atomic_save(self.areas, "areas", self.lock)
-        _atomic_save(self.transitions, "transitions", self.lock2)
-        _atomic_save(self.doors, "doors", self.lock3)
+        with db.lock:
+            cursor.execute("BEGIN TRANSACTION")
+            try:
+                for area in areas_snapshot:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO areas (name, data) VALUES (?, ?)",
+                        (area.name, dill.dumps(area)),
+                    )
 
-    # def save(self):
-    #     with self.lock:
-    #         _save_areas(self.areas)
-    #     with self.lock2:
-    #         _save_transitions(self.transitions)
-    #     with self.lock3:
-    #         _save_doors(self.doors)
+                for t in transitions_snapshot:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO transitions (to_area, to_x, to_y, to_z, data) VALUES (?, ?, ?, ?, ?)",
+                        (t.to_coord[0], t.to_coord[1], t.to_coord[2], t.to_coord[3], dill.dumps(t)),
+                    )
+                for coord, doors_dict in doors_snapshot:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO doors (area, x, y, z, data) VALUES (?, ?, ?, ?, ?)",
+                        (coord[0], coord[1], coord[2], coord[3], dill.dumps(doors_dict)),
+                    )
+
+                cursor.execute("COMMIT")
+            except Exception as e:
+                cursor.execute("ROLLBACK")
+                logger.error(f"Error saving node data to DB: {e}")
 
     # def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
     #     result = []

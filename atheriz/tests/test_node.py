@@ -27,6 +27,10 @@ def setup_teardown():
     yield
 
     # Teardown
+    from atheriz import database_setup
+    if database_setup._DATABASE:
+        database_setup._DATABASE.close()
+
     settings.SAVE_PATH = original_save_path
     if TEST_SAVE_DIR.exists():
         shutil.rmtree(TEST_SAVE_DIR)

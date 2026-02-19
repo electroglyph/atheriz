@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 from atheriz.objects.session import Session
 from atheriz.connection_screen import render
 from atheriz.singletons.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
-from atheriz.singletons.objects import filter_by_type, TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.singletons.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 from atheriz.utils import strip_ansi
 from atheriz.inputfuncs import InputFuncs
 from atheriz.logger import logger

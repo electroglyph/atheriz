@@ -431,53 +431,45 @@ class MapInfo:
         self.render_legend()
 
 
+from atheriz.database_setup import get_database
+
 class MapHandler:
     def __init__(self) -> None:
         self.lock = RLock()
-        p = Path(settings.SAVE_PATH) / "mapdata"
-        if p.exists():
-            try:
-                with p.open("rb") as f:
-                    self.data = dill.load(f)
-            except Exception as e:
-                logger.error(f"Error loading map data from {p}: {e}")
-                self.data: dict[tuple[str, int], MapInfo] = {}
-        else:
-            self.data: dict[tuple[str, int], MapInfo] = {}
-    # def __init__(self) -> None:
-    #     mapdata = _load_file("mapdata")
-    #     if mapdata:
-    #         new_data = {}
-    #         for k, v in mapdata.items():
-    #             mi = MapInfo()
-    #             mi.__setstate__(v)
-    #             new_data[str_to_tuple(k)] = mi
-    #         self.data = new_data
-    #     else:
-    #         self.data: dict[tuple[str, int], MapInfo] = {}
-    #     self.lock = RLock()
+        self.data: dict[tuple[str, int], MapInfo] = {}
+        
+        try:
+            db = get_database()
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT area, z, data FROM mapdata")
+            for area, z, blob in cursor:
+                try:
+                    mi = dill.loads(blob)
+                    self.data[(area, z)] = mi
+                except Exception as e:
+                    logger.error(f"Error loading map chunk {area}:{z}: {e}")
+        except Exception as e:
+            logger.error(f"Error loading map data from DB: {e}")
 
     def save(self):
+        db = get_database()
+        cursor = db.connection.cursor()
+        
         with self.lock:
-            path = Path(settings.SAVE_PATH) / "mapdata"
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temp_path = path.with_suffix(path.suffix + ".tmp")
+            snapshot = list(self.data.items())
+        
+        with db.lock:
+            cursor.execute("BEGIN TRANSACTION")
             try:
-                with temp_path.open("wb") as f:
-                    dill.dump(self.data, f)
-                temp_path.replace(path)
+                for (area, z), mi in snapshot:
+                    cursor.execute(
+                        "INSERT OR REPLACE INTO mapdata (area, z, data) VALUES (?, ?, ?)",
+                        (area, z, dill.dumps(mi))
+                    )
+                cursor.execute("COMMIT")
             except Exception as e:
-                logger.error(f"Error saving map data: {e}")
-                if temp_path.exists():
-                    temp_path.unlink()
-
-    # def save(self):
-    #     logger.info("Saving map data...")
-    #     data = {}
-    #     with self.lock:
-    #         for k, v in self.data.items():
-    #             data[tuple_to_str(k)] = v.__getstate__()
-    #     _save_file(data, "mapdata")
+                cursor.execute("ROLLBACK")
+                logger.error(f"Error saving map data to DB: {e}")
 
     def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo):
         with self.lock:
