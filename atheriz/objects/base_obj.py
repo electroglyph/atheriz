@@ -152,6 +152,7 @@ class Object:
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
+            object.__setattr__(self, "is_modified", False)
             params = (self.id, dill.dumps(self))
         return sql, params
 

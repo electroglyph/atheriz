@@ -110,7 +110,6 @@ def save_objects(force: bool = False):
         for obj in to_save:
             ops = obj.get_save_ops()
             cursor.execute(ops[0], ops[1])
-            obj.is_modified = False
         cursor.execute("COMMIT")
 
 

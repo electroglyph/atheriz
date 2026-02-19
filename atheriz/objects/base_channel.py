@@ -91,7 +91,7 @@ class Channel:
         self.listeners: dict[int, Object] = {}
         self.locks: dict[str, list[Callable]] = {}
         self.is_pc = False
-        self.is_modified = False
+        self.is_modified = True
         self.is_npc = False
         self.is_item = False
         self.is_mapable = False
@@ -145,6 +145,7 @@ class Channel:
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
+            object.__setattr__(self, "is_modified", False)
             params = (self.id, dill.dumps(self))
         return sql, params
 
