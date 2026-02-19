@@ -1,15 +1,12 @@
 from atheriz.singletons.get import set_id
 from threading import RLock
 from atheriz.utils import get_import_path
-import atheriz.settings as settings
-from pathlib import Path
 from atheriz.database_setup import get_database
 import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.objects.nodes import Node
 
 _IGNORE_FILES = [
     "salt.txt",
@@ -30,11 +27,6 @@ TEMP_BANNED_LOCK = RLock()
 # only access via the lock
 _ALL_OBJECTS = {}
 _ALL_OBJECTS_LOCK = RLock()
-
-# key = import path, value = set(object ids)
-# only access via the lock
-# _OBJECT_MAP = {}
-# _OBJECT_MAP_LOCK = RLock()
 
 
 def filter_by(l: Callable[[Any], bool]) -> list[Any]:
@@ -73,19 +65,15 @@ def get(ids: int | Iterable[int]) -> list[Any]:
         return [r for id in ids if (r := _ALL_OBJECTS.get(id)) is not None]
 
 
-def add_object(obj: object) -> None:
+def add_object(obj: Object) -> None:
     """Add an object to the global object registry."""
     global _ALL_OBJECTS
     path = get_import_path(obj)
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS[obj.id] = obj
-    # with _OBJECT_MAP_LOCK:
-    #     s = _OBJECT_MAP.get(path, set())
-    #     s.add(obj.id)
-    #     _OBJECT_MAP[path] = s
 
 
-def remove_object(obj: object) -> None:
+def remove_object(obj: Object) -> None:
     """Remove an object from the global object registry."""
     global _ALL_OBJECTS
     with _ALL_OBJECTS_LOCK:

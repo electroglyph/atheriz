@@ -152,6 +152,52 @@ CLASS_INJECTIONS = [
 '''
 
 
+def generate_objects_template() -> str:
+    """Generate the objects.py template (thin wrapper around atheriz.singletons.objects)."""
+    return '''# Re-export everything from the base objects module.
+# Override or extend functions below to customize behavior.
+from atheriz.singletons.objects import (  # noqa: F401
+    filter_by,
+    get,
+    add_object,
+    remove_object,
+    load_objects,
+    save_objects,
+    delete_objects,
+    TEMP_BANNED_IPS,
+    TEMP_BANNED_LOCK,
+)
+from atheriz.database_setup import get_database  # noqa: F401
+
+# Example: override save_objects to add custom logic
+# def save_objects():
+#     from atheriz.singletons.objects import save_objects as _base_save
+#     print("Custom pre-save hook")
+#     _base_save()
+'''
+
+
+def generate_database_setup_template() -> str:
+    """Generate the database_setup.py template (thin wrapper around atheriz.database_setup)."""
+    return '''# Re-export everything from the base database_setup module.
+# Override or extend functions below to customize behavior.
+from atheriz.database_setup import (  # noqa: F401
+    Database,
+    get_database,
+    do_setup,
+)
+
+# Example: override do_setup to add custom tables
+# def do_setup():
+#     from atheriz.database_setup import do_setup as _base_setup
+#     _base_setup()
+#     conn = get_database().connection
+#     cursor = conn.cursor()
+#     cursor.execute("CREATE TABLE IF NOT EXISTS my_table (id INTEGER PRIMARY KEY, data TEXT)")
+#     conn.commit()
+'''
+
+
 def generate_inputfuncs_template() -> str:
     """Generate the inputfuncs.py template."""
     return '''from atheriz.inputfuncs import InputFuncs as BaseInputFuncs, inputfunc
@@ -342,6 +388,12 @@ def create_game_folder(folder_name: str) -> None:
     print(f"  Creating settings.py...")
     (folder_path / "settings.py").write_text(generate_settings_template())
 
+    print("  Creating objects.py...")
+    (folder_path / "objects.py").write_text(generate_objects_template())
+
+    print("  Creating database_setup.py...")
+    (folder_path / "database_setup.py").write_text(generate_database_setup_template())
+
     # Copy initial_setup.py
     print(f"  Copying initial_setup.py...")
     import atheriz.initial_setup
@@ -368,6 +420,14 @@ def create_game_folder(folder_name: str) -> None:
     content = content.replace(
         "from atheriz.commands.base_cmd import Command",
         "from commands.command import Command"
+    )
+    content = content.replace(
+        "from atheriz.singletons.objects import add_object, save_objects",
+        "from objects import add_object, save_objects"
+    )
+    content = content.replace(
+        "from atheriz.database_setup import do_setup as do_db_setup",
+        "from database_setup import do_setup as do_db_setup"
     )
     
     (folder_path / "initial_setup.py").write_text(content)
@@ -429,6 +489,7 @@ def create_game_folder(folder_name: str) -> None:
     print(f"\nSuccess! Game folder '{folder_name}' created with:")
     print(f"  Template files:")
     print(f"    - account.py, channel.py, object.py, node.py")
+    print(f"    - objects.py, database_setup.py")
     print(f"    - commands/, inputfuncs.py, settings.py")
     print(f"    - initial_setup.py, connection_screen.py")
     print(f"    - web/ (templates and static files)")
