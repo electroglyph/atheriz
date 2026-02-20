@@ -51,7 +51,8 @@ class Script:
         """
         any functions that start with 'at_' in this class will be considered hooks on the child object
         so at_init on this class will hook at_init on the child object
-        you must use one of the decorators above on every hook function in this class
+        you must use one of the decorators above on every hook function in this class.
+        
         before decorator means: run this class' hook code, then run the original child code
         after decorator means: run child code first, then run this class' hook code
         replace decorator means: this class' hook completely replaces the child's code
