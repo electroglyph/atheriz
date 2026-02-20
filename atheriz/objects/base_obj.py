@@ -54,7 +54,7 @@ def hookable(func):
 
         after_hooks = [h for h in hooks if getattr(h, "is_after", False)]
         for h in after_hooks:
-            result = h(*args, result=result, **kwargs)
+            result = h(*args, **kwargs)
 
         if hooks and not (replace_hooks or before_hooks or after_hooks):
             raise ValueError(
