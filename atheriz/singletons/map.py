@@ -364,7 +364,7 @@ class MapInfo:
                     if o.id != l.id
                 ]
                 entries.extend([(e.symbol, e.desc, e.coord) for e in self.legend_entries])
-                l.at_legend_update(entries, self.name)
+                l.at_legend_update(entries, True, self.name)
 
     def render(self, force=False):
         if force or self.map_changed:

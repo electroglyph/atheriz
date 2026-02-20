@@ -28,12 +28,42 @@ import time
 import dill
 
 if TYPE_CHECKING:
+    from atheriz.objects.base_script import Script
     from atheriz.objects.session import Session
     from atheriz.singletons.node import Node
     from atheriz.objects.base_channel import Channel
     from atheriz.singletons.map import MapInfo
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
+
+
+def hookable(func):
+    def wrapper(self: "Object", *args, **kwargs):
+        h_dict = getattr(self, "hooks", {})
+        hooks = h_dict.get(func.__name__, set())
+
+        replace_hooks = [h for h in hooks if getattr(h, "is_replace", False)]
+        if replace_hooks:
+            return replace_hooks[0](*args, **kwargs)
+
+        before_hooks = [h for h in hooks if getattr(h, "is_before", False)]
+        for h in before_hooks:
+            h(*args, **kwargs)
+
+        result = func(self, *args, **kwargs)
+
+        after_hooks = [h for h in hooks if getattr(h, "is_after", False)]
+        for h in after_hooks:
+            result = h(*args, result=result, **kwargs)
+
+        if hooks and not (replace_hooks or before_hooks or after_hooks):
+            raise ValueError(
+                f"Function {func.__name__} has hooks but none are marked with @before, @after, or @replace."
+            )
+
+        return result
+
+    return wrapper
 
 
 class Object:
@@ -55,7 +85,7 @@ class Object:
         self.date_created = None
         self.location = None
         self.home = None
-        self._contents = set()
+        self._contents: set[int] = set()
         self.privilege_level = 0
         self.is_connected = False
         self.created_by = -1
@@ -75,6 +105,8 @@ class Object:
         self.quelled = False
         self.map_enabled = True
         self._seconds_played = 0
+        self.scripts: set[int] = set()
+        self.hooks: dict[str, set[Callable]] = {}
         # list of channel ids subscribed to
         self.channels: list[int] = []
         self.session: Session | None = None
@@ -142,8 +174,21 @@ class Object:
             get_async_ticker().add_coro(obj.at_tick, tick_seconds)
         add_object(obj)
         obj.at_create()
-        obj.add_lock("delete", lambda x: x.id != obj.id)
+        # prevent you from accidentally deleting yourself (atari teenage riot!)
+        obj.add_lock("delete", lambda caller: caller.id != obj.id)
         return obj
+
+    def add_script(self, script: Script | int):
+        script = get(script)[0] if isinstance(script, int) else script
+        script.install_hooks(self)
+        with self.lock:
+            self.scripts.add(script.id)
+
+    def remove_script(self, script: Script | int):
+        script = get(script)[0] if isinstance(script, int) else script
+        script.remove_hooks(self)
+        with self.lock:
+            self.scripts.discard(script.id)
 
     def get_save_ops(self) -> tuple[str, tuple]:
         """
@@ -207,6 +252,7 @@ class Object:
 
         return ops
 
+    @hookable
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
         if not self.access(caller, "delete"):
@@ -217,6 +263,7 @@ class Object:
             return False
         return True
 
+    @hookable
     def at_create(self):
         """Called after an object is created."""
         pass
@@ -246,6 +293,7 @@ class Object:
             state.pop("session", None)
             state.pop("lock", None)
             state.pop("access", None)
+            state.pop("hooks")
             if loc := state.get("location"):
                 if loc.is_node:
                     state["location"] = loc.coord
@@ -279,9 +327,16 @@ class Object:
             object.__setattr__(self, "access", self._safe_access)
         else:
             object.__setattr__(self, "access", self._fast_access)
-        if hasattr(self, "_is_tickable") and self._is_tickable:
+
+        if object.__getattribute__(self, "_is_tickable"):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
+
+        if scripts := object.__getattribute__(self, "scripts"):
+            for id in scripts:
+                if script := get(id):
+                    script[0].install_hooks(self)
+
         self.at_init()
 
     @property
@@ -317,24 +372,28 @@ class Object:
     def seconds_played(self, value):
         self._seconds_played = value
 
+    @hookable
     def at_init(self):
         """
         Called after this object is deserialized and all attributes are set.
         """
         pass
 
+    @hookable
     def at_tick(self):
         """
         Called every tick.
         """
         pass
 
+    @hookable
     def at_alarm(self, time: dict, data):
         """
         Called when an alarm goes off. See time.py for time format.
         """
         pass
 
+    @hookable
     def at_disconnect(self):
         self.is_connected = False
         self.session = None
@@ -365,6 +424,7 @@ class Object:
     def search(self, query: str):
         return search(self, query)
 
+    @hookable
     def at_legend_update(
         self,
         legend: list[tuple[str, str, tuple[int, int]]],
@@ -373,6 +433,7 @@ class Object:
     ):
         self.msg(legend={"area": area, "legend": legend, "show_legend": show_legend})
 
+    @hookable
     def at_map_update(
         self,
         map: str,
@@ -407,6 +468,7 @@ class Object:
         )
         self.last_map_time = time.time()
 
+    @hookable
     def at_pre_map_render(self, grid: dict[tuple[int, int], str]) -> dict[tuple[int, int], str]:
         """
         to modify map before it's been rendered for this character
@@ -651,12 +713,14 @@ class Object:
 
             receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
+    @hookable
     def at_pre_move(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> bool:
         """Called before moving the object."""
         return destination.access(self, "put") if destination else True
 
+    @hookable
     def at_post_move(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> None:
@@ -807,6 +871,7 @@ class Object:
             **kwargs,
         )
 
+    @hookable
     def at_post_puppet(self, **kwargs):
         self.is_connected = True
         self.session.connection.send_command("logged_in")
@@ -894,47 +959,58 @@ class Object:
             **kwargs,
         )
 
+    @hookable
     def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs):
         """Called by the default `msg` command when this object has received a message."""
         return True
 
+    @hookable
     def at_msg_send(self, text: str | None = None, to_obj: Object | None = None, **kwargs):
         """Called by the default `msg` command when this object sends a message."""
         pass
 
+    @hookable
     def at_desc(self, looker: Object | None = None, **kwargs):
         """Called by the default `look` command when this object is looked at."""
         pass
 
+    @hookable
     def at_pre_get(self, getter: Object, **kwargs):
         """Called by the default `get` command before this object has been picked up."""
         return self.access(getter, "get")
 
+    @hookable
     def at_get(self, getter: Object, **kwargs):
         """Called by the default `get` command when this object has been picked up."""
         pass
 
+    @hookable
     def at_pre_give(self, giver: Object, getter: Object, **kwargs):
         """Called by the default `give` command before this object has been given."""
         return self.access(getter, "give")
 
+    @hookable
     def at_give(self, giver: Object, getter: Object, **kwargs):
         """Called by the default `give` command when this object has been given."""
         pass
 
+    @hookable
     def at_pre_drop(self, dropper: Object, **kwargs):
         """Called by the default `drop` command before this object has been dropped."""
         return self.access(dropper, "drop")
 
+    @hookable
     def at_drop(self, dropper: Object, **kwargs):
         """Called by the default `drop` command when this object has been dropped."""
         pass
 
+    @hookable
     def at_pre_say(self, message: str, **kwargs):
         """Called by the default `say` command before this object says something."""
         return message
 
     # this is from Evennia, see EVENNIA_LICENSE.txt
+    @hookable
     def at_say(
         self,
         message: str,
@@ -1075,6 +1151,7 @@ class Object:
                 mapping=location_mapping,
             )
 
+    @hookable
     def at_look(self, target: Object | Node | None, **kwargs):
         if target is None:
             return "You see nothing here."
@@ -1083,18 +1160,6 @@ class Object:
         desc = target.return_appearance(self, **kwargs)
         target.at_desc(looker=self, **kwargs)
         return desc
-
-    def at_desc(self, looker: Object | None = None, **kwargs):
-        """
-        This is called whenever someone looks at this object.
-
-        Args:
-            looker (Object, optional): The object requesting the description.
-            **kwargs: Arbitrary, optional arguments for users
-                overriding the call (unused by default).
-
-        """
-        pass
 
     def format_appearance(self, appearance, looker, **kwargs):
         return compress_whitespace(appearance).strip()
