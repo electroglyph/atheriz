@@ -145,6 +145,8 @@ class Node:
         self.is_modified = True
         self.is_deleted = False
         self.nouns = {}
+        self.scripts: set[int] = set()
+        self.hooks: dict[str, set[Callable]] = {}
         self.locks: dict[str, list[Callable]] = {}
         if settings.SLOW_LOCKS:
             self.access = self._safe_access
@@ -203,6 +205,7 @@ class Node:
             state = self.__dict__.copy()
             state.pop("lock", None)
             state.pop("access", None)
+            state.pop("hooks", None)
             return state
 
     def __setstate__(self, state):
@@ -210,6 +213,7 @@ class Node:
         self.__dict__.update(state)
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
+        object.__setattr__(self, "hooks", {})
         if settings.SLOW_LOCKS:
             object.__setattr__(self, "access", self._safe_access)
         else:
@@ -220,6 +224,12 @@ class Node:
         if getattr(self, "_is_tickable", False):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
+        scripts = getattr(self, "scripts", None)
+        if scripts:
+            for id in scripts:
+                if script := get(id):
+                    script[0].install_hooks(self)
+
         self.at_init()
 
     @property

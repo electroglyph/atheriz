@@ -41,6 +41,7 @@ class TemplateGenerator:
         self.base_import = base_import
         self.base_class = base_class
         self.methods: list[tuple[str, Any, str | None, bool]] = []
+        self.extra_imports: list[str] = []
 
     def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
         """Add methods to generate stubs for."""
@@ -101,9 +102,14 @@ class TemplateGenerator:
 
     def generate(self) -> str:
         """Generate the complete template file content."""
+        import_list = [f"{self.base_class} as Base{self.base_class}"]
+        if self.extra_imports:
+            import_list.extend(self.extra_imports)
+            
         lines = [
-            f"from {self.base_import} import {self.base_class} as Base{self.base_class}",
+            f"from {self.base_import} import {', '.join(import_list)}",
             "",
+
             "",
             f"class {self.class_name}(Base{self.base_class}):",
             f'    """Custom {self.class_name} class. Override methods below to customize behavior."""',
@@ -434,7 +440,11 @@ def create_game_folder(folder_name: str) -> None:
         methods = inspector.get_override_methods()
 
         generator = TemplateGenerator(base_class, base_import, base_class)
+        if base_class == "Script":
+            generator.extra_imports = ["before", "after", "replace"]
+            
         generator.add_methods(methods)
+
 
         content = generator.generate()
         (folder_path / filename).write_text(content)

@@ -313,6 +313,7 @@ class Object:
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
+        object.__setattr__(self, "hooks", {})
         if settings.SLOW_LOCKS:
             object.__setattr__(self, "access", self._safe_access)
         else:
