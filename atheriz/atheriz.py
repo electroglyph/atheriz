@@ -24,6 +24,8 @@ import atheriz.reloader as reloader
 import atheriz.initial_setup as initial_setup
 import traceback
 import os
+import sys
+import importlib
 
 # global state
 class ServerState:
@@ -38,7 +40,6 @@ app = FastAPI(title=settings.SERVERNAME)
 
 app.websocket("/ws")(websocket_endpoint)
 
-# Default web directories (from atheriz package); overridden by game folder if it has a web/ dir
 templates_dir = Path(__file__).parent / "web" / "templates"
 static_dir = Path(__file__).parent / "web" / "static"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -70,7 +71,7 @@ def setup_game_folder(required=True):
     
     from atheriz.utils import is_in_game_folder
     
-    # Check if we are in a game folder (looks for settings.py, save directory, and __init__.py)
+    # check if we are in a game folder (looks for settings.py, save directory, and __init__.py)
     cwd = Path.cwd()
     if not is_in_game_folder():
         if required:
@@ -82,19 +83,32 @@ def setup_game_folder(required=True):
 
     print(f"Game folder detected at {cwd}. Injecting custom classes and settings...")
     
-    # Add setup folder to sys.path
-    sys.path.insert(0, str(cwd))
+    parent_dir = str(cwd.parent.resolve())
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    pkg_name = cwd.name
+
+    if str(cwd) not in sys.path:
+        sys.path.insert(0, str(cwd))
     
     try:
-        import settings as local_settings
-        # Override values in atheriz.settings
+        local_settings = importlib.import_module(f"{pkg_name}.settings")
+        # override values in atheriz.settings
         for key in dir(local_settings):
             if key.isupper():
                 setattr(settings, key, getattr(local_settings, key))
-        print("  - Settings injected.")
-    except ImportError as e:
-        print(f"  - Error importing local settings: {e}")
-        sys.exit(1)
+        print("  - Settings injected (as package).")
+    except (ImportError, ModuleNotFoundError):
+        try:
+            import settings as local_settings
+            # override values in atheriz.settings
+            for key in dir(local_settings):
+                if key.isupper():
+                    setattr(settings, key, getattr(local_settings, key))
+            print("  - Settings injected (top-level).")
+        except ImportError as e:
+            print(f"  - Error importing local settings: {e}")
+            sys.exit(1)
 
     injections = getattr(settings, "CLASS_INJECTIONS", [])
     if not injections:
@@ -103,7 +117,12 @@ def setup_game_folder(required=True):
 
     for local_mod, cls_name, target_mod in injections:
         try:
-            module = importlib.import_module(local_mod)
+            # try package import first
+            try:
+                module = importlib.import_module(f"{pkg_name}.{local_mod}")
+            except (ImportError, ModuleNotFoundError):
+                module = importlib.import_module(local_mod)
+
             if hasattr(module, cls_name):
                 new_cls = getattr(module, cls_name)
                 target = importlib.import_module(target_mod)
@@ -117,7 +136,8 @@ def setup_game_folder(required=True):
         except Exception as e:
             print(f"  - Error injecting {cls_name}: {e}")
 
-    # Check if the game folder has a web/ directory to override templates and static files
+
+    # check if the game folder has a web/ directory to override templates and static files
     global templates_dir, static_dir, templates
     game_web = cwd / "web"
     if game_web.is_dir():
@@ -786,17 +806,29 @@ def do_reset_command(args):
     print("Setting up new world...")
     
     # Try to use local initial_setup.py if it exists
-    import sys
-    sys.path.insert(0, os.getcwd())
+    cwd = Path.cwd()
+    parent_dir = str(cwd.parent.resolve())
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    pkg_name = cwd.name
+    
     try:
-        import initial_setup as local_setup
-        import importlib
-        importlib.reload(local_setup) # Ensure we get the latest
+        local_setup = importlib.import_module(f"{pkg_name}.initial_setup")
+        importlib.reload(local_setup)
         local_setup.do_setup()
-        print("  - Used local initial_setup.py")
-    except ImportError:
-        print("  - local initial_setup.py not found, using default.")
-        initial_setup.do_setup()
+        print(f"  - Used local {pkg_name}.initial_setup.py")
+    except (ImportError, ModuleNotFoundError):
+        # Fallback to top-level import
+        sys.path.insert(0, str(cwd))
+        try:
+            import initial_setup as local_setup
+            importlib.reload(local_setup)
+            local_setup.do_setup()
+            print("  - Used local initial_setup.py")
+        except ImportError:
+            print("  - local initial_setup.py not found, using default.")
+            initial_setup.do_setup()
+
     
     print("Success! New world created.")
 

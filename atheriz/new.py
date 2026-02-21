@@ -148,7 +148,9 @@ CLASS_INJECTIONS = [
     ("commands.loggedin", "LoggedinCmdSet", "atheriz.commands.loggedin.cmdset"),
     ("commands.unloggedin", "UnloggedinCmdSet", "atheriz.commands.unloggedin.cmdset"),
     ("inputfuncs", "InputFuncs", "atheriz.inputfuncs"),
+    ("script", "Script", "atheriz.objects.base_script"),
 ]
+
 '''
 
 
@@ -376,7 +378,9 @@ TEMPLATE_CONFIGS = [
     ("channel.py", "atheriz.objects.base_channel", "Channel"),
     ("object.py", "atheriz.objects.base_obj", "Object"),
     ("node.py", "atheriz.objects.nodes", "Node"),
+    ("script.py", "atheriz.objects.base_script", "Script"),
 ]
+
 
 
 def create_game_folder(folder_name: str) -> None:
@@ -475,32 +479,34 @@ def create_game_folder(folder_name: str) -> None:
     # Patch imports to use local template classes
     content = content.replace(
         "from atheriz.objects.base_account import Account",
-        "from account import Account"
+        "from .account import Account"
     )
     content = content.replace(
         "from atheriz.objects.base_obj import Object",
-        "from object import Object"
+        "from .object import Object"
     )
     content = content.replace(
         "from atheriz.objects.base_channel import Channel",
-        "from channel import Channel"
+        "from .channel import Channel"
     )
     content = content.replace(
         "from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink",
-        "from node import Node\nfrom atheriz.objects.nodes import NodeGrid, NodeArea, NodeLink"
+        "from .node import Node\nfrom atheriz.objects.nodes import NodeGrid, NodeArea, NodeLink"
     )
     content = content.replace(
         "from atheriz.commands.base_cmd import Command",
-        "from commands.command import Command"
+        "from .commands.command import Command"
     )
     content = content.replace(
         "from atheriz.singletons.objects import add_object, save_objects",
-        "from objects import add_object, save_objects"
+        "from .objects import add_object, save_objects"
     )
     content = content.replace(
         "from atheriz.database_setup import do_setup as do_db_setup",
-        "from database_setup import do_setup as do_db_setup"
+        "from .database_setup import do_setup as do_db_setup"
     )
+
+
     
     (folder_path / "initial_setup.py").write_text(content)
 
@@ -532,12 +538,18 @@ def create_game_folder(folder_name: str) -> None:
     # Set up initial world and superuser account
     print("\nSetting up initial world state...")
 
-    # Set up sys.path to include the new game folder
+    # Set up sys.path to include the parent of the new game folder
+    # This allows importing the game folder as a package for relative imports
     import sys
-    sys.path.insert(0, str(folder_path.resolve()))
+    import importlib
+    parent_dir = str(folder_path.parent.resolve())
+    if parent_dir not in sys.path:
+        sys.path.insert(0, parent_dir)
+    pkg_name = folder_path.name
 
     # Import settings to configure paths
-    import settings as game_settings
+    game_settings = importlib.import_module(f"{pkg_name}.settings")
+
     
     # Override save path keys in the global settings to match the new game folder
     import atheriz.settings as global_settings
@@ -548,10 +560,11 @@ def create_game_folder(folder_name: str) -> None:
     global_settings.SECRET_PATH = str(secret_path.resolve())
 
 
-    # Import and run initial_setup from the new game folder
+    # Import and run initial_setup from the new game folder as a package
     try:
-        import initial_setup
-        initial_setup.do_setup(username, password)
+        local_setup = importlib.import_module(f"{pkg_name}.initial_setup")
+        local_setup.do_setup(username, password)
+
     except Exception as e:
         print(f"Error during initial setup: {e}")
         import traceback
