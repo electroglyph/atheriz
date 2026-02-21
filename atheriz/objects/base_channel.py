@@ -4,10 +4,11 @@ from collections import deque
 from threading import Lock, RLock
 import atheriz.settings as settings
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
-from atheriz.singletons.objects import get, add_object, filter_by, remove_object
+from atheriz.singletons.objects import get, add_object, filter_by, remove_object, delete_objects
 from atheriz.singletons.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
+from atheriz.objects.base_db_ops import DbOps
 from atheriz.objects.base_flags import Flags
 from typing import TYPE_CHECKING
 
@@ -79,7 +80,7 @@ class BaseChannelCommand(Command):
         self._channel = None
 
 
-class Channel(Flags):
+class Channel(Flags, DbOps):
     group_save: bool = False
 
     def __init__(self):
@@ -131,15 +132,15 @@ class Channel(Flags):
         c.at_create()
         return c
 
-    def get_save_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for saving this object.
-        """
-        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
-        with self.lock:
-            object.__setattr__(self, "is_modified", False)
-            params = (self.id, dill.dumps(self))
-        return sql, params
+    def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
+        del unused
+        if not self.at_delete(caller):
+            return False
+        ops = [self.get_del_ops()]
+        delete_objects(ops)
+        remove_object(self)
+        self.is_deleted = True
+        return True
 
     def add_lock(self, lock_name: str, callable: Callable):
         """
@@ -169,15 +170,7 @@ class Channel(Flags):
         with self.lock:
             self.locks.pop(lock_name, None)
 
-    def delete(self, caller: Object, unused: bool) -> int:
-        del unused
-        if not self.at_delete(caller):
-            return 0
-        self.is_deleted = True
-        remove_object(self)
-        return 1
-
-    def at_delete(self, caller: Object) -> bool:
+    def at_delete(self, caller: Object | None = None) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
         return True
 

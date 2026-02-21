@@ -860,7 +860,7 @@ def do_test_command(args):
     
     # 3. Run pytest
     # We pass the rest of the arguments to pytest
-    pytest_args = [str(test_path)]
+    pytest_args = ["-W", "ignore::pytest.PytestAssertRewriteWarning", str(test_path)]
     if args.pytest_args:
         pytest_args.extend(args.pytest_args)
     

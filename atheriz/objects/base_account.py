@@ -1,5 +1,5 @@
 import dill
-from atheriz.singletons.objects import add_object, remove_object, filter_by
+from atheriz.singletons.objects import add_object, remove_object, filter_by, delete_objects
 from atheriz.utils import ensure_thread_safe
 from atheriz.singletons.salt import get_salt
 from atheriz.singletons.get import get_unique_id
@@ -8,6 +8,7 @@ import hashlib
 import atheriz.settings as settings
 from threading import RLock
 from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_db_ops import DbOps
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,7 +17,7 @@ if TYPE_CHECKING:
 IGNORE_FIELDS = ["lock"]
 
 
-class Account(Flags):
+class Account(Flags, DbOps):
     group_save: bool = False
 
     def __init__(self):
@@ -50,29 +51,22 @@ class Account(Flags):
         account.at_create()
         return account
 
-    def get_save_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for saving this object.
-        """
-        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
-        with self.lock:
-            object.__setattr__(self, "is_modified", False)
-            params = (self.id, dill.dumps(self))
-        return sql, params
-
-    def delete(self, caller: Object, unused: bool) -> int:
+    def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
         del unused
         if not self.at_delete(caller):
-            return 0
-        self.is_deleted = True
+            return False
+            
+        ops = [self.get_del_ops()]
+        delete_objects(ops)
         remove_object(self)
-        return 1
+        self.is_deleted = True
+        return True
 
     def at_pre_puppet(self, character: Object) -> bool:
         """Called before a character is puppeted, return False to cancel puppeting."""
         return True
 
-    def at_delete(self, caller: Object) -> bool:
+    def at_delete(self, caller: Object | None = None) -> bool:
         """Called before an object is deleted, return False to cancel deletion."""
         return True
 

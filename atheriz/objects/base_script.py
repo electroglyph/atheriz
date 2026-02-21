@@ -2,11 +2,11 @@ from typing import Self
 from typing import TYPE_CHECKING
 from threading import RLock
 import time
-import dill
 from atheriz.logger import logger
 from atheriz.singletons.get import get_unique_id
 from atheriz.singletons.objects import add_object, delete_objects, remove_object
 from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_db_ops import DbOps
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -33,7 +33,7 @@ def replace(func):
     return func
 
 
-class Script(Flags):
+class Script(Flags, DbOps):
     def __init__(self):
         super().__init__()
         self.lock = RLock()
@@ -77,24 +77,6 @@ class Script(Flags):
         add_object(obj)
         return obj
 
-    def get_save_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for saving this object.
-        """
-        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
-        with self.lock:
-            object.__setattr__(self, "is_modified", False)
-            params = (self.id, dill.dumps(self))
-        return sql, params
-
-    def get_del_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for deleting this object.
-        """
-        sql = "DELETE FROM objects WHERE id = ?"
-        params = (self.id,)
-        return sql, params
-
     def delete(self, caller: Object | None = None, recursive: bool = True):
         if self.child:
             self.remove_hooks()
@@ -105,7 +87,6 @@ class Script(Flags):
         ops = [self.get_del_ops()]
         delete_objects(ops)
         remove_object(self)
-        self.is_connected = False
         return True
 
     def __getstate__(self):

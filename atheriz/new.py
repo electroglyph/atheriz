@@ -43,6 +43,7 @@ class TemplateGenerator:
         self.methods: list[tuple[str, Any, str | None, bool]] = []
         self.extra_imports: list[str] = []
         self.add_flags: bool = False
+        self.add_db_ops: bool = False
 
 
     def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
@@ -114,11 +115,13 @@ class TemplateGenerator:
         
         if self.add_flags:
             lines.append("from .flags import Flags")
+        if self.add_db_ops:
+            lines.append("from .db_ops import DbOps")
 
         lines.extend([
             "",
             "",
-            f"class {self.class_name}(Base{self.base_class}{', Flags' if self.add_flags else ''}):",
+            f"class {self.class_name}(Base{self.base_class}{', Flags' if self.add_flags else ''}{', DbOps' if self.add_db_ops else ''}):",
             f'    """Custom {self.class_name} class. Override methods below to customize behavior."""',
         ])
         
@@ -458,6 +461,7 @@ def create_game_folder(folder_name: str) -> None:
 
         generator = TemplateGenerator(base_class, base_import, base_class)
         generator.add_flags = True
+        generator.add_db_ops = True
         
         if base_class == "Script":
             generator.extra_imports = ["before", "after", "replace"]
@@ -473,6 +477,11 @@ def create_game_folder(folder_name: str) -> None:
     import atheriz.objects.base_flags
     flags_src = Path(atheriz.objects.base_flags.__file__)
     (folder_path / "flags.py").write_text(flags_src.read_text())
+
+    print("  Creating db_ops.py...")
+    import atheriz.objects.base_db_ops
+    db_ops_src = Path(atheriz.objects.base_db_ops.__file__)
+    (folder_path / "db_ops.py").write_text(db_ops_src.read_text())
 
     # Create commands directory
     print("  Creating commands directory...")

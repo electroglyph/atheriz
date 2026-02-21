@@ -25,8 +25,8 @@ from atheriz.logger import logger
 from atheriz.objects import funcparser
 import atheriz.settings as settings
 from threading import RLock
+from atheriz.objects.base_db_ops import DbOps
 import time
-import dill
 
 if TYPE_CHECKING:
     from atheriz.objects.base_script import Script
@@ -67,7 +67,7 @@ def hookable(func):
     return wrapper
 
 
-class Object(Flags):
+class Object(Flags, DbOps):
     appearance_template = "{name}: {desc}{things}"
 
     def __init__(self):
@@ -178,22 +178,6 @@ class Object(Flags):
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)
-
-    def get_save_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for saving this object.
-        """
-        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
-        with self.lock:
-            object.__setattr__(self, "is_modified", False)
-            params = (self.id, dill.dumps(self))
-        return sql, params
-
-    def get_del_ops(self) -> tuple[str, tuple]:
-        """
-        Returns a tuple of (sql, params) for deleting this object.
-        """
-        return "DELETE FROM objects WHERE id = ?", (self.id,)
 
     def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
         """Delete this object. If recursive, delete contents recursively.

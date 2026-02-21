@@ -129,22 +129,54 @@ def test_node_delete_registry(caller, room):
     assert get_node_handler().get_node(coord) is None
 
 def test_account_delete(caller):
+    from atheriz.database_setup import get_database
+    db = get_database()
+    
     account = Account.create("TestAccount", "password")
+    assert account is not None
     assert account.id in _ALL_OBJECTS
     
+    # Save the account to DB first
+    ops = account.get_save_ops()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute(ops[0], ops[1])
+        db.connection.commit()
+    
     res = account.delete(caller, False)
-    assert res == 1
+    assert res is True
     assert account.is_deleted is True
     assert account.id not in _ALL_OBJECTS
+    
+    # Verify it is gone from DB
+    with db.lock:
+        cursor.execute("SELECT id FROM objects WHERE id = ?", (account.id,))
+        assert cursor.fetchone() is None
 
 def test_channel_delete(caller):
+    from atheriz.database_setup import get_database
+    db = get_database()
+    
     channel = Channel.create("Public")
+    assert channel is not None
     assert channel.id in _ALL_OBJECTS
     
+    # Save the channel to DB first
+    ops = channel.get_save_ops()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute(ops[0], ops[1])
+        db.connection.commit()
+    
     res = channel.delete(caller, False)
-    assert res == 1
+    assert res is True
     assert channel.is_deleted is True
     assert channel.id not in _ALL_OBJECTS
+    
+    # Verify it is gone from DB
+    with db.lock:
+        cursor.execute("SELECT id FROM objects WHERE id = ?", (channel.id,))
+        assert cursor.fetchone() is None
 
 def test_delete_objects_utility():
     from atheriz.database_setup import get_database
