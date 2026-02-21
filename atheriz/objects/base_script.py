@@ -1,8 +1,11 @@
+from typing import Self
 from typing import TYPE_CHECKING
 from threading import RLock
 import time
 import dill
 from atheriz.logger import logger
+from atheriz.singletons.get import get_unique_id
+from atheriz.singletons.objects import add_object, delete_objects, remove_object
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -48,11 +51,83 @@ class Script:
         self.is_connected = False
         self.created_by = -1
         self.child: Object | None = None
-        
-    def create(self, name: str, desc: str, created_by: int):
-        self.name = name
-        self.desc = desc
-        self.created_by = created_by
+        self.date_created = None
+        self.is_modified = True
+
+    @classmethod
+    def create(
+        cls,
+        caller: Object | None,
+        name: str,
+        desc: str = "",
+    ) -> Self:
+        """
+        Create a new object.
+
+        Args:
+            session (Session | None): The session to create the object for.
+            name (str): The name of the object.
+            is_pc (bool, optional): Whether the object is a player character. Defaults to False.
+            is_item (bool, optional): Whether the object is an item. Defaults to False.
+            is_npc (bool, optional): Whether the object is an NPC. Defaults to False.
+            is_mapable (bool, optional): Whether the object is mapable. Defaults to False.
+            is_container (bool, optional): Whether the object is a container. Defaults to False.
+            is_tickable (bool, optional): Whether the object is tickable. Defaults to False.
+
+        Returns:
+            Self: The created object.
+        """
+        obj = cls()
+        obj.id = get_unique_id()
+        obj.date_created = time.time()
+        obj.created_by = caller.id if caller else -1
+        obj.name = name
+        obj.desc = desc
+        add_object(obj)
+        return obj
+
+    def get_save_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for saving this object.
+        """
+        sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
+        with self.lock:
+            object.__setattr__(self, "is_modified", False)
+            params = (self.id, dill.dumps(self))
+        return sql, params
+
+    def get_del_ops(self) -> tuple[str, tuple]:
+        """
+        Returns a tuple of (sql, params) for deleting this object.
+        """
+        sql = "DELETE FROM objects WHERE id = ?"
+        params = (self.id,)
+        return sql, params
+
+    def delete(self, caller: Object | None = None, recursive: bool = True):
+        if self.child:
+            self.remove_hooks()
+            if self.id in self.child.scripts:
+                self.child.scripts.remove(self.id)
+                self.child.is_modified = True
+
+        ops = [self.get_del_ops()]
+        delete_objects(ops)
+        remove_object(self)
+        self.is_connected = False
+        return True
+
+    def __getstate__(self):
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            state.pop("child", None)
+            return state
+
+    def __setstate__(self, state):
+        object.__setattr__(self, "lock", RLock())
+        self.__dict__.update(state)
+        object.__setattr__(self, "child", None)
 
     def at_install(self):
         """
@@ -70,7 +145,7 @@ class Script:
         any functions that start with 'at_' in this class will be considered hooks on the child object
         so at_init on this class will hook at_init on the child object
         you must use one of the decorators above on every hook function in this class.
-        
+
         before decorator means: run this class' hook code, then run the original child code
         after decorator means: run child code first, then run this class' hook code
         replace decorator means: this class' hook completely replaces the child's code
@@ -83,7 +158,7 @@ class Script:
                 s.add(func)
                 child.hooks[name] = s
         self.at_install()
-                
+
     def remove_hooks(self, child: Object | None = None):
         child = self.child if child is None else child
         if child is None:
@@ -95,5 +170,3 @@ class Script:
                 s = child.hooks.get(name, set())
                 s.discard(func)
                 child.hooks[name] = s
-        
-        

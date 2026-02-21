@@ -1,13 +1,18 @@
 import pytest
-from atheriz.objects.base_obj import Object, hookable
-from atheriz.objects.base_script import Script, before, after, replace
+import tempfile
+import shutil
+from atheriz import settings
+from atheriz.database_setup import do_setup
+from atheriz.singletons import get as singletons_get
+from atheriz.singletons.objects import _ALL_OBJECTS, save_objects, load_objects
+import atheriz.database_setup as db_mod
 from atheriz.singletons import objects as obj_singleton
 
 
-@pytest.fixture(autouse=True)
-def setup_teardown():
-    obj_singleton._ALL_OBJECTS.clear()
-    yield
+from atheriz.objects.base_obj import Object, hookable
+from atheriz.objects.base_script import Script, before, after, replace
+
+
 
 
 class DummyObj(Object):
@@ -104,3 +109,51 @@ def test_unmarked_hook_raises_error():
     with pytest.raises(ValueError) as exc:
         obj.at_test_hook("foo", kwarg1="bar")
     assert "has hooks but none are marked" in str(exc.value)
+
+def test_script_at_install():
+    obj = DummyObj.create(None, "TestObj")
+    script = DummyBeforeScript.create(None, "TestScript")
+    
+    # We will test that at_install is called by adding a side effect to the script
+    script.install_called = False
+    
+    def mock_install():
+        script.install_called = True
+        
+    script.at_install = mock_install
+    
+    obj.add_script(script)
+    assert script.install_called is True
+
+def test_script_db_serialization():
+    # Use the Object-like create method the user added
+    script = DummyBeforeScript.create(None, "TestScript", "Test Description")
+    
+    # In order for save_objects to save it, it must be in _ALL_OBJECTS and be is_modified
+    obj_singleton.add_object(script)
+    script.is_modified = True
+    
+    # Test getting save ops
+    ops = script.get_save_ops()
+    assert ops is not None
+    
+    # NOTE: get_save_ops() sets is_modified to False, but we want save_objects
+    # to actually save it, so we must set it back to True for the test.
+    script.is_modified = True
+    
+    # Save to the test database
+    save_objects()
+    
+    # Clear memory to simulate a reboot
+    _ALL_OBJECTS.clear()
+    
+    # Load from the database
+    load_objects()
+    
+    # Assert it was loaded correctly
+    assert script.id in _ALL_OBJECTS
+    loaded_script = _ALL_OBJECTS[script.id]
+    
+    assert loaded_script.name == "TestScript"
+    assert loaded_script.desc == "Test Description"
+    assert getattr(loaded_script, "date_created", None) is not None

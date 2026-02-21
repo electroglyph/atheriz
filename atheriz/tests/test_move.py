@@ -11,31 +11,6 @@ from unittest.mock import MagicMock
 
 TEST_SAVE_DIR = Path("test_move_data")
 
-@pytest.fixture(autouse=True)
-def setup_teardown():
-    # Setup - redirect save path and clean up
-    original_save_path = settings.SAVE_PATH
-    settings.SAVE_PATH = str(TEST_SAVE_DIR)
-    if TEST_SAVE_DIR.exists():
-        try:
-            shutil.rmtree(TEST_SAVE_DIR)
-        except OSError:
-            pass
-    TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-
-    obj_singleton._ALL_OBJECTS.clear()
-
-    yield
-
-    # Teardown
-    get_database().close()
-    settings.SAVE_PATH = original_save_path
-    if TEST_SAVE_DIR.exists():
-        try:
-            shutil.rmtree(TEST_SAVE_DIR)
-        except OSError:
-            pass
-
 def test_npc_move_announcements():
     # 1. Setup Area, Grid, Nodes
     handler = NodeHandler()

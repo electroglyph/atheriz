@@ -10,32 +10,7 @@ import shutil
 from unittest.mock import MagicMock
 from atheriz.database_setup import get_database
 
-TEST_SAVE_DIR = Path("test_give_data")
 
-@pytest.fixture(autouse=True)
-def setup_teardown():
-    # Setup - redirect save path and clean up
-    original_save_path = settings.SAVE_PATH
-    settings.SAVE_PATH = str(TEST_SAVE_DIR)
-    if TEST_SAVE_DIR.exists():
-        try:
-            shutil.rmtree(TEST_SAVE_DIR)
-        except OSError:
-            pass
-    TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-
-    obj_singleton._ALL_OBJECTS.clear()
-
-    yield
-
-    # Teardown
-    get_database().close()
-    settings.SAVE_PATH = original_save_path
-    if TEST_SAVE_DIR.exists():
-        try:
-            shutil.rmtree(TEST_SAVE_DIR)
-        except OSError:
-            pass
 
 def setup_give_scenario():
     # Setup Area, Grid, Node

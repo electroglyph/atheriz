@@ -1,38 +1,15 @@
 
 import pytest
 import os
+import shutil
+import tempfile
 import sqlite3
 from atheriz.objects.base_obj import Object
 from atheriz.singletons.objects import save_objects, load_objects, delete_objects, get
 from atheriz import settings, database_setup
 import dill
 
-@pytest.fixture
-def db_setup():
-    # Setup: Ensure DB directory exists and clean up previous DB
-    if not os.path.exists(settings.SAVE_PATH):
-        os.makedirs(settings.SAVE_PATH)
-    
-    db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
-    if os.path.exists(db_path):
-        os.remove(db_path)
-        
-    # Re-initialize database singleton
-    database_setup._DATABASE = None
-    database_setup.do_setup()
-    
-    # Reload objects (clears memory and loads from empty DB)
-    load_objects()
-    
-    yield
-    
-    # Teardown: Close connection and remove DB file
-    if database_setup._DATABASE:
-        database_setup._DATABASE.connection.close()
-        database_setup._DATABASE = None
-    
-    if os.path.exists(db_path):
-        os.remove(db_path)
+
 
 @pytest.fixture
 def superuser():
@@ -51,8 +28,8 @@ def test_save_load_object(db_setup):
     save_objects()
     
     # Clear memory
-    database_setup._DATABASE.connection.close()
-    database_setup._DATABASE = None
+    if database_setup._DATABASE:
+        database_setup._DATABASE.close()
     
     # Load objects from DB
     load_objects()

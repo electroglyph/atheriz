@@ -14,35 +14,7 @@ from atheriz.objects.nodes import Node
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_channel import Channel
 
-@pytest.fixture(autouse=True)
-def temp_env():
-    # Setup temp dir for database and saves
-    old_save_path = settings.SAVE_PATH
-    temp_dir = tempfile.mkdtemp()
-    settings.SAVE_PATH = temp_dir
-    
-    # Initialize DB schema
-    do_setup()
-    
-    # Clear singletons to ensure fresh state
-    singletons_get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
-    
-    yield
-    
-    # Cleanup: close DB before removing temp dir (Windows file locks)
-    import atheriz.database_setup as db_mod
-    if db_mod._DATABASE is not None:
-        db_mod._DATABASE.close()
-    db_mod._DATABASE = None
-    
-    try:
-        shutil.rmtree(temp_dir)
-    except Exception:
-        pass  # Best-effort cleanup on Windows
-    settings.SAVE_PATH = old_save_path
-    singletons_get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
+
 
 @pytest.fixture
 def caller():

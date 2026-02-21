@@ -6,34 +6,7 @@ from atheriz import settings
 from pathlib import Path
 import shutil
 
-TEST_SAVE_DIR = Path("test_node_data")
 
-
-@pytest.fixture(autouse=True)
-def setup_teardown():
-    # Setup - redirect save path and clean up
-    original_save_path = settings.SAVE_PATH
-    settings.SAVE_PATH = str(TEST_SAVE_DIR)
-    if TEST_SAVE_DIR.exists():
-        shutil.rmtree(TEST_SAVE_DIR)
-    TEST_SAVE_DIR.mkdir()
-
-    obj_singleton._ALL_OBJECTS.clear()
-    
-    # Clear NodeHandler state
-    from atheriz.singletons.get import get_node_handler
-    get_node_handler().clear()
-
-    yield
-
-    # Teardown
-    from atheriz import database_setup
-    if database_setup._DATABASE:
-        database_setup._DATABASE.close()
-
-    settings.SAVE_PATH = original_save_path
-    if TEST_SAVE_DIR.exists():
-        shutil.rmtree(TEST_SAVE_DIR)
 
 
 # ==================== NodeLink Tests ====================

@@ -95,7 +95,8 @@ def load_objects():
             objects[obj_id] = obj
             max_id = max(max_id, obj_id)
     with _ALL_OBJECTS_LOCK:
-        _ALL_OBJECTS = objects
+        _ALL_OBJECTS.clear()
+        _ALL_OBJECTS.update(objects)
     set_id(max_id)
 
     with _ALL_OBJECTS_LOCK:
@@ -110,7 +111,7 @@ def save_objects(force: bool = False):
     cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
-    to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if s.is_modified]
+    to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")
         for obj in to_save:
