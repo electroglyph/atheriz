@@ -11,6 +11,7 @@ from atheriz.singletons import objects as obj_singleton
 
 from atheriz.objects.base_obj import Object, hookable
 from atheriz.objects.base_script import Script, before, after, replace
+from atheriz.objects.nodes import Node
 
 
 
@@ -20,6 +21,19 @@ class DummyObj(Object):
 
     def __init__(self):
         super().__init__()
+        self.log = []
+
+    @hookable
+    def at_test_hook(self, arg1, kwarg1=None):
+        self.log.append(f"at_test_hook: {arg1}, {kwarg1}")
+        return "original_result"
+
+
+class DummyNode(Node):
+    log: list = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.log = []
 
     @hookable
@@ -157,3 +171,81 @@ def test_script_db_serialization():
     assert loaded_script.name == "TestScript"
     assert loaded_script.desc == "Test Description"
     assert getattr(loaded_script, "date_created", None) is not None
+
+def test_node_add_remove_script():
+    node = DummyNode(coord=("test_area", 0, 0, 0))
+    script = DummyBeforeScript()
+    script.id = 201
+
+    node.add_script(script)
+    assert script.id in node.scripts
+    assert len(node.hooks.get("at_test_hook", set())) == 1
+
+    node.remove_script(script)
+    assert script.id not in node.scripts
+    assert len(node.hooks.get("at_test_hook", set())) == 0
+
+def test_node_hooks():
+    node = DummyNode(coord=("test_area", 0, 0, 1))
+    script = DummyBeforeScript()
+    script.id = 202
+    node.add_script(script)
+
+    res = node.at_test_hook("n1", kwarg1="n2")
+    assert node.log == ["before: n1, n2", "at_test_hook: n1, n2"]
+    assert res == "original_result"
+
+def test_attached_script_persistence():
+    # Setup
+    obj = DummyObj.create(None, "PersistObj")
+    # Coordinates must be valid (area, x, y, z)
+    coord = ("persist_area", 1, 1, 1)
+    node = DummyNode(coord=coord)
+    
+    # Scripts
+    obj_script = DummyBeforeScript.create(None, "ObjScript")
+    node_script = DummyAfterScript.create(None, "NodeScript")
+
+    obj.add_script(obj_script)
+    node.add_script(node_script)
+
+    # Initial test
+    assert obj.at_test_hook("o1") == "original_result"
+    assert node.at_test_hook("n1") == "after_result"
+
+    # Save everything
+    obj.is_modified = True
+    obj_script.is_modified = True
+    node_script.is_modified = True
+    save_objects()
+    
+    nh = singletons_get.get_node_handler()
+    nh.add_node(node)
+    nh.save()
+
+    # IDs for verification
+    obj_id = obj.id
+    obj_script_id = obj_script.id
+    node_script_id = node_script.id
+
+    # Clear memory
+    _ALL_OBJECTS.clear()
+    nh.clear()
+
+    # Load everything
+    load_objects()
+    new_nh = singletons_get.get_node_handler()
+    new_nh.load()
+    
+    # Verify Object script
+    restored_obj = _ALL_OBJECTS[obj_id]
+    restored_obj.log = [] # Reset log for clean test
+    assert restored_obj.at_test_hook("o2") == "original_result"
+    assert restored_obj.log == ["before: o2, None", "at_test_hook: o2, None"]
+
+    # Verify Node script
+    restored_node = new_nh.get_node(coord)
+    assert restored_node is not None
+    restored_node.log = []
+    assert restored_node.at_test_hook("n2") == "after_result"
+    assert restored_node.log == ["at_test_hook: n2, None", "after: n2, None"]

@@ -23,6 +23,10 @@ class NodeHandler:
         self.lock3 = RLock()
         self.doors: dict[tuple[str, int, int, int], dict[str, Door]] = {}
 
+        self.load()
+
+    def load(self):
+        """Load node data from the database."""
         try:
             db = get_database()
             cursor = db.connection.cursor()
@@ -46,6 +50,12 @@ class NodeHandler:
                     self.doors[(area, x, y, z)] = dill.loads(blob)
                 except Exception as e:
                     logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
+
+            for area in self.areas.values():
+                for grid in area.grids.values():
+                    for node in grid.nodes.values():
+                        if hasattr(node, "resolve_relations"):
+                            node.resolve_relations()
 
         except Exception as e:
             logger.error(f"Error loading node data from DB: {e}")

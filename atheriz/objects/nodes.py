@@ -418,6 +418,22 @@ class Node:
     def name(self):
         return str(self.coord)
 
+    def add_script(self, script):
+        from atheriz.singletons.objects import get
+        script = get(script)[0] if isinstance(script, int) else script
+        script.install_hooks(self)
+        with self.lock:
+            self.scripts.add(script.id)
+            self.is_modified = True
+
+    def remove_script(self, script):
+        from atheriz.singletons.objects import get
+        script = get(script)[0] if isinstance(script, int) else script
+        script.remove_hooks(self)
+        with self.lock:
+            self.scripts.discard(script.id)
+            self.is_modified = True
+
     def get_random_link(self) -> NodeLink | None:
         """
         randomly select a NodeLink (exit) from this Node
