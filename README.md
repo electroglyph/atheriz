@@ -58,8 +58,7 @@ with foo.lock:
 
 pip install this repo and run 'atheriz':
 
-```usage: python.exe C:\Users\anon\repos\atheriz\.venv\Scripts\atheriz [-h] {start,restart,stop,reload,reset,create,new,test} ...
-
+```
 AtheriZ - Text-based multiplayer game server
 
 positional arguments:
