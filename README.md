@@ -87,11 +87,10 @@ TODO:
 - docs
 - more tests (getting there!)
 - ~~node hooks~~
-- scripts
-- funcparser cleanup
+- ~~scripts~~
 - ~~tick system~~
 - ~~time system~~
 - pathfinding (already done, just needs to be added)
 - door stuff + ability for custom doors
-- build command colors
+- build colors for map tiles
 - MCP
