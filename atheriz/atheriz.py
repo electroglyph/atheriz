@@ -59,11 +59,11 @@ def get_file_version(path: str) -> str:
 templates.env.globals["v"] = get_file_version
 
 
-def setup_game_folder():
+def setup_game_folder(required=True):
     """
     Detect if running in a game folder and inject custom classes/settings.
-    Exits if not in a game folder.
     """
+
     import sys
     import os
     import importlib
@@ -73,9 +73,12 @@ def setup_game_folder():
     # Check if we are in a game folder (looks for settings.py, save directory, and __init__.py)
     cwd = Path.cwd()
     if not is_in_game_folder():
-        print("Error: 'atheriz start' must be run from a game folder (containing settings.py, save/, and __init__.py).")
-        print(f"Current directory: {cwd}")
-        sys.exit(1)
+        if required:
+            print("Error: This command must be run from a game folder (containing settings.py, save/, and __init__.py).")
+            print(f"Current directory: {cwd}")
+            sys.exit(1)
+        return False
+
 
     print(f"Game folder detected at {cwd}. Injecting custom classes and settings...")
     
@@ -128,6 +131,8 @@ def setup_game_folder():
         if game_static.is_dir():
             static_dir = game_static
             print(f"  - Using game folder static files: {game_static}")
+    return True
+
 
 
 
@@ -509,6 +514,10 @@ def main():
         "--foreground", "-f", action="store_true", help="Run the server in the foreground"
     )
 
+    test_parser = subparsers.add_parser("test", help="Run tests with local game objects")
+    test_parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Additional arguments for pytest")
+
+
     args = parser.parse_args()
 
     if args.command == "start":
@@ -593,7 +602,10 @@ def main():
             start_server()
         else:
             spawn_daemon(args)
+    elif args.command == "test":
+        do_test_command(args)
     else:
+
         parser.print_help()
 
 
@@ -794,6 +806,33 @@ def do_reset_command(args):
         args.host = None
 
     spawn_daemon(args)
+
+
+def do_test_command(args):
+    """Run core tests using local game objects."""
+    import sys
+    import pytest
+    from pathlib import Path
+
+    # 1. Setup game folder (injections)
+    setup_game_folder(required=False)
+
+    # 2. Find internal tests directory
+
+    test_path = Path(__file__).parent / "tests"
+    if not test_path.exists():
+        print(f"Error: Could not find core tests at {test_path}")
+        sys.exit(1)
+
+    print(f"Running core tests from {test_path}...")
+    
+    # 3. Run pytest
+    # We pass the rest of the arguments to pytest
+    pytest_args = [str(test_path)]
+    if args.pytest_args:
+        pytest_args.extend(args.pytest_args)
+    
+    sys.exit(pytest.main(pytest_args))
 
 
 if __name__ == "__main__":

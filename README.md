@@ -58,10 +58,12 @@ with foo.lock:
 
 pip install this repo and run 'atheriz':
 
-```AtheriZ - Text-based multiplayer game server
+```usage: python.exe C:\Users\anon\repos\atheriz\.venv\Scripts\atheriz [-h] {start,restart,stop,reload,reset,create,new,test} ...
+
+AtheriZ - Text-based multiplayer game server
 
 positional arguments:
-  {start,restart,stop,reload,reset,create,new}
+  {start,restart,stop,reload,reset,create,new,test}
                         Available commands
     start               Start the AtheriZ server
     restart             Restart the AtheriZ server
@@ -70,6 +72,7 @@ positional arguments:
     reset               Delete all game data and start fresh
     create              Create a new account and character
     new                 Create a new game folder with template classes
+    test                Run tests with local game objects
 
 options:
   -h, --help            show this help message and exit
