@@ -98,6 +98,11 @@ def load_objects():
         _ALL_OBJECTS = objects
     set_id(max_id)
 
+    with _ALL_OBJECTS_LOCK:
+        for obj in _ALL_OBJECTS.values():
+            if hasattr(obj, "resolve_relations"):
+                obj.resolve_relations()
+
 
 def save_objects(force: bool = False):
     """Save modified objects to the database."""

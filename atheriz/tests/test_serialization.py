@@ -192,3 +192,51 @@ def test_mapinfo_serialization():
     assert object.__getattribute__(deserialized, "custom").value == "map_data"
     assert len(object.__getattribute__(deserialized, "legend_entries")) == 1
     assert object.__getattribute__(deserialized, "legend_entries")[0].symbol == "T"
+
+def test_resolve_relations():
+    from atheriz.singletons import objects as obj_singleton
+    from atheriz.singletons.get import get_node_handler
+    
+    # Setup state
+    obj_singleton._ALL_OBJECTS.clear()
+    
+    # 1. Create a Target Object (ID 500)
+    target_obj = Object()
+    target_obj.id = 500
+    obj_singleton.add_object(target_obj)
+    
+    # 2. Create a Target Node
+    nav_node = Node(coord=("test_area", 1, 1, 1))
+    nav_node.id = 501
+    
+    # Setup NodeHandler
+    nh = get_node_handler()
+    if "test_area" not in nh.areas:
+        nh.areas["test_area"] = NodeArea("test_area")
+    
+    grid = NodeGrid("test_area", 1)
+    grid.nodes[(1, 1)] = nav_node
+    nh.areas["test_area"].grids[1] = grid
+    
+    # 3. Create a Source Object that links to both
+    source_obj = Object()
+    source_obj.id = 502
+    source_obj.location = nav_node
+    source_obj.home = target_obj
+    
+    # Serialization (Pass 1 of Saving)
+    serialized = dill.dumps(source_obj)
+    
+    # Deserialization (Pass 1 of Loading)
+    deserialized = dill.loads(serialized)
+    
+    # ASSERT PASS 1 STATE: Raw data restoration only
+    assert object.__getattribute__(deserialized, "location") == ("test_area", 1, 1, 1)
+    assert object.__getattribute__(deserialized, "home") == 500
+    
+    # Resolution (Pass 2 of Loading)
+    deserialized.resolve_relations()
+    
+    # ASSERT PASS 2 STATE: Relations successfully re-linked
+    assert object.__getattribute__(deserialized, "location") is nav_node
+    assert object.__getattribute__(deserialized, "home") is target_obj

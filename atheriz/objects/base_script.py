@@ -33,6 +33,8 @@ class Script:
     def __init__(self):
         self.lock = RLock()
         self.id = -1
+        self.name = ""
+        self.desc = ""
         self.is_pc = False
         self.is_npc = False
         self.is_item = False
@@ -46,6 +48,22 @@ class Script:
         self.is_connected = False
         self.created_by = -1
         self.child: Object | None = None
+        
+    def create(self, name: str, desc: str, created_by: int):
+        self.name = name
+        self.desc = desc
+        self.created_by = created_by
+
+    def at_install(self):
+        """
+        called when the script is installed on an object
+        you can use this event -or- you can hook at_init on the child object
+        but you probably don't want to do both
+        the main difference is that this code will run right when the script
+        is added to the object, and every reboot thereafter.
+        if you only do init from 'at_init' then init code will only run after reboot
+        """
+        pass
 
     def install_hooks(self, child: Object):
         """
@@ -64,6 +82,7 @@ class Script:
                 s = child.hooks.get(name, set())
                 s.add(func)
                 child.hooks[name] = s
+        self.at_install()
                 
     def remove_hooks(self, child: Object | None = None):
         child = self.child if child is None else child

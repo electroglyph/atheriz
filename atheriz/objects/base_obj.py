@@ -313,26 +313,33 @@ class Object:
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
-        if loc := state.get("location"):
-            if isinstance(loc, int):
-                object.__setattr__(self, "location", get(loc))
-            else:
-                object.__setattr__(self, "location", get_node_handler().get_node(loc))
-        if home := state.get("home"):
-            if isinstance(home, int):
-                object.__setattr__(self, "home", get(home))
-            else:
-                object.__setattr__(self, "home", get_node_handler().get_node(home))
         if settings.SLOW_LOCKS:
             object.__setattr__(self, "access", self._safe_access)
         else:
             object.__setattr__(self, "access", self._fast_access)
 
-        if object.__getattribute__(self, "_is_tickable"):
+    def resolve_relations(self):
+        """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
+        loc = getattr(self, "location", None)
+        if loc:
+            if isinstance(loc, int):
+                self.location = get(loc)[0] if get(loc) else None
+            elif isinstance(loc, tuple):
+                self.location = get_node_handler().get_node(loc)
+
+        home = getattr(self, "home", None)
+        if home:
+            if isinstance(home, int):
+                self.home = get(home)[0] if get(home) else None
+            elif isinstance(home, tuple):
+                self.home = get_node_handler().get_node(home)
+
+        if getattr(self, "_is_tickable", False):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
-
-        if scripts := object.__getattribute__(self, "scripts"):
+            
+        scripts = getattr(self, "scripts", None)
+        if scripts:
             for id in scripts:
                 if script := get(id):
                     script[0].install_hooks(self)

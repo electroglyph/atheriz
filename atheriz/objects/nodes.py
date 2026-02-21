@@ -214,7 +214,10 @@ class Node:
             object.__setattr__(self, "access", self._safe_access)
         else:
             object.__setattr__(self, "access", self._fast_access)
-        if self._is_tickable:
+
+    def resolve_relations(self):
+        """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
+        if getattr(self, "_is_tickable", False):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
         self.at_init()
