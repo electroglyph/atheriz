@@ -6,7 +6,8 @@ from atheriz.singletons.get import get_unique_id
 from atheriz.logger import logger
 import hashlib
 import atheriz.settings as settings
-from threading import Lock, RLock
+from threading import RLock
+from atheriz.objects.base_flags import Flags
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -15,30 +16,19 @@ if TYPE_CHECKING:
 IGNORE_FIELDS = ["lock"]
 
 
-class Account:
+class Account(Flags):
     group_save: bool = False
 
     def __init__(self):
+        super().__init__()
         self.lock = RLock()
         self.id = -1
         self.name = ""
         self.password = ""
         self.characters = []
-        self.is_connected = False
         self.is_banned = False
         self.ban_reason = ""
-        self.is_modified = True
-        self.is_pc = False
-        self.is_npc = False
-        self.is_item = False
         self.is_account = True
-        self.is_deleted = False
-        self.is_mapable = False
-        self.is_container = False
-        self.is_tickable = False
-        self.is_script = False
-        self.is_channel = False
-        self.is_node = False
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 

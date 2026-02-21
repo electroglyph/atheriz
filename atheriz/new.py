@@ -42,6 +42,8 @@ class TemplateGenerator:
         self.base_class = base_class
         self.methods: list[tuple[str, Any, str | None, bool]] = []
         self.extra_imports: list[str] = []
+        self.add_flags: bool = False
+
 
     def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
         """Add methods to generate stubs for."""
@@ -108,14 +110,29 @@ class TemplateGenerator:
             
         lines = [
             f"from {self.base_import} import {', '.join(import_list)}",
-            "",
-
-            "",
-            f"class {self.class_name}(Base{self.base_class}):",
-            f'    """Custom {self.class_name} class. Override methods below to customize behavior."""',
         ]
+        
+        if self.add_flags:
+            lines.append("from .flags import Flags")
 
-        if not self.methods:
+        lines.extend([
+            "",
+            "",
+            f"class {self.class_name}(Base{self.base_class}{', Flags' if self.add_flags else ''}):",
+            f'    """Custom {self.class_name} class. Override methods below to customize behavior."""',
+        ])
+        
+        has_methods = bool(self.methods)
+        
+        if self.add_flags:
+            lines.extend([
+                "",
+                "    def __init__(self, *args, **kwargs):",
+                "        super().__init__(*args, **kwargs)",
+            ])
+            has_methods = True
+
+        if not has_methods:
             lines.append("    pass")
         else:
             for name, sig, doc, is_empty in self.methods:
@@ -440,6 +457,8 @@ def create_game_folder(folder_name: str) -> None:
         methods = inspector.get_override_methods()
 
         generator = TemplateGenerator(base_class, base_import, base_class)
+        generator.add_flags = True
+        
         if base_class == "Script":
             generator.extra_imports = ["before", "after", "replace"]
             
@@ -450,6 +469,11 @@ def create_game_folder(folder_name: str) -> None:
         (folder_path / filename).write_text(content)
 
     # Generate special templates
+    print("  Creating flags.py...")
+    import atheriz.objects.base_flags
+    flags_src = Path(atheriz.objects.base_flags.__file__)
+    (folder_path / "flags.py").write_text(flags_src.read_text())
+
     # Create commands directory
     print("  Creating commands directory...")
     commands_path = folder_path / "commands"
@@ -584,7 +608,7 @@ def create_game_folder(folder_name: str) -> None:
     print(f"\nSuccess! Game folder '{folder_name}' created with:")
     print(f"  Template files:")
     print(f"    - account.py, channel.py, object.py, node.py")
-    print(f"    - objects.py, database_setup.py")
+    print(f"    - script.py, flags.py, objects.py, database_setup.py")
     print(f"    - commands/, inputfuncs.py, settings.py")
     print(f"    - initial_setup.py, connection_screen.py")
     print(f"    - web/ (templates and static files)")

@@ -8,6 +8,7 @@ from atheriz.singletons.objects import get, add_object, filter_by, remove_object
 from atheriz.singletons.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
+from atheriz.objects.base_flags import Flags
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -78,10 +79,11 @@ class BaseChannelCommand(Command):
         self._channel = None
 
 
-class Channel:
+class Channel(Flags):
     group_save: bool = False
 
     def __init__(self):
+        super().__init__()
         self.lock = RLock()
         self.name: str = ""
         self.desc: str = ""
@@ -90,18 +92,7 @@ class Channel:
         self.history: deque[tuple[int, str, str]] = deque(maxlen=settings.CHANNEL_HISTORY_LIMIT)
         self.listeners: dict[int, Object] = {}
         self.locks: dict[str, list[Callable]] = {}
-        self.is_pc = False
-        self.is_modified = True
-        self.is_npc = False
-        self.is_item = False
-        self.is_mapable = False
-        self.is_container = False
-        self.is_script = False
-        self.is_tickable = False
-        self.is_account = False
         self.is_channel = True
-        self.is_deleted = False
-        self.is_node = False
         if settings.SLOW_LOCKS:
             self.access = self._safe_access
         else:

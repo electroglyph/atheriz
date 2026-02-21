@@ -1,3 +1,4 @@
+from atheriz.objects.base_flags import Flags
 from atheriz.singletons.objects import save_objects
 from atheriz.utils import compress_whitespace
 from typing import Callable
@@ -66,14 +67,13 @@ def hookable(func):
     return wrapper
 
 
-class Object:
+class Object(Flags):
     appearance_template = "{name}: {desc}{things}"
 
     def __init__(self):
+        super().__init__()
         self.lock = RLock()
         self.id = -1
-        self.is_deleted = False
-        self.is_modified = True
         self.name = ""
         self.desc = ""
         # symbol to be used on map
@@ -87,19 +87,8 @@ class Object:
         self.home = None
         self._contents: set[int] = set()
         self.privilege_level = 0
-        self.is_connected = False
         self.created_by = -1
         self.last_touched_by = -1
-        self.is_pc = False
-        self.is_npc = False
-        self.is_item = False
-        self.is_mapable = False
-        self.is_container = False
-        self.is_script = False
-        self._is_tickable = False
-        self.is_account = False
-        self.is_channel = False
-        self.is_node = False
         self._tick_seconds = settings.DEFAULT_TICK_SECONDS
         self.last_map_time = time.time()
         self.quelled = False
