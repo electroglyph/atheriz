@@ -4,12 +4,19 @@ from threading import RLock
 from pyatomix import AtomicInt
 from pathlib import Path
 from atheriz.singletons.get import get_async_ticker, get_async_threadpool
-from atheriz.singletons.objects import get
-from atheriz.utils import msg_all
+from atheriz.singletons.objects import get, filter_by
 import json
 import ast
 from atheriz.objects.base_obj import Object
 
+
+def get_solar_receivers() -> list[Object]:
+    obj_filter = lambda x: x.is_pc and x.is_connected if not settings.NPCS_GET_SOLAR_EVENTS else lambda x: (x.is_pc and x.is_connected) or x.is_npc
+    return filter_by(obj_filter)
+
+def get_lunar_receivers() -> list[Object]:
+    obj_filter = lambda x: x.is_pc and x.is_connected if not settings.NPCS_GET_LUNAR_EVENTS else lambda x: (x.is_pc and x.is_connected) or x.is_npc
+    return filter_by(obj_filter)
 
 class GameTime:
     def save(self) -> None:
@@ -157,12 +164,15 @@ class GameTime:
         after_sun = self.sun_up_alt(after_time["hour"])
         after_phase = after_time["moon_phase"]
         if before_phase != after_phase:
-            msg_all(f"A {after_phase.lower()} moon rises.")
+            for obj in get_lunar_receivers():
+                obj.at_lunar_event(f"A {after_phase.lower()} moon rises.")
         if before_sun != after_sun:
             if after_sun:
-                msg_all("The sun rises on a new day.")
+                for obj in get_solar_receivers():
+                    obj.at_solar_event("The sun rises on a new day.")
             else:
-                msg_all("The sun begins to set.")
+                for obj in get_solar_receivers():
+                    obj.at_solar_event("The sun begins to set.")
 
     def get_timespan(self, ticks: int) -> dict:
         """Convert ticks into human readable timespan, even negative ticks

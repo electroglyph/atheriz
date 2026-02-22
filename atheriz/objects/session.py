@@ -3,7 +3,6 @@ from atheriz.objects.base_account import Account
 from typing import TYPE_CHECKING
 import asyncio
 import atheriz.settings as settings
-from datetime import datetime
 
 if TYPE_CHECKING:
     from atheriz.websocket import Connection
@@ -21,7 +20,7 @@ class Session:
         self.map_width: int = 0
         self.map_height: int = 0
         self.screenreader: bool = False
-        self.conn_time = 0
+        self.conn_time = 0.0
         self.cmd_last = None
         self.cmd_total = 0
         self.last_cmd = ""

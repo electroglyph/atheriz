@@ -74,8 +74,13 @@ ROUNDED_WALL_PLACEHOLDER = "⍮"
 ROOM_PLACEHOLDER = "℣"
 PATH_PLACEHOLDER = "߶"
 ROAD_PLACEHOLDER = "᭤"
-# time related settings
+
+# --- time related settings ---
 TIME_SYSTEM_ENABLED = True
+# sunrise, sunset messages
+NPCS_GET_SOLAR_EVENTS = False
+# moon phase messages
+NPCS_GET_LUNAR_EVENTS = False
 # seconds between time updates
 # this is the resolution of the time system
 # every N seconds below, the time will advance by TICK_MINUTES below

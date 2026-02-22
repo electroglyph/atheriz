@@ -226,6 +226,16 @@ class Object(Flags, DbOps):
         return ops
 
     @hookable
+    def at_solar_event(self, msg: str):
+        """Called when a solar event occurs."""
+        self.msg(msg)
+
+    @hookable
+    def at_lunar_event(self, msg: str):
+        """Called when a lunar event occurs."""
+        self.msg(msg)
+
+    @hookable
     def at_delete(self, caller: Object) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
         if not self.access(caller, "delete"):
@@ -311,7 +321,7 @@ class Object(Flags, DbOps):
         if getattr(self, "_is_tickable", False):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
-            
+
         scripts = getattr(self, "scripts", None)
         if scripts:
             for id in scripts:
