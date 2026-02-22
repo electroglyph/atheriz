@@ -565,9 +565,8 @@ class TestGetTimeFractionalTickMinutes:
 class TestSunUp:
     """Test sun_up and sun_up_alt methods."""
 
-    def test_sun_up_at_6am(self):
-        tpd = settings.MINUTES_PER_HOUR * settings.HOURS_PER_DAY
-        ticks = int(6 * settings.MINUTES_PER_HOUR)
+    def test_sun_up_at_sunrise(self):
+        ticks = int(settings.SUNRISE_HOUR * settings.MINUTES_PER_HOUR)
         gt = _make_gt(ticks)
         assert gt.sun_up() is True
 
@@ -575,8 +574,8 @@ class TestSunUp:
         gt = _make_gt(0)
         assert gt.sun_up() is False
 
-    def test_sun_down_at_5am(self):
-        ticks = int(5 * settings.MINUTES_PER_HOUR)
+    def test_sun_down_before_sunrise(self):
+        ticks = int((settings.SUNRISE_HOUR - 1) * settings.MINUTES_PER_HOUR)
         gt = _make_gt(ticks)
         assert gt.sun_up() is False
 
@@ -585,22 +584,22 @@ class TestSunUp:
         gt = _make_gt(ticks)
         assert gt.sun_up() is True
 
-    def test_sun_up_at_17(self):
-        ticks = int(17 * settings.MINUTES_PER_HOUR)
+    def test_sun_up_before_sunset(self):
+        ticks = int((settings.SUNSET_HOUR - 1) * settings.MINUTES_PER_HOUR)
         gt = _make_gt(ticks)
         assert gt.sun_up() is True
 
-    def test_sun_down_at_18(self):
-        ticks = int(18 * settings.MINUTES_PER_HOUR)
+    def test_sun_down_at_sunset(self):
+        ticks = int(settings.SUNSET_HOUR * settings.MINUTES_PER_HOUR)
         gt = _make_gt(ticks)
         assert gt.sun_up() is False
 
     def test_sun_up_alt_directly(self):
         gt = _make_gt(0)
-        assert gt.sun_up_alt(6) is True
-        assert gt.sun_up_alt(17) is True
-        assert gt.sun_up_alt(18) is False
-        assert gt.sun_up_alt(5) is False
+        assert gt.sun_up_alt(settings.SUNRISE_HOUR) is True
+        assert gt.sun_up_alt(settings.SUNRISE_HOUR - 1) is False
+        assert gt.sun_up_alt(settings.SUNSET_HOUR - 1) is True
+        assert gt.sun_up_alt(settings.SUNSET_HOUR) is False
         assert gt.sun_up_alt(0) is False
         assert gt.sun_up_alt(12) is True
 
@@ -615,10 +614,10 @@ class TestSunUpFractional:
         settings.TICK_MINUTES = original
 
     def test_sun_up_half_tick(self):
-        """TICK_MINUTES=0.5, 6am should still be sun-up."""
+        """TICK_MINUTES=0.5, sunrise should still be sun-up."""
         settings.TICK_MINUTES = 0.5
         tph = settings.MINUTES_PER_HOUR / 0.5
-        ticks = int(6 * tph)
+        ticks = int(settings.SUNRISE_HOUR * tph)
         gt = _make_gt(ticks)
         assert gt.sun_up() is True
 
@@ -837,3 +836,57 @@ class TestEdgeCases:
         t = gt.get_time()
         assert t["second"] == 0
         assert t["minute"] == 1
+
+
+class TestTimeEvents:
+    """Test solar and lunar events Triggering through at_solar_event and at_lunar_event."""
+    
+    @patch("atheriz.singletons.time.get_solar_receivers")
+    @patch("atheriz.singletons.time.get_lunar_receivers")
+    def test_solar_events(self, mock_lunar, mock_solar):
+        mock_character = MagicMock()
+        mock_solar.return_value = [mock_character]
+        mock_lunar.return_value = []
+        
+        # Start exactly at sunrise - 1 tick
+        ticks_before_sunrise = int(settings.SUNRISE_HOUR * settings.MINUTES_PER_HOUR) - int(settings.TICK_MINUTES)
+        gt = _make_gt(ticks_before_sunrise)
+        
+        # Next tick crosses sunrise
+        gt.on_tick()
+        mock_character.at_solar_event.assert_called_with(settings.SUNRISE_MESSAGE)
+        
+        # Reset mock
+        mock_character.reset_mock()
+        
+        # Start exactly at sunset - 1 tick
+        ticks_before_sunset = int(settings.SUNSET_HOUR * settings.MINUTES_PER_HOUR) - int(settings.TICK_MINUTES)
+        gt = _make_gt(ticks_before_sunset)
+        
+        # Next tick crosses sunset
+        gt.on_tick()
+        mock_character.at_solar_event.assert_called_with(settings.SUNSET_MESSAGE)
+
+    @patch("atheriz.singletons.time.get_solar_receivers")
+    @patch("atheriz.singletons.time.get_lunar_receivers")
+    def test_lunar_events(self, mock_lunar, mock_solar):
+        mock_character = MagicMock()
+        mock_solar.return_value = []
+        mock_lunar.return_value = [mock_character]
+        
+        # Start right at the end of day 0 (New moon)
+        # Phase changes to Waxing Crescent on day 1
+        tph = settings.MINUTES_PER_HOUR / settings.TICK_MINUTES
+        tpd = tph * settings.HOURS_PER_DAY
+        ticks_before_change = int(tpd) - 1
+        
+        gt = _make_gt(ticks_before_change)
+        before_phase = gt.get_time()["moon_phase"]
+        
+        # Next tick crosses into day 1
+        gt.on_tick()
+        after_phase = gt.get_time()["moon_phase"]
+        
+        assert before_phase == "new"
+        assert after_phase == "waxing crescent"
+        mock_character.at_lunar_event.assert_called_with(f"A {after_phase.lower()} moon rises.")
