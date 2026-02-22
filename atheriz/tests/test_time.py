@@ -840,13 +840,10 @@ class TestEdgeCases:
 
 class TestTimeEvents:
     """Test solar and lunar events Triggering through at_solar_event and at_lunar_event."""
-    
-    @patch("atheriz.singletons.time.get_solar_receivers")
-    @patch("atheriz.singletons.time.get_lunar_receivers")
-    def test_solar_events(self, mock_lunar, mock_solar):
+    @patch("atheriz.singletons.time.filter_by")
+    def test_solar_events(self, mock_filter_by):
         mock_character = MagicMock()
-        mock_solar.return_value = [mock_character]
-        mock_lunar.return_value = []
+        mock_filter_by.return_value = [mock_character]
         
         # Start exactly at sunrise - 1 tick
         ticks_before_sunrise = int(settings.SUNRISE_HOUR * settings.MINUTES_PER_HOUR) - int(settings.TICK_MINUTES)
@@ -867,12 +864,10 @@ class TestTimeEvents:
         gt.on_tick()
         mock_character.at_solar_event.assert_called_with(settings.SUNSET_MESSAGE)
 
-    @patch("atheriz.singletons.time.get_solar_receivers")
-    @patch("atheriz.singletons.time.get_lunar_receivers")
-    def test_lunar_events(self, mock_lunar, mock_solar):
+    @patch("atheriz.singletons.time.filter_by")
+    def test_lunar_events(self, mock_filter_by):
         mock_character = MagicMock()
-        mock_solar.return_value = []
-        mock_lunar.return_value = [mock_character]
+        mock_filter_by.return_value = [mock_character]
         
         # Start right at the end of day 0 (New moon)
         # Phase changes to Waxing Crescent on day 1

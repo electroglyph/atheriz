@@ -77,10 +77,14 @@ ROAD_PLACEHOLDER = "᭤"
 
 # --- time related settings ---
 TIME_SYSTEM_ENABLED = True
-# sunrise, sunset messages
-NPCS_GET_SOLAR_EVENTS = False
-# moon phase messages
-NPCS_GET_LUNAR_EVENTS = False
+# choose which objects receive sunrise, sunset messages
+# if you want all objects to receive these messages, set this to: lambda x: True
+# if you want no objects to receive these messages, set this to: lambda x: False
+# if you want PCs and NPCs to receive them: lambda x: (x.is_pc and x.is_connected) or x.is_npc
+# these are based on the flags defined in flags.py
+SOLAR_RECEIVER_LAMBDA = lambda x: x.is_pc and x.is_connected
+# choose which objects receive moon phase messages
+LUNAR_RECEIVER_LAMBDA = lambda x: x.is_pc and x.is_connected
 # seconds between time updates
 # this is the resolution of the time system
 # every N seconds below, the time will advance by TICK_MINUTES below

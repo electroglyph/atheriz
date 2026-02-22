@@ -10,14 +10,6 @@ import ast
 from atheriz.objects.base_obj import Object
 
 
-def get_solar_receivers() -> list[Object]:
-    obj_filter = lambda x: x.is_pc and x.is_connected if not settings.NPCS_GET_SOLAR_EVENTS else lambda x: (x.is_pc and x.is_connected) or x.is_npc
-    return filter_by(obj_filter)
-
-def get_lunar_receivers() -> list[Object]:
-    obj_filter = lambda x: x.is_pc and x.is_connected if not settings.NPCS_GET_LUNAR_EVENTS else lambda x: (x.is_pc and x.is_connected) or x.is_npc
-    return filter_by(obj_filter)
-
 class GameTime:
     def save(self) -> None:
         path = Path(settings.SAVE_PATH) / "time"
@@ -164,14 +156,14 @@ class GameTime:
         after_sun = self.sun_up_alt(after_time["hour"])
         after_phase = after_time["moon_phase"]
         if before_phase != after_phase:
-            for obj in get_lunar_receivers():
+            for obj in filter_by(settings.LUNAR_RECEIVER_LAMBDA):
                 obj.at_lunar_event(f"A {after_phase.lower()} moon rises.")
         if before_sun != after_sun:
             if after_sun:
-                for obj in get_solar_receivers():
+                for obj in filter_by(settings.SOLAR_RECEIVER_LAMBDA):
                     obj.at_solar_event(settings.SUNRISE_MESSAGE)
             else:
-                for obj in get_solar_receivers():
+                for obj in filter_by(settings.SOLAR_RECEIVER_LAMBDA):
                     obj.at_solar_event(settings.SUNSET_MESSAGE)
 
     def get_timespan(self, ticks: int) -> dict:
