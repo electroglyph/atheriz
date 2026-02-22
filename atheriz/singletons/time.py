@@ -169,16 +169,16 @@ class GameTime:
         if before_sun != after_sun:
             if after_sun:
                 for obj in get_solar_receivers():
-                    obj.at_solar_event("The sun rises on a new day.")
+                    obj.at_solar_event(settings.SUNRISE_MESSAGE)
             else:
                 for obj in get_solar_receivers():
-                    obj.at_solar_event("The sun begins to set.")
+                    obj.at_solar_event(settings.SUNSET_MESSAGE)
 
     def get_timespan(self, ticks: int) -> dict:
         """Convert ticks into human readable timespan, even negative ticks
 
         Args:
-            ticks (int): duh
+            ticks (int): elapsed ticks
 
         Returns:
             dict: years, months, weeks, days, hours, minutes, and desc = text

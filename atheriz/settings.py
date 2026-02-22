@@ -102,6 +102,8 @@ DAYS_PER_WEEK = 7
 SUNRISE_HOUR = 5
 # 7 PM
 SUNSET_HOUR = 19
+SUNRISE_MESSAGE = "The sun rises on a new day."
+SUNSET_MESSAGE = "The sun begins to set."
 
 class Month(IntEnum):
     Ianuarius = 1
