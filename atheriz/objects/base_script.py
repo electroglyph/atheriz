@@ -7,6 +7,8 @@ from atheriz.singletons.get import get_unique_id
 from atheriz.singletons.objects import add_object, delete_objects, remove_object
 from atheriz.objects.base_flags import Flags
 from atheriz.objects.base_db_ops import DbOps
+import atheriz.settings as settings
+from atheriz.utils import ensure_thread_safe
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -44,6 +46,8 @@ class Script(Flags, DbOps):
         self.created_by = -1
         self.child: Object | None = None
         self.date_created = None
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            ensure_thread_safe(self)
 
     @classmethod
     def create(
