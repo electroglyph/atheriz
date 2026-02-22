@@ -125,10 +125,10 @@ class GameTime:
     def sun_up(self) -> bool:
         time = self.get_time()
         hour = time["hour"]
-        return hour >= 6 and hour < 18
+        return hour >= settings.SUNRISE_HOUR and hour < settings.SUNSET_HOUR
 
     def sun_up_alt(self, hour: int) -> bool:
-        return hour >= 6 and hour < 18
+        return hour >= settings.SUNRISE_HOUR and hour < settings.SUNSET_HOUR
 
     def on_tick(self) -> None:
         before_time = self.get_time()
