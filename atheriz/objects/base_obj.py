@@ -72,6 +72,7 @@ class Object(Flags, DbOps, AccessLock):
     appearance_template = "{name}: {desc}{things}"
 
     def __init__(self):
+        # lock should be first!
         self.lock = RLock()
         super().__init__()
         self.id = -1

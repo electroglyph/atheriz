@@ -111,6 +111,11 @@ class Account(Flags, DbOps):
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
+            for cls in type(self).mro():
+                # remove excluded keys
+                excludes = getattr(cls, "_pickle_excludes", ())
+                for key in excludes:
+                    state.pop(key, None)
             state.pop("lock", None)
             return state
 
