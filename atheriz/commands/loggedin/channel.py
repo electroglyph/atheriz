@@ -1,11 +1,9 @@
 from atheriz.singletons.objects import filter_by, get
 from atheriz.commands.base_cmd import Command
 from atheriz.utils import wrap_xterm256
-from atheriz.logger import logger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
     from atheriz.objects.base_obj import Object
     from atheriz.objects.base_channel import Channel
 

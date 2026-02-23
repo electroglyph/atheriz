@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.websocket import Connection
 
 
 class InventoryCommand(Command):

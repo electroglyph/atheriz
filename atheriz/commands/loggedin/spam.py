@@ -5,11 +5,7 @@ from atheriz.singletons.objects import add_object, save_objects
 from atheriz.singletons.get import get_node_handler
 from atheriz import settings
 from pathlib import Path
-from typing import TYPE_CHECKING
 import time
-
-if TYPE_CHECKING:
-    from atheriz.websocket import Connection
 
 
 class SpamCommand(Command):

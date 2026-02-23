@@ -1,11 +1,9 @@
 from typing import Any, Callable
 import argparse
 import shlex
-from atheriz.utils import get_import_path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.objects.session import Session
     from atheriz.objects.base_obj import Object
     from atheriz.websocket import Connection
 
@@ -148,16 +146,8 @@ class Command:
             return None, None, None
         return self.run, caller, parsed_args
 
-    # def __getstate__(self):
-    #     state = self.__dict__.copy()
-    #     state["__import_path__"] = get_import_path(self)
-    #     del state["_parser"]
-    #     return state
-
     def __setstate__(self, state):
         self.__dict__.update(state)
         if self.use_parser:
-            self.parser = GameArgumentParser(
-                prog=self.key, description=self.desc, add_help=True
-            )
+            self.parser = GameArgumentParser(prog=self.key, description=self.desc, add_help=True)
             self.setup_parser()

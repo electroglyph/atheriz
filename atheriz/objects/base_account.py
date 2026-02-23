@@ -1,4 +1,3 @@
-import dill
 from atheriz.singletons.objects import add_object, remove_object, filter_by, delete_objects
 from atheriz.utils import ensure_thread_safe
 from atheriz.singletons.salt import get_salt

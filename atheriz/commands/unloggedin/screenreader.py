@@ -16,4 +16,3 @@ class ScreenReaderCommand(Command):
     def run(self, caller: Connection, args):
         caller.session.screenreader = not caller.session.screenreader
         caller.session.connection.send_command("screenreader", caller.session.screenreader)
-        # caller.msg(f"Screenreader {'enabled' if caller.session.screenreader else 'disabled'}.")

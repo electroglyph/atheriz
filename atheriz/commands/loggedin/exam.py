@@ -1,12 +1,13 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get, filter_by
+from atheriz.singletons.objects import get
 from atheriz.objects.base_obj import Object
 from atheriz.websocket import Connection
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
+
 
 class ExamineCommand(Command):
     """
@@ -54,7 +55,6 @@ class ExamineCommand(Command):
                 caller.msg("Invalid ID format. Use #<number>.")
                 return
         else:
-            # matches = filter_by(lambda x: target_str.lower() in x.name.lower())
             if target_str:
                 matches = caller.search(target_str)
                 if not matches:

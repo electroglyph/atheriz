@@ -1,7 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from prettytable import PrettyTable, TableStyle
 from typing import TYPE_CHECKING
-from atheriz.singletons.get import get_loggedin_cmdset, get_unloggedin_cmdset
+from atheriz.singletons.get import get_loggedin_cmdset
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object

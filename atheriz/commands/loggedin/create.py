@@ -1,10 +1,6 @@
 import argparse
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from atheriz.websocket import Connection
 
 
 class CreateCommand(Command):

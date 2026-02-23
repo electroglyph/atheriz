@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING
 import random
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.websocket import Connection
     from atheriz.objects.nodes import Node
 
 

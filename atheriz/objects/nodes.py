@@ -63,7 +63,6 @@ class NodeLink:
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state["__import_path__"] = get_import_path(self)
         return state
 
     def __setstate__(self, state):
@@ -309,8 +308,6 @@ class Node(Flags, AccessLock):
             return []
 
         def _self_delete():
-            from atheriz.singletons.get import get_node_handler
-
             get_node_handler().remove_node(self.coord)
             self.is_deleted = True
 
@@ -367,8 +364,6 @@ class Node(Flags, AccessLock):
         return str(self.coord)
 
     def add_script(self, script):
-        from atheriz.singletons.objects import get
-
         script = get(script)[0] if isinstance(script, int) else script
         script.install_hooks(self)
         with self.lock:
@@ -376,8 +371,6 @@ class Node(Flags, AccessLock):
             self.is_modified = True
 
     def remove_script(self, script):
-        from atheriz.singletons.objects import get
-
         script = get(script)[0] if isinstance(script, int) else script
         script.remove_hooks(self)
         with self.lock:
