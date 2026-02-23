@@ -161,7 +161,6 @@ def test_door_serialization():
     )
     door.custom = CustomData("door_data")
     
-    # Door uses AtomicFlag/AtomicInt which are handled in __getstate__/__setstate__
     deserialized = assert_serialization(door)
     assert object.__getattribute__(deserialized, "from_exit") == "east"
     assert object.__getattribute__(deserialized, "custom").value == "door_data"

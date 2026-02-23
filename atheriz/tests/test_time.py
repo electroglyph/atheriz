@@ -11,7 +11,6 @@ import json
 import shutil
 from pathlib import Path
 from unittest.mock import patch, MagicMock
-from pyatomix import AtomicInt
 
 # ---------------------------------------------------------------------------
 # Pre-mock heavy dependencies that cause circular imports when importing
@@ -72,7 +71,7 @@ def _make_gt(ticks: int = 0) -> GameTime:
     """Create a GameTime instance with a given tick count, bypassing file IO."""
     with patch.object(GameTime, "load"):
         gt = GameTime()
-    gt.ticks = AtomicInt(ticks)
+    gt.ticks = ticks
     gt.alarms = {}
     return gt
 
@@ -731,7 +730,7 @@ class TestSaveLoad:
             with patch.object(GameTime, "load"):
                 gt2 = GameTime()
             gt2.load()
-            assert gt2.ticks.load() == 500
+            assert gt2.ticks == 500
 
     def test_load_missing_file(self):
         """Loading when no save file exists should default to 0 ticks."""
@@ -739,7 +738,7 @@ class TestSaveLoad:
             with patch.object(GameTime, "load"):
                 gt = GameTime()
             gt.load()
-            assert gt.ticks.load() == 0
+            assert gt.ticks == 0
             assert gt.alarms == {}
 
 

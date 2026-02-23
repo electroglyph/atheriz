@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING, Any
 import atheriz.settings as settings
 from threading import RLock
-from pyatomix import AtomicInt
 from pathlib import Path
 from atheriz.singletons.get import get_async_ticker, get_async_threadpool
 from atheriz.singletons.objects import get, filter_by
@@ -16,17 +15,17 @@ class GameTime:
         path.parent.mkdir(parents=True, exist_ok=True)
         alarms_data = {str(k): v for k, v in self.alarms.items()}
         with open(path, "w") as f:
-            json.dump({"ticks": self.ticks.load(), "alarms": alarms_data}, f)
+            json.dump({"ticks": self.ticks, "alarms": alarms_data}, f)
 
     def load(self) -> None:
         path = Path(settings.SAVE_PATH) / "time"
         if not path.exists():
-            self.ticks = AtomicInt(0)
+            self.ticks = 0
             self.alarms: dict[tuple[str, str], list[tuple[int, bool, Any]]] = {}
             return
         with open(path, "r") as f:
             data = json.load(f)
-            self.ticks = AtomicInt(data["ticks"])
+            self.ticks = data["ticks"]
             self.alarms = {}
             for k, v in data["alarms"].items():
                 try:
@@ -126,7 +125,8 @@ class GameTime:
         before_time = self.get_time()
         before_sun = self.sun_up_alt(before_time["hour"])
         before_phase = before_time["moon_phase"]
-        self.ticks += 1
+        with self.lock:
+            self.ticks += 1
         after_time = self.get_time()
         callers = []
         with self.lock:
@@ -270,7 +270,8 @@ class GameTime:
                     suffix = "th"
             return f"{day}{suffix}"
 
-        current_ticks = self.ticks.load()
+        with self.lock:
+            current_ticks = self.ticks
         tick_duration_seconds = int(settings.TICK_MINUTES * settings.SECONDS_PER_MINUTE)
         total_seconds_elapsed = current_ticks * tick_duration_seconds
         total_days_elapsed = total_seconds_elapsed // settings.SECONDS_PER_DAY
