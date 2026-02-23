@@ -44,6 +44,7 @@ class TemplateGenerator:
         self.extra_imports: list[str] = []
         self.add_flags: bool = False
         self.add_db_ops: bool = False
+        self.add_access_lock: bool = False
 
 
     def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
@@ -117,11 +118,13 @@ class TemplateGenerator:
             lines.append("from .flags import Flags")
         if self.add_db_ops:
             lines.append("from .db_ops import DbOps")
+        if self.add_access_lock:
+            lines.append("from .access import AccessLock")
 
         lines.extend([
             "",
             "",
-            f"class {self.class_name}(Base{self.base_class}{', Flags' if self.add_flags else ''}{', DbOps' if self.add_db_ops else ''}):",
+            f"class {self.class_name}(Base{self.base_class}{', Flags' if self.add_flags else ''}{', DbOps' if self.add_db_ops else ''}{', AccessLock' if self.add_access_lock else ''}):",
             f'    """Custom {self.class_name} class. Override methods below to customize behavior."""',
         ])
         
@@ -462,6 +465,8 @@ def create_game_folder(folder_name: str) -> None:
         generator = TemplateGenerator(base_class, base_import, base_class)
         generator.add_flags = True
         generator.add_db_ops = True
+        if base_class in ("Object", "Node", "Channel"):
+            generator.add_access_lock = True
         
         if base_class == "Script":
             generator.extra_imports = ["before", "after", "replace"]
@@ -482,6 +487,11 @@ def create_game_folder(folder_name: str) -> None:
     import atheriz.objects.base_db_ops
     db_ops_src = Path(atheriz.objects.base_db_ops.__file__)
     (folder_path / "db_ops.py").write_text(db_ops_src.read_text())
+
+    print("  Creating access.py...")
+    import atheriz.objects.base_lock
+    access_src = Path(atheriz.objects.base_lock.__file__)
+    (folder_path / "access.py").write_text(access_src.read_text())
 
     # Create commands directory
     print("  Creating commands directory...")
@@ -617,7 +627,7 @@ def create_game_folder(folder_name: str) -> None:
     print(f"\nSuccess! Game folder '{folder_name}' created with:")
     print(f"  Template files:")
     print(f"    - account.py, channel.py, object.py, node.py")
-    print(f"    - script.py, flags.py, objects.py, database_setup.py")
+    print(f"    - script.py, flags.py, access.py, objects.py, database_setup.py")
     print(f"    - commands/, inputfuncs.py, settings.py")
     print(f"    - initial_setup.py, connection_screen.py")
     print(f"    - web/ (templates and static files)")

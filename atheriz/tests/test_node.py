@@ -191,63 +191,6 @@ def test_transition_init():
     assert trans.from_link == "north"
 
 
-# ==================== Door Tests ====================
-
-
-def test_door_init():
-    door = Door(
-        from_coord=("Area1", 0, 0, 0),
-        to_coord=("Area2", 0, 0, 0),
-        from_exit="north",
-        to_exit="south",
-    )
-    assert door.from_coord == ("Area1", 0, 0, 0)
-    assert door.to_coord == ("Area2", 0, 0, 0)
-    assert door.from_exit == "north"
-    assert door.to_exit == "south"
-    assert door.closed.test() is True  # default closed
-    assert door.locked.test() is False  # default unlocked
-
-
-def test_door_open_close():
-    door = Door(from_coord=("A", 0, 0, 0), to_coord=("B", 0, 0, 0), from_exit="n", to_exit="s")
-
-    assert door.closed.test() is True
-    door.closed.clear()  # open
-    assert door.closed.test() is False
-    door.closed.test_and_set()  # close (sets flag and returns previous value)
-    assert door.closed.test() is True
-
-
-def test_door_lock_unlock():
-    door = Door(
-        from_coord=("A", 0, 0, 0), to_coord=("B", 0, 0, 0), from_exit="n", to_exit="s", locked=True
-    )
-
-    assert door.locked.test() is True
-    door.locked.clear()  # unlock
-    assert door.locked.test() is False
-    door.locked.test_and_set()  # lock
-    assert door.locked.test() is True
-
-
-def test_door_desc():
-    door = Door(
-        from_coord=("Area1", 0, 0, 0),
-        to_coord=("Area2", 0, 0, 0),
-        from_exit="north",
-        to_exit="south",
-    )
-
-    desc_from = door.desc(("Area1", 0, 0, 0))
-    assert "north" in desc_from
-    assert "closed" in desc_from.lower()
-
-    door.closed.clear()  # open
-    desc_open = door.desc(("Area1", 0, 0, 0))
-    assert "open" in desc_open.lower()
-
-
 # ==================== NodeHandler Tests ====================
 
 

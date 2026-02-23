@@ -26,6 +26,7 @@ from atheriz.objects import funcparser
 import atheriz.settings as settings
 from threading import RLock
 from atheriz.objects.base_db_ops import DbOps
+from atheriz.objects.base_lock import AccessLock
 import time
 
 if TYPE_CHECKING:
@@ -67,12 +68,12 @@ def hookable(func):
     return wrapper
 
 
-class Object(Flags, DbOps):
+class Object(Flags, DbOps, AccessLock):
     appearance_template = "{name}: {desc}{things}"
 
     def __init__(self):
-        super().__init__()
         self.lock = RLock()
+        super().__init__()
         self.id = -1
         self.name = ""
         self.desc = ""
@@ -99,11 +100,6 @@ class Object(Flags, DbOps):
         # list of channel ids subscribed to
         self.channels: list[int] = []
         self.session: Session | None = None
-        self.locks: dict[str, list[Callable]] = {}
-        if settings.SLOW_LOCKS:
-            self.access = self._safe_access
-        else:
-            self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -251,31 +247,17 @@ class Object(Flags, DbOps):
         """Called after an object is created."""
         pass
 
-    def _safe_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser and name != "delete":
-            return True
-        with self.lock:
-            lock_list = self.locks.get(name, [])
-            for lock in lock_list:
-                if not lock(accessing_obj):
-                    return False
-            return True
-
-    def _fast_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser and name != "delete":
-            return True
-        lock_list = self.locks.get(name, [])
-        for lock in lock_list:
-            if not lock(accessing_obj):
-                return False
-        return True
-
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
+            for cls in type(self).mro():
+                # remove excluded keys
+                excludes = getattr(cls, "_pickle_excludes", ())
+                for key in excludes:
+                    state.pop(key, None)
+            # Object-specific exclusions here:
             state.pop("session", None)
             state.pop("lock", None)
-            state.pop("access", None)
             state.pop("hooks")
             if loc := state.get("location"):
                 if loc.is_node:
@@ -287,6 +269,7 @@ class Object(Flags, DbOps):
                     state["home"] = home.coord
                 else:
                     state["home"] = home.id
+
             return state
 
     def __setstate__(self, state):
@@ -297,10 +280,13 @@ class Object(Flags, DbOps):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
         object.__setattr__(self, "hooks", {})
-        if settings.SLOW_LOCKS:
-            object.__setattr__(self, "access", self._safe_access)
-        else:
-            object.__setattr__(self, "access", self._fast_access)
+        # call __setstate__ for all parent classes
+        mro = type(self).mro()
+        current_idx = mro.index(__class__)
+        ancestors = mro[current_idx + 1 :]
+        for cls in reversed(ancestors):
+            if "__setstate__" in cls.__dict__:
+                cls.__setstate__(self, state)
 
     def resolve_relations(self):
         """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
@@ -495,34 +481,6 @@ class Object(Flags, DbOps):
         with self.lock:
             self._contents.discard(obj.id)
             self.is_modified = True
-
-    def add_lock(self, lock_name: str, callable: Callable):
-        """
-        Add a lock to this object.
-
-        For example:
-        ```python
-        obj.add_lock("control", lambda x: x.is_builder)
-        ```
-
-        Args:
-            lock_name (str): The name of the lock to add.
-            callable (Callable): The callable to add to the lock.
-        """
-        with self.lock:
-            l = self.locks.get(lock_name, [])
-            l.append(callable)
-            self.locks[lock_name] = l
-
-    def clear_locks_by_name(self, lock_name: str):
-        """
-        Clear all locks by name.
-
-        Args:
-            lock_name (str): The name of the lock to clear.
-        """
-        with self.lock:
-            self.locks.pop(lock_name, None)
 
     @property
     def contents(self) -> list[Object]:

@@ -165,8 +165,6 @@ def test_door_serialization():
     deserialized = assert_serialization(door)
     assert object.__getattribute__(deserialized, "from_exit") == "east"
     assert object.__getattribute__(deserialized, "custom").value == "door_data"
-    assert object.__getattribute__(deserialized, "is_closed") == True
-    assert object.__getattribute__(deserialized, "is_locked") == False
 
 def test_legendentry_serialization():
     entry = LegendEntry(symbol="T", desc="A Tree", coord=(10, 20))

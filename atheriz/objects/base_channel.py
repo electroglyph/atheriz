@@ -1,7 +1,5 @@
-import dill
-from typing import Callable
 from collections import deque
-from threading import Lock, RLock
+from threading import RLock
 import atheriz.settings as settings
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
 from atheriz.singletons.objects import get, add_object, filter_by, remove_object, delete_objects
@@ -10,6 +8,7 @@ from atheriz.commands.base_cmd import Command
 from datetime import datetime
 from atheriz.objects.base_db_ops import DbOps
 from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_lock import AccessLock
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -80,45 +79,21 @@ class BaseChannelCommand(Command):
         self._channel = None
 
 
-class Channel(Flags, DbOps):
+class Channel(Flags, DbOps, AccessLock):
     group_save: bool = False
 
     def __init__(self):
-        super().__init__()
         self.lock = RLock()
+        super().__init__()
         self.name: str = ""
         self.desc: str = ""
         self.id: int = -1
         self.command: Command | None = None
         self.history: deque[tuple[int, str, str]] = deque(maxlen=settings.CHANNEL_HISTORY_LIMIT)
         self.listeners: dict[int, Object] = {}
-        self.locks: dict[str, list[Callable]] = {}
         self.is_channel = True
-        if settings.SLOW_LOCKS:
-            self.access = self._safe_access
-        else:
-            self.access = self._fast_access
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
-
-    def _safe_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
-            return True
-        with self.lock:
-            lock_list = self.locks.get(name, [])
-            for lock in lock_list:
-                if not lock(accessing_obj):
-                    return False
-            return True
-
-    def _fast_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
-            return True
-        lock_list = self.locks.get(name, [])
-        for lock in lock_list:
-            if not lock(accessing_obj):
-                return False
-        return True
 
     @classmethod
     def create(cls, name: str) -> "Channel":
@@ -141,34 +116,6 @@ class Channel(Flags, DbOps):
         remove_object(self)
         self.is_deleted = True
         return True
-
-    def add_lock(self, lock_name: str, callable: Callable):
-        """
-        Add a lock to this object.
-
-        For example:
-        ```python
-        obj.add_lock("control", lambda x: x.is_builder)
-        ```
-
-        Args:
-            lock_name (str): The name of the lock to add.
-            callable (Callable): The callable to add to the lock.
-        """
-        with self.lock:
-            l = self.locks.get(lock_name, [])
-            l.append(callable)
-            self.locks[lock_name] = l
-
-    def clear_locks_by_name(self, lock_name: str):
-        """
-        Clear all locks by name.
-
-        Args:
-            lock_name (str): The name of the lock to clear.
-        """
-        with self.lock:
-            self.locks.pop(lock_name, None)
 
     def at_delete(self, caller: Object | None = None) -> bool:
         """Called before an object is deleted, aborts deletion if False"""
@@ -232,9 +179,13 @@ class Channel(Flags, DbOps):
     def __getstate__(self) -> dict:
         with self.lock:
             state = self.__dict__.copy()
+            for cls in type(self).mro():
+                # remove excluded keys
+                excludes = getattr(cls, "_pickle_excludes", ())
+                for key in excludes:
+                    state.pop(key, None)
+            # Channel-specific exclusions:
             state.pop("lock", None)
-            # state.pop("command", None)
-            state.pop("access", None)
             state.pop("listeners", None)
             return state
 
@@ -242,10 +193,12 @@ class Channel(Flags, DbOps):
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
         self.listeners = {}
-        # self.command = None
         if not isinstance(self.history, deque):
             self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)
-        if settings.SLOW_LOCKS:
-            object.__setattr__(self, "access", self._safe_access)
-        else:
-            object.__setattr__(self, "access", self._fast_access)
+        # call __setstate__ for all parent classes
+        mro = type(self).mro()
+        current_idx = mro.index(__class__)
+        ancestors = mro[current_idx + 1 :]
+        for cls in reversed(ancestors):
+            if "__setstate__" in cls.__dict__:
+                cls.__setstate__(self, state)

@@ -5,7 +5,6 @@ from atheriz.singletons.objects import get
 import random
 from threading import RLock
 from typing import TYPE_CHECKING
-from pyatomix import AtomicFlag, AtomicInt
 from atheriz.utils import (
     wrap_truecolor,
     get_import_path,
@@ -21,6 +20,8 @@ from atheriz.objects.contents import filter_contents, group_by_name
 from atheriz.utils import wrap_truecolor
 from atheriz.logger import logger
 import atheriz.settings as settings
+from atheriz.objects.base_lock import AccessLock
+from atheriz.objects.base_flags import Flags
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -69,7 +70,7 @@ class NodeLink:
         self.__dict__.update(state)
 
 
-class Node:
+class Node(Flags, AccessLock):
     """
     this is the equivalent to a room.
     many of the functions below are inspired heavily by or pulled straight from evennia.objects.objects.DefaultObject.
@@ -86,15 +87,6 @@ class Node:
         return True
 
     is_node = True
-    is_pc = False
-    is_item = False
-    is_connected = False
-    is_npc = False
-    is_mapable = False
-    is_container = False
-    is_channel = False
-    is_account = False
-    home = None
 
     def at_desc(self, looker: Object | None = None, **kwargs):
         """Called when the node is looked at."""
@@ -131,9 +123,10 @@ class Node:
         links: list[NodeLink] = None,
         tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ):
+        self.lock = RLock()
+        super().__init__()
         self.coord = coord
         self.desc = desc
-        self._is_tickable = False
         self._tick_seconds = tick_seconds
         self.theme = theme
         self.symbol = symbol
@@ -141,70 +134,21 @@ class Node:
         self.data = data if data else {}
         self.links = links
         self._contents = set()
-        self.lock = RLock()
-        self.is_modified = True
-        self.is_deleted = False
+        self.is_node = True
         self.nouns = {}
         self.scripts: set[int] = set()
         self.hooks: dict[str, set[Callable]] = {}
-        self.locks: dict[str, list[Callable]] = {}
-        if settings.SLOW_LOCKS:
-            self.access = self._safe_access
-        else:
-            self.access = self._fast_access
-
-    def _safe_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
-            return True
-        with self.lock:
-            lock_list = self.locks.get(name, [])
-            for lock in lock_list:
-                if not lock(accessing_obj):
-                    return False
-            return True
-
-    def _fast_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser:
-            return True
-        lock_list = self.locks.get(name, [])
-        for lock in lock_list:
-            if not lock(accessing_obj):
-                return False
-        return True
-
-    def add_lock(self, lock_name: str, callable: Callable):
-        """
-        Add a lock to this object.
-
-        For example:
-        ```python
-        obj.add_lock("control", lambda x: x.is_builder)
-        ```
-
-        Args:
-            lock_name (str): The name of the lock to add.
-            callable (Callable): The callable to add to the lock.
-        """
-        with self.lock:
-            l = self.locks.get(lock_name, [])
-            l.append(callable)
-            self.locks[lock_name] = l
-
-    def clear_locks_by_name(self, lock_name: str):
-        """
-        Clear all locks by name.
-
-        Args:
-            lock_name (str): The name of the lock to clear.
-        """
-        with self.lock:
-            self.locks.pop(lock_name, None)
 
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
+            for cls in type(self).mro():
+                # remove excluded keys
+                excludes = getattr(cls, "_pickle_excludes", ())
+                for key in excludes:
+                    state.pop(key, None)
+            # Node specific exclusions:
             state.pop("lock", None)
-            state.pop("access", None)
             state.pop("hooks", None)
             return state
 
@@ -214,10 +158,13 @@ class Node:
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "hooks", {})
-        if settings.SLOW_LOCKS:
-            object.__setattr__(self, "access", self._safe_access)
-        else:
-            object.__setattr__(self, "access", self._fast_access)
+        # call __setstate__ for all parent classes
+        mro = type(self).mro()
+        current_idx = mro.index(__class__)
+        ancestors = mro[current_idx + 1 :]
+        for cls in reversed(ancestors):
+            if "__setstate__" in cls.__dict__:
+                cls.__setstate__(self, state)
 
     def resolve_relations(self):
         """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
@@ -363,6 +310,7 @@ class Node:
 
         def _self_delete():
             from atheriz.singletons.get import get_node_handler
+
             get_node_handler().remove_node(self.coord)
             self.is_deleted = True
 
@@ -420,6 +368,7 @@ class Node:
 
     def add_script(self, script):
         from atheriz.singletons.objects import get
+
         script = get(script)[0] if isinstance(script, int) else script
         script.install_hooks(self)
         with self.lock:
@@ -428,6 +377,7 @@ class Node:
 
     def remove_script(self, script):
         from atheriz.singletons.objects import get
+
         script = get(script)[0] if isinstance(script, int) else script
         script.remove_hooks(self)
         with self.lock:
@@ -932,15 +882,9 @@ class Door:
         closed: bool = True,
         locked: bool = False,
     ) -> None:
-        if locked:
-            self.locked = AtomicFlag(True)
-        else:
-            self.locked = AtomicFlag()
-        if closed:
-            self.closed = AtomicFlag(True)
-        else:
-            self.closed = AtomicFlag()
-        self.code = random.randint(0, 99)
+        self.lock = RLock()
+        self.locked = locked
+        self.closed = closed
         self.from_coord = from_coord
         self.from_exit = from_exit
         self.to_coord = to_coord
@@ -949,23 +893,16 @@ class Door:
         self.to_symbol_coord = to_symbol_coord
         self.closed_symbol = closed_symbol
         self.open_symbol = open_symbol
-        self.max_hp = AtomicInt(100)
-        self.hp = AtomicInt(100)
 
     def __setstate__(self, state):
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        self.locked = AtomicFlag(state["locked"])
-        self.closed = AtomicFlag(state["closed"])
-        self.hp = AtomicInt(state["hp"])
-        self.max_hp = AtomicInt(state["max_hp"])
 
     def __getstate__(self):
-        state = self.__dict__.copy()
-        state["closed"] = self.closed.test()
-        state["locked"] = self.locked.test()
-        state["hp"] = self.hp.load()
-        state["max_hp"] = self.max_hp.load()
-        return state
+        with self.lock:
+            state = self.__dict__.copy()
+            state.pop("lock", None)
+            return state
 
     def __str__(self):
         return (
@@ -974,38 +911,12 @@ class Door:
         )
 
     def desc(self, from_coord: tuple[str, int, int, int]) -> str:
-        status = "A closed" if self.closed.test() else "An open"
+        with self.lock:
+            status = "A closed" if self.closed else "An open"
         if from_coord == self.from_coord:
             return f"{status} door leading {self.from_exit}"
         elif from_coord == self.to_coord:
             return f"{status} door leading {self.to_exit}"
-        else:
-            return "Door desc: unexpected coord."
-
-    def full_desc(self, from_coord: tuple[str, int, int, int]) -> str:
-        condition = ""
-        c = (self.hp.load() / self.max_hp.load()) * 100
-        if self.hp.load() == 0:
-            condition = "This door is destroyed"
-        elif c < 10:
-            condition = "This door is in very bad shape"
-        elif c < 30:
-            condition = "This door is in bad shape"
-        elif c < 50:
-            condition = "This door is a bit worse for wear"
-        elif c < 70:
-            condition = "This door is in fair condition"
-        elif c < 90:
-            condition = "This door has been banged around a bit"
-        elif c <= 99:
-            condition = "This door has a few scuffs and scratches"
-        elif self.hp.load() == self.max_hp.load():
-            condition = "This door is in perfect condition"
-        status = "A closed" if self.closed.test() else "An open"
-        if from_coord == self.from_coord:
-            return f"{status} door leading {self.from_exit}\n{wrap_xterm256('Condition', fg=15)}: {condition} ({c:.0f}%)"
-        elif from_coord == self.to_coord:
-            return f"{status} door leading {self.to_exit}\n{wrap_xterm256('Condition', fg=15)}: {condition} ({c:.0f}%)"
         else:
             return "Door desc: unexpected coord."
 
@@ -1032,41 +943,3 @@ class Door:
     #         mi = mh.get_mapinfo(self.to_coord[0], self.to_coord[3])
     #         if mi:
     #             mi.update_map(self.to_symbol_coord, self.open_symbol)
-
-    def try_open(self, codes: list[int] | None = None) -> bool:
-        if self.locked.test() and codes and self.code in codes:
-            self.locked.clear()
-            self.closed.clear()
-            self.map_open()
-            return True
-        if not self.locked.test() and self.closed.test():
-            self.closed.clear()
-            self.map_open()
-            return True
-        if not self.locked.test() and not self.closed.test():
-            return True
-        return False
-
-    @property
-    def is_closed(self):
-        return self.closed.test()
-
-    @property
-    def is_locked(self):
-        return self.locked.test()
-
-    def open(self):
-        self.closed.clear()
-        self.map_open()
-
-    def close(self):
-        self.closed.test_and_set()
-        self.map_close()
-
-    def unlock(self):
-        self.locked.clear()
-
-    def lock(self):
-        if not self.closed.test():
-            self.close()
-        self.locked.test_and_set()

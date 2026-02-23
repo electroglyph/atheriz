@@ -37,8 +37,8 @@ def replace(func):
 
 class Script(Flags, DbOps):
     def __init__(self):
-        super().__init__()
         self.lock = RLock()
+        super().__init__()
         self.id = -1
         self.name = ""
         self.desc = ""
@@ -104,6 +104,13 @@ class Script(Flags, DbOps):
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
         object.__setattr__(self, "child", None)
+        # call __setstate__ for all parent classes
+        mro = type(self).mro()
+        current_idx = mro.index(__class__)
+        ancestors = mro[current_idx + 1:]
+        for cls in reversed(ancestors):
+            if '__setstate__' in cls.__dict__:
+                cls.__setstate__(self, state)
 
     def at_install(self):
         """

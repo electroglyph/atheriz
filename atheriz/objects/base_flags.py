@@ -14,6 +14,7 @@ class Flags:
         object.__setattr__(self, "is_modified", True)
         object.__setattr__(self, "is_deleted", False)
         object.__setattr__(self, "is_connected", False)
+        super().__init__()
 
         
     @property
