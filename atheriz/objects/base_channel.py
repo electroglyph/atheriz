@@ -1,3 +1,4 @@
+from __future__ import annotations
 from collections import deque
 from threading import RLock
 import atheriz.settings as settings

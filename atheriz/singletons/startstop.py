@@ -66,6 +66,7 @@ def do_reload():
         save_objects()
         get_map_handler().save()
         get_node_handler().save()
+    channel: Channel | None = get_server_channel()
     if channel:
         channel.msg("Server reloaded")
     logger.info("Reload sequence completed.")

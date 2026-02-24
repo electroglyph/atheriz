@@ -114,10 +114,14 @@ def save_objects(force: bool = False):
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")
-        for obj in to_save:
-            ops = obj.get_save_ops()
-            cursor.execute(ops[0], ops[1])
-        cursor.execute("COMMIT")
+        try:
+            for obj in to_save:
+                ops = obj.get_save_ops()
+                cursor.execute(ops[0], ops[1])
+            cursor.execute("COMMIT")
+        except Exception:
+            cursor.execute("ROLLBACK")
+            raise
 
 
 def delete_objects(ops: list[tuple[str, tuple]]):
@@ -132,6 +136,10 @@ def delete_objects(ops: list[tuple[str, tuple]]):
     cursor = db.connection.cursor()
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")
-        for op in ops:
-            cursor.execute(op[0], op[1])
-        cursor.execute("COMMIT")
+        try:
+            for op in ops:
+                cursor.execute(op[0], op[1])
+            cursor.execute("COMMIT")
+        except Exception:
+            cursor.execute("ROLLBACK")
+            raise

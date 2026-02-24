@@ -1,3 +1,4 @@
+from __future__ import annotations
 import atheriz.settings as settings
 from typing import Callable
 from typing import TYPE_CHECKING

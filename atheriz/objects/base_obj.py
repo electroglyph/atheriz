@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.objects.base_flags import Flags
 from atheriz.singletons.objects import save_objects
 from atheriz.utils import compress_whitespace

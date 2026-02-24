@@ -19,6 +19,7 @@ _EXCLUDED_MODULES = {
 def _get_atheriz_package_dir() -> Path:
     """Get the atheriz package directory. Uses __path__ since __file__ is None for editable installs."""
     import atheriz
+
     return Path(list(atheriz.__path__)[0]).resolve()
 
 
@@ -50,6 +51,7 @@ def _discover_new_atheriz_modules():
 
             try:
                 importlib.import_module(module_name)
+                print(f"[HotReload] Discovered new atheriz module: {module_name}")
                 discovered += 1
             except Exception as e:
                 print(f"[HotReload] Could not import new module {module_name}: {e}")
@@ -65,6 +67,7 @@ def _discover_new_game_modules():
     """
     cwd = Path.cwd().resolve()
     atheriz_dir = str(_get_atheriz_package_dir())
+    pkg_name = cwd.name
 
     discovered = 0
 
@@ -88,12 +91,16 @@ def _discover_new_game_modules():
             rel = filepath.relative_to(cwd)
             parts = list(rel.with_suffix("").parts)
             module_name = ".".join(parts)
+            pkg_module_name = f"{pkg_name}.{module_name}"
 
-            if module_name in sys.modules:
+            if module_name in sys.modules or pkg_module_name in sys.modules:
                 continue
 
             try:
-                importlib.import_module(module_name)
+                try:
+                    importlib.import_module(pkg_module_name)
+                except (ImportError, ModuleNotFoundError):
+                    importlib.import_module(module_name)
                 discovered += 1
             except Exception as e:
                 print(f"[HotReload] Could not import new game module {module_name}: {e}")
@@ -119,8 +126,11 @@ def _reload_game_folder_modules():
     atheriz_dir = str(_get_atheriz_package_dir())
 
     # Only consider top-level subdirectories that are Python packages
-    valid_packages = {str(cwd / d) for d in os.listdir(cwd)
-                      if (cwd / d).is_dir() and (cwd / d / "__init__.py").exists()}
+    valid_packages = {
+        str(cwd / d)
+        for d in os.listdir(cwd)
+        if (cwd / d).is_dir() and (cwd / d / "__init__.py").exists()
+    }
 
     game_modules = []
     for module_name, module in list(sys.modules.items()):
@@ -130,8 +140,15 @@ def _reload_game_folder_modules():
         mod_path = str(Path(mod_file).resolve())
         # Module is in the game folder (CWD) but NOT part of the atheriz package
         if mod_path.startswith(cwd_str) and not mod_path.startswith(atheriz_dir):
-            # Must be inside a top-level directory that has __init__.py
-            if not any(mod_path.startswith(pkg) for pkg in valid_packages):
+            is_valid = False
+            # Allow top-level files in the game folder (e.g. account.py)
+            if str(Path(mod_path).parent) == cwd_str:
+                is_valid = True
+            # Allow inside a top-level directory that has __init__.py
+            elif any(mod_path.startswith(pkg) for pkg in valid_packages):
+                is_valid = True
+
+            if not is_valid:
                 continue
             game_modules.append((module_name, module))
 
@@ -151,12 +168,19 @@ def _reload_game_folder_modules():
 
     # Re-run class injections so game folder overrides take effect
     injections = getattr(settings, "CLASS_INJECTIONS", [])
+    pkg_name = cwd.name
     for local_mod, cls_name, target_mod in injections:
         try:
-            if local_mod in sys.modules:
+            pkg_local_mod = f"{pkg_name}.{local_mod}"
+            if pkg_local_mod in sys.modules:
+                module = sys.modules[pkg_local_mod]
+            elif local_mod in sys.modules:
                 module = sys.modules[local_mod]
             else:
-                module = importlib.import_module(local_mod)
+                try:
+                    module = importlib.import_module(pkg_local_mod)
+                except (ImportError, ModuleNotFoundError):
+                    module = importlib.import_module(local_mod)
 
             if hasattr(module, cls_name):
                 new_cls = getattr(module, cls_name)
@@ -181,6 +205,7 @@ def reload_game_logic() -> str:
         str: A status message describing what was done.
     """
     from atheriz.logger import logger
+
     logger.info("Server reload initiated.")
 
     # Step 0: Discover new atheriz.* modules from disk (e.g. newly added command files)
@@ -203,10 +228,6 @@ def reload_game_logic() -> str:
 
         modules_to_reload.append((module_name, module))
 
-    # Sort modules to attempt a somewhat reasonable order (e.g. utils before objects)
-    # This is a heuristic; perfect dependency sorting is hard dynamically.
-    # We move 'cmdset' modules to the end because they import all the commands in their directory,
-    # and we want them to pick up the reloaded versions of those commands.
     modules_to_reload.sort(key=lambda x: (x[0].endswith(".cmdset"), x[0]))
 
     reloaded_count = 0
@@ -237,6 +258,7 @@ def reload_game_logic() -> str:
     # Patch existing objects
     # We iterate over all live objects and try to find their new class definition
     objects_patched = 0
+    patched_objects = {}
 
     def _patch_object(obj):
         nonlocal objects_patched
@@ -265,15 +287,14 @@ def reload_game_logic() -> str:
                     # Capture transient state that might be lost during init/setstate
                     # session is the most critical one for logged-in players
                     saved_session = getattr(obj, "session", None)
+                    saved_listeners = getattr(obj, "listeners", None)
+                    saved_command = getattr(obj, "command", None)
 
                     obj.__class__ = new_class
 
                     try:
                         obj.__init__()
                     except TypeError:
-                        # Fallback for classes that require arguments in __init__
-                        # We can't easily guess arguments, so we skip re-init for them
-                        # and just trust the class update + state restore.
                         pass
 
                     if hasattr(obj, "__setstate__"):
@@ -284,8 +305,13 @@ def reload_game_logic() -> str:
                     # Restore transient state
                     if saved_session:
                         obj.session = saved_session
+                    if saved_listeners is not None:
+                        obj.listeners = saved_listeners
+                    if saved_command is not None:
+                        obj.command = saved_command
 
                     objects_patched += 1
+                    patched_objects[id(obj)] = obj
         except Exception as e:
             print(f"[HotReload] Error patching object {obj}: {e}")
 
@@ -302,33 +328,24 @@ def reload_game_logic() -> str:
         except Exception as e:
             print(f"[HotReload] Error patching cmdsets for {obj}: {e}")
 
-    # 2. Nodes and related structures
     try:
-        # Import here to avoid potential circular imports at top level if reloader is imported early
+        # import here to avoid potential circular imports at top level if reloader is imported early
         from atheriz.singletons.get import get_node_handler
 
         nh = get_node_handler()
         if nh:
-            # Areas
             for area in nh.get_areas():
                 _patch_object(area)
-                # Grids
                 for grid in area.grids.values():
                     _patch_object(grid)
-                    # Nodes
                     for node in grid.nodes.values():
                         _patch_object(node)
-                        # NodeLinks are inside nodes, but they are technically objects too?
-                        # NodeLink is a class in nodes.py.
                         if node.links:
                             for link in node.links:
                                 _patch_object(link)
 
-            # Transitions
             for t in nh.transitions.values():
                 _patch_object(t)
-
-            # Doors
             for d_group in nh.doors.values():
                 for d in d_group.values():
                     _patch_object(d)
@@ -369,6 +386,16 @@ def reload_game_logic() -> str:
         msg = f"Error patching global cmdsets: {e}"
         print(f"[HotReload] {msg}")
         errors.append(msg)
+
+    # 4. Resolve Relations for Patched Objects
+    for obj in patched_objects.values():
+        if hasattr(obj, "resolve_relations"):
+            try:
+                obj.resolve_relations()
+            except Exception as e:
+                msg = f"Error resolving relations for {obj}: {e}"
+                print(f"[HotReload] {msg}")
+                errors.append(msg)
 
     result_msg = (
         f"Reloaded {reloaded_count} modules. "

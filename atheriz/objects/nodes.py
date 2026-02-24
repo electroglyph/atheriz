@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import Callable
 from atheriz.utils import is_iter, make_iter
 from typing import Any, Optional
@@ -234,23 +235,6 @@ class Node(Flags, AccessLock):
     #         if o.can_hear:
     #             o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
 
-    # def get_objects(
-    #     self, include_objects=True, include_npcs=False, include_pcs=False
-    # ) -> list[Object]:
-    #     if not self._contents:
-    #         return []
-    #     result = []
-    #     with self.lock:
-    #         for o in self.contents:
-    #             if (
-    #                 (include_objects and o.is_object)
-    #                 or (include_npcs and o.is_npc)
-    #                 or (include_pcs and o.is_pc)
-    #             ):
-    #                 # result.append((o, self))
-    #                 result.append(o)
-    #     return result
-
     def at_pre_object_leave(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> bool:
@@ -316,7 +300,6 @@ class Node(Flags, AccessLock):
 
         all_ops = _delete_recursive(self) if recursive else _move_contents(self)
         _self_delete()
-        # count of other nodes deleted is 0, since nodes can't contain nodes
         return 0, all_ops
 
     def at_delete(self, caller: Object) -> bool:

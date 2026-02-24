@@ -1,3 +1,4 @@
+from __future__ import annotations
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
