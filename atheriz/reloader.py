@@ -51,7 +51,6 @@ def _discover_new_atheriz_modules():
 
             try:
                 importlib.import_module(module_name)
-                print(f"[HotReload] Discovered new atheriz module: {module_name}")
                 discovered += 1
             except Exception as e:
                 print(f"[HotReload] Could not import new module {module_name}: {e}")
@@ -166,6 +165,14 @@ def _reload_game_folder_modules():
             print(f"[HotReload] {msg}")
             errors.append(msg)
 
+    # second pass: re-reload so that cross-imports (e.g. `from .test import TestCommand`
+    # in loggedin.py) pick up the freshly reloaded classes from the first pass.
+    for module_name, module in game_modules:
+        try:
+            importlib.reload(module)
+        except Exception as e:
+            pass  # errors already captured in first pass
+
     # Re-run class injections so game folder overrides take effect
     injections = getattr(settings, "CLASS_INJECTIONS", [])
     pkg_name = cwd.name
@@ -245,25 +252,20 @@ def reload_game_logic() -> str:
             print(f"[HotReload] {msg}")
             errors.append(msg)
 
-    # Reload game folder modules and re-run class injections
+    # reload game folder modules and re-run class injections
     game_reloaded, game_errors = _reload_game_folder_modules()
     reloaded_count += game_reloaded
     errors.extend(game_errors)
 
-    # Invalidate Singleton Caches
-    # We DO NOT want to reset these, as it kills the game state
-    # get._UNLOGGEDIN_CMDSET = None
-    # get._NODE_HANDLER = None
-
-    # Patch existing objects
-    # We iterate over all live objects and try to find their new class definition
+    # patch existing objects
+    # we iterate over all live objects and try to find their new class definition
     objects_patched = 0
     patched_objects = {}
 
     def _patch_object(obj):
         nonlocal objects_patched
         try:
-            # Get the module where the object's class is defined
+            # get the module where the object's class is defined
             module_name = obj.__class__.__module__
             class_name = obj.__class__.__name__
 
@@ -272,11 +274,11 @@ def reload_game_logic() -> str:
 
             module = sys.modules[module_name]
 
-            # Get the new class definition from the reloaded module
+            # get the new class definition from the reloaded module
             if hasattr(module, class_name):
                 new_class = getattr(module, class_name)
 
-                # Check if it's actually different (it should be if module was reloaded)
+                # check if it's actually different (it should be if module was reloaded)
                 if obj.__class__ is not new_class:
                     state = None
                     if hasattr(obj, "__getstate__"):
@@ -284,7 +286,7 @@ def reload_game_logic() -> str:
                     else:
                         state = obj.__dict__.copy()
 
-                    # Capture transient state that might be lost during init/setstate
+                    # capture transient state that might be lost during init/setstate
                     # session is the most critical one for logged-in players
                     saved_session = getattr(obj, "session", None)
                     saved_listeners = getattr(obj, "listeners", None)
@@ -302,7 +304,7 @@ def reload_game_logic() -> str:
                     else:
                         obj.__dict__.update(state)
 
-                    # Restore transient state
+                    # restore transient state
                     if saved_session:
                         obj.session = saved_session
                     if saved_listeners is not None:
@@ -315,8 +317,8 @@ def reload_game_logic() -> str:
         except Exception as e:
             print(f"[HotReload] Error patching object {obj}: {e}")
 
-        # Recurse into CmdSets (for Objects and Sessions)
-        # We need to do this even if the object itself wasn't patched,
+        # recurse into cmdsets (for objects and sessions)
+        # we need to do this even if the object itself wasn't patched,
         # because the commands might have been reloaded.
         try:
             if hasattr(obj, "internal_cmdset") and obj.internal_cmdset:
@@ -329,7 +331,7 @@ def reload_game_logic() -> str:
             print(f"[HotReload] Error patching cmdsets for {obj}: {e}")
 
     try:
-        # import here to avoid potential circular imports at top level if reloader is imported early
+        # import here to avoid potential circular imports
         from atheriz.singletons.get import get_node_handler
 
         nh = get_node_handler()
@@ -363,21 +365,20 @@ def reload_game_logic() -> str:
     for obj in rest:
         _patch_object(obj)
 
-    # 3. Global Command Sets
     try:
         from atheriz.singletons.get import get_loggedin_cmdset, get_unloggedin_cmdset
 
         global_sets = [get_loggedin_cmdset(), get_unloggedin_cmdset()]
         for s in global_sets:
             if s:
-                # Patch existing commands FIRST (before __init__ replaces them)
+                # patch existing commands FIRST (before __init__ replaces them)
                 for cmd in list(s.commands.values()):
                     _patch_object(cmd)
 
-                # Then patch the CmdSet class itself
+                # then patch the cmdset class itself
                 _patch_object(s)
 
-                # Finally re-initialize (creates new command instances)
+                # finally re-initialize (creates new command instances)
                 try:
                     s.__init__()
                 except Exception as e:
@@ -387,7 +388,6 @@ def reload_game_logic() -> str:
         print(f"[HotReload] {msg}")
         errors.append(msg)
 
-    # 4. Resolve Relations for Patched Objects
     for obj in patched_objects.values():
         if hasattr(obj, "resolve_relations"):
             try:
