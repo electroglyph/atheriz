@@ -74,7 +74,13 @@ ROUNDED_WALL_PLACEHOLDER = "⍮"
 ROOM_PLACEHOLDER = "℣"
 PATH_PLACEHOLDER = "߶"
 ROAD_PLACEHOLDER = "᭤"
-
+# brown doors:
+NS_CLOSED_DOOR = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m━\x1b[0m'
+NS_OPEN_DOOR1 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┚\x1b[0m'
+NS_OPEN_DOOR2 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┒\x1b[0m'
+EW_CLOSED_DOOR = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┃\x1b[0m'
+EW_OPEN_DOOR1 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┙\x1b[0m'
+EW_OPEN_DOOR2 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┕\x1b[0m'
 # --- time related settings ---
 TIME_SYSTEM_ENABLED = True
 # choose which objects receive sunrise, sunset messages

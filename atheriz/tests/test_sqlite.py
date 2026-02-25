@@ -137,7 +137,8 @@ def test_map_handler_persistence(db_setup):
 
 def test_node_handler_persistence(db_setup):
     from atheriz.singletons.node import NodeHandler
-    from atheriz.objects.nodes import NodeArea, NodeGrid, NodeLink, Transition, Door
+    from atheriz.objects.nodes import NodeArea, NodeGrid, NodeLink, Transition
+    from atheriz.objects.base_door import Door
     
     # Initialize handler
     nh = NodeHandler()

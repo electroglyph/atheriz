@@ -1,6 +1,7 @@
 import pytest
-from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Door, Transition
+from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Transition
 from atheriz.singletons.node import NodeHandler
+from atheriz.objects.base_door import Door
 from atheriz.singletons import objects as obj_singleton
 from atheriz import settings
 from pathlib import Path

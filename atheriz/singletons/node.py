@@ -6,7 +6,8 @@ import dill
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
 
 if TYPE_CHECKING:
-    from atheriz.objects.nodes import Door, Transition
+    from atheriz.objects.nodes import Transition
+    from atheriz.objects.base_door import Door
 
 from atheriz.database_setup import get_database
 
@@ -96,15 +97,6 @@ class NodeHandler:
             except Exception as e:
                 cursor.execute("ROLLBACK")
                 logger.error(f"Error saving node data to DB: {e}")
-
-    # def get_objects(self, include_objects=True, include_npcs=False, include_pcs=False):
-    #     result = []
-    #     with self.lock:
-    #         for v in self.areas.values():
-    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
-    #             if o:
-    #                 result.extend(o)
-    #     return result
 
     def get_doors(self, coord: tuple[str, int, int, int]) -> dict[str, Door] | None:
         with self.lock3:

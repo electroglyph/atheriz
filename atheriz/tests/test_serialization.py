@@ -5,8 +5,9 @@ from atheriz.objects.base_obj import Object
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_channel import Channel
 from atheriz.commands.base_cmd import Command
-from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea, Transition, Door
+from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea, Transition
 from atheriz.singletons.map import LegendEntry, MapInfo
+from atheriz.objects.base_door import Door
 
 class CustomData:
     """A small custom class to test reference serialization."""

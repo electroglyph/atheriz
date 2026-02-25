@@ -8,13 +8,12 @@ from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.utils import (
     wrap_truecolor,
-    get_import_path,
     wrap_xterm256,
 )
 from atheriz.objects import funcparser
 from atheriz.singletons.objects import get
 from atheriz.objects.contents import search
-from atheriz.singletons.get import get_node_handler, get_async_ticker
+from atheriz.singletons.get import get_node_handler, get_async_ticker, get_map_handler
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
@@ -739,30 +738,6 @@ class NodeArea:
         with self.lock:
             del self.data[key]
 
-    # def get_objects(
-    #     self,
-    #     include_objects=True,
-    #     include_npcs=False,
-    #     include_pcs=False,
-    #     include_linked_areas=False,
-    # ):
-    #     result = []
-    #     with self.lock:
-    #         for v in self.grids.values():
-    #             o = v.get_objects(include_objects, include_npcs, include_pcs)
-    #             if o:
-    #                 result.extend(o)
-    #         if include_linked_areas:
-    #             if self.linked_areas:
-    #                 nh = get_node_handler()
-    #                 for a in self.linked_areas:
-    #                     area = nh.get_area(a)
-    #                     if area:
-    #                         o = area.get_objects(include_objects, include_npcs, include_pcs, True)
-    #                         if o:
-    #                             result.extend(o)
-    #     return result
-
     def remove_linked_area(self, area: str):
         with self.lock:
             if self.linked_areas:
@@ -842,80 +817,3 @@ class Transition:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.lock = RLock()
-
-
-class Door:
-    def __init__(
-        self,
-        from_coord: tuple[str, int, int, int] = None,
-        from_exit: str = None,
-        to_coord: tuple[str, int, int, int] = None,
-        to_exit: str = None,
-        from_symbol_coord: tuple[int, int] = None,  # map coord to show the door symbol
-        to_symbol_coord: tuple[int, int] = None,  # map coord to show the door symbol
-        closed_symbol: str = None,
-        open_symbol: str = None,
-        closed: bool = True,
-        locked: bool = False,
-    ) -> None:
-        self.lock = RLock()
-        self.locked = locked
-        self.closed = closed
-        self.from_coord = from_coord
-        self.from_exit = from_exit
-        self.to_coord = to_coord
-        self.to_exit = to_exit
-        self.from_symbol_coord = from_symbol_coord
-        self.to_symbol_coord = to_symbol_coord
-        self.closed_symbol = closed_symbol
-        self.open_symbol = open_symbol
-
-    def __setstate__(self, state):
-        object.__setattr__(self, "lock", RLock())
-        self.__dict__.update(state)
-
-    def __getstate__(self):
-        with self.lock:
-            state = self.__dict__.copy()
-            state.pop("lock", None)
-            return state
-
-    def __str__(self):
-        return (
-            f"Door({self.from_coord}, 'from_exit' : {self.from_exit}, 'to_coord' : {self.to_coord}, 'to_exit' :"
-            f" {self.to_exit})"
-        )
-
-    def desc(self, from_coord: tuple[str, int, int, int]) -> str:
-        with self.lock:
-            status = "A closed" if self.closed else "An open"
-        if from_coord == self.from_coord:
-            return f"{status} door leading {self.from_exit}"
-        elif from_coord == self.to_coord:
-            return f"{status} door leading {self.to_exit}"
-        else:
-            return "Door desc: unexpected coord."
-
-    # def map_close(self):
-    #     if self.from_symbol_coord:
-    #         mh = get_map_handler()
-    #         mi = mh.get_mapinfo(self.from_coord[0], self.from_coord[3])
-    #         if mi:
-    #             mi.update_map(self.from_symbol_coord, self.closed_symbol)
-    #     if self.to_symbol_coord:
-    #         mh = get_map_handler()
-    #         mi = mh.get_mapinfo(self.to_coord[0], self.to_coord[3])
-    #         if mi:
-    #             mi.update_map(self.to_symbol_coord, self.closed_symbol)
-
-    # def map_open(self):
-    #     if self.from_symbol_coord:
-    #         mh = get_map_handler()
-    #         mi = mh.get_mapinfo(self.from_coord[0], self.from_coord[3])
-    #         if mi:
-    #             mi.update_map(self.from_symbol_coord, self.open_symbol)
-    #     if self.to_symbol_coord:
-    #         mh = get_map_handler()
-    #         mi = mh.get_mapinfo(self.to_coord[0], self.to_coord[3])
-    #         if mi:
-    #             mi.update_map(self.to_symbol_coord, self.open_symbol)
