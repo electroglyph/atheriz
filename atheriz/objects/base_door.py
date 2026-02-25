@@ -72,8 +72,10 @@ class Door(AccessLock):
 
     def try_open(self, caller: Object) -> bool:
         from_node, to_node = self.get_nodes()
+        loc = caller.location
         with self.lock:
             if not self.closed:
+                # door is open, so the action can be viewed on both sides of the door
                 if from_node:
                     from_node.msg_contents(
                         f"$You(target) $conj(open) the already open door just to be sure.",
@@ -88,28 +90,16 @@ class Door(AccessLock):
                     )
                 return True
             if self.locked:
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(try) to open the door, but it won't budge.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(try) to open the door, but it won't budge.",
                         mapping={"target": caller},
                         from_obj=caller,
                     )
                 return False
             if not self.access(caller, "open"):
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(try) to open the door, but an unknown force prevents it.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(try) to open the door, but an unknown force prevents it.",
                         mapping={"target": caller},
                         from_obj=caller,
@@ -118,53 +108,50 @@ class Door(AccessLock):
             if self.closed:
                 self.closed = False
                 self.map_open()
-                if from_node:
-                    from_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(open) the door.",
                         mapping={"target": caller},
                         from_obj=caller,
                     )
-                if to_node:
-                    to_node.msg_contents(
-                        f"$You(target) $conj(open) the door.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-
             return True
 
     def try_close(self, caller: Object) -> bool:
         from_node, to_node = self.get_nodes()
+        loc = caller.location
         with self.lock:
-            if self.locked:
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(try) to close the door, but it won't budge.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
-                        f"$You(target) $conj(try) to close the door, but it won't budge.",
+            if self.closed:
+                if loc:
+                    loc.msg_contents(
+                        f"$You(target) $conj(try) to close the door, but it is already closed.",
                         mapping={"target": caller},
                         from_obj=caller,
                     )
                 return False
             if not self.access(caller, "close"):
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(try) to close the door, but an unknown force prevents it.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
-                        f"$You(target) $conj(try) to close the door, but an unknown force prevents it.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
+                if not self.closed:
+                    if from_node:
+                        from_node.msg_contents(
+                            f"$You(target) $conj(try) to close the door, but an unknown force prevents it.",
+                            mapping={"target": caller},
+                            from_obj=caller,
+                        )
+                    if to_node:
+                        to_node.msg_contents(
+                            f"$You(target) $conj(try) to close the door, but an unknown force prevents it.",
+                            mapping={"target": caller},
+                            from_obj=caller,
+                        )
+                else:
+                    if loc:
+                        loc.msg_contents(
+                            f"$You(target) $conj(try) to close the door, but an unknown force prevents it.",
+                            mapping={"target": caller},
+                            from_obj=caller,
+                        )
                 return False
             if not self.closed:
+                # door is open, so the action can be viewed on both sides of the door
                 self.closed = True
                 self.map_close()
                 if from_node:
@@ -182,32 +169,28 @@ class Door(AccessLock):
             return True
 
     def try_lock(self, caller: Object) -> bool:
-        from_node, to_node = self.get_nodes()
+        loc = caller.location
         with self.lock:
             if not self.access(caller, "lock"):
-                if from_node:
-                    from_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(try) to lock the door, but an unknown force prevents it.",
                         mapping={"target": caller},
                         from_obj=caller,
                     )
-                if to_node:
-                    to_node.msg_contents(
-                        f"$You(target) $conj(try) to lock the door, but an unknown force prevents it.",
+                return False
+            if self.locked:
+                if loc:
+                    loc.msg_contents(
+                        f"$You(target) $conj(try) to lock the door, but it is already locked.",
                         mapping={"target": caller},
                         from_obj=caller,
                     )
                 return False
             if not self.locked:
                 self.locked = True
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(lock) the door.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(lock) the door.",
                         mapping={"target": caller},
                         from_obj=caller,
@@ -216,16 +199,11 @@ class Door(AccessLock):
 
     def try_unlock(self, caller: Object) -> bool:
         from_node, to_node = self.get_nodes()
+        loc = caller.location
         with self.lock:
             if not self.access(caller, "unlock"):
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(try) to unlock the door, but an unknown force prevents it.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(try) to unlock the door, but an unknown force prevents it.",
                         mapping={"target": caller},
                         from_obj=caller,
@@ -233,14 +211,8 @@ class Door(AccessLock):
                 return False
             if self.locked:
                 self.locked = False
-                if from_node:
-                    from_node.msg_contents(
-                        f"$You(target) $conj(unlock) the door.",
-                        mapping={"target": caller},
-                        from_obj=caller,
-                    )
-                if to_node:
-                    to_node.msg_contents(
+                if loc:
+                    loc.msg_contents(
                         f"$You(target) $conj(unlock) the door.",
                         mapping={"target": caller},
                         from_obj=caller,
