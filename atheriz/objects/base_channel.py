@@ -203,3 +203,5 @@ class Channel(Flags, DbOps, AccessLock):
         for cls in reversed(ancestors):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            ensure_thread_safe(self)

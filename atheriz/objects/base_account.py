@@ -120,5 +120,7 @@ class Account(Flags, DbOps):
             return state
 
     def __setstate__(self, state):
+        object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        self.lock = RLock()
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            ensure_thread_safe(self)

@@ -184,3 +184,72 @@ def test_node_handler_persistence(db_setup):
     assert ("TestArea", 1, 1, 0) in nh2.transitions
     assert ("TestArea", 5, 5, 0) in nh2.doors
     assert "exit" in nh2.doors[("TestArea", 5, 5, 0)]
+
+def test_loaded_objects_threadsafe(db_setup):
+    """
+    Test to determine if ensure_threadsafe is applied after a database load.
+    """
+    from atheriz.objects.base_channel import Channel
+    from atheriz.objects.base_account import Account
+    from atheriz.objects.base_script import Script
+    from atheriz.objects.nodes import Node, NodeArea, NodeGrid
+    from atheriz.singletons.node import NodeHandler
+
+    # Create objects and save them
+    obj = Object.create(None, "Threadsafe Test Object")
+    obj.is_modified = True
+    
+    chan = Channel.create("test_chan_threadsafe")
+    assert chan is not None
+    chan.is_modified = True
+    
+    acc = Account.create("test_acc_threadsafe", "pw")
+    assert acc is not None
+    acc.is_modified = True
+    
+    script = Script.create(None, "test_script_threadsafe")
+    assert script is not None
+    script.is_modified = True
+    
+    save_objects()
+    
+    # Create Node and save it
+    nh = NodeHandler()
+    node = Node(coord=("TestAreaTS", 10, 10, 0))
+    
+    if "TestAreaTS" not in nh.areas:
+        nh.add_area(NodeArea("TestAreaTS"))
+    if 0 not in nh.areas["TestAreaTS"].grids:
+        nh.areas["TestAreaTS"].add_grid(NodeGrid(area="TestAreaTS", z=0))
+    nh.areas["TestAreaTS"].grids[0].add_node(node)
+    nh.save()
+
+    # Close DB and clear memory
+    if database_setup._DATABASE:
+        database_setup._DATABASE.close()
+    database_setup._DATABASE = None
+    
+    # Unpatch the classes to simulate a fresh server start
+    for cls in (Object, Channel, Account, Script, Node):
+        if getattr(cls, "_is_thread_safe", False):
+            cls.__getattribute__ = object.__getattribute__
+            cls.__setattr__ = object.__setattr__
+            cls._is_thread_safe = False
+
+    # Load objects from DB
+    load_objects()
+    nh2 = NodeHandler()
+    
+    loaded_obj = get(obj.id)[0]
+    loaded_chan = get(chan.id)[0]
+    loaded_acc = get(acc.id)[0]
+    loaded_script = get(script.id)[0]
+    loaded_node = nh2.get_node(("TestAreaTS", 10, 10, 0))
+    
+    # Test if classes have had ensure_thread_safe applied
+    assert getattr(loaded_obj.__class__, "_is_thread_safe", False) is True, "Object missing thread_safe patch!"
+    assert getattr(loaded_chan.__class__, "_is_thread_safe", False) is True, "Channel missing thread_safe patch!"
+    assert getattr(loaded_acc.__class__, "_is_thread_safe", False) is True, "Account missing thread_safe patch!"
+    assert getattr(loaded_script.__class__, "_is_thread_safe", False) is True, "Script missing thread_safe patch!"
+    assert getattr(loaded_node.__class__, "_is_thread_safe", False) is True, "Node missing thread_safe patch!"
+

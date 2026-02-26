@@ -17,7 +17,7 @@ from atheriz.singletons.get import get_node_handler, get_async_ticker, get_map_h
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
-from atheriz.utils import wrap_truecolor
+from atheriz.utils import wrap_truecolor, ensure_thread_safe
 from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.objects.base_lock import AccessLock
@@ -137,6 +137,8 @@ class Node(Flags, AccessLock):
         self.nouns = {}
         self.scripts: set[int] = set()
         self.hooks: dict[str, set[Callable]] = {}
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            ensure_thread_safe(self)
 
     def __getstate__(self):
         with self.lock:
@@ -164,6 +166,8 @@ class Node(Flags, AccessLock):
         for cls in reversed(ancestors):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            ensure_thread_safe(self)
 
     def resolve_relations(self):
         """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
@@ -329,6 +333,10 @@ class Node(Flags, AccessLock):
     def search(self, query: str) -> list[Any]:
         return search(self, query)
 
+    def get_links(self) -> list[NodeLink]:
+        with self.lock:
+            return self.links.copy()
+
     @property
     def area(self):
         nh = get_node_handler()
@@ -365,9 +373,8 @@ class Node(Flags, AccessLock):
         Returns:
             NodeLink | None: NodeLink if this Node has any NodeLinks, otherwise None
         """
-        if self.links:
-            return random.choice(self.links)
-        return None
+        with self.lock:
+            return random.choice(self.links) if self.links else None
 
     def add_link(self, link: NodeLink):
         """

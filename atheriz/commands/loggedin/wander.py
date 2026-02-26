@@ -14,10 +14,10 @@ class Wanderer(Object):
         loc: Node | None = self.location
         if not loc:
             return
-        if not loc.links:
-            return
         nh = get_node_handler()
-        link = random.choice(loc.links)
+        link = loc.get_random_link()
+        if not link:
+            return
         node = nh.get_node(link.coord)
         if not node:
             return
