@@ -1,4 +1,5 @@
 from __future__ import annotations
+from atheriz.singletons.get import get_map_handler
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
@@ -117,25 +118,38 @@ class NodeHandler:
             else:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
+        mh = get_map_handler()
+        mi = mh.get_mapinfo(door.from_coord[0], door.from_coord[3])
+        if mi:
+            if door.closed:
+                mi.update_grid(door.symbol_coord, door.closed_symbol)
+            else:
+                mi.update_grid(door.symbol_coord, door.open_symbol)
+            mi.render(True)
 
     def remove_door(self, door: Door):
         with self.lock3:
             d = self.doors.get(door.from_coord)
             rem_keys = []
             if d:
-                for k, v in d:
-                    if v == d:
+                for k, v in d.items():
+                    if v == door:
                         rem_keys.append(k)
                 for k in rem_keys:
                     del d[k]
             rem_keys.clear()
             d = self.doors.get(door.to_coord)
             if d:
-                for k, v in d:
-                    if v == d:
+                for k, v in d.items():
+                    if v == door:
                         rem_keys.append(k)
                 for k in rem_keys:
                     del d[k]
+        mh = get_map_handler()
+        mi = mh.get_mapinfo(door.from_coord[0], door.from_coord[3])
+        if mi:
+            mi.update_grid(door.symbol_coord, " ")
+            mi.render(True)
 
     def add_node(self, node: Node):
         area = self.get_area(node.coord[0])
