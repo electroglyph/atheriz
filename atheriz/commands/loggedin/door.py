@@ -24,8 +24,6 @@ class DoorCommand(Command):
         self.parser.add_argument("-s", "--south", action="store_true", help="South")
         self.parser.add_argument("-e", "--east", action="store_true", help="East")
         self.parser.add_argument("-w", "--west", action="store_true", help="West")
-        self.parser.add_argument("-u", "--up", action="store_true", help="Up")
-        self.parser.add_argument("-d", "--down", action="store_true", help="Down")
         self.parser.add_argument("-r", "--remove", action="store_true", help="Remove door")
         self.parser.add_argument(
             "-a",
@@ -378,7 +376,3 @@ class DoorCommand(Command):
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
                 return
-            if args.up:
-                pass
-            if args.down:
-                pass
