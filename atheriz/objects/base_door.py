@@ -10,6 +10,7 @@ from atheriz.objects.base_lock import AccessLock
 from atheriz.logger import logger
 from threading import RLock
 
+
 class Door(AccessLock):
     def __init__(
         self,
@@ -33,6 +34,7 @@ class Door(AccessLock):
         self.symbol_coord = symbol_coord
         self.closed_symbol = closed_symbol
         self.open_symbol = open_symbol
+        super().__init__()
 
     def __setstate__(self, state):
         object.__setattr__(self, "lock", RLock())
@@ -43,6 +45,31 @@ class Door(AccessLock):
             state = self.__dict__.copy()
             state.pop("lock", None)
             return state
+
+    @classmethod
+    def create(
+        cls,
+        from_coord: tuple[str, int, int, int],
+        from_exit: str,
+        to_coord: tuple[str, int, int, int],
+        to_exit: str,
+        symbol_coord: tuple[int, int] = None,
+        closed_symbol: str = None,
+        open_symbol: str = None,
+        closed: bool = True,
+        locked: bool = False,
+    ) -> Door:
+        return cls(
+            from_coord,
+            from_exit,
+            to_coord,
+            to_exit,
+            symbol_coord,
+            closed_symbol,
+            open_symbol,
+            closed,
+            locked,
+        )
 
     def __str__(self):
         return (

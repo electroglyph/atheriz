@@ -29,6 +29,9 @@ from atheriz.commands.loggedin.delete import DeleteCommand
 from atheriz.commands.loggedin.wander import WanderCommand
 from atheriz.commands.loggedin.move import MoveCommand
 from atheriz.commands.loggedin.time import TimeCommand
+from atheriz.commands.loggedin.door import DoorCommand
+from atheriz.commands.loggedin.open import OpenCommand
+from atheriz.commands.loggedin.open import CloseCommand
 
 
 class LoggedinCmdSet(CmdSet):
@@ -66,3 +69,6 @@ class LoggedinCmdSet(CmdSet):
         self.add(WanderCommand())
         self.add(MoveCommand())
         self.add(TimeCommand())
+        self.add(DoorCommand())
+        self.add(OpenCommand())
+        self.add(CloseCommand())

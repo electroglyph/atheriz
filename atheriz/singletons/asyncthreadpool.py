@@ -86,7 +86,7 @@ class AsyncThreadPool:
                             caller.msg(f"{tb}")
                         except:
                             pass
-                    logger.info(f"{tb}")
+                    logger.error(f"{tb}")
 
     def stop(self, wait=True):
         """

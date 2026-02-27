@@ -41,42 +41,17 @@ class ExitCommand(Command):
         if not dest:
             logger.error(f"Error getting destination node for: {self.destination}")
             return
-        # d = nh.get_doors(self.location)
-        # if d:
-        #     door = d.get(self.name)
-        #     if door:
-        #         if door.is_closed and door.try_open():
-        #             loc = nh.get_node(c.location)
-        #             loc.msg_contents(
-        #                 f"$You(target) $conj(open) the door.",
-        #                 mapping={"target": c},
-        #                 from_obj=c,
-        #             )
-        #             c.move_to(dest, self.name)
-        #             door.close()
-        #             dest.msg_contents(
-        #                 f"$You(target) $conj(close) the door.",
-        #                 mapping={"target": c},
-        #                 from_obj=c,
-        #             )
-        #             # todo post move
-        #             return
-        #         elif not door.is_closed:
-        #             c.move_to(dest, self.name)
-        #             # door.close()
-        #             # dest.msg_contents(
-        #             #     f"$You(target) $conj(close) the door.",
-        #             #     mapping={"target": self.caller},
-        #             #     from_obj=self.caller,
-        #             # )
-        #             # todo post move
-        #             return
-        #         else:
-        #             loc = nh.get_node(self.location)
-        #             loc.msg_contents(
-        #                 f"$You(target) $conj(try) to open the door, but it's locked.",
-        #                 mapping={"target": c},
-        #                 from_obj=c,
-        #             )
-        #             return
+        d = nh.get_doors(self.location)
+        if d:
+            door = d.get(self.name)
+            if door:
+                if door.closed and door.try_open(c):
+                    if c.move_to(dest, self.name):
+                        door.try_close(c)
+                    return
+                elif not door.closed:
+                    c.move_to(dest, self.name)
+                    return
+                else:
+                    return
         c.move_to(dest, self.name)

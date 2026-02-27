@@ -21,6 +21,12 @@ class Wanderer(Object):
         node = nh.get_node(link.coord)
         if not node:
             return
+        # Debug: trace NPC movement
+        from atheriz.logger import logger
+        old_area = loc.coord[0] if loc.is_node else "???"
+        new_area = node.coord[0]
+        if old_area != new_area:
+            logger.warning(f"NPC {self.name} (#{self.id}) crossing areas: {loc.coord} -> {node.coord} via link '{link.name}' (link.coord={link.coord})")
         self.move_to(node, link.name)
 
 class WanderCommand(Command):
@@ -40,12 +46,30 @@ class WanderCommand(Command):
     def run(self, caller: Object, args):
         count = args.count if args.count else 10
         
+        loc = caller.location
+        if not loc or not getattr(loc, 'is_node', False):
+            caller.msg("You must be in a room to spawn wanderers.")
+            return
+        
+        nh = get_node_handler()
+        area = nh.get_area(loc.coord[0])
+        if not area:
+            caller.msg("Could not find your current area.")
+            return
+        
+        # Get the grid for the current z-level
+        grid = area.get_grid(loc.coord[3])
+        if not grid:
+            caller.msg("Could not find the grid for your current z-level.")
+            return
+        
         start = time.time()
         for i in range(count):
             # Create a unique name for each wanderer to avoid collisions if called multiple times
             name = f"Wanderer {random.randint(1000, 9999)}"
             npc = Wanderer.create(caller=caller, name=name, is_npc=True, is_mapable=True, is_tickable=True)
             if npc:
-                npc.move_to(caller.location)
+                random_node = grid.get_random_node()
+                npc.move_to(random_node)
         end = time.time()
-        caller.msg(f"Spawned {count} NPCs in {(end - start) * 1000:.2f} milliseconds")
+        caller.msg(f"Spawned {count} NPCs across area '{loc.coord[0]}' in {(end - start) * 1000:.2f} milliseconds")

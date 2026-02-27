@@ -34,7 +34,7 @@ def test_node_init():
     node = Node(coord=("TestArea", 1, 2, 3), desc="A dark room")
     assert node.coord == ("TestArea", 1, 2, 3)
     assert node.desc == "A dark room"
-    assert node.links is None  # defaults to None, not []
+    assert node.links == []
 
 
 def test_node_with_links():

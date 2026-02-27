@@ -759,24 +759,23 @@ class Object(Flags, DbOps, AccessLock):
                 ordered = sort_locks(loc, destination)
                 with ordered[0].lock:
                     with ordered[1].lock:
-                        if announce:
-                            self.announce_move_to(loc, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
                         object.__setattr__(loc, "is_modified", True)
                         object.__setattr__(destination, "is_modified", True)
                         destination.add_exits(self, internal=True)
                         self.location = destination
-                        if announce:
-                            self.announce_move_from(destination, from_exit, **kwargs)
+                if announce:
+                    self.announce_move_to(loc, to_exit, **kwargs)
+                    self.announce_move_from(destination, from_exit, **kwargs)
             else:
                 with destination.lock:
                     destination._contents.add(self.id)
                     object.__setattr__(destination, "is_modified", True)
                     destination.add_exits(self, internal=True)
                     self.location = destination
-                    if announce:
-                        self.announce_move_from(destination, from_exit, **kwargs)
+                if announce:
+                    self.announce_move_from(destination, from_exit, **kwargs)
             if settings.MAP_ENABLED:
                 mh = get_map_handler()
                 if self.is_pc:
@@ -862,7 +861,6 @@ class Object(Flags, DbOps, AccessLock):
                 from_obj=self,
                 exclude=self,
                 type="move",
-                internal=True,
                 **kwargs,
             )
             return
@@ -878,7 +876,6 @@ class Object(Flags, DbOps, AccessLock):
             from_obj=self,
             exclude=self,
             type="move",
-            internal=True,
             **kwargs,
         )
 
@@ -892,7 +889,6 @@ class Object(Flags, DbOps, AccessLock):
                 from_obj=self,
                 exclude=self,
                 type="move",
-                internal=True,
                 **kwargs,
             )
             return
@@ -908,7 +904,6 @@ class Object(Flags, DbOps, AccessLock):
             from_obj=self,
             exclude=self,
             type="move",
-            internal=True,
             **kwargs,
         )
 

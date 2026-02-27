@@ -131,7 +131,7 @@ class Node(Flags, AccessLock):
         self.symbol = symbol
         self.legend_desc = legend_desc
         self.data = data if data else {}
-        self.links = links
+        self.links = links if links else []
         self._contents = set()
         self.is_node = True
         self.nouns = {}
@@ -335,7 +335,18 @@ class Node(Flags, AccessLock):
 
     def get_links(self) -> list[NodeLink]:
         with self.lock:
-            return self.links.copy()
+            return self.links.copy() if self.links else []
+        
+    def has_link_name(self, name: str) -> bool:
+        """
+        Check if this node has a link with the given name.
+        Args:
+            name (str): Name of the link to check
+        Returns:
+            bool: True if the link exists, False otherwise
+        """
+        with self.lock:
+            return any(link.name == name for link in self.links)
 
     @property
     def area(self):
@@ -477,7 +488,6 @@ class Node(Flags, AccessLock):
         from_obj=None,
         mapping=None,
         raise_funcparse_errors=False,
-        internal: bool = False,
         **kwargs,
     ):
         """send a message to all objects in this node
@@ -499,7 +509,7 @@ class Node(Flags, AccessLock):
 
         if "you" not in mapping:
             mapping["you"] = you
-        contents = get(self._contents) if internal else self.contents
+        contents = self.contents
         if exclude:
             exclude = make_iter(exclude)
             contents = [obj for obj in contents if obj not in exclude]

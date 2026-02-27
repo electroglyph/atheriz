@@ -57,99 +57,103 @@ class InputFuncs:
     @inputfunc()
     def text(self, connection: Connection, args: list, kwargs: dict):
         """Handle plain text/command input from the client."""
-        
-        text = str(args[0]) if args else ""
+        try:
+            text = str(args[0]) if args else ""
+            logger.debug(f"text handler received: {text!r}")
 
-        # if we are waiting for input pass it to the future.
-        if connection.session.input_future:
-            if not connection.session.input_future.done():
-                get_async_threadpool().loop.call_soon_threadsafe(
-                    connection.session.input_future.set_result, text
-                )
-                connection.session.input_future = None
+            # if we are waiting for input pass it to the future.
+            if connection.session.input_future:
+                if not connection.session.input_future.done():
+                    get_async_threadpool().loop.call_soon_threadsafe(
+                        connection.session.input_future.set_result, text
+                    )
+                    connection.session.input_future = None
+                    return
+
+            if not text:
                 return
 
-        if not text:
-            return
+            parts = text.split(" ", 1)
+            cmd_key = parts[0].lower()
+            cmd_args = parts[1] if len(parts) > 1 else ""
 
-        parts = text.split(" ", 1)
-        cmd_key = parts[0].lower()
-        cmd_args = parts[1] if len(parts) > 1 else ""
+            atp = get_async_threadpool()
 
-        atp = get_async_threadpool()
-
-        if connection.session.puppet:
-            # Player is logged in
-            cmd = connection.session.puppet.internal_cmdset.get(cmd_key)
-            if not cmd:
-                cmd = get_loggedin_cmdset().get(cmd_key)
-            if cmd:
-                func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args)
-                if func:
-                    atp.add_task(func, caller, eargs)
-                else:
-                    logger.warning(f"Command {cmd_key} execute returned no func")
-            else:
-                # handle aliasing / short commands
-                # this makes 'bleh work as `say bleh`
-                cmd = get_loggedin_cmdset().get(text[:1])
+            if connection.session.puppet:
+                # Player is logged in
+                cmd = connection.session.puppet.internal_cmdset.get(cmd_key)
+                if not cmd:
+                    cmd = get_loggedin_cmdset().get(cmd_key)
                 if cmd:
-                    cmd_key = text[1:]
+                    func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args)
+                    if func:
+                        atp.add_task(func, caller, eargs)
+                    else:
+                        logger.warning(f"Command {cmd_key} execute returned no func")
                 else:
-                    # check for commands provided by objects in the players location
-                    loc: Object | Node = connection.session.puppet.location
-                    if loc:
-                        objs = loc.contents
-                        for obj in objs:
-                            if cmd := obj.external_cmdset.get(cmd_key):
+                    # handle aliasing / short commands
+                    # this makes 'bleh work as `say bleh`
+                    cmd = get_loggedin_cmdset().get(text[:1])
+                    if cmd:
+                        cmd_key = text[1:]
+                    else:
+                        # check for commands provided by objects in the players location
+                        loc: Object | Node = connection.session.puppet.location
+                        if loc:
+                            objs = loc.contents
+                            for obj in objs:
+                                if cmd := obj.external_cmdset.get(cmd_key):
+                                    break
+                        if not cmd:
+                            # check for commands provided by objects in the players inventory
+                            objs = connection.session.puppet.contents
+                            for obj in objs:
+                                if cmd := obj.external_cmdset.get(cmd_key):
+                                    break
+
+                    if not cmd and settings.AUTO_COMMAND_ALIASING:
+                        keys = get_loggedin_cmdset().get_keys()
+                        for key in keys:
+                            if key in _IGNORE_KEYS:
+                                continue
+                            if key.startswith(cmd_key):
+                                cmd = get_loggedin_cmdset().get(key)
+                                # using the execute below, so set our args properly
+                                cmd_key = cmd_args
                                 break
                     if not cmd:
-                        # check for commands provided by objects in the players inventory
-                        objs = connection.session.puppet.contents
-                        for obj in objs:
-                            if cmd := obj.external_cmdset.get(cmd_key):
-                                break
-
-                if not cmd and settings.AUTO_COMMAND_ALIASING:
-                    keys = get_loggedin_cmdset().get_keys()
-                    for key in keys:
-                        if key in _IGNORE_KEYS:
-                            continue
-                        if key.startswith(cmd_key):
-                            cmd = get_loggedin_cmdset().get(key)
-                            # using the execute below, so set our args properly
-                            cmd_key = cmd_args
-                            break
-                if not cmd:
-                    cmd = get_loggedin_cmdset().get("none")
-                if cmd:
-                    func, caller, eargs = cmd.execute(connection.session.puppet, cmd_key)
-                    if func:
-                        atp.add_task(func, caller, eargs)
-        else:
-            # Player is NOT logged in
-            cmd = get_unloggedin_cmdset().get(cmd_key)
-            if cmd:
-                func, caller, eargs = cmd.execute(connection, cmd_args)
-                if func:
-                    atp.add_task(func, caller, eargs)
+                        cmd = get_loggedin_cmdset().get("none")
+                    if cmd:
+                        func, caller, eargs = cmd.execute(connection.session.puppet, cmd_key)
+                        if func:
+                            atp.add_task(func, caller, eargs)
             else:
-                if settings.AUTO_COMMAND_ALIASING:
-                    keys = get_unloggedin_cmdset().get_keys()
-                    for key in keys:
-                        if key in _IGNORE_KEYS:
-                            continue
-                        if key.startswith(cmd_key):
-                            cmd = get_unloggedin_cmdset().get(key)
-                            # using the execute below, so set our args properly
-                            cmd_key = cmd_args
-                            break
-                if not cmd:
-                    cmd = get_unloggedin_cmdset().get("none")
+                # Player is NOT logged in
+                cmd = get_unloggedin_cmdset().get(cmd_key)
                 if cmd:
-                    func, caller, eargs = cmd.execute(connection, cmd_key)
+                    func, caller, eargs = cmd.execute(connection, cmd_args)
                     if func:
                         atp.add_task(func, caller, eargs)
+                else:
+                    if settings.AUTO_COMMAND_ALIASING:
+                        keys = get_unloggedin_cmdset().get_keys()
+                        for key in keys:
+                            if key in _IGNORE_KEYS:
+                                continue
+                            if key.startswith(cmd_key):
+                                cmd = get_unloggedin_cmdset().get(key)
+                                # using the execute below, so set our args properly
+                                cmd_key = cmd_args
+                                break
+                    if not cmd:
+                        cmd = get_unloggedin_cmdset().get("none")
+                    if cmd:
+                        func, caller, eargs = cmd.execute(connection, cmd_key)
+                        if func:
+                            atp.add_task(func, caller, eargs)
+        except Exception:
+            import traceback
+            logger.error(f"Exception in text handler: {traceback.format_exc()}")
 
     @inputfunc()
     def term_size(self, connection: Connection, args: list, kwargs: dict):
