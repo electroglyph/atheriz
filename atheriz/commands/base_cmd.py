@@ -142,8 +142,9 @@ class Command:
             arg_list = shlex.split(args_string, posix=False)
         try:
             parsed_args = self.parser.parse_args(arg_list)
-        except CommandError:
-            self.print_help()
+        except:
+            help_text = self.print_help()
+            caller.msg(help_text)
             return None, None, None
         return self.run, caller, parsed_args
 
