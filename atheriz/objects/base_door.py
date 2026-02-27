@@ -54,8 +54,8 @@ class Door(AccessLock):
         to_coord: tuple[str, int, int, int],
         to_exit: str,
         symbol_coord: tuple[int, int] = None,
-        closed_symbol: str = None,
-        open_symbol: str = None,
+        closed_symbol: str = "",
+        open_symbol: str = "",
         closed: bool = True,
         locked: bool = False,
     ) -> Door:

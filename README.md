@@ -98,6 +98,6 @@ TODO:
 - ~~tick system~~
 - ~~time system~~
 - pathfinding (already done, just needs to be added)
-- door stuff + ability for custom doors
+- ~~door stuff + ability for custom doors~~
 - build colors for map tiles
 - MCP

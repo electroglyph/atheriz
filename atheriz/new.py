@@ -174,6 +174,7 @@ CLASS_INJECTIONS = [
     ("object", "Object", "atheriz.objects.base_obj"),
     ("channel", "Channel", "atheriz.objects.base_channel"),
     ("node", "Node", "atheriz.objects.nodes"),
+    ("door", "Door", "atheriz.objects.base_door"),
     ("commands.loggedin", "LoggedinCmdSet", "atheriz.commands.loggedin.cmdset"),
     ("commands.unloggedin", "UnloggedinCmdSet", "atheriz.commands.unloggedin.cmdset"),
     ("inputfuncs", "InputFuncs", "atheriz.inputfuncs"),
@@ -493,6 +494,11 @@ def create_game_folder(folder_name: str) -> None:
     access_src = Path(atheriz.objects.base_lock.__file__)
     (folder_path / "access.py").write_text(access_src.read_text())
 
+    print("  Creating door.py...")
+    import atheriz.objects.base_door
+    door_src = Path(atheriz.objects.base_door.__file__)
+    (folder_path / "door.py").write_text(door_src.read_text())
+
     # Create commands directory
     print("  Creating commands directory...")
     commands_path = folder_path / "commands"
@@ -627,7 +633,7 @@ def create_game_folder(folder_name: str) -> None:
     print(f"\nSuccess! Game folder '{folder_name}' created with:")
     print(f"  Template files:")
     print(f"    - account.py, channel.py, object.py, node.py")
-    print(f"    - script.py, flags.py, access.py, objects.py, database_setup.py")
+    print(f"    - script.py, flags.py, access.py, door.py, objects.py, database_setup.py")
     print(f"    - commands/, inputfuncs.py, settings.py")
     print(f"    - initial_setup.py, connection_screen.py")
     print(f"    - web/ (templates and static files)")

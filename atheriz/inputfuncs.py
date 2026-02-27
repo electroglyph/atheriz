@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import Node
     from atheriz.objects.base_obj import Object
     
-_IGNORE_KEYS = ["save", "quit"]
+_IGNORE_KEYS = ["save", "quit", "wander"]
 
 def inputfunc(name: str | None = None):
     """
