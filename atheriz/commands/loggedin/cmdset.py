@@ -32,7 +32,8 @@ from atheriz.commands.loggedin.time import TimeCommand
 from atheriz.commands.loggedin.door import DoorCommand
 from atheriz.commands.loggedin.open import OpenCommand
 from atheriz.commands.loggedin.open import CloseCommand
-
+from atheriz.commands.loggedin.open import LockCommand
+from atheriz.commands.loggedin.open import UnlockCommand
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -72,3 +73,5 @@ class LoggedinCmdSet(CmdSet):
         self.add(DoorCommand())
         self.add(OpenCommand())
         self.add(CloseCommand())
+        self.add(LockCommand())
+        self.add(UnlockCommand())
