@@ -299,7 +299,6 @@ class MapInfo:
     def update_grid(self, coord: tuple[int, int], new_symbol: str):
         with self.lock:
             self.pre_grid[coord] = new_symbol
-            self.post_grid[coord] = new_symbol
             self.map_changed = True
         self.render(True)
 

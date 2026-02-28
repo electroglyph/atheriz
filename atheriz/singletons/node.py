@@ -125,7 +125,6 @@ class NodeHandler:
                 mi.update_grid(door.symbol_coord, door.closed_symbol)
             else:
                 mi.update_grid(door.symbol_coord, door.open_symbol)
-            mi.render(True)
 
     def remove_door(self, door: Door):
         with self.lock3:
