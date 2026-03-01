@@ -71,36 +71,6 @@ def ensure_thread_safe(obj):
     cls._is_thread_safe = True
 
 
-def tuple_to_str(t: tuple) -> str:
-    return repr(t)
-
-
-def str_to_tuple(s: str) -> tuple:
-    import ast
-
-    return ast.literal_eval(s)
-
-
-def instance_from_string(class_path_string, *args, **kwargs):
-    """dynamically import a class and instantiate it with given arguments
-
-    Args:
-        class_path_string (str): the full import path to the class (e.g., 'package.module.ClassName')
-
-    Returns:
-        object: an instance of the specified class
-    """
-    module_name, _, class_name = class_path_string.rpartition(".")
-    module = importlib.import_module(module_name)
-    cls = getattr(module, class_name)
-    instance = cls(*args, **kwargs)
-    return instance
-
-
-def get_import_path(obj: object) -> str:
-    return obj.__module__ + "." + obj.__class__.__name__
-
-
 def wrap_xterm256(
     input: str,
     fg=None,

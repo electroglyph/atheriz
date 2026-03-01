@@ -1,6 +1,5 @@
 from atheriz.singletons.get import set_id
 from threading import RLock
-from atheriz.utils import get_import_path
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
 import dill
@@ -69,7 +68,6 @@ def get(ids: int | Iterable[int]) -> list[Any]:
 def add_object(obj: Object) -> None:
     """Add an object to the global object registry."""
     global _ALL_OBJECTS
-    path = get_import_path(obj)
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS[obj.id] = obj
 
