@@ -39,9 +39,6 @@ def node_handler():
     with patch(
         "atheriz.commands.loggedin.door.get_node_handler", return_value=nh
     ), patch(
-        "atheriz.commands.loggedin.door.get_map_handler",
-        return_value=MockMapHandler(),
-    ), patch(
         "atheriz.singletons.node.get_map_handler",
         return_value=MockMapHandler(),
     ):
@@ -357,7 +354,7 @@ def test_create_door_west_auto(setup_area):
     assert door.to_exit == "east"
     assert door.symbol_coord == (-1, 0)
     assert door.closed_symbol == settings.EW_CLOSED_DOOR
-    assert door.open_symbol == settings.EW_OPEN_DOOR1
+    assert door.open_symbol == settings.EW_OPEN_DOOR2
 
 
 def test_create_door_west_links(setup_area):

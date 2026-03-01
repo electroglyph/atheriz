@@ -1,6 +1,5 @@
 import pytest
 from atheriz.singletons import objects
-from atheriz.utils import get_import_path
 
 
 class MockObj:
