@@ -144,7 +144,7 @@ class MapInfo:
 
     @staticmethod
     def get_dirs(
-        grid: dict[tuple[int, int], str], coord: tuple[int, int], char: str
+        grid: dict[tuple[int, int], str], coord: tuple[int, int], chars: list[str]
     ) -> tuple[bool, bool, bool, bool]:
         """
         returns a tuple of booleans representing the directions of the walls around a coordinate
@@ -154,19 +154,22 @@ class MapInfo:
         e = False
         w = False
         cx, cy = coord
-        if grid.get((cx, cy + 1), None) == char:
+        if grid.get((cx, cy + 1), None) in chars:
             n = True
-        if grid.get((cx, cy - 1), None) == char:
+        if grid.get((cx, cy - 1), None) in chars:
             s = True
-        if grid.get((cx + 1, cy), None) == char:
+        if grid.get((cx + 1, cy), None) in chars:
             e = True
-        if grid.get((cx - 1, cy), None) == char:
+        if grid.get((cx - 1, cy), None) in chars:
             w = True
         return n, s, e, w
 
     @staticmethod
     def render_char(
-        grid: dict[tuple[int, int], str], char: str, style: str = "single"
+        grid: dict[tuple[int, int], str],
+        original_grid: dict[tuple[int, int], str],
+        char: str,
+        style: str = "single",
     ) -> dict[tuple[int, int], str]:
         """
         renders specified char into appropriate road/wall/path type based on its neighbors
@@ -176,7 +179,7 @@ class MapInfo:
         to_place = {}
         for k, v in grid.items():
             if v == char:
-                n, s, e, w = MapInfo.get_dirs(grid, k, char)
+                n, s, e, w = MapInfo.get_dirs(original_grid, k, settings.ALL_SYMBOLS)
                 if style == "single":
                     if n and s and e and w:
                         to_place[k] = "┼"
@@ -282,11 +285,12 @@ class MapInfo:
     def pre_render(self):
         with self.lock:
             rendered = copy.deepcopy(self.pre_grid)
-        MapInfo.render_char(rendered, settings.SINGLE_WALL_PLACEHOLDER, "single")
-        MapInfo.render_char(rendered, settings.DOUBLE_WALL_PLACEHOLDER, "double")
-        MapInfo.render_char(rendered, settings.ROUNDED_WALL_PLACEHOLDER, "rounded")
-        MapInfo.render_char(rendered, settings.PATH_PLACEHOLDER, "rounded")
-        MapInfo.render_char(rendered, settings.ROAD_PLACEHOLDER, "double")
+            original = self.pre_grid.copy()
+        MapInfo.render_char(rendered, original, settings.SINGLE_WALL_PLACEHOLDER, "single")
+        MapInfo.render_char(rendered, original, settings.DOUBLE_WALL_PLACEHOLDER, "double")
+        MapInfo.render_char(rendered, original, settings.ROUNDED_WALL_PLACEHOLDER, "rounded")
+        MapInfo.render_char(rendered, original, settings.PATH_PLACEHOLDER, "rounded")
+        MapInfo.render_char(rendered, original, settings.ROAD_PLACEHOLDER, "double")
         rooms = []
         for k, v in rendered.items():
             if v == settings.ROOM_PLACEHOLDER:

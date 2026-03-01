@@ -74,6 +74,8 @@ ROUNDED_WALL_PLACEHOLDER = "⍮"
 ROOM_PLACEHOLDER = "℣"
 PATH_PLACEHOLDER = "߶"
 ROAD_PLACEHOLDER = "᭤"
+# all symbols which can be rendered as a different shape according to neighbors
+ALL_SYMBOLS = [SINGLE_WALL_PLACEHOLDER, DOUBLE_WALL_PLACEHOLDER, ROUNDED_WALL_PLACEHOLDER, PATH_PLACEHOLDER, ROAD_PLACEHOLDER]
 # brown doors:
 NS_CLOSED_DOOR = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m━\x1b[0m'
 NS_OPEN_DOOR1 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┚\x1b[0m'

@@ -1,5 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.get import get_node_handler, get_map_handler
+from atheriz.singletons.get import get_node_handler
 from atheriz.objects.nodes import NodeLink, Node
 from atheriz.objects.base_door import Door
 import atheriz.settings as settings
@@ -237,7 +237,7 @@ class DoorCommand(Command):
                     "north",
                     (door_coord[1], door_coord[2]),
                     settings.NS_CLOSED_DOOR,
-                    settings.NS_OPEN_DOOR1,
+                    settings.NS_OPEN_DOOR2,
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
@@ -371,7 +371,7 @@ class DoorCommand(Command):
                     "east",
                     (door_coord[1], door_coord[2]),
                     settings.EW_CLOSED_DOOR,
-                    settings.EW_OPEN_DOOR1,
+                    settings.EW_OPEN_DOOR2,
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
