@@ -8,6 +8,7 @@ if TYPE_CHECKING:
 class QuellCommand(Command):
     key = "quell"
     aliases = ["q"]
+    category = "Building"
     desc = "Quell your privileges to the level of a normal player."
     use_parser = False
 
@@ -29,6 +30,7 @@ class QuellCommand(Command):
 class UnquellCommand(Command):
     key = "unquell"
     aliases = ["unq"]
+    category = "Building"
     desc = "Unquell your privileges."
     use_parser = False
 

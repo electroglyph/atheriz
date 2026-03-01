@@ -25,7 +25,7 @@ class HelpCommand(Command):
     def run(self, caller: Object, args):
         cmdset = get_loggedin_cmdset()
         loc = caller.location
-        if not args:
+        if not args or not args.command:
             table = PrettyTable()
             table.border = not caller.session.screenreader
             table.header = not caller.session.screenreader

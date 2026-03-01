@@ -11,6 +11,7 @@ class OpenCommand(Command):
     key = "open"
     category = "General"
     desc = "Open doors."
+    extra_desc = "Also accepts n,s,e,w,u,d as arguments."
     use_parser = True
 
     def setup_parser(self):
@@ -39,6 +40,7 @@ class OpenCommand(Command):
 
         if not (n_flag or s_flag or e_flag or w_flag or u_flag or d_flag):
             caller.msg("Open what?")
+            caller.msg(self.print_help())
             return
 
         nh = get_node_handler()
@@ -94,6 +96,7 @@ class CloseCommand(Command):
     key = "close"
     category = "General"
     desc = "Close doors."
+    extra_desc = "Also accepts n,s,e,w,u,d as arguments."
     use_parser = True
 
     def setup_parser(self):
@@ -122,6 +125,7 @@ class CloseCommand(Command):
 
         if not (n_flag or s_flag or e_flag or w_flag or u_flag or d_flag):
             caller.msg("Close what?")
+            caller.msg(self.print_help())
             return
 
         nh = get_node_handler()
@@ -176,6 +180,7 @@ class LockCommand(Command):
     key = "lock"
     category = "General"
     desc = "Lock doors."
+    extra_desc = "Also accepts n,s,e,w,u,d as arguments."
     use_parser = True
 
     def setup_parser(self):
@@ -203,7 +208,8 @@ class LockCommand(Command):
         d_flag = args.down or "d" in args_lower or "down" in args_lower
 
         if not (n_flag or s_flag or e_flag or w_flag or u_flag or d_flag):
-            caller.msg("Close what?")
+            caller.msg("Lock what?")
+            caller.msg(self.print_help())
             return
 
         nh = get_node_handler()
@@ -258,6 +264,7 @@ class UnlockCommand(Command):
     key = "unlock"
     category = "General"
     desc = "Unlock doors."
+    extra_desc = "Also accepts n,s,e,w,u,d as arguments."
     use_parser = True
 
     def setup_parser(self):
@@ -285,7 +292,8 @@ class UnlockCommand(Command):
         d_flag = args.down or "d" in args_lower or "down" in args_lower
 
         if not (n_flag or s_flag or e_flag or w_flag or u_flag or d_flag):
-            caller.msg("Close what?")
+            caller.msg("Unlock what?")
+            caller.msg(self.print_help())
             return
 
         nh = get_node_handler()

@@ -35,10 +35,13 @@ class DoorCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
-        if args.remove and not any(
-            [args.north, args.south, args.east, args.west, args.up, args.down]
-        ):
+        if not args.remove and not any([args.north, args.south, args.east, args.west]):
+            caller.msg("You must specify a direction when creating a door.")
+            caller.msg(self.print_help())
+            return
+        if args.remove and not any([args.north, args.south, args.east, args.west]):
             caller.msg("You must specify a direction when removing a door.")
+            caller.msg(self.print_help())
             return
         # loc.coord = tuple["area", "x", "y", "z"]
         loc = caller.location

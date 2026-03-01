@@ -53,6 +53,9 @@ class Command:
     key: str = "base"
     aliases: list[str] = []
     desc: str = "Base command"
+    # this extra info will be shown in individual command help text, but not on the help list
+    # this will print after the original help text
+    extra_desc: str = ""
     category: str = "General"
     tag: str = ""
     hide: bool = False
@@ -104,7 +107,7 @@ class Command:
         """
         a = [x for x in self.aliases]
         a.insert(0, self.key)
-        return self.parser.format_help() + f"\naliases: {', '.join(a)}\n"
+        return self.parser.format_help() + f"\naliases: {', '.join(a)}\n" + self.extra_desc
 
     def run(self, caller: Object | Connection, args) -> Any:
         """
