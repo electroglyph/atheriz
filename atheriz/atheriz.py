@@ -787,7 +787,7 @@ def do_reset_command(args):
             os.kill(pid, 0)
             print("Error: Server is running. Please stop the server before resetting.")
             return
-        except (ValueError, ProcessLookupError, FileNotFoundError):
+        except (ValueError, ProcessLookupError, FileNotFoundError, OSError):
             pass
 
     if not args.force:
