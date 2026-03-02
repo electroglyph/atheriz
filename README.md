@@ -92,6 +92,7 @@ in folder_name you'll see some basic template classes and a placeholder website.
 TODO:
 
 - docs
+- example game
 - more tests (getting there!)
 - ~~node hooks~~
 - ~~scripts~~
@@ -99,5 +100,7 @@ TODO:
 - ~~time system~~
 - ~~pathfinding~~
 - ~~door stuff + ability for custom doors~~
-- build colors for map tiles
-- MCP
+- map tile highlight in game client
+- telnet
+- follow and group system
+- room nouns
