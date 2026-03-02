@@ -34,22 +34,23 @@ def get_path(current_node):
     return path[::-1]  # return reversed path
 
 
-def get_adjacent_cells(origin: tuple, map: list, width: int, height: int):
-    results = []
-    if origin[0] > 0 and map[origin[1] * width + (origin[0] - 1)]:
-        results.append((origin[0] - 1, origin[1]))
-    if origin[0] < width - 1 and map[origin[1] * width + (origin[0] + 1)]:
-        results.append((origin[0] + 1, origin[1]))
-    if origin[1] > 0 and map[(origin[1] - 1) * width + origin[0]]:
-        results.append((origin[0], origin[1] - 1))
-    if origin[1] < height - 1 and map[(origin[1] + 1) * width + origin[0]]:
-        results.append((origin[0], origin[1] + 1))
-    return results
-
-
 def astar(
     start: Node, end: Node, caller: Object | None = None
 ) -> tuple[bool, list[Node], list[Node]]:
+    """
+    Finds a path between two nodes using the A* algorithm.
+    
+    Args:
+        start: The starting node.
+        end: The ending node.
+        caller: The object trying to find the path.
+    
+    Returns:
+        A tuple containing:
+            - A boolean indicating whether a path was found.
+            - A list of nodes representing the path.
+            - A list of nodes representing the dead ends
+    """
     nh = get_node_handler()
 
     def get_link_nodes(node: Node) -> list[Node]:
@@ -100,7 +101,11 @@ def astar(
         if iterations > max_iterations:
             return False, get_path(current_node), [c.position for c in closed_list]
         children = []
-        nodes = get_link_nodes(current_node.position) if caller is None else get_link_nodes_caller(current_node.position)
+        nodes = (
+            get_link_nodes(current_node.position)
+            if caller is None
+            else get_link_nodes_caller(current_node.position)
+        )
         for n in nodes:
             node = PathNode(current_node, n)
             children.append(node)

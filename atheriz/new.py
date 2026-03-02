@@ -349,15 +349,11 @@ def generate_loggedin_cmdset_template() -> str:
     generator.add_methods(methods)
 
     content = generator.generate()
-    # Add TestCommand import after the first import line
-    lines = content.split("\n")
-    lines.insert(1, "from .test import TestCommand")
-    content = "\n".join(lines)
-    # Replace 'pass' with __init__ that registers TestCommand
+    # Replace 'pass' with __init__ with commented example
     init_body = "\n".join([
         "    def __init__(self):",
         "        super().__init__()",
-        "        self.add(TestCommand())",
+        "        # self.add(MyLoggedinCommand())",
     ])
     content = content.replace("    pass", init_body)
     return content
@@ -384,22 +380,6 @@ def generate_unloggedin_cmdset_template() -> str:
     return content
 
 
-def generate_test_command_template() -> str:
-    """Generate the commands/test.py template (scaffolding for a test command)."""
-    return '''from atheriz.commands.base_cmd import Command
-
-
-class TestCommand(Command):
-    """
-    A simple test command to verify custom commands work.
-    """
-    key = "test"
-    desc = "A simple test command."
-    category = "Custom"
-
-    def run(self, caller, args):
-        caller.msg("test!")
-'''
 
 
 # Template configurations: (filename, base_import, base_class)
@@ -508,8 +488,6 @@ def create_game_folder(folder_name: str) -> None:
     print("  Creating commands/command.py...")
     (commands_path / "command.py").write_text(generate_command_base_template())
 
-    print("  Creating commands/test.py...")
-    (commands_path / "test.py").write_text(generate_test_command_template())
 
     print("  Creating commands/loggedin.py...")
     (commands_path / "loggedin.py").write_text(generate_loggedin_cmdset_template())

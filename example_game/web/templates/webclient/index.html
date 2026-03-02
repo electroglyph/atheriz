@@ -1,0 +1,109 @@
+<!DOCTYPE HTML>
+<html dir="ltr" lang="en">
+  <head>
+    <style>
+      body, html {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+      }
+      #terminal-container {
+        display: flex;
+        flex-grow: 1;
+        width: 100%;
+        overflow: hidden;
+        scrollbar-color: #333333 #171717;
+      }
+      .terminal {
+        height: 100%;
+        overflow: hidden;
+      }
+      #left-terminal {
+        width: 50%;
+        border-left: 5px solid #333333;
+        border-top: 5px solid #333333;
+        border-bottom: 5px solid #333333;
+        box-sizing: border-box;
+      }
+      #right-terminal {
+        flex-grow: 1;
+        border-right: 5px solid #333333;
+        border-top: 5px solid #333333;
+        border-bottom: 5px solid #333333;
+        box-sizing: border-box;
+      }
+      #divider {
+        width: 5px;
+        background-color: #333333;
+        cursor: col-resize;
+        height: 100%;
+        flex-shrink: 0;
+      }
+      #input-area-wrapper {
+        width: 100%;
+        flex-shrink: 0;
+        padding: 3px 0;
+        background-color: #333333;
+        /*border-top: 1px solid #070530;*/
+      }
+      #input-box {
+        display: block;
+        width: 100%;
+        background-color: black;
+        color: white;
+        box-sizing: border-box;
+        border: 1px solid #333333;
+        font-family: monospace;
+        font-size: 14px;
+        line-height: 1.4;
+        padding: 6px 8px;
+        resize: none;
+        overflow-y: hidden;
+        min-height: 0;
+      }
+      .xterm .xterm-viewport {
+        width: 100% !important;
+      }
+      #input-box:focus {
+        outline: none;
+        border-color: #333333;
+      }
+    </style>
+    <title>AtheriZ</title>
+    <meta http-equiv="content-type", content="application/xhtml+xml; charset=UTF-8" />
+    <meta name="author" content="Evennia" />
+    <link
+          rel="preload"
+          href="fonts/Fira_Custom.ttf"
+          as="font"
+          type="font/ttf"
+          crossorigin />
+    <link rel="preload stylesheet" href="fonts/FiraCode.css?v={{ v('webclient/fonts/FiraCode.css') }}" as="style" type="text/css" crossorigin="anonymous">
+    <link rel="stylesheet" type="text/css" href="css/xterm.css?v={{ v('webclient/css/xterm.css') }}">
+    <script language="javascript" type="text/javascript">
+        const wsactive = true;
+        const csessid = false;
+        const wsurl = "ws://" + window.location.hostname + ":" + window.location.port + "/ws";
+    </script>
+    <script src="js/xterm.js?v={{ v('webclient/js/xterm.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <script src="js/addon-fit.js?v={{ v('webclient/js/addon-fit.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <script src="js/addon-unicode11.js?v={{ v('webclient/js/addon-unicode11.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <script src="js/addon-webgl.js?v={{ v('webclient/js/addon-webgl.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <script src="js/addon-web-links.js?v={{ v('webclient/js/addon-web-links.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+    <script src="js/fontfaceobserver.js?v={{ v('webclient/js/fontfaceobserver.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+  </head>
+<body>
+  <div id="terminal-container">
+    <div id="left-terminal" class="terminal"></div>
+    <div id="divider"></div>
+    <div id="right-terminal" class="terminal"></div>
+  </div>
+  <div id="input-area-wrapper">
+    <label for="input-box"></label><textarea id="input-box" rows="1" placeholder="Enter command (Shift+Enter for new line, right arrow or tab to use completion)..."></textarea>
+  </div>
+    <script src="js/webclient.js?v={{ v('webclient/js/webclient.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
+</body>
+</html>

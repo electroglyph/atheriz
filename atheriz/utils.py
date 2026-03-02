@@ -132,7 +132,7 @@ def wrap_truecolor(
     clear=False,
 ) -> str:
     """
-    colorize input string with ANSI xterm256 color and append a color reset code to the end
+    colorize input string with ANSI truecolor and append a color reset code to the end
 
     Args:
         input (str): input string
