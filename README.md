@@ -24,7 +24,7 @@ Because Evennia is single-threaded, you are limited in how much computation you 
 
 at_tick() is possible for thousands of objects per second without slowing down the game.
 
-# Documents
+# Documentation
 
 First version of the docs are up, view them here: [docs](docs/table_of_contents.md)
 
