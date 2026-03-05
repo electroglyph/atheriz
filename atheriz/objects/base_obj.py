@@ -166,12 +166,24 @@ class Object(Flags, DbOps, AccessLock):
         return obj
 
     def add_script(self, script: Script | int):
+        """
+        Attaches a Script object to this Object, installing any defined hooks.
+
+        Args:
+            script (Script | int): The Script object or global ID to attach.
+        """
         script = get(script)[0] if isinstance(script, int) else script
         script.install_hooks(self)
         with self.lock:
             self.scripts.add(script.id)
 
     def remove_script(self, script: Script | int):
+        """
+        Detaches a Script object from this Object, removing any associated hooks.
+
+        Args:
+            script (Script | int): The Script object or global ID to remove.
+        """
         script = get(script)[0] if isinstance(script, int) else script
         script.remove_hooks(self)
         with self.lock:
@@ -225,17 +237,37 @@ class Object(Flags, DbOps, AccessLock):
 
     @hookable
     def at_solar_event(self, msg: str):
-        """Called when a solar event occurs."""
+        """
+        Called when a solar event occurs (e.g., sunrise or sunset).
+        Receives messages targeted at objects satisfying the `SOLAR_RECEIVER_LAMBDA`.
+
+        Args:
+            msg (str): The descriptive message of the event.
+        """
         self.msg(msg)
 
     @hookable
     def at_lunar_event(self, msg: str):
-        """Called when a lunar event occurs."""
+        """
+        Called when a lunar event occurs (e.g., full moon phase changes).
+        Receives messages targeted at objects satisfying the `LUNAR_RECEIVER_LAMBDA`.
+
+        Args:
+            msg (str): The descriptive message of the event.
+        """
         self.msg(msg)
 
     @hookable
     def at_delete(self, caller: Object) -> bool:
-        """Called before an object is deleted, aborts deletion if False"""
+        """
+        Called before an object is deleted, aborts deletion if False.
+
+        Args:
+            caller (Object): The object attempting to trigger the deletion.
+
+        Returns:
+            bool: True if deletion should proceed, False to abort.
+        """
         if not self.access(caller, "delete"):
             caller.msg(f"You cannot delete {self.get_display_name(caller)}.")
             logger.info(
@@ -246,7 +278,10 @@ class Object(Flags, DbOps, AccessLock):
 
     @hookable
     def at_create(self):
-        """Called after an object is created."""
+        """
+        Called after an object is newly created and initialized via `Object.create()`.
+        Useful for setting initial variables, inventory generation, or database linkage.
+        """
         pass
 
     def __getstate__(self):
@@ -293,7 +328,11 @@ class Object(Flags, DbOps, AccessLock):
             ensure_thread_safe(self)
 
     def resolve_relations(self):
-        """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
+        """
+        Called as pass 2 of the database load to reconnect relational IDs to actual objects.
+        This reconstitutes pointers like `location` and `home` from their integer IDs,
+        and reschedules any async ticker events or script hooks.
+        """
         loc = getattr(self, "location", None)
         if loc:
             if isinstance(loc, int):
@@ -321,7 +360,8 @@ class Object(Flags, DbOps, AccessLock):
         self.at_init()
 
     @property
-    def tick_seconds(self):
+    def tick_seconds(self) -> float:
+        """float: The interval in seconds at which `at_tick` is called."""
         return self._tick_seconds
 
     @tick_seconds.setter
@@ -333,7 +373,8 @@ class Object(Flags, DbOps, AccessLock):
         self._tick_seconds = value
 
     @property
-    def is_tickable(self):
+    def is_tickable(self) -> bool:
+        """bool: Indicates if this object is currently registered with the asynchronous ticker."""
         return self._is_tickable
 
     @is_tickable.setter
@@ -346,7 +387,8 @@ class Object(Flags, DbOps, AccessLock):
             at.remove_coro(self.at_tick, self._tick_seconds)
 
     @property
-    def seconds_played(self):
+    def seconds_played(self) -> float:
+        """float: The total accumulated playtime in seconds for this character/object."""
         return self._seconds_played + (time.time() - self.session.conn_time if self.session else 0)
 
     @seconds_played.setter
@@ -376,6 +418,10 @@ class Object(Flags, DbOps, AccessLock):
 
     @hookable
     def at_disconnect(self):
+        """
+        Called when the client connected to this object drops the WebSocket connection.
+        Handles internal state updates and optionally triggers an auto-save.
+        """
         self.is_connected = False
         self.session = None
         channel = get_server_channel()
@@ -402,7 +448,17 @@ class Object(Flags, DbOps, AccessLock):
                 self.internal_cmdset.remove(cmd)
                 channel.remove_listener(self)
 
-    def search(self, query: str):
+    def search(self, query: str) -> list[Object]:
+        """
+        Search for an object by name or alias inside the contents of this object,
+        and within the room this object is standing in.
+
+        Args:
+            query (str): The search string to evaluate.
+
+        Returns:
+            list[Object]: A list of objects matching the query.
+        """
         return search(self, query)
 
     @hookable
@@ -412,6 +468,14 @@ class Object(Flags, DbOps, AccessLock):
         show_legend: bool = True,
         area: str = "Somewhere",
     ):
+        """
+        Sends map legend updates directly to the connected client.
+
+        Args:
+            legend (list[tuple[str, str, tuple[int, int]]]): Parsed legend data format.
+            show_legend (bool, optional): Whether the legend pane should be rendered. Defaults to True.
+            area (str, optional): The geographic name of the map area. Defaults to "Somewhere".
+        """
         self.msg(legend={"area": area, "legend": legend, "show_legend": show_legend})
 
     @hookable
@@ -459,28 +523,31 @@ class Object(Flags, DbOps, AccessLock):
 
     def add_objects(self, objs: list[Object]):
         """
-        add objects to this object's inventory
+        Add multiple objects to this object's internal inventory.
+
         Args:
-            objs (list): list of objects to add
+            objs (list[Object]): A list of objects to add.
         """
         with self.lock:
             self._contents.update([obj.id for obj in objs])
 
     def add_object(self, obj: Object):
         """
-        add object to this object's inventory
+        Add a single object to this object's internal inventory.
+
         Args:
-            obj: object to add
+            obj (Object): The object to add.
         """
         with self.lock:
             self._contents.add(obj.id)
             self.is_modified = True
 
-    def remove_object(self, obj):
+    def remove_object(self, obj: Object):
         """
-        remove object from this object's inventory
+        Remove a single object from this object's internal inventory.
+
         Args:
-            obj (Object): object to remove
+            obj (Object): The object to remove.
         """
         with self.lock:
             self._contents.discard(obj.id)
@@ -488,21 +555,40 @@ class Object(Flags, DbOps, AccessLock):
 
     @property
     def contents(self) -> list[Object]:
+        """list[Object]: The list of objects currently stored within this object."""
         with self.lock:
             return get(self._contents)
 
     @property
-    def is_superuser(self):
+    def is_superuser(self) -> bool:
+        """bool: Indicates if this object possesses superuser administrative rights."""
         return (self.privilege_level >= 4) and not self.quelled
 
     @property
-    def is_builder(self):
+    def is_builder(self) -> bool:
+        """bool: Indicates if this object possesses builder world-editing rights."""
         return self.privilege_level >= 3 and not self.quelled
 
     def execute_cmd(self, raw_string, session=None, **kwargs):
+        """
+        Mock compatibility method simulating executing a command directly as this object.
+        Currently unimplemented.
+
+        Args:
+            raw_string (str): The raw string to execute.
+            session (Session, optional): The session executing the command.
+        """
         pass
 
     def msg(self, *args, **kwargs):
+        """
+        Send a direct textual message to this object. If the object is currently
+        controlled by a connected session, the message is routed to the client.
+
+        Args:
+            *args: Ordered textual messages.
+            **kwargs: Extra arguments, primarily including 'from_obj' and 'text'.
+        """
         from_obj = kwargs.pop("from_obj", None)
         if from_obj:
             for obj in make_iter(from_obj):
@@ -670,14 +756,31 @@ class Object(Flags, DbOps, AccessLock):
     def at_pre_move(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> bool:
-        """Called before moving the object."""
+        """
+        Called before moving the object. Evaluates the destination's access locks.
+
+        Args:
+            destination (Node | Object | None): The target location for the move.
+            to_exit (str | None, optional): The name of the exit traversed, if any.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if the move should proceed, False to abort.
+        """
         return destination.access(self, "put") if destination else True
 
     @hookable
     def at_post_move(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> None:
-        """Called after moving the object."""
+        """
+        Called after moving the object successfully completes.
+
+        Args:
+            destination (Node | Object | None): The new location of the object.
+            to_exit (str | None, optional): The name of the exit traversed, if any.
+            **kwargs: Extra arguments.
+        """
         pass
 
     def move_to(
@@ -688,7 +791,20 @@ class Object(Flags, DbOps, AccessLock):
         announce=True,
         **kwargs,
     ) -> bool:
-        """Move this object to a new location."""
+        """
+        Execute the complex sequence of moving this object to a new location,
+        handling locks, announcements, map updates, and hooks bidirectionally.
+
+        Args:
+            destination (Node | Object | None): The target destination.
+            to_exit (str | None, optional): The exit traversed. Defaults to None.
+            force (bool, optional): If True, bypasses pre-move checks. Defaults to False.
+            announce (bool, optional): If True, broadcasts movement strings to rooms. Defaults to True.
+            **kwargs: Optional variables passed to hooks.
+
+        Returns:
+            bool: True if the move successful, False if aborted.
+        """
         if not force and not self.at_pre_move(destination, to_exit, **kwargs):
             return False
         if destination is None:
@@ -793,23 +909,59 @@ class Object(Flags, DbOps, AccessLock):
                 self.msg(msg)
         return True
 
-    def get_display_name(self, looker: Object | None = None, **kwargs):
-        """Get the display name of this object."""
+    def get_display_name(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the display name of this object, customized for the looker.
+
+        Args:
+            looker (Object | None, optional): The object looking at this object. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The evaluated name string.
+        """
         return self.name
 
-    def get_display_desc(self, looker: Object | None = None, **kwargs):
-        """Get the display description of this object."""
+    def get_display_desc(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the display description of this object, customized for the looker.
+
+        Args:
+            looker (Object | None, optional): The object looking at this object. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The evaluated description string.
+        """
         return self.desc
 
-    def get_display_things(self, looker: Object | None = None, **kwargs):
-        """Get the display contents of this object."""
+    def get_display_things(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the formatted inventory/contents of this object.
+
+        Args:
+            looker (Object | None, optional): The object looking at this object. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The formatted string listing contents, or empty string.
+        """
         contents = group_by_name(self.contents, looker)
         if self.is_container and contents:
             return "\n\nInside you see: " + contents
         return ""
 
-    def return_appearance(self, looker: Object | None = None, **kwargs):
+    def return_appearance(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Assembles and formats the complete appearance of this object into a single string.
 
+        Args:
+            looker (Object | None, optional): The object observing this object. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The fully formatted appearance string for rendering on the client.
+        """
         if not looker:
             return ""
 
@@ -825,6 +977,13 @@ class Object(Flags, DbOps, AccessLock):
 
     @hookable
     def at_post_puppet(self, **kwargs):
+        """
+        Called when a Session successfully assumes direct control of this object.
+        Re-subscribes to channels, registers with the map system, and loads CmdSets.
+
+        Args:
+            **kwargs: Extra arguments.
+        """
         self.is_connected = True
         self.session.connection.send_command("logged_in")
         with self.lock:
@@ -852,6 +1011,14 @@ class Object(Flags, DbOps, AccessLock):
             self.move_to(self.location)
 
     def announce_move_from(self, destination: Node, from_exit: str | None, **kwargs):
+        """
+        Announces that this object has arrived in a target room.
+
+        Args:
+            destination (Node): The node the object has arrived into.
+            from_exit (str | None): The name of the exit traversed to get here, if any.
+            **kwargs: Extra arguments passed to msg_contents.
+        """
         if not destination:
             return
         if not from_exit:
@@ -880,6 +1047,14 @@ class Object(Flags, DbOps, AccessLock):
         )
 
     def announce_move_to(self, source_location: Node, to_exit: str | None, **kwargs):
+        """
+        Announces that this object has departed a source room.
+
+        Args:
+            source_location (Node): The node the object has departed from.
+            to_exit (str | None): The name of the exit traversed to leave.
+            **kwargs: Extra arguments passed to msg_contents.
+        """
         if not source_location:
             return
         if not to_exit:
@@ -908,53 +1083,137 @@ class Object(Flags, DbOps, AccessLock):
         )
 
     @hookable
-    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs):
-        """Called by the default `msg` command when this object has received a message."""
+    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs) -> bool:
+        """
+        Called when this object is about to receive an arbitrary string message.
+        Returning False aborts the message delivery.
+
+        Args:
+            text (str | None, optional): The message content. Defaults to None.
+            from_obj (Object | None, optional): The sender of the message. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if the message should be received, False to reject it.
+        """
         return True
 
     @hookable
-    def at_msg_send(self, text: str | None = None, to_obj: Object | None = None, **kwargs):
-        """Called by the default `msg` command when this object sends a message."""
+    def at_msg_send(self, text: str | None = None, to_obj: Object | None = None, **kwargs) -> None:
+        """
+        Called when this object sends an arbitrary string message to another object.
+
+        Args:
+            text (str | None, optional): The message content. Defaults to None.
+            to_obj (Object | None, optional): The intended receiver. Defaults to None.
+            **kwargs: Extra arguments.
+        """
         pass
 
     @hookable
-    def at_desc(self, looker: Object | None = None, **kwargs):
-        """Called by the default `look` command when this object is looked at."""
+    def at_desc(self, looker: Object | None = None, **kwargs) -> None:
+        """
+        Called when another object looks at this object.
+
+        Args:
+            looker (Object | None, optional): The object observing this one. Defaults to None.
+            **kwargs: Extra arguments.
+        """
         pass
 
     @hookable
-    def at_pre_get(self, getter: Object, **kwargs):
-        """Called by the default `get` command before this object has been picked up."""
+    def at_pre_get(self, getter: Object, **kwargs) -> bool:
+        """
+        Called before another object attempts to pick up this object.
+        Evaluates the "get" lock by default.
+
+        Args:
+            getter (Object): The object attempting to get this object.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if the get is permitted, False otherwise.
+        """
         return self.access(getter, "get")
 
     @hookable
-    def at_get(self, getter: Object, **kwargs):
-        """Called by the default `get` command when this object has been picked up."""
+    def at_get(self, getter: Object, **kwargs) -> None:
+        """
+        Called after another object successfully picks up this object.
+
+        Args:
+            getter (Object): The object that picked up this object.
+            **kwargs: Extra arguments.
+        """
         pass
 
     @hookable
-    def at_pre_give(self, giver: Object, getter: Object, **kwargs):
-        """Called by the default `give` command before this object has been given."""
+    def at_pre_give(self, giver: Object, getter: Object, **kwargs) -> bool:
+        """
+        Called before this object is given from one inventory to another.
+        Evaluates the "give" lock on the receiving object by default.
+
+        Args:
+            giver (Object): The object currently holding this object.
+            getter (Object): The intended recipient.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if the transfer is permitted, False otherwise.
+        """
         return self.access(getter, "give")
 
     @hookable
-    def at_give(self, giver: Object, getter: Object, **kwargs):
-        """Called by the default `give` command when this object has been given."""
+    def at_give(self, giver: Object, getter: Object, **kwargs) -> None:
+        """
+        Called after this object is successfully transferred between inventories.
+
+        Args:
+            giver (Object): The previous holder of this object.
+            getter (Object): The new holder.
+            **kwargs: Extra arguments.
+        """
         pass
 
     @hookable
-    def at_pre_drop(self, dropper: Object, **kwargs):
-        """Called by the default `drop` command before this object has been dropped."""
+    def at_pre_drop(self, dropper: Object, **kwargs) -> bool:
+        """
+        Called before this object is dropped from an inventory into the room.
+        Evaluates the "drop" lock by default.
+
+        Args:
+            dropper (Object): The object attempting to drop this object.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if dropping is permitted, False otherwise.
+        """
         return self.access(dropper, "drop")
 
     @hookable
-    def at_drop(self, dropper: Object, **kwargs):
-        """Called by the default `drop` command when this object has been dropped."""
+    def at_drop(self, dropper: Object, **kwargs) -> None:
+        """
+        Called after this object is successfully dropped out of an inventory.
+
+        Args:
+            dropper (Object): The actor that dropped this object.
+            **kwargs: Extra arguments.
+        """
         pass
 
     @hookable
-    def at_pre_say(self, message: str, **kwargs):
-        """Called by the default `say` command before this object says something."""
+    def at_pre_say(self, message: str, **kwargs) -> str:
+        """
+        Called before this object broadcasts a speech message into the room.
+        Can intercept and mutate the spoken message.
+
+        Args:
+            message (str): The raw string intended to be spoken.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The potentially modified message string.
+        """
         return message
 
     # this is from Evennia, see EVENNIA_LICENSE.txt
@@ -1100,7 +1359,17 @@ class Object(Flags, DbOps, AccessLock):
             )
 
     @hookable
-    def at_look(self, target: Object | Node | None, **kwargs):
+    def at_look(self, target: Object | Node | None, **kwargs) -> str:
+        """
+        Called when this object looks at another target. Evaluates the "view" lock.
+
+        Args:
+            target (Object | Node | None): The entity being looked at.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The evaluated appearance string of the target.
+        """
         if target is None:
             return "You see nothing here."
         if not target.access(self, "view"):
@@ -1109,5 +1378,16 @@ class Object(Flags, DbOps, AccessLock):
         target.at_desc(looker=self, **kwargs)
         return desc
 
-    def format_appearance(self, appearance, looker, **kwargs):
+    def format_appearance(self, appearance: str, looker: Object, **kwargs) -> str:
+        """
+        Compresses and cleans up whitespace on the final appearance string.
+
+        Args:
+            appearance (str): The raw multi-line appearance string.
+            looker (Object): The object viewing the appearance.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The polished string.
+        """
         return compress_whitespace(appearance).strip()

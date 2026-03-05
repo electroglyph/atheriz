@@ -13,12 +13,25 @@ class CmdSet:
         self.commands: dict[str, Command] = {}
 
     def get_all(self) -> list[Command]:
-        """Get all commands in the command set."""
+        """
+        Extract all commands currently active in this command set.
+
+        Returns:
+            list[Command]: A list of all Command instances.
+        """
         with self.lock:
             return list(self.commands.values())
 
-    def add(self, command: Command, tag: str | None = None):
-        """Add a command to the command set. If you overwrite a command, it's on you to figure out how/if to put it back"""
+    def add(self, command: Command, tag: str | None = None) -> None:
+        """
+        Merge a single Command instance into this command set. 
+        If a command with the same key or alias already exists, it is overwritten.
+
+        Args:
+            command (Command): The command object to add.
+            tag (str | None, optional): An optional tag to categorize the command (e.g. "exits"). 
+                Defaults to None.
+        """
         if tag is not None:
             command.tag = tag
         with self.lock:
@@ -31,8 +44,16 @@ class CmdSet:
                         logger.warning(f"Overwriting command alias {alias}")
                     self.commands[alias] = command
 
-    def adds(self, commands: list[Command], tag: str | None = None):
-        """Add a command to the command set. If you overwrite a command, it's on you to figure out how/if to put it back"""
+    def adds(self, commands: list[Command], tag: str | None = None) -> None:
+        """
+        Merge multiple Command instances into this command set simultaneously.
+        Any commands with duplicate keys or aliases will overwrite pre-existing ones.
+
+        Args:
+            commands (list[Command]): A list of Command objects to add.
+            tag (str | None, optional): An optional tag to apply to all added commands. 
+                Defaults to None.
+        """
         if tag is not None:
             for command in commands:
                 command.tag = tag
@@ -47,16 +68,26 @@ class CmdSet:
                             logger.warning(f"Overwriting command alias {alias}")
                         self.commands[alias] = command
 
-    def remove(self, command: Command):
-        """Remove a command from the command set."""
+    def remove(self, command: Command) -> None:
+        """
+        Remove a specific Command instance from this command set, including its aliases.
+
+        Args:
+            command (Command): The command object to remove.
+        """
         with self.lock:
             self.commands.pop(command.key, None)
             if command.aliases:
                 for alias in command.aliases:
                     self.commands.pop(alias, None)
 
-    def remove_by_tag(self, tag: str):
-        """Remove a command from the command set by tag."""
+    def remove_by_tag(self, tag: str) -> None:
+        """
+        Remove all commands matching a specific tag string from this command set.
+
+        Args:
+            tag (str): The tag identifier (e.g., "exits").
+        """
         to_del = []
         with self.lock:
             for key, command in self.commands.items():
@@ -66,12 +97,25 @@ class CmdSet:
                 del self.commands[key]
 
     def get(self, command: str) -> Command | None:
-        """Get a command from the command set."""
+        """
+        Retrieve a Command instance by its key or alias.
+
+        Args:
+            command (str): The key or alias to search for.
+
+        Returns:
+            Command | None: The matching Command object, or None if not found.
+        """
         with self.lock:
             return self.commands.get(command)
 
     def get_keys(self) -> list[str]:
-        """Get a list of all command keys."""
+        """
+        Retrieve a list of all raw command keywords and aliases currently registered in this set.
+
+        Returns:
+            list[str]: A list of command keys.
+        """
         with self.lock:
             return list(self.commands.keys())
 

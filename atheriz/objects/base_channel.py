@@ -26,6 +26,7 @@ class BaseChannelCommand(Command):
 
     @property
     def channel(self) -> Channel:
+        """Channel: The channel object this command communicates through."""
         if self._channel is None:
             c = get(self.id)
             if c:
@@ -36,6 +37,7 @@ class BaseChannelCommand(Command):
 
     @channel.setter
     def channel(self, channel: Channel):
+        """Sets the active channel object and synchronizes the command ID to the channel's ID."""
         self._channel = channel
         self.id = channel.id
 
@@ -109,6 +111,16 @@ class Channel(Flags, DbOps, AccessLock):
         return c
 
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
+        """
+        Delete this channel from the database entirely.
+        
+        Args:
+            caller (Object | None, optional): The object executing the deletion. Defaults to None.
+            unused (bool, optional): Unused parameter for API compatibility. Defaults to True.
+            
+        Returns:
+            bool: True if the channel was successfully deleted, False if aborted.
+        """
         del unused
         if not self.at_delete(caller):
             return False
@@ -119,22 +131,50 @@ class Channel(Flags, DbOps, AccessLock):
         return True
 
     def at_delete(self, caller: Object | None = None) -> bool:
-        """Called before an object is deleted, aborts deletion if False"""
+        """
+        Called before the channel is deleted.
+        
+        Args:
+            caller (Object | None, optional): The object executing the command. Defaults to None.
+            
+        Returns:
+            bool: True to proceed with deletion, False to stop.
+        """
         return True
 
     def at_create(self):
-        """Called after an object is created."""
+        """
+        Called after a new channel is successfully created.
+        """
         pass
 
     def add_listener(self, listener: Object) -> None:
+        """
+        Connects an object to this channel to receive broadcasts.
+        
+        Args:
+            listener (Object): The object to subscribe to this channel.
+        """
         with self.lock:
             self.listeners[listener.id] = listener
 
     def remove_listener(self, listener: Object) -> None:
+        """
+        Disconnects an object from this channel.
+        
+        Args:
+            listener (Object): The object to unsubscribe.
+        """
         with self.lock:
             self.listeners.pop(listener.id, None)
 
     def get_command(self) -> Command | None:
+        """
+        Generates and retrieves the Command class instance used to converse on this channel.
+        
+        Returns:
+            Command | None: The specialized hook command for this channel.
+        """
         if self.command is not None:
             return self.command
         command = BaseChannelCommand()

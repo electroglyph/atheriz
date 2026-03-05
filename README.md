@@ -88,10 +88,14 @@ for a new game:
 
 in folder_name you'll see some basic template classes and a placeholder website. adding commands and such is similar to Evennia, the new game will have a 'test' command in it as an example.
 
+# Documents
+
+First version of the docs are up, view them here: [docs](docs/table_of_contents.md)
+
 
 TODO:
 
-- docs
+- ~~docs~~
 - example game
 - more tests (getting there!)
 - ~~node hooks~~

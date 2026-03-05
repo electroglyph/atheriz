@@ -15,21 +15,48 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
 
-def before(func):
+def before(func: Callable) -> Callable:
+    """
+    Decorator designating a script hook to execute BEFORE the child object's native method.
+
+    Args:
+        func (Callable): The method being decorated.
+
+    Returns:
+        Callable: The flagged method.
+    """
     func.is_before = True
     func.is_after = False
     func.is_replace = False
     return func
 
 
-def after(func):
+def after(func: Callable) -> Callable:
+    """
+    Decorator designating a script hook to execute AFTER the child object's native method.
+
+    Args:
+        func (Callable): The method being decorated.
+
+    Returns:
+        Callable: The flagged method.
+    """
     func.is_before = False
     func.is_after = True
     func.is_replace = False
     return func
 
 
-def replace(func):
+def replace(func: Callable) -> Callable:
+    """
+    Decorator designating a script hook to completely REPLACE the child object's native method.
+
+    Args:
+        func (Callable): The method being decorated.
+
+    Returns:
+        Callable: The flagged method.
+    """
     func.is_before = False
     func.is_after = False
     func.is_replace = True
@@ -58,20 +85,15 @@ class Script(Flags, DbOps):
         desc: str = "",
     ) -> Self:
         """
-        Create a new object.
+        Create a new persistent Script in the database.
 
         Args:
-            session (Session | None): The session to create the object for.
-            name (str): The name of the object.
-            is_pc (bool, optional): Whether the object is a player character. Defaults to False.
-            is_item (bool, optional): Whether the object is an item. Defaults to False.
-            is_npc (bool, optional): Whether the object is an NPC. Defaults to False.
-            is_mapable (bool, optional): Whether the object is mapable. Defaults to False.
-            is_container (bool, optional): Whether the object is a container. Defaults to False.
-            is_tickable (bool, optional): Whether the object is tickable. Defaults to False.
+            caller (Object | None): The object executing the creation.
+            name (str): The name of the script.
+            desc (str, optional): A description for the script. Defaults to "".
 
         Returns:
-            Self: The created object.
+            Self: The generated Script object.
         """
         obj = cls()
         obj.id = get_unique_id()
@@ -82,7 +104,17 @@ class Script(Flags, DbOps):
         add_object(obj)
         return obj
 
-    def delete(self, caller: Object | None = None, recursive: bool = True):
+    def delete(self, caller: Object | None = None, recursive: bool = True) -> bool:
+        """
+        Delete this script entirely from the database and remove any active hooks.
+
+        Args:
+            caller (Object | None, optional): The object executing the command. Defaults to None.
+            recursive (bool, optional): Unused compatibility argument. Defaults to True.
+
+        Returns:
+            bool: True upon successful deletion.
+        """
         if self.child:
             self.remove_hooks()
             if self.id in self.child.scripts:
@@ -120,26 +152,25 @@ class Script(Flags, DbOps):
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
-    def at_install(self):
+    def at_install(self) -> None:
         """
-        called when the script is installed on an object
-        you can use this event -or- you can hook at_init on the child object
-        but you probably don't want to do both
-        the main difference is that this code will run right when the script
-        is added to the object, and every reboot thereafter.
-        if you only do init from 'at_init' then init code will only run after reboot
+        Called when the script is assigned to and installed on an object.
+        
+        This occurs immediately when the script is attached, and upon every subsequent 
+        server reboot. You can use this for initialization code, or alternatively hook 
+        `at_init` on the child. `at_init` will only run on object instantiation (server boot/creation).
         """
         pass
 
-    def install_hooks(self, child: Object):
+    def install_hooks(self, child: Object) -> None:
         """
-        any functions that start with 'at_' in this class will be considered hooks on the child object
-        so at_init on this class will hook at_init on the child object
-        you must use one of the decorators above on every hook function in this class.
-
-        before decorator means: run this class' hook code, then run the original child code
-        after decorator means: run child code first, then run this class' hook code
-        replace decorator means: this class' hook completely replaces the child's code
+        Attaches all properly-decorated `at_*` hook methods in this script to a child object.
+        
+        Every hook in this class must be prefixed with `at_` to mirror the child object's method, 
+        and decorated with `@before`, `@after`, or `@replace`.
+        
+        Args:
+            child (Object | Node): The target object experiencing the method injection.
         """
         self.child = child
         at_funcs = [(d, getattr(self, d)) for d in dir(self) if d.startswith("at_")]
@@ -150,7 +181,14 @@ class Script(Flags, DbOps):
                 child.hooks[name] = s
         self.at_install()
 
-    def remove_hooks(self, child: Object | None = None):
+    def remove_hooks(self, child: Object | None = None) -> None:
+        """
+        Detaches all hook methods in this Script from the currently-assigned child object.
+        
+        Args:
+            child (Object | Node | None, optional): An explicitly provided object to detach from. 
+            Defaults to the currently active child payload.
+        """
         child = self.child if child is None else child
         if child is None:
             logger.error(f"Script has invalid child object, script id: {self.id}")

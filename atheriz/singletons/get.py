@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import TYPE_CHECKING
 from atheriz.settings import THREADPOOL_LIMIT
 from atheriz.logger import logger

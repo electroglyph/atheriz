@@ -52,6 +52,16 @@ class Account(Flags, DbOps):
         return account
 
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
+        """
+        Delete this account from the game entirely.
+        
+        Args:
+            caller (Object | None, optional): The object executing the deletion. Defaults to None.
+            unused (bool, optional): Unused parameter for API compatibility. Defaults to True.
+            
+        Returns:
+            bool: True if the account was successfully deleted, False if aborted.
+        """
         del unused
         if not self.at_delete(caller):
             return False
@@ -63,45 +73,106 @@ class Account(Flags, DbOps):
         return True
 
     def at_pre_puppet(self, character: Object) -> bool:
-        """Called before a character is puppeted, return False to cancel puppeting."""
+        """
+        Called before a character is puppeted by this account.
+        
+        Args:
+            character (Object): The character object to puppet.
+            
+        Returns:
+            bool: True to allow puppeting, False to cancel.
+        """
         return True
 
     def at_delete(self, caller: Object | None = None) -> bool:
-        """Called before an object is deleted, return False to cancel deletion."""
+        """
+        Called before the account is deleted.
+        
+        Args:
+            caller (Object | None, optional): The object executing the command. Defaults to None.
+            
+        Returns:
+            bool: True to proceed with deletion, False to stop.
+        """
         return True
 
     def at_create(self):
-        """Called after an object is created."""
+        """
+        Called after a new account is successfully created.
+        """
         pass
 
     def at_disconnect(self):
+        """
+        Called when a session associated with this account disconnects.
+        """
         pass
 
     def add_character(self, character: Object) -> None:
-        """Add a character to the account."""
+        """
+        Add a character's ID to the list of characters owned by this account.
+        
+        Args:
+            character (Object): The character to add.
+        """
         with self.lock:
             self.characters.append(character.id)
 
     def remove_character(self, character: Object) -> None:
-        """Remove a character from the account."""
+        """
+        Remove a character's ID from the list of characters owned by this account.
+        
+        Args:
+            character (Object): The character to remove.
+        """
         with self.lock:
             self.characters.remove(character.id)
 
     @staticmethod
     def hash_password(password: str) -> str:
-        """Hash the account password."""
+        """
+        Hash the given plaintext password using the system salt.
+        
+        Args:
+            password (str): The plaintext password to hash.
+            
+        Returns:
+            str: The SHA-256 hashed password string.
+        """
         return hashlib.sha256(f"{password}{get_salt()}".encode()).hexdigest()
 
     def check_password(self, password: str) -> bool:
-        """Check if the provided password matches the account password."""
+        """
+        Check if the provided plaintext password matches the account's hashed password.
+        
+        Args:
+            password (str): The plaintext password to test.
+            
+        Returns:
+            bool: True if the passwords match, False otherwise.
+        """
         return self.hash_password(password) == self.password
 
     def set_password(self, password: str) -> None:
-        """Set the account password."""
+        """
+        Update and hash the account's password.
+        
+        Args:
+            password (str): The new plaintext password.
+        """
         self.password = self.hash_password(password)
 
     def login(self, name: str, password: str) -> bool:
-        """Log in to the account."""
+        """
+        Attempt to log in to the account with given credentials.
+        
+        Args:
+            name (str): The provided account name.
+            password (str): The plaintext password to verify.
+            
+        Returns:
+            bool: True on successful authentication, False otherwise.
+        """
         with self.lock:
             if self.name == name and self.check_password(password):
                 self.logged_in = True

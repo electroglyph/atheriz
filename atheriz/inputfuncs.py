@@ -11,16 +11,23 @@ if TYPE_CHECKING:
     
 _IGNORE_KEYS = ["save", "quit", "wander"]
 
-def inputfunc(name: str | None = None):
+def inputfunc(name: str | None = None) -> Callable:
     """
-    Decorator to mark a method as an input handler.
+    Decorator to mark a method as an input handler for incoming client WebSocket commands.
     
+    Args:
+        name (str | None, optional): An explicit command name to bind this handler to. 
+            If None, the method's name is used. Defaults to None.
+            
+    Returns:
+        Callable: The decorated function, enriched with an `_inputfunc_name` attribute.
+
     Usage:
         @inputfunc()  # Uses method name as command name
-        def my_handler(self, connection, args, kwargs): ...
+        def text(self, connection, args, kwargs): ...
         
         @inputfunc("custom_name")  # Uses custom command name
-        def my_handler(self, connection, args, kwargs): ...
+        def custom(self, connection, args, kwargs): ...
     """
     def decorator(func: Callable) -> Callable:
         func._inputfunc_name = name if name else func.__name__
@@ -30,8 +37,8 @@ def inputfunc(name: str | None = None):
 
 class InputFuncs:
     """
-    Handles input messages from the client.
-    Methods in this class correspond to message commands sent by the client.
+    Handles parsed JSON-RPC input messages from the client.
+    Methods in this class correspond to specific message commands sent by the client.
     
     To add custom handlers, subclass this and add methods decorated with @inputfunc:
     
@@ -44,8 +51,11 @@ class InputFuncs:
     
     def get_handlers(self) -> dict[str, Callable]:
         """
-        Returns a dict mapping command names to handler methods.
-        Automatically discovers all methods decorated with @inputfunc.
+        Scans this class instance to discover and map all methods decorated with @inputfunc.
+
+        Returns:
+            dict[str, Callable]: A dictionary mapping the expected input string command 
+                to its corresponding handler function.
         """
         handlers = {}
         for attr_name in dir(self):
@@ -55,8 +65,18 @@ class InputFuncs:
         return handlers
 
     @inputfunc()
-    def text(self, connection: Connection, args: list, kwargs: dict):
-        """Handle plain text/command input from the client."""
+    def text(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle plain text/command input from the client (e.g. typing commands in the game).
+        
+        This method is responsible for matching plain text to command sets, checking 
+        abbreviations and aliases, and queuing the matched command for execution.
+
+        Args:
+            connection (Connection): The connection receiving the text.
+            args (list): List of arguments from the RPC call (expects string as first element).
+            kwargs (dict): Extra Keyword arguments.
+        """
         try:
             text = str(args[0]) if args else ""
             logger.debug(f"text handler received: {text!r}")
@@ -156,31 +176,59 @@ class InputFuncs:
             logger.error(f"Exception in text handler: {traceback.format_exc()}")
 
     @inputfunc()
-    def term_size(self, connection: Connection, args: list, kwargs: dict):
-        """Handle terminal resize events."""
+    def term_size(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle terminal resize events sent natively from the client.
+
+        Args:
+            connection (Connection): The connection triggering the resize.
+            args (list): Expects a list containing `[width (int), height (int)]`.
+            kwargs (dict): Extra Keyword arguments.
+        """
         if len(args) >= 2:
             connection.session.term_width = args[0]
             connection.session.term_height = args[1]
             # connection.send_text(f"Terminal size set to {args[0]}x{args[1]}\r\n")
 
     @inputfunc()
-    def map_size(self, connection: Connection, args: list, kwargs: dict):
-        """Handle map resize events."""
+    def map_size(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle map UI resize events sent natively from the web client.
+
+        Args:
+            connection (Connection): The connection triggering the resize.
+            args (list): Expects a list containing `[width (int), height (int)]` of the map pane.
+            kwargs (dict): Extra Keyword arguments.
+        """
         if len(args) >= 2:
             connection.session.map_width = args[0]
             connection.session.map_height = args[1]
 
     @inputfunc()
-    def screenreader(self, connection: Connection, args: list, kwargs: dict):
-        """Handle screenreader status update from client."""
+    def screenreader(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle screenreader accessibility status updates from the client.
+
+        Args:
+            connection (Connection): The connection sending the update.
+            args (list): Expects a list containing a single boolean denoting active status.
+            kwargs (dict): Extra Keyword arguments.
+        """
         if len(args) > 0:
             enabled = bool(args[0])
             connection.session.screenreader = enabled
             connection.msg(f"Screenreader {'enabled' if enabled else 'disabled'}.")
 
     @inputfunc()
-    def client_ready(self, connection: Connection, args: list, kwargs: dict):
-        """Handle client ready signal. Send welcome screen now."""
+    def client_ready(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle the 'client ready' lifecycle signal, prompting the welcome screen to render.
+
+        Args:
+            connection (Connection): The connection reporting ready status.
+            args (list): Unused.
+            kwargs (dict): Unused.
+        """
         try:
             import connection_screen
             import importlib

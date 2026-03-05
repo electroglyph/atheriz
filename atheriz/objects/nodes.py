@@ -170,7 +170,11 @@ class Node(Flags, AccessLock):
             ensure_thread_safe(self)
 
     def resolve_relations(self):
-        """Called as pass 2 of the database load to reconnect relational IDs to actual objects."""
+        """
+        Called as pass 2 of the database load to reconnect relational IDs to actual objects.
+        This reconstitutes pointers and reschedules async ticker events or script hooks
+        for the Node.
+        """
         if getattr(self, "_is_tickable", False):
             at = get_async_ticker()
             at.add_coro(self.at_tick, self._tick_seconds)
@@ -183,7 +187,8 @@ class Node(Flags, AccessLock):
         self.at_init()
 
     @property
-    def tick_seconds(self):
+    def tick_seconds(self) -> float:
+        """float: The interval in seconds at which `at_tick` is called."""
         return self._tick_seconds
 
     @tick_seconds.setter
@@ -195,7 +200,8 @@ class Node(Flags, AccessLock):
         self._tick_seconds = value
 
     @property
-    def is_tickable(self):
+    def is_tickable(self) -> bool:
+        """bool: Indicates if this node is currently registered with the asynchronous ticker."""
         return self._is_tickable
 
     @is_tickable.setter
@@ -207,17 +213,38 @@ class Node(Flags, AccessLock):
         else:
             at.remove_coro(self.at_tick, self._tick_seconds)
 
-    def set_data(self, key, value):
-        """save arbitrary data for this node... make sure it can be pickled"""
+    def set_data(self, key: str, value: Any):
+        """
+        Save arbitrary data into this node's volatile dictionary.
+        Keys must be strings and values must be picklable.
+
+        Args:
+            key (str): The storage key.
+            value (Any): The data to save.
+        """
         with self.lock:
             self.data[key] = value
 
-    def get_data(self, key):
-        """load arbitrary data for this node... make sure it can be pickled"""
+    def get_data(self, key: str) -> Any:
+        """
+        Load arbitrary data from this node's volatile dictionary.
+
+        Args:
+            key (str): The storage key.
+
+        Returns:
+            Any: The stored data, or None if not found.
+        """
         with self.lock:
             return self.data.get(key)
 
-    def remove_data(self, key):
+    def remove_data(self, key: str):
+        """
+        Delete a data entry from this node.
+
+        Args:
+            key (str): The storage key to erase.
+        """
         with self.lock:
             del self.data[key]
 
@@ -241,30 +268,65 @@ class Node(Flags, AccessLock):
     def at_pre_object_leave(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> bool:
-        """Called before leaving the object, return False to cancel."""
+        """
+        Called before an object leaves the node. Returning False aborts the move.
+
+        Args:
+            destination (Node | Object | None): The destination of the object.
+            to_exit (str | None, optional): The exit used to leave.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True to allow leaving, False to abort.
+        """
         return True
 
     def at_object_leave(
         self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
     ) -> None:
-        """Called after leaving the object."""
+        """
+        Called after an object has successfully left the node.
+
+        Args:
+            destination (Node | Object | None): The destination of the object.
+            to_exit (str | None, optional): The exit used to leave.
+            **kwargs: Extra arguments.
+        """
         pass
 
     def at_pre_object_receive(
         self, source: Node | Object | None, from_exit: str | None = None, **kwargs
     ) -> bool:
-        """Called before receiving the object, return False to cancel."""
+        """
+        Called before an object enters the node. Returning False aborts the entry.
+
+        Args:
+            source (Node | Object | None): The source location.
+            from_exit (str | None, optional): The exit used to enter.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True to allow entry, False to abort.
+        """
         return True
 
     def at_object_receive(
         self, source: Node | Object | None, from_exit: str | None = None, **kwargs
     ) -> None:
-        """Called after receiving the object."""
+        """
+        Called after an object has successfully entered the node.
+
+        Args:
+            source (Node | Object | None): The source location.
+            from_exit (str | None, optional): The exit used to enter.
+            **kwargs: Extra arguments.
+        """
         pass
 
     def at_init(self):
         """
-        Called after this object is deserialized and all attributes are set.
+        Called after this node object is deserialized and all its attributes
+        and components are linked and instantiated.
         """
         pass
 
@@ -306,7 +368,16 @@ class Node(Flags, AccessLock):
         return 0, all_ops
 
     def at_delete(self, caller: Object) -> bool:
-        """Called before an object is deleted, aborts deletion if False"""
+        """
+        Called before a node is fundamentally deleted from the world grid.
+        Evaluates the node's delete lock.
+
+        Args:
+            caller (Object): The object executing the command.
+
+        Returns:
+            bool: True to proceed with deletion, False to stop.
+        """
         if not self.access(caller, "delete"):
             caller.msg(f"You cannot delete {self.get_display_name(caller)}.")
             logger.info(
@@ -316,14 +387,36 @@ class Node(Flags, AccessLock):
         return True
 
     def add_noun(self, noun: str, desc: str):
+        """
+        Adds a static scenic noun to the room.
+
+        Args:
+            noun (str): The keyword or name to look at.
+            desc (str): The description returned when looked at.
+        """
         with self.lock:
             self.nouns[noun] = desc
 
     def remove_noun(self, noun: str):
+        """
+        Removes a scenic noun from the room.
+
+        Args:
+            noun (str): The keyword to remove.
+        """
         with self.lock:
             del self.nouns[noun]
 
-    def get_noun(self, noun: str):
+    def get_noun(self, noun: str) -> str | None:
+        """
+        Retrieves the description of a scenic noun.
+
+        Args:
+            noun (str): The keyword to look for.
+
+        Returns:
+            str | None: The description, or None if not found.
+        """
         with self.lock:
             return self.nouns.get(noun)
 
@@ -331,9 +424,24 @@ class Node(Flags, AccessLock):
         return f"Node: {self.coord}"
 
     def search(self, query: str) -> list[Any]:
+        """
+        Searches the contents of this node using the given query string.
+
+        Args:
+            query (str): The search phrase.
+
+        Returns:
+            list[Any]: A list of objects matching the search query.
+        """
         return search(self, query)
 
     def get_links(self) -> list[NodeLink]:
+        """
+        Retrieves a copy of the links (exits) leading out of this node.
+
+        Returns:
+            list[NodeLink]: A list of exit links.
+        """
         with self.lock:
             return self.links.copy() if self.links else []
         
@@ -349,29 +457,44 @@ class Node(Flags, AccessLock):
             return any(link.name == name for link in self.links)
 
     @property
-    def area(self):
+    def area(self) -> Any:
+        """NodeArea | None: The NodeArea object that encompasses this node."""
         nh = get_node_handler()
         return nh.get_area(self.coord[0])
 
     @property
-    def grid(self):
+    def grid(self) -> Any:
+        """NodeGrid | None: The NodeGrid object corresponding to this node's Z-level."""
         nh = get_node_handler()
         a = nh.get_area(self.coord[0])
         if a:
             return a.get_grid(self.coord[3])
 
     @property
-    def name(self):
+    def name(self) -> str:
+        """str: The string representation of this node's coordinates."""
         return str(self.coord)
 
-    def add_script(self, script):
+    def add_script(self, script: int | Any):
+        """
+        Attach a global script hook to this node.
+
+        Args:
+            script (int | Any): The ID of the Script, or the Script object itself.
+        """
         script = get(script)[0] if isinstance(script, int) else script
         script.install_hooks(self)
         with self.lock:
             self.scripts.add(script.id)
             self.is_modified = True
 
-    def remove_script(self, script):
+    def remove_script(self, script: int | Any):
+        """
+        Remove a global script hook from this node.
+
+        Args:
+            script (int | Any): The ID of the Script, or the Script object itself.
+        """
         script = get(script)[0] if isinstance(script, int) else script
         script.remove_hooks(self)
         with self.lock:
@@ -406,6 +529,12 @@ class Node(Flags, AccessLock):
                 nh.add_transition(Transition(self.coord, link.coord, link.name))
 
     def remove_link(self, name: str):
+        """
+        Remove an exit from this node. Also alerts the map handler if it crosses areas.
+
+        Args:
+            name (str): The name of the exit to remove.
+        """
         found = None
         index = -1
         with self.lock:
@@ -537,6 +666,16 @@ class Node(Flags, AccessLock):
             receiver.msg(text=outmessage, from_obj=from_obj, **outkwargs)
 
     def get_display_things(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the formatted inventory/contents of strictly inanimate items in this node.
+
+        Args:
+            looker (Object | None, optional): The object viewing the room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The formatted string listing contents, or an empty string.
+        """
         things = filter_contents(self, lambda x: x.is_item)
         thing_names = group_by_name(things, looker)
         return (
@@ -544,6 +683,16 @@ class Node(Flags, AccessLock):
         )
 
     def get_display_characters(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the formatted list of other characters currently in this node.
+
+        Args:
+            looker (Object | None, optional): The object viewing the room (excluded from output). Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The formatted string listing characters, or an empty string.
+        """
         characters = filter_contents(self, lambda x: (x.is_pc or x.is_npc) and x != looker)
         character_names = group_by_name(characters, looker)
         return (
@@ -553,6 +702,16 @@ class Node(Flags, AccessLock):
         )
 
     def get_display_exits(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the formatted list of available exits from this node.
+
+        Args:
+            looker (Object | None, optional): The object viewing the room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The formatted string listing exits, or an empty string.
+        """
         if self.links is None:
             return ""
         exit_names = ""
@@ -568,6 +727,16 @@ class Node(Flags, AccessLock):
         )
 
     def get_display_doors(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the formatted list of doors present in this node.
+
+        Args:
+            looker (Object | None, optional): The object viewing the room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The formatted string listing doors, or an empty string.
+        """
         result = f"{wrap_xterm256('Doors:', fg=15, bold=True)} "
         nh = get_node_handler()
         d = nh.get_doors(self.coord)
@@ -585,11 +754,31 @@ class Node(Flags, AccessLock):
         else:
             return ""
 
-    def get_display_desc(self, looker: Object | None = None, **kwargs):
+    def get_display_desc(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the main descriptive text for this node.
+
+        Args:
+            looker (Object | None, optional): The object viewing the room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The description text, followed by a newline.
+        """
         with self.lock:
             return self.desc + "\n" if self.desc else "You see nothing special.\n"
 
-    def get_display_name(self, looker: Object | None = None, **kwargs):
+    def get_display_name(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Get the name of the node (usually returns empty/none for rooms unless builder).
+
+        Args:
+            looker (Object | None, optional): The object viewing the room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The builder string identifying the coord, or an empty string.
+        """
         with self.lock:
             if looker.is_builder:
                 return wrap_truecolor(
@@ -597,7 +786,18 @@ class Node(Flags, AccessLock):
                 )
         return ""
 
-    def return_appearance(self, looker: Object | None = None, **kwargs):
+    def return_appearance(self, looker: Object | None = None, **kwargs) -> str:
+        """
+        Assembles and formats the complete appearance of this room into a single string.
+        Fills the standard appearance_template using the object's helper display methods.
+
+        Args:
+            looker (Object | None, optional): The object observing this room. Defaults to None.
+            **kwargs: Extra arguments.
+
+        Returns:
+            str: The fully formatted room output string for rendering.
+        """
         if not looker:
             return "You see nothing here."
         return appearance_template.format(
