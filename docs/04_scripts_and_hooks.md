@@ -12,7 +12,7 @@ Reference [`atheriz/objects/base_script.py`](../atheriz/objects/base_script.py) 
 ### 4.1.2 Script Lifecycle
 1. **Creation**: Calling `Script.create(caller, name, desc)` instantiates the script and calls `at_install()`.
 2. **Execution**: The script hooks are patched dynamically onto the parent child Object.
-3. **Removal**: Calling `Script.delete()` forcefully removes the hooks from the target child. Scripts persist within the database independently from their root parent objects.
+3. **Removal**: Calling `Script.delete()` removes the hooks from the script's child object and deletes the Script permanently.
 
 ## 4.2 Hook Decorators: `@before`, `@after`, `@replace`
 
