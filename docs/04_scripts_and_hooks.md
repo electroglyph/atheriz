@@ -92,6 +92,4 @@ Assigning scripts to target objects utilizes standard API methods:
 - `object.add_script(script_or_id)`
 - `object.remove_script(script_or_id)`
 
-Always ensure scripts correctly identify target hooks and track persistence accurately during serialization passes.
-
 [Table of Contents](./table_of_contents.md) | [Next: 05 Persistence](./05_persistence.md)
