@@ -75,19 +75,26 @@ This creates a `my_game` directory containing a set of template Python files. Th
 
 ```text
 my_game/
+├── __init__.py
 ├── access.py
 ├── account.py
 ├── channel.py
+├── connection_screen.py
+├── database_setup.py
 ├── commands/
+│   ├── __init__.py
 │   ├── command.py
 │   ├── loggedin.py
 │   └── unloggedin.py
 ├── db_ops.py
 ├── flags.py
+├── initial_setup.py
 ├── inputfuncs.py
 ├── node.py
 ├── object.py
+├── objects.py
 ├── script.py
+├── server_events.py
 └── settings.py
 ```
 
@@ -141,14 +148,14 @@ If the variables are not set, Atheriz will prompt for them interactively.
 | `atheriz stop` | Gracefully stop a running server. |
 | `atheriz restart` | Stop, then start the server again. |
 | `atheriz reload` | Hot-reload game logic without a full restart. |
-| `atheriz reset` | Delete all game data and start clean. Prompts for confirmation unless `-f` is passed. |
+| `atheriz reset` | Delete all game data and re-run initial_setup.py. Prompts for confirmation unless `-f` is passed. |
 | `atheriz create <account> <character> <password>` | Create an account and character from the command line (server must be stopped). |
 | `atheriz test [pytest_args...]` | Run the test suite with local game objects injected. |
 
 All commands that contact a running server (`stop`, `reload`, etc.) accept `--port` to override the default port.
 
 ### 1.3.4 The Class Injection System
-The core mechanic for extending Atheriz is class injection, handled within `settings.py`. By defining `CLASS_INJECTIONS`, you instruct Atheriz to replace its base classes with your game folder's templates.
+The core mechanic for extending Atheriz is class injection, handled within `settings.py`. By defining `CLASS_INJECTIONS`, you instruct Atheriz to replace its base classes with your game folder's templates. This can be ignored if you're just modifying the default classes in your game folder.
 
 The injection format is a tuple: `(local_module, class_name, target_import_path)`.
 
