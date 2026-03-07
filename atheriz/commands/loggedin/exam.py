@@ -1,7 +1,6 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.singletons.objects import get
 from atheriz.objects.base_obj import Object
-from atheriz.websocket import Connection
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -30,7 +29,8 @@ class ExamineCommand(Command):
     def setup_parser(self):
         self.parser.add_argument("target", nargs="?", help="Object to examine (name or #id).")
 
-    def run(self, caller: Object | Connection, args):
+    # pyrefly: ignore
+    def run(self, caller: Object, args):
         if not args:
             caller.msg(self.print_help())
             return

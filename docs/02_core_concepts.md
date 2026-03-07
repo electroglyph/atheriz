@@ -4,6 +4,7 @@
 
 ### 2.1.1 What is an Object?
 An `Object` is the universal entity within Atheriz. Anything that is not a static room—including players, NPCs, items, and containers—is represented by an `Object` or a subclass thereof. Important attributes include `id`, `name`, `desc`, and `location`. Classification flags such as `is_pc`, `is_npc`, `is_item`, `is_container`, and `is_mapable` determine the object's identity and interaction rules. These flags are inherited via the `Flags` mixin.
+Ids are guaranteed to be unique across all objects which use them.
 
 For exact attribute definitions, refer to [`atheriz/objects/base_obj.py`](../atheriz/objects/base_obj.py).
 
@@ -80,7 +81,7 @@ Atheriz auto-generates a map based on node coordinates and specific node attribu
 ## 2.3 Accounts
 
 ### 2.3.1 What is an Account?
-An `Account` instances the user credential data out-of-band from their gameplay characters. A single account can own multiple character entities (Objects). Primary tracking attributes are `name`, password hash, the `characters` list (containing Object IDs), and `is_banned`.
+An `Account` holds the credentials for a user and their associated character ids. A single account can own multiple character entities (Objects). Primary tracking attributes are `name`, password hash, the `characters` list (containing Object IDs), and `is_banned`.
 
 See [`atheriz/objects/base_account.py`](../atheriz/objects/base_account.py) for full implementation details.
 
