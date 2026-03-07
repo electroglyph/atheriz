@@ -11,11 +11,11 @@ For exact attribute definitions, refer to [`atheriz/objects/base_obj.py`](../ath
 ### 2.1.2 Creating Objects
 Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it with the global cache, and calls the `at_create` hook for customized setup. Note: objects are not persisted to the database until `Object.save()` is called.
 
-Key parameters include `session`, `name`, `desc`, `location`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds`.
+Key parameters include `caller`, `name`, `desc`, `location`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds`.
 
 Example usage:
 ```python
-sword = Object.create(session=None, name="Iron Sword", desc="A rusty blade.", is_item=True)
+sword = Object.create(caller=None, name="Iron Sword", desc="A rusty blade.", is_item=True)
 ```
 
 ### 2.1.3 The Hook System (`at_*` methods)

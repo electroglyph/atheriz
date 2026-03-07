@@ -124,7 +124,7 @@ class Object(Flags, DbOps, AccessLock):
         Create a new object.
 
         Args:
-            session (Session | None): The session to create the object for.
+            caller (Object | None): The object executing the creation.
             name (str): The name of the object.
             is_pc (bool, optional): Whether the object is a player character. Defaults to False.
             is_item (bool, optional): Whether the object is an item. Defaults to False.

@@ -10,9 +10,10 @@ Common uses include timed buffs/debuffs, complex AI behaviors, localized weather
 Reference [`atheriz/objects/base_script.py`](../atheriz/objects/base_script.py) for the core definitions.
 
 ### 4.1.2 Script Lifecycle
-1. **Creation**: Calling `Script.create(caller, name, desc)` instantiates the script and calls `at_install()`.
-2. **Execution**: The script hooks are patched dynamically onto the parent child Object.
-3. **Removal**: Calling `Script.delete()` removes the hooks from the script's child object and deletes the Script permanently.
+1. **Creation**: Calling `Script.create(caller, name, desc)` instantiates the script and caches it in memory.
+2. **Installation**: Calling `script.install()` patches the script's hooks onto the child object.
+3. **Execution**: The script hooks are patched dynamically onto the parent child Object.
+4. **Removal**: Calling `Script.delete()` removes the hooks from the script's child object and deletes the Script permanently.
 
 ## 4.2 Hook Decorators: `@before`, `@after`, `@replace`
 
@@ -73,18 +74,17 @@ from atheriz.objects.base_script import Script, replace
 class StrengthBuff(Script):
     def at_install(self):
         self.duration = 10
+        self.child.strength_modifier += 5
         self.child.msg("You feel immense strength surging through you.")
 
-    @replace
+    @after
     def at_tick(self):
         self.duration -= 1
         if self.duration <= 0:
             self.child.msg("Your strength fades.")
+            self.child.strength_modifier -= 5
             self.delete()
             return
-
-        # Execute object tick normally explicitly if overriding
-        self.child.base_tick_logic()
 ```
 
 ### 4.3.2 Attaching and Removing Scripts

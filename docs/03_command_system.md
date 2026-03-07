@@ -63,7 +63,7 @@ from atheriz.commands.base_cmd import Command
 class CmdExamine(Command):
     key = "examine"
     aliases = ["exa"]
-    category = "Observation"
+    category = "General"
     
     def setup_parser(self):
         self.parser.add_argument("target", help="The object you wish to observe.")
