@@ -8,7 +8,7 @@ An `Object` is the universal entity within Atheriz. Anything that is not a stati
 For exact attribute definitions, refer to [`atheriz/objects/base_obj.py`](../atheriz/objects/base_obj.py).
 
 ### 2.1.2 Creating Objects
-Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it with the global system, and calls the `at_create` hook for customized setup.
+Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it with the global cache, and calls the `at_create` hook for customized setup. Note: objects are not persisted to the database until `Object.save()` is called.
 
 Key parameters include `session`, `name`, `desc`, `location`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds`.
 
@@ -39,12 +39,12 @@ The `location` attribute designates parent-child relationships. An object's loca
 Locating objects depends on search requirements.
 
 - `Object.search(query)`: Matches against names and aliases locally for a given object or room.
-- `filter_by()`: A global registry function found in `atheriz.singletons.objects`. Ideal for complex or comprehensive querying.
+- `filter_by()`: A global cache filtering function found in `atheriz.singletons.objects`. Ideal for complex or comprehensive querying.
   ```python
   from atheriz.singletons.objects import filter_by
   merchants = filter_by(lambda x: x.is_npc and x.name == "Merchant")
   ```
-- `get()`: Used for direct ID-based lookups from the global register.
+- `get()`: Used for direct ID-based lookups from the global cache.
 
 ### 2.1.6 Messaging
 Text is delivered to players through the messaging system.
@@ -74,15 +74,7 @@ NodeLink("North", ("forest", 0, 1, 0), aliases=["n"])
 ### 2.2.3 Node Hooks
 Nodes utilize event hooks similarly to Objects. Significant room hooks include `at_pre_object_receive`, `at_object_receive`, `at_pre_object_leave`, `at_object_leave`, `at_init`, `at_tick`, `at_desc`, and `at_delete`. Overriding `at_object_receive` is commonly used to announce a player's arrival or enforce room mechanics.
 
-### 2.2.4 Node Data Storage
-Nodes possess a discrete picklable dictionary for state storage.
-- `set_data(key, value)`
-- `get_data(key)`
-- `remove_data(key)`
-
-This storage is used for persistent room logic, such as tracking instances of a pulled lever or determining if a puzzle remains unsolved.
-
-### 2.2.5 The Map System
+### 2.2.4 The Map System
 Atheriz auto-generates a map based on node coordinates and specific node attributes. The `symbol` property dictates the visual representation on the map, and the `is_mapable` flag toggles visibility entirely. Map configuration is managed via settings such as `MAP_ENABLED`, `MAP_FPS_LIMIT`, `MAX_OBJECTS_PER_LEGEND`, and `DEFAULT_ROOM_OUTLINE`. Specific hooks like `at_map_update` allow for on-the-fly display modifications. For deep rendering mechanics, observe [`atheriz/singletons/map.py`](../atheriz/singletons/map.py).
 
 ## 2.3 Accounts

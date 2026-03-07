@@ -130,7 +130,6 @@ class Node(Flags, AccessLock):
         self.theme = theme
         self.symbol = symbol
         self.legend_desc = legend_desc
-        self.data = data if data else {}
         self.links = links if links else []
         self._contents = set()
         self.is_node = True
@@ -213,40 +212,6 @@ class Node(Flags, AccessLock):
         else:
             at.remove_coro(self.at_tick, self._tick_seconds)
 
-    def set_data(self, key: str, value: Any):
-        """
-        Save arbitrary data into this node's volatile dictionary.
-        Keys must be strings and values must be picklable.
-
-        Args:
-            key (str): The storage key.
-            value (Any): The data to save.
-        """
-        with self.lock:
-            self.data[key] = value
-
-    def get_data(self, key: str) -> Any:
-        """
-        Load arbitrary data from this node's volatile dictionary.
-
-        Args:
-            key (str): The storage key.
-
-        Returns:
-            Any: The stored data, or None if not found.
-        """
-        with self.lock:
-            return self.data.get(key)
-
-    def remove_data(self, key: str):
-        """
-        Delete a data entry from this node.
-
-        Args:
-            key (str): The storage key to erase.
-        """
-        with self.lock:
-            del self.data[key]
 
     # def pre_emit_sound(
     #     self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
