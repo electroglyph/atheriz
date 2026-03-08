@@ -22,9 +22,13 @@ Object creation doesn't require db access in AtheriZ, and deletion is fast.
 
 Because Evennia is single-threaded, you are limited in how much computation you can do on objects without slowing down the game.
 
+AtheriZ is multi-threaded, with automatic thread-safety for immutable object attributes.
+
+at_tick() is possible for thousands of objects per second without slowing down the game, while this pattern is not really possible in Evennia.
+
 3d room coordinates are built in, coords = ("area", x, y, z)
 
-at_tick() is possible for thousands of objects per second without slowing down the game.
+The included client has built in support for ascii maps, and building rooms in-game can optionally auto-generate maps.
 
 # Documentation
 

@@ -63,8 +63,8 @@ class AsyncThreadPool:
                     try:
                         caller = args[0]
                         caller.msg(f"{tb}")
-                    except Exception as e2:
-                        logger.error(f"Exception while sending exception to caller: {e2}")
+                    except:
+                        pass
                 logger.error(f"{tb}")
 
         while True:

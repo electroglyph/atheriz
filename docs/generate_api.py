@@ -2,20 +2,20 @@ import os
 import ast
 
 TARGETS = [
-    ("11.1", "atheriz.objects.base_obj", ["Object"]),
-    ("11.2", "atheriz.objects.nodes", ["Node"]),
-    ("11.3", "atheriz.objects.base_account", ["Account"]),
-    ("11.4", "atheriz.objects.base_channel", ["Channel"]),
-    ("11.5", "atheriz.objects.base_script", ["Script"]),
-    ("11.6", "atheriz.commands.base_cmd", ["Command"]),
-    ("11.7", "atheriz.commands.base_cmdset", ["CmdSet"]),
-    ("11.8", "atheriz.inputfuncs", ["InputFuncs"]),
-    ("11.9", "atheriz.globals.objects", []),
-    ("11.10", "atheriz.globals.map", []),
-    ("11.11", "atheriz.globals.time", []),
-    ("11.12", "atheriz.utils", []),
-    ("11.13", "atheriz.objects.funcparser", []),
-    ("11.14", "atheriz.settings", [])
+    ("12.1", "atheriz.objects.base_obj", ["Object"]),
+    ("12.2", "atheriz.objects.nodes", ["Node"]),
+    ("12.3", "atheriz.objects.base_account", ["Account"]),
+    ("12.4", "atheriz.objects.base_channel", ["Channel"]),
+    ("12.5", "atheriz.objects.base_script", ["Script"]),
+    ("12.6", "atheriz.commands.base_cmd", ["Command"]),
+    ("12.7", "atheriz.commands.base_cmdset", ["CmdSet"]),
+    ("12.8", "atheriz.inputfuncs", ["InputFuncs"]),
+    ("12.9", "atheriz.globals.objects", []),
+    ("12.10", "atheriz.globals.map", []),
+    ("12.11", "atheriz.globals.time", []),
+    ("12.12", "atheriz.utils", []),
+    ("12.13", "atheriz.objects.funcparser", []),
+    ("12.14", "atheriz.settings", [])
 ]
 
 def format_args(args_node):
@@ -41,7 +41,7 @@ def format_args(args_node):
 
 def generate_markdown():
     output = []
-    output.append("# 11 API Reference\n")
+    output.append("# 12 API Reference\n")
     output.append("[Table of Contents](./table_of_contents.md)\n")
     output.append("This document provides an auto-generated reference for the public classes, methods, and functions within Atheriz.\n")
 
@@ -135,7 +135,7 @@ def generate_markdown():
                             except Exception:
                                 pass
 
-    output_path = os.path.join(os.path.dirname(__file__), '11_api_reference.md')
+    output_path = os.path.join(os.path.dirname(__file__), '12_api_reference.md')
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output))
     

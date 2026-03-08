@@ -1,10 +1,10 @@
-# 11 API Reference
+# 12 API Reference
 
 [Table of Contents](./table_of_contents.md)
 
 This document provides an auto-generated reference for the public classes, methods, and functions within Atheriz.
 
-## 11.1 `atheriz.objects.base_obj`
+## 12.1 `atheriz.objects.base_obj`
 
 ### Class: `Object`
 
@@ -691,7 +691,7 @@ Returns:
 
 
 
-## 11.2 `atheriz.objects.nodes`
+## 12.2 `atheriz.objects.nodes`
 
 ### Class: `Node`
 
@@ -1091,7 +1091,7 @@ Returns:
 
 
 
-## 11.3 `atheriz.objects.base_account`
+## 12.3 `atheriz.objects.base_account`
 
 ### Class: `Account`
 
@@ -1214,7 +1214,7 @@ Returns:
 
 
 
-## 11.4 `atheriz.objects.base_channel`
+## 12.4 `atheriz.objects.base_channel`
 
 ### Class: `Channel`
 
@@ -1304,7 +1304,7 @@ Clear all history from the channel.
 
 
 
-## 11.5 `atheriz.objects.base_script`
+## 12.5 `atheriz.objects.base_script`
 
 ### Class: `Script`
 
@@ -1367,7 +1367,7 @@ Args:
 
 
 
-## 11.6 `atheriz.commands.base_cmd`
+## 12.6 `atheriz.commands.base_cmd`
 
 ### Class: `Command`
 
@@ -1438,7 +1438,7 @@ Returns:
 
 
 
-## 11.7 `atheriz.commands.base_cmdset`
+## 12.7 `atheriz.commands.base_cmdset`
 
 ### Class: `CmdSet`
 
@@ -1514,7 +1514,7 @@ Returns:
 
 
 
-## 11.8 `atheriz.inputfuncs`
+## 12.8 `atheriz.inputfuncs`
 
 ### Class: `InputFuncs`
 
@@ -1597,7 +1597,7 @@ Args:
 
 
 
-## 11.9 `atheriz.globals.objects`
+## 12.9 `atheriz.globals.objects`
 
 ### `def filter_by(l)`
 
@@ -1661,11 +1661,11 @@ Args:
 
 
 
-## 11.10 `atheriz.globals.map`
+## 12.10 `atheriz.globals.map`
 
-## 11.11 `atheriz.globals.time`
+## 12.11 `atheriz.globals.time`
 
-## 11.12 `atheriz.utils`
+## 12.12 `atheriz.utils`
 
 ### `def is_in_game_folder()`
 
@@ -1879,7 +1879,7 @@ Returns:
 
 
 
-## 11.13 `atheriz.objects.funcparser`
+## 12.13 `atheriz.objects.funcparser`
 
 Generic function parser for functions embedded in a string, on the form
 `$funcname(*args, **kwargs)`, for example:
@@ -2436,7 +2436,7 @@ Usage: $Pron(word, [options]) - always maps to a capitalized word.
 
 
 
-## 11.14 `atheriz.settings`
+## 12.14 `atheriz.settings`
 
 ### `SAVE_PATH`
 

@@ -22,5 +22,7 @@ Welcome to the Atheriz documentation. Atheriz is a Python framework built for cr
    *Managing the game clock, responding to solar/lunar events, and scheduling alarms.*
 10. **[10 Utility Functions & Advanced Topics](./10_utilities_advanced.md)**  
     *Math/Map utilities, string formatters, FuncParser logic, and the hot-reloader.*
-11. **[11 API Reference](./11_api_reference.md)**  
+11. **[11 The AsyncThreadPool](./11_async_threadpool.md)**  
+    *Understanding concurrency, worker threads, and fire-and-forget execution.*
+12. **[12 API Reference](./12_api_reference.md)**  
     *Auto-generated documentation outlining public classes, methods, and functions.*
