@@ -1,4 +1,4 @@
-![AtheriZ](./AtheriZ.png)
+<img src="./AtheriZ.png" height="100" />
 
 # AtheriZ
 
