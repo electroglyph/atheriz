@@ -3,49 +3,58 @@
 ## 8.1 The WebSocket Connection
 
 ### 8.1.1 Connection Lifecycle
-Atheriz routes basic connections handling standard WebSocket protocols intrinsically. 
-1. Client connects externally.
-2. A generic `Connection` wrapper object initializes tracking localized connection parameters internally.
-3. Upon finalizing the handshake, Atheriz dispatches `client_ready`, transmitting base configuration options directly toward the renderer interface rendering the main screen logic reliably.
+Atheriz uses FastAPI to handle WebSocket connections. 
+1. When a client connects, Atheriz accepts the connection and creates a `Connection` wrapper object to manage it.
+2. The client handshake finishes and typically sends a `client_ready` message.
+3. The server responds to `client_ready` by rendering the welcome screen and prompting for login.
 
-Reference `atheriz/websocket.py` tracing structural API mechanics defining the wrapper implementation reliably.
+Reference `atheriz/websocket.py` for the core implementation of the `WebSocketManager` and `Connection` classes.
 
 ### 8.1.2 Message Format
-Communications utilize a structured JSON format universally passing between the primary client UI and the engine parsing interface logic.
+Communications between the client UI and the game server use a structured JSON format. Every message sent to the server must be a list with three elements:
 
 `[command_name, [positional_args], {kwargs}]`
 
-Built-in native commands encompass: `text`, `term_size`, `map_size`, `screenreader`, and `client_ready`. Expanding the system allows inserting custom rendering structures securely natively parsed against custom interface configurations directly mapping variables inside the `webclient.js` source code securely.
+Built-in message commands natively handled by the engine include: `text`, `term_size`, `map_size`, `screenreader`, and `client_ready`. You can add custom commands (like button clicks or UI events) by writing custom input handlers on the server and sending matching JSON arrays from the client.
 
 ## 8.2 Input Functions
 
 ### 8.2.1 The `InputFuncs` Class
-The `InputFuncs` module delegates the mapping linking designated strings extracted against custom functions executed across identical names directly. The system identifies targets actively through an implicit `@inputfunc` execution wrapper assigning functions logically upon startup.
+The `InputFuncs` class maps incoming JSON message commands (like `"text"` or `"map_size"`) to python methods. It does this automatically by scanning for methods decorated with `@inputfunc()`.
 
-Reference `atheriz/inputfuncs.py` examining the complete logic block defining automated registration procedures executed natively through `get_handlers()`.
+Reference `atheriz/inputfuncs.py` for the base implementations.
 
 ### 8.2.2 The `text` Handler
-Player actions resolve inherently via `text()`. Flow logic defines the execution string uniformly:
-1. Strips unformatted whitespace natively.
-2. Identifies matching CmdSet strings resolving dynamically referencing object command constraints simultaneously.
-3. Invokes validation tests initiating `command.execute()`.
-4. Completes logic calling `command.run()`.
-
-Inspecting `InputFuncs.text()` reveals the precise insertion point where external pre-processing logic (profanity filtration or comprehensive logging sequences) must reside securely resolving before command completion processing completes successfully.
+Standard player commands (like typing "look" or "say hello") are sent as `text` messages. The `text` handler does the following:
+1. Receives the raw string from the client.
+2. Checks if the player is in a prompt/input state (resolving `input_future` if so).
+3. Splits the text to find the command name and its arguments.
+4. Searches for the command in the appropriate command sets (unlogged-in, logged-in, objects in room, inventory, etc.).
+5. If a command is found, it schedules it for execution in the async threadpool.
 
 ### 8.2.3 Creating Custom Input Handlers
-Modifying connection constraints requires directly extending `InputFuncs`. Create new target wrappers assigning strings exactly against decorators mapping targeted structures identically.
+To add new WebSocket message handlers or override existing ones, extend the base `InputFuncs` class and use the `@inputfunc` decorator.
+
+For example, to handle a custom `"ping"` message from your web client:
 
 ```python
-from atheriz.inputfuncs import InputFuncs, inputfunc
+from atheriz.inputfuncs import InputFuncs as BaseInputFuncs, inputfunc
 
-class GameInputFuncs(InputFuncs):
-    @inputfunc("minimap_click")
-    def handle_map_click(self, connection, *args, **kwargs):
-        x, y = args[0]
-        # Resolve pathfinding against coordinates precisely here.
+class InputFuncs(BaseInputFuncs):
+    
+    @inputfunc("ping")
+    def handle_ping(self, connection, args, kwargs):
+        # Replies back to the client
+        connection.msg("pong!")
 ```
 
-Register the file configuration safely against the `settings.py` `CLASS_INJECTIONS` list explicitly redefining target overrides logically processing the incoming application payload actively mapping strings identically across targets.
+If you do not pass a string name to `@inputfunc()`, it defaults to using the name of the function.
+
+To ensure your game uses this custom class instead of the default one, add it to `CLASS_INJECTIONS` inside your `settings.py` so the core engine swaps it out on startup:
+```python
+CLASS_INJECTIONS = [
+    ("inputfuncs", "InputFuncs", "atheriz.inputfuncs"),
+]
+```
 
 [Table of Contents](./table_of_contents.md) | [Next: 09 Time System](./09_time_system.md)

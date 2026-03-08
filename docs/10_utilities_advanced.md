@@ -39,7 +39,7 @@ Doors govern access between adjacent nodes. The `Door` class defined in [`atheri
 ## 10.4 Pathfinding
 
 ### 10.4.1 Built-in Pathfinding
-Atheriz includes an A* pathfinding implementation in [`atheriz/pathfind.py`](../atheriz/pathfind.py). This module exposes functions to calculate optimal routes across node coordinates, supporting automated NPC movement and navigation mechanics.
+Atheriz includes an A* pathfinding implementation in [`atheriz/pathfind.py`](../atheriz/pathfind.py). It's not super fast, but can pathfind across a maze of thousands of rooms in 100 milliseconds or so. Thread-safety slows it down quite a bit, but it works.
 
 ## 10.5 The Connection Screen
 
@@ -54,6 +54,6 @@ The `server_events.py` module exposes hooks that execute during the initializati
 ## 10.7 The Hot Reloader
 
 ### 10.7.1 Code Reloading
-Atheriz features a hot-reloader located at [`atheriz/reloader.py`](../atheriz/reloader.py). Modified Python files are detected and reloaded into the active process memory without dropping client WebSocket connections. Note that structural changes to class inheritance or pickling variables may still require a full server restart to resolve safely.
+Atheriz features a hot-reloader located at [`atheriz/reloader.py`](../atheriz/reloader.py), which is triggered by `atheriz reload` in the terminal or by the `reload` command in-game. Modified Python files are detected and reloaded into the active process memory without dropping client WebSocket connections. Note that structural changes to class inheritance or pickling variables may still require a full server restart to resolve safely.
 
 [Table of Contents](./table_of_contents.md) | [Next: 11 Recipes & Tutorials](./11_recipes.md)
