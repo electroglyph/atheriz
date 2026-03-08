@@ -1,5 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.get import get_node_handler
 from atheriz.objects.base_door import Door
 from typing import TYPE_CHECKING
 

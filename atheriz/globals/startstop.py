@@ -1,6 +1,6 @@
 from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
-from atheriz.singletons.objects import save_objects, load_objects
+from atheriz.globals.objects import save_objects, load_objects
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
 from atheriz.logger import logger

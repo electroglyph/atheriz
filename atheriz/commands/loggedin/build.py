@@ -1,8 +1,8 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid
-from atheriz.singletons.get import get_node_handler, get_map_handler
+from atheriz.globals.get import get_node_handler, get_map_handler
 import atheriz.settings as settings
-from atheriz.singletons.map import MapInfo
+from atheriz.globals.map import MapInfo
 from typing import TYPE_CHECKING
 import time
 

@@ -6,12 +6,12 @@ from threading import Lock
 
 if TYPE_CHECKING:
     from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
-    from atheriz.singletons.asyncthreadpool import AsyncThreadPool, AsyncTicker
+    from atheriz.globals.asyncthreadpool import AsyncThreadPool, AsyncTicker
     from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
-    from atheriz.singletons.node import NodeHandler
-    from atheriz.singletons.map import MapHandler
+    from atheriz.globals.node import NodeHandler
+    from atheriz.globals.map import MapHandler
     from atheriz.websocket import WebSocketManager
-    from atheriz.singletons.time import GameTime
+    from atheriz.globals.time import GameTime
 
     # from inflect import engine
     from atheriz.objects.base_channel import Channel
@@ -57,7 +57,7 @@ def get_unique_id() -> int:
 def get_game_time() -> GameTime:
     global _GAME_TIME
     if not _GAME_TIME:
-        from atheriz.singletons.time import GameTime
+        from atheriz.globals.time import GameTime
 
         _GAME_TIME = GameTime()
     return _GAME_TIME
@@ -75,7 +75,7 @@ def get_websocket_manager() -> WebSocketManager:
 def get_async_ticker() -> AsyncTicker:
     global _ASYNC_TICKER
     if not _ASYNC_TICKER:
-        from atheriz.singletons.asyncthreadpool import AsyncTicker
+        from atheriz.globals.asyncthreadpool import AsyncTicker
 
         _ASYNC_TICKER = AsyncTicker()
     return _ASYNC_TICKER
@@ -84,7 +84,7 @@ def get_async_ticker() -> AsyncTicker:
 def get_server_channel() -> Channel | None:
     global _SERVER_CHANNEL
     if not _SERVER_CHANNEL:
-        from atheriz.singletons.objects import filter_by
+        from atheriz.globals.objects import filter_by
 
         c = filter_by(lambda x: x.is_channel and x.name.lower() == "server")
         if c:
@@ -97,7 +97,7 @@ def get_server_channel() -> Channel | None:
 def get_map_handler() -> MapHandler:
     global _MAP_HANDLER
     if not _MAP_HANDLER:
-        from atheriz.singletons.map import MapHandler
+        from atheriz.globals.map import MapHandler
 
         _MAP_HANDLER = MapHandler()
     return _MAP_HANDLER
@@ -115,7 +115,7 @@ def get_loggedin_cmdset() -> LoggedinCmdSet:
 def get_async_threadpool() -> AsyncThreadPool:
     global _ASYNC_THREAD_POOL
     if not _ASYNC_THREAD_POOL:
-        from atheriz.singletons.asyncthreadpool import AsyncThreadPool
+        from atheriz.globals.asyncthreadpool import AsyncThreadPool
 
         _ASYNC_THREAD_POOL = AsyncThreadPool(THREADPOOL_LIMIT)
     return _ASYNC_THREAD_POOL
@@ -133,7 +133,7 @@ def get_unloggedin_cmdset() -> UnloggedinCmdSet:
 def get_node_handler() -> NodeHandler:
     global _NODE_HANDLER
     if not _NODE_HANDLER:
-        from atheriz.singletons.node import NodeHandler
+        from atheriz.globals.node import NodeHandler
 
         _NODE_HANDLER = NodeHandler()
     return _NODE_HANDLER

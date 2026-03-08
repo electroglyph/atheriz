@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.node import NodeHandler
+from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_door import Door
 from atheriz.pathfind import astar
 
@@ -22,7 +22,7 @@ def node_handler():
     with patch("atheriz.pathfind.get_node_handler", return_value=nh), \
          patch("atheriz.objects.nodes.get_node_handler", return_value=nh), \
          patch("atheriz.objects.base_door.get_node_handler", return_value=nh), \
-         patch("atheriz.singletons.node.get_map_handler", return_value=MockMapHandler()), \
+         patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()), \
          patch("atheriz.objects.base_door.get_map_handler", return_value=MockMapHandler()):
         yield nh
 

@@ -3,7 +3,7 @@ import os
 import shutil
 import tempfile
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import save_objects, load_objects, get
+from atheriz.globals.objects import save_objects, load_objects, get
 from atheriz import settings, database_setup
 
 @pytest.fixture
@@ -21,7 +21,7 @@ def db_setup():
     database_setup.do_setup()
     
     # Reload objects (clears memory and loads from empty DB)
-    from atheriz.singletons.objects import _ALL_OBJECTS
+    from atheriz.globals.objects import _ALL_OBJECTS
     _ALL_OBJECTS.clear()
     load_objects()
     

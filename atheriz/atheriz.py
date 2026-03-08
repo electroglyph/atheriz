@@ -1,4 +1,4 @@
-from atheriz.singletons.objects import filter_by
+from atheriz.globals.objects import filter_by
 from atheriz.logger import logger
 import argparse
 import signal
@@ -14,9 +14,9 @@ from atheriz import settings
 from atheriz.websocket import websocket_endpoint, websocket_manager
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import add_object, get, load_objects, save_objects
-from atheriz.singletons.startstop import do_shutdown, do_startup, do_reload
-from atheriz.singletons.get import get_node_handler, get_unique_id
+from atheriz.globals.objects import add_object, get, load_objects, save_objects
+from atheriz.globals.startstop import do_shutdown, do_startup, do_reload
+from atheriz.globals.get import get_node_handler, get_unique_id
 from atheriz.database_setup import get_database
 import secrets
 import shutil

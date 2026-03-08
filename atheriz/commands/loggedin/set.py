@@ -1,6 +1,6 @@
 import ast
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get
+from atheriz.globals.objects import get
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

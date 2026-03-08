@@ -1,5 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.get import get_unloggedin_cmdset
+from atheriz.globals.get import get_unloggedin_cmdset
 from polyleven import levenshtein
 from typing import TYPE_CHECKING
 

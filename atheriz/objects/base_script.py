@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 from threading import RLock
 import time
 from atheriz.logger import logger
-from atheriz.singletons.get import get_unique_id
-from atheriz.singletons.objects import add_object, delete_objects, remove_object
+from atheriz.globals.get import get_unique_id
+from atheriz.globals.objects import add_object, delete_objects, remove_object
 from atheriz.objects.base_flags import Flags
 from atheriz.objects.base_db_ops import DbOps
 import atheriz.settings as settings

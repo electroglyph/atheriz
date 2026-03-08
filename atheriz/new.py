@@ -192,7 +192,7 @@ def generate_module_wrapper_template(module_path: str) -> str:
     re-export imports plus commented-out override examples for each function.
 
     Args:
-        module_path: Dotted import path, e.g. "atheriz.singletons.objects"
+        module_path: Dotted import path, e.g. "atheriz.globals.objects"
     """
     import importlib
     import types
@@ -264,8 +264,8 @@ def generate_module_wrapper_template(module_path: str) -> str:
 
 
 def generate_objects_template() -> str:
-    """Generate the objects.py template (thin wrapper around atheriz.singletons.objects)."""
-    return generate_module_wrapper_template("atheriz.singletons.objects")
+    """Generate the objects.py template (thin wrapper around atheriz.globals.objects)."""
+    return generate_module_wrapper_template("atheriz.globals.objects")
 
 
 def generate_database_setup_template() -> str:
@@ -535,7 +535,7 @@ def create_game_folder(folder_name: str) -> None:
         "from .commands.command import Command"
     )
     content = content.replace(
-        "from atheriz.singletons.objects import add_object, save_objects",
+        "from atheriz.globals.objects import add_object, save_objects",
         "from .objects import add_object, save_objects"
     )
     content = content.replace(

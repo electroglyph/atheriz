@@ -8,7 +8,7 @@ Atheriz uses an SQLite database consisting of a single table for physical object
 Every persistent entity (Objects, Accounts, Scripts, Channels) exists within this unified table, differentiated by unique IDs and class-level property flags (`is_account`, `is_script`, etc.). View [`atheriz/database_setup.py`](../atheriz/database_setup.py) for the schema generation.
 
 ### 5.1.2 Save & Load Cycle
-The primary interactions pass natively via `atheriz.singletons.objects`:
+The primary interactions pass natively via `atheriz.globals.objects`:
 - `save_objects()` iterates across all loaded objects. Unless globally configured via `ALWAYS_SAVE_ALL`, it exclusively evaluates objects possessing the `is_modified = True` flag, executing a write with a structured database transaction.
 - `load_objects()` executes a two-pass load architecture. Initially, it deserializes the blobs into memory. After deserialization, it sequentially executes `resolve_relations()` to translate stored object identifier integers into their cached objects.
 

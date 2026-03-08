@@ -1,6 +1,6 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import get
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.objects import get
+from atheriz.globals.get import get_node_handler
 from atheriz.logger import logger
 from typing import TYPE_CHECKING
 

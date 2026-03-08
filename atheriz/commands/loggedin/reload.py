@@ -1,7 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.reloader import reload_game_logic
 from atheriz.logger import logger
-from atheriz.singletons.get import get_server_channel
+from atheriz.globals.get import get_server_channel
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

@@ -1,5 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.get import get_game_time
+from atheriz.globals.get import get_game_time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

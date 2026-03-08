@@ -2,7 +2,7 @@ import os
 import shutil
 import tempfile
 from pathlib import Path
-from atheriz.singletons.salt import get_salt
+from atheriz.globals.salt import get_salt
 from atheriz import settings
 import importlib
 import pytest
@@ -18,7 +18,7 @@ def temp_cwd(tmp_path):
 @pytest.fixture
 def reset_salt():
     """Fixture to ensure the salt module is fresh before each test."""
-    import atheriz.singletons.salt as salt_module
+    import atheriz.globals.salt as salt_module
     importlib.reload(salt_module)
     return salt_module
 

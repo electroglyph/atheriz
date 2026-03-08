@@ -11,7 +11,7 @@ class Node(BaseNode, Flags, DbOps, AccessLock):
         super().__init__(*args, **kwargs)
 
     def at_delete(self, caller):
-        """Called before an object is deleted, aborts deletion if False"""
+        """Called before a node is fundamentally deleted from the world grid."""
         return super().at_delete(caller)
 
     def at_desc(self, looker=None, **kwargs):
@@ -19,23 +19,23 @@ class Node(BaseNode, Flags, DbOps, AccessLock):
         pass
 
     def at_init(self):
-        """Called after this object is deserialized and all attributes are set."""
+        """Called after this node object is deserialized and all its attributes"""
         pass
 
     def at_object_leave(self, destination, to_exit=None, **kwargs):
-        """Called after leaving the object."""
+        """Called after an object has successfully left the node."""
         pass
 
     def at_object_receive(self, source, from_exit=None, **kwargs):
-        """Called after receiving the object."""
+        """Called after an object has successfully entered the node."""
         pass
 
     def at_pre_object_leave(self, destination, to_exit=None, **kwargs):
-        """Called before leaving the object, return False to cancel."""
+        """Called before an object leaves the node. Returning False aborts the move."""
         return super().at_pre_object_leave(destination, to_exit, **kwargs)
 
     def at_pre_object_receive(self, source, from_exit=None, **kwargs):
-        """Called before receiving the object, return False to cancel."""
+        """Called before an object enters the node. Returning False aborts the entry."""
         return super().at_pre_object_receive(source, from_exit, **kwargs)
 
     def at_tick(self):

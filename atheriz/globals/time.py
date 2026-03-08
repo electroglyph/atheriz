@@ -2,8 +2,8 @@ from typing import TYPE_CHECKING, Any
 import atheriz.settings as settings
 from threading import RLock
 from pathlib import Path
-from atheriz.singletons.get import get_async_ticker, get_async_threadpool
-from atheriz.singletons.objects import get, filter_by
+from atheriz.globals.get import get_async_ticker, get_async_threadpool
+from atheriz.globals.objects import get, filter_by
 import json
 import ast
 from atheriz.objects.base_obj import Object

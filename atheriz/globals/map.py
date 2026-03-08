@@ -1,6 +1,6 @@
 from __future__ import annotations
 from threading import RLock
-from atheriz.singletons.node import Node
+from atheriz.globals.node import Node
 from atheriz.logger import logger
 import atheriz.settings as settings
 import dill

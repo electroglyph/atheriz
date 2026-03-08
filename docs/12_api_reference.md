@@ -1629,7 +1629,7 @@ Args:
 
 
 
-## 12.9 `atheriz.singletons.objects`
+## 12.9 `atheriz.globals.objects`
 
 ### `def filter_by(l)`
 
@@ -1693,9 +1693,9 @@ Args:
 
 
 
-## 12.10 `atheriz.singletons.map`
+## 12.10 `atheriz.globals.map`
 
-## 12.11 `atheriz.singletons.time`
+## 12.11 `atheriz.globals.time`
 
 ## 12.12 `atheriz.utils`
 

@@ -1,8 +1,8 @@
 import pytest
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.node import NodeHandler
+from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_obj import Object
-from atheriz.singletons import objects as obj_singleton
+from atheriz.globals import objects as obj_singleton
 from atheriz.database_setup import get_database
 from atheriz import settings
 from pathlib import Path

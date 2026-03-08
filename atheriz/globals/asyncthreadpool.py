@@ -8,7 +8,7 @@ import traceback
 import queue
 from atheriz.logger import logger
 from atheriz.settings import DEBUG
-from atheriz.singletons.get import get_async_threadpool
+from atheriz.globals.get import get_async_threadpool
 
 
 class AsyncThread(Thread):

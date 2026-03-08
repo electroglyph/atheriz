@@ -1,10 +1,10 @@
 from __future__ import annotations
 from atheriz.objects.base_flags import Flags
-from atheriz.singletons.objects import save_objects
+from atheriz.globals.objects import save_objects
 from atheriz.utils import compress_whitespace
 from typing import Callable
-from atheriz.singletons.objects import get, add_object, remove_object
-from atheriz.singletons.get import (
+from atheriz.globals.objects import get, add_object, remove_object
+from atheriz.globals.get import (
     get_node_handler,
     get_map_handler,
     get_server_channel,
@@ -33,9 +33,9 @@ import time
 if TYPE_CHECKING:
     from atheriz.objects.base_script import Script
     from atheriz.objects.session import Session
-    from atheriz.singletons.node import Node
+    from atheriz.globals.node import Node
     from atheriz.objects.base_channel import Channel
-    from atheriz.singletons.map import MapInfo
+    from atheriz.globals.map import MapInfo
 IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 

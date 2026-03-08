@@ -1,7 +1,7 @@
 import time
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
-from atheriz.singletons.objects import filter_by, TEMP_BANNED_IPS, TEMP_BANNED_LOCK, get
+from atheriz.globals.objects import filter_by, TEMP_BANNED_IPS, TEMP_BANNED_LOCK, get
 from atheriz.objects.base_account import Account
 import atheriz.settings as settings
 from atheriz.logger import logger

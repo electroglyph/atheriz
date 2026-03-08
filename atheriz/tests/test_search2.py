@@ -1,7 +1,7 @@
 from atheriz.objects.base_obj import Object
 from atheriz.objects.contents import search
-from atheriz.singletons.objects import add_object
-from atheriz.singletons import objects
+from atheriz.globals.objects import add_object
+from atheriz.globals import objects
 import pytest
 
 

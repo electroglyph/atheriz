@@ -10,9 +10,9 @@ TARGETS = [
     ("12.6", "atheriz.commands.base_cmd", ["Command"]),
     ("12.7", "atheriz.commands.base_cmdset", ["CmdSet"]),
     ("12.8", "atheriz.inputfuncs", ["InputFuncs"]),
-    ("12.9", "atheriz.singletons.objects", []),
-    ("12.10", "atheriz.singletons.map", []),
-    ("12.11", "atheriz.singletons.time", []),
+    ("12.9", "atheriz.globals.objects", []),
+    ("12.10", "atheriz.globals.map", []),
+    ("12.11", "atheriz.globals.time", []),
     ("12.12", "atheriz.utils", []),
     ("12.13", "atheriz.objects.funcparser", []),
     ("12.14", "atheriz.settings", [])
@@ -124,7 +124,7 @@ def generate_markdown():
                 output.append("\n")
             
             # Document public settings/constants if it's the settings or time module
-            if module_name in ["atheriz.settings", "atheriz.singletons.time"]:
+            if module_name in ["atheriz.settings", "atheriz.globals.time"]:
                 for assign in assignments:
                     for target in assign.targets:
                         if isinstance(target, ast.Name) and target.id.isupper() and not target.id.startswith("_"):

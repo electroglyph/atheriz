@@ -6,9 +6,9 @@ from unittest.mock import MagicMock
 
 from atheriz import settings
 from atheriz.database_setup import do_setup
-from atheriz.singletons import get as singletons_get
-from atheriz.singletons.objects import _ALL_OBJECTS, delete_objects, get as objects_get
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals import get as globals_get
+from atheriz.globals.objects import _ALL_OBJECTS, delete_objects, get as objects_get
+from atheriz.globals.get import get_node_handler
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node
 from atheriz.objects.base_account import Account

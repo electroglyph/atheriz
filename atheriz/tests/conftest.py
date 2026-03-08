@@ -3,8 +3,8 @@ import shutil
 import tempfile
 import os
 from atheriz import settings, database_setup
-from atheriz.singletons import objects as obj_singleton
-from atheriz.singletons import get as get_singleton
+from atheriz.globals import objects as obj_singleton
+from atheriz.globals import get as get_singleton
 
 @pytest.fixture(autouse=True)
 def global_test_env():
@@ -20,13 +20,13 @@ def global_test_env():
     database_setup.do_setup()
 
     
-    # Clear other singletons/state if necessary
+    # Clear other globals/state if necessary
     obj_singleton._ALL_OBJECTS.clear()
     
     # Reset internal ID counter to ensure predictable test IDs if needed
     get_singleton.set_id(-1)
     
-    # Reset other singletons if they exist
+    # Reset other globals if they exist
     get_singleton._NODE_HANDLER = None
     get_singleton._MAP_HANDLER = None
     get_singleton._GAME_TIME = None
@@ -49,7 +49,7 @@ def global_test_env():
 @pytest.fixture
 def db_setup(global_test_env):
     """Alias for global_test_env to avoid breaking tests."""
-    from atheriz.singletons.objects import load_objects
+    from atheriz.globals.objects import load_objects
     load_objects()
     return global_test_env
 

@@ -1,5 +1,5 @@
 """
-Extensive tests for atheriz.singletons.time.GameTime
+Extensive tests for atheriz.globals.time.GameTime
 
 Focuses on correctness of get_timespan and get_time under different
 settings configurations, including fractional TICK_MINUTES values.
@@ -14,14 +14,14 @@ from unittest.mock import patch, MagicMock
 
 # ---------------------------------------------------------------------------
 # Pre-mock heavy dependencies that cause circular imports when importing
-# atheriz.singletons.time.  We only need the GameTime class itself and
+# atheriz.globals.time.  We only need the GameTime class itself and
 # atheriz.settings — everything else (object system, websockets, utils)
 # is irrelevant for these unit tests.
 # ---------------------------------------------------------------------------
 # Save original sys.modules state to prevent poisoning other tests
 _mods_to_mock = [
-    "atheriz.singletons.get",
-    "atheriz.singletons.objects",
+    "atheriz.globals.get",
+    "atheriz.globals.objects",
     "atheriz.utils",
     "atheriz.websocket",
     "atheriz.objects.persist",
@@ -41,7 +41,7 @@ for _mod in _mods_to_mock:
         sys.modules[_mod] = MagicMock()
 
 import atheriz.settings as settings
-from atheriz.singletons.time import GameTime
+from atheriz.globals.time import GameTime
 
 # RESTORE sys.modules immediately after import. GameTime has its references,
 # and we stop poisoning the global state for other tests (like serialization).
@@ -839,7 +839,7 @@ class TestEdgeCases:
 
 class TestTimeEvents:
     """Test solar and lunar events Triggering through at_solar_event and at_lunar_event."""
-    @patch("atheriz.singletons.time.filter_by")
+    @patch("atheriz.globals.time.filter_by")
     def test_solar_events(self, mock_filter_by):
         mock_character = MagicMock()
         mock_filter_by.return_value = [mock_character]
@@ -863,7 +863,7 @@ class TestTimeEvents:
         gt.on_tick()
         mock_character.at_solar_event.assert_called_with(settings.SUNSET_MESSAGE)
 
-    @patch("atheriz.singletons.time.filter_by")
+    @patch("atheriz.globals.time.filter_by")
     def test_lunar_events(self, mock_filter_by):
         mock_character = MagicMock()
         mock_filter_by.return_value = [mock_character]

@@ -40,9 +40,9 @@ The `location` attribute designates parent-child relationships. An object's loca
 Locating objects depends on search requirements.
 
 - `Object.search(query)`: Matches against names and aliases locally for a given object or room.
-- `filter_by()`: A global cache filtering function found in `atheriz.singletons.objects`. Ideal for complex or comprehensive querying.
+- `filter_by()`: A global cache filtering function found in `atheriz.globals.objects`. Ideal for complex or comprehensive querying.
   ```python
-  from atheriz.singletons.objects import filter_by
+  from atheriz.globals.objects import filter_by
   merchants = filter_by(lambda x: x.is_npc and x.name == "Merchant")
   ```
 - `get()`: Used for direct ID-based lookups from the global cache.
@@ -76,7 +76,7 @@ NodeLink("North", ("forest", 0, 1, 0), aliases=["n"])
 Nodes utilize event hooks similarly to Objects. Significant room hooks include `at_pre_object_receive`, `at_object_receive`, `at_pre_object_leave`, `at_object_leave`, `at_init`, `at_tick`, `at_desc`, and `at_delete`. Overriding `at_object_receive` is commonly used to announce a player's arrival or enforce room mechanics.
 
 ### 2.2.4 The Map System
-Atheriz auto-generates a map based on node coordinates and specific node attributes. The `symbol` property dictates the visual representation on the map, and the `is_mapable` flag toggles visibility entirely. Map configuration is managed via settings such as `MAP_ENABLED`, `MAP_FPS_LIMIT`, `MAX_OBJECTS_PER_LEGEND`, and `DEFAULT_ROOM_OUTLINE`. Specific hooks like `at_map_update` allow for on-the-fly display modifications. For deep rendering mechanics, observe [`atheriz/singletons/map.py`](../atheriz/singletons/map.py).
+Atheriz auto-generates a map based on node coordinates and specific node attributes. The `symbol` property dictates the visual representation on the map, and the `is_mapable` flag toggles visibility entirely. Map configuration is managed via settings such as `MAP_ENABLED`, `MAP_FPS_LIMIT`, `MAX_OBJECTS_PER_LEGEND`, and `DEFAULT_ROOM_OUTLINE`. Specific hooks like `at_map_update` allow for on-the-fly display modifications. For deep rendering mechanics, observe [`atheriz/globals/map.py`](../atheriz/globals/map.py).
 
 ## 2.3 Accounts
 
@@ -90,7 +90,7 @@ See [`atheriz/objects/base_account.py`](../atheriz/objects/base_account.py) for 
 - Registration and auth: `Account.create(name, password)`, `login()`, `check_password()`, `set_password()`.
 - Management: `add_character()`, `remove_character()`.
 
-Passwords are hashed utilizing SHA-256 combined with a dedicated salt (`atheriz/singletons/salt.py`).
+Passwords are hashed utilizing SHA-256 combined with a dedicated salt (`atheriz/globals/salt.py`).
 
 ## 2.4 Channels
 

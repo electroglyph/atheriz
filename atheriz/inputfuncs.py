@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING, Callable
-from atheriz.singletons.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
+from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
 from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.connection_screen import render

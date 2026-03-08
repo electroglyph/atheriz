@@ -5,7 +5,7 @@ Tests for lock functionality in Object class.
 import pytest
 from unittest.mock import patch
 from atheriz.objects.base_obj import Object
-from atheriz.singletons import objects as obj_singleton
+from atheriz.globals import objects as obj_singleton
 import atheriz.settings as settings
 
 

@@ -1,10 +1,10 @@
 from atheriz.objects.base_channel import Channel
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.map import MapInfo
-from atheriz.singletons.get import get_node_handler, get_map_handler
+from atheriz.globals.map import MapInfo
+from atheriz.globals.get import get_node_handler, get_map_handler
 from atheriz.objects.base_obj import Object
 from atheriz.objects.base_account import Account
-from atheriz.singletons.objects import add_object, save_objects
+from atheriz.globals.objects import add_object, save_objects
 import atheriz.settings as settings
 from atheriz.database_setup import do_setup as do_db_setup
 from atheriz.logger import logger

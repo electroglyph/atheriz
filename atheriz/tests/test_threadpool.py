@@ -3,7 +3,7 @@ import time
 import threading
 import asyncio
 from typing import NoReturn
-from atheriz.singletons.asyncthreadpool import AsyncThreadPool, AsyncTicker
+from atheriz.globals.asyncthreadpool import AsyncThreadPool, AsyncTicker
 
 
 class TestAsyncThreadPool:

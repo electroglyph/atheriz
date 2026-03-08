@@ -6,7 +6,7 @@ from atheriz.objects.base_account import Account
 from atheriz.objects.base_channel import Channel
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea, Transition
-from atheriz.singletons.map import LegendEntry, MapInfo
+from atheriz.globals.map import LegendEntry, MapInfo
 from atheriz.objects.base_door import Door
 
 class CustomData:
@@ -192,8 +192,8 @@ def test_mapinfo_serialization():
     assert object.__getattribute__(deserialized, "legend_entries")[0].symbol == "T"
 
 def test_resolve_relations():
-    from atheriz.singletons import objects as obj_singleton
-    from atheriz.singletons.get import get_node_handler
+    from atheriz.globals import objects as obj_singleton
+    from atheriz.globals.get import get_node_handler
     
     # Setup state
     obj_singleton._ALL_OBJECTS.clear()

@@ -89,4 +89,5 @@ class Object(BaseObject, Flags, DbOps, AccessLock):
         return super().at_tick(*args, **kwargs)
 
     def format_appearance(self, appearance, looker, **kwargs):
+        """Compresses and cleans up whitespace on the final appearance string."""
         return super().format_appearance(appearance, looker, **kwargs)

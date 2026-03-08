@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock, patch, PropertyMock
 from atheriz.commands.loggedin.door import DoorCommand
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.node import NodeHandler
+from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_door import Door
 from atheriz import settings
 
@@ -39,7 +39,7 @@ def node_handler():
     with patch(
         "atheriz.commands.loggedin.door.get_node_handler", return_value=nh
     ), patch(
-        "atheriz.singletons.node.get_map_handler",
+        "atheriz.globals.node.get_map_handler",
         return_value=MockMapHandler(),
     ):
         yield nh
@@ -602,7 +602,7 @@ def test_nodehandler_add_door():
         to_coord=("A", 0, 2, 0),
         to_exit="south",
     )
-    with patch("atheriz.singletons.node.get_map_handler", return_value=MockMapHandler()):
+    with patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()):
         nh.add_door(door)
 
     assert nh.get_doors(("A", 0, 0, 0))["north"] is door
@@ -617,7 +617,7 @@ def test_nodehandler_remove_door():
         to_coord=("A", 0, 2, 0),
         to_exit="south",
     )
-    with patch("atheriz.singletons.node.get_map_handler", return_value=MockMapHandler()):
+    with patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()):
         nh.add_door(door)
         nh.remove_door(door)
 

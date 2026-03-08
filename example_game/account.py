@@ -10,16 +10,17 @@ class Account(BaseAccount, Flags, DbOps):
         super().__init__(*args, **kwargs)
 
     def at_create(self):
-        """Called after an object is created."""
+        """Called after a new account is successfully created."""
         pass
 
     def at_delete(self, caller=None):
-        """Called before an object is deleted, return False to cancel deletion."""
+        """Called before the account is deleted."""
         return super().at_delete(caller)
 
     def at_disconnect(self):
+        """Called when a session associated with this account disconnects."""
         pass
 
     def at_pre_puppet(self, character):
-        """Called before a character is puppeted, return False to cancel puppeting."""
+        """Called before a character is puppeted by this account."""
         return super().at_pre_puppet(character)

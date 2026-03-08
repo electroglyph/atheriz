@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import sqlite3
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import save_objects, load_objects, delete_objects, get
+from atheriz.globals.objects import save_objects, load_objects, delete_objects, get
 from atheriz import settings, database_setup
 import dill
 
@@ -109,7 +109,7 @@ def test_recursive_delete(db_setup, superuser):
     conn.close()
 
 def test_map_handler_persistence(db_setup):
-    from atheriz.singletons.map import MapHandler, MapInfo
+    from atheriz.globals.map import MapHandler, MapInfo
     
     # Initialize handler (loads from empty DB)
     mh = MapHandler()
@@ -136,7 +136,7 @@ def test_map_handler_persistence(db_setup):
     assert mh2.data[("TestArea", 0)].name == "TestArea"
 
 def test_node_handler_persistence(db_setup):
-    from atheriz.singletons.node import NodeHandler
+    from atheriz.globals.node import NodeHandler
     from atheriz.objects.nodes import NodeArea, NodeGrid, NodeLink, Transition
     from atheriz.objects.base_door import Door
     
@@ -193,7 +193,7 @@ def test_loaded_objects_threadsafe(db_setup):
     from atheriz.objects.base_account import Account
     from atheriz.objects.base_script import Script
     from atheriz.objects.nodes import Node, NodeArea, NodeGrid
-    from atheriz.singletons.node import NodeHandler
+    from atheriz.globals.node import NodeHandler
 
     # Create objects and save them
     obj = Object.create(None, "Threadsafe Test Object")

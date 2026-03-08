@@ -10,5 +10,5 @@ class Script(BaseScript, Flags, DbOps):
         super().__init__(*args, **kwargs)
 
     def at_install(self):
-        """called when the script is installed on an object"""
+        """Called when the script is assigned to and installed on an object."""
         pass

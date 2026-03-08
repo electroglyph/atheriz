@@ -11,11 +11,11 @@ class Channel(BaseChannel, Flags, DbOps, AccessLock):
         super().__init__(*args, **kwargs)
 
     def at_create(self):
-        """Called after an object is created."""
+        """Called after a new channel is successfully created."""
         pass
 
     def at_delete(self, caller=None):
-        """Called before an object is deleted, aborts deletion if False"""
+        """Called before the channel is deleted."""
         return super().at_delete(caller)
 
     def format_message(self, timestamp, sender, message):

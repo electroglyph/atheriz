@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
-from atheriz.singletons.get import get_node_handler
-from atheriz.singletons.get import get_map_handler
+from atheriz.globals.get import get_node_handler
+from atheriz.globals.get import get_map_handler
 from atheriz.objects.base_lock import AccessLock
 from atheriz.logger import logger
 from threading import RLock

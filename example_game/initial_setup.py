@@ -1,8 +1,8 @@
 from .channel import Channel
 from .node import Node
 from atheriz.objects.nodes import NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.map import MapInfo
-from atheriz.singletons.get import get_node_handler, get_map_handler
+from atheriz.globals.map import MapInfo
+from atheriz.globals.get import get_node_handler, get_map_handler
 from .object import Object
 from .account import Account
 from .objects import add_object, save_objects

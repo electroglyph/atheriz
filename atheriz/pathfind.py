@@ -1,5 +1,5 @@
 from typing import TYPE_CHECKING
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.get import get_node_handler
 import heapq
 
 if TYPE_CHECKING:

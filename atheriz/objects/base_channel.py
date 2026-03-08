@@ -3,8 +3,8 @@ from collections import deque
 from threading import RLock
 import atheriz.settings as settings
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
-from atheriz.singletons.objects import get, add_object, filter_by, remove_object, delete_objects
-from atheriz.singletons.get import get_unique_id
+from atheriz.globals.objects import get, add_object, filter_by, remove_object, delete_objects
+from atheriz.globals.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
 from atheriz.objects.base_db_ops import DbOps

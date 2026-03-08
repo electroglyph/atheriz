@@ -3,10 +3,10 @@ import tempfile
 import shutil
 from atheriz import settings
 from atheriz.database_setup import do_setup
-from atheriz.singletons import get as singletons_get
-from atheriz.singletons.objects import _ALL_OBJECTS, save_objects, load_objects
+from atheriz.globals import get as globals_get
+from atheriz.globals.objects import _ALL_OBJECTS, save_objects, load_objects
 import atheriz.database_setup as db_mod
-from atheriz.singletons import objects as obj_singleton
+from atheriz.globals import objects as obj_singleton
 
 
 from atheriz.objects.base_obj import Object, hookable
@@ -219,7 +219,7 @@ def test_attached_script_persistence():
     node_script.is_modified = True
     save_objects()
     
-    nh = singletons_get.get_node_handler()
+    nh = globals_get.get_node_handler()
     nh.add_node(node)
     nh.save()
 
@@ -234,7 +234,7 @@ def test_attached_script_persistence():
 
     # Load everything
     load_objects()
-    new_nh = singletons_get.get_node_handler()
+    new_nh = globals_get.get_node_handler()
     new_nh.load()
     
     # Verify Object script

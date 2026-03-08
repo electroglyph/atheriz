@@ -2,8 +2,8 @@ import pytest
 from unittest.mock import patch, MagicMock
 from atheriz.commands.loggedin.build import BuildCommand, DIRECTIONS
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
-from atheriz.singletons.node import NodeHandler
-from atheriz.singletons.map import MapInfo
+from atheriz.globals.node import NodeHandler
+from atheriz.globals.map import MapInfo
 from atheriz import settings
 
 
@@ -87,7 +87,7 @@ def env():
     ), patch(
         "atheriz.commands.loggedin.build.get_map_handler", return_value=mh
     ), patch(
-        "atheriz.singletons.node.get_map_handler", return_value=mh
+        "atheriz.globals.node.get_map_handler", return_value=mh
     ):
         yield nh, mh, area, grid, start_node, caller
 

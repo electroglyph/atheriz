@@ -3,15 +3,15 @@ from unittest.mock import MagicMock
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node
 from atheriz.commands.loggedin.delete import DeleteCommand
-from atheriz.singletons.objects import get, _ALL_OBJECTS
-from atheriz.singletons.node import NodeHandler
+from atheriz.globals.objects import get, _ALL_OBJECTS
+from atheriz.globals.node import NodeHandler
 from atheriz import settings, database_setup
 
 import tempfile
 import shutil
 import os
 from atheriz.database_setup import do_setup, get_database
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.get import get_node_handler
 
 from atheriz.utils import strip_ansi
 
@@ -25,8 +25,8 @@ def temp_env():
     # Initialize DB schema
     do_setup()
     
-    # Clear singletons to ensure fresh state
-    from atheriz.singletons import get
+    # Clear globals to ensure fresh state
+    from atheriz.globals import get
     get._NODE_HANDLER = None
     _ALL_OBJECTS.clear()
     

@@ -1,8 +1,8 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.objects import add_object, save_objects
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.objects import add_object, save_objects
+from atheriz.globals.get import get_node_handler
 from atheriz import settings
 from pathlib import Path
 import time

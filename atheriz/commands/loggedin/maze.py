@@ -1,7 +1,7 @@
 from random import choice
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea
-from atheriz.singletons.get import get_node_handler, get_map_handler
-from atheriz.singletons.map import MapInfo, LegendEntry
+from atheriz.globals.get import get_node_handler, get_map_handler
+from atheriz.globals.map import MapInfo, LegendEntry
 from atheriz.commands.base_cmd import Command
 from atheriz.utils import wrap_xterm256
 import time

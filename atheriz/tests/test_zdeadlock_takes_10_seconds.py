@@ -17,11 +17,11 @@ settings.THREADSAFE_GETTERS_SETTERS = True
 
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node, NodeLink
-from atheriz.singletons.objects import add_object, get
-from atheriz.singletons.get import get_unique_id, get_node_handler
+from atheriz.globals.objects import add_object, get
+from atheriz.globals.get import get_unique_id, get_node_handler
 from atheriz.commands.base_cmdset import CmdSet
 
-# Ensure we have a clean slate for singletons if possible
+# Ensure we have a clean slate for globals if possible
 # (In a single run script, this is fresh)
 
 def test_stress_deadlock():

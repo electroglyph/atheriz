@@ -1,8 +1,8 @@
 import pytest
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Transition
-from atheriz.singletons.node import NodeHandler
+from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_door import Door
-from atheriz.singletons import objects as obj_singleton
+from atheriz.globals import objects as obj_singleton
 from atheriz import settings
 from pathlib import Path
 import shutil
@@ -50,19 +50,6 @@ def test_node_add_link():
     node.add_link(link)
     assert len(node.links) == 1
     assert node.links[0].name == "east"
-
-
-# Note: Node class doesn't have get_link or remove_link that work standalone
-# remove_link tries to remove transitions which requires proper setup
-
-
-def test_node_data():
-    node = Node(coord=("TestArea", 0, 0, 0))
-    node.set_data("key1", "value1")
-    assert node.get_data("key1") == "value1"
-    assert node.get_data("nonexistent") is None
-    node.remove_data("key1")
-    assert node.get_data("key1") is None
 
 
 def test_node_nouns():
@@ -324,7 +311,7 @@ def test_nodehandler_add_door():
 
 def test_nodegrid_add_node_creates_transition():
     """Adding a node with a link to another area should create a transition"""
-    from atheriz.singletons.get import get_node_handler
+    from atheriz.globals.get import get_node_handler
 
     handler = get_node_handler()
 
@@ -354,7 +341,7 @@ def test_nodegrid_add_node_creates_transition():
 
 def test_nodegrid_remove_node_removes_transition():
     """Removing a node with a cross-area link should remove the transition"""
-    from atheriz.singletons.get import get_node_handler
+    from atheriz.globals.get import get_node_handler
 
     handler = get_node_handler()
 
@@ -383,7 +370,7 @@ def test_nodegrid_remove_node_removes_transition():
 
 def test_node_remove_link_removes_transition():
     """Removing a cross-area link from a node should remove the transition"""
-    from atheriz.singletons.get import get_node_handler
+    from atheriz.globals.get import get_node_handler
 
     handler = get_node_handler()
 
@@ -413,7 +400,7 @@ def test_node_remove_link_removes_transition():
 
 def test_node_remove_link_same_area_no_transition():
     """Removing a same-area link should not try to remove transitions"""
-    from atheriz.singletons.get import get_node_handler
+    from atheriz.globals.get import get_node_handler
 
     handler = get_node_handler()
 

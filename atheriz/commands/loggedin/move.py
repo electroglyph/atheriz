@@ -1,5 +1,5 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.get import get_node_handler
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

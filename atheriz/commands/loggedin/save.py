@@ -1,6 +1,6 @@
 from atheriz.commands.base_cmd import Command
-from atheriz.singletons.objects import save_objects
-from atheriz.singletons.get import get_map_handler, get_node_handler, get_game_time
+from atheriz.globals.objects import save_objects
+from atheriz.globals.get import get_map_handler, get_node_handler, get_game_time
 import atheriz.settings as settings
 from typing import TYPE_CHECKING
 import time

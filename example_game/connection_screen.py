@@ -1,5 +1,5 @@
 from importlib import metadata
-from atheriz.singletons.objects import filter_by
+from atheriz.globals.objects import filter_by
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

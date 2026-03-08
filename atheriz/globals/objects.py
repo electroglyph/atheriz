@@ -1,4 +1,4 @@
-from atheriz.singletons.get import set_id
+from atheriz.globals.get import set_id
 from threading import RLock
 from atheriz.database_setup import get_database
 import atheriz.settings as settings

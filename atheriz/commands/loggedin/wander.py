@@ -1,6 +1,6 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.get import get_node_handler
+from atheriz.globals.get import get_node_handler
 import time
 from typing import TYPE_CHECKING
 import random

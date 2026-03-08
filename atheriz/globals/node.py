@@ -1,5 +1,5 @@
 from __future__ import annotations
-from atheriz.singletons.get import get_map_handler
+from atheriz.globals.get import get_map_handler
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger

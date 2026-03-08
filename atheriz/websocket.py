@@ -6,12 +6,12 @@ from fastapi import WebSocket, WebSocketDisconnect
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.singletons.asyncthreadpool import AsyncThreadPool
+    from atheriz.globals.asyncthreadpool import AsyncThreadPool
     from atheriz.objects.base_account import Account
 from atheriz.objects.session import Session
 from atheriz.connection_screen import render
-from atheriz.singletons.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
-from atheriz.singletons.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
+from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 from atheriz.utils import strip_ansi
 from atheriz.inputfuncs import InputFuncs
 from atheriz.logger import logger

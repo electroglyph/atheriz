@@ -4,15 +4,15 @@ import os
 from pathlib import Path
 from typing import Any
 import types
-from atheriz.singletons.objects import _ALL_OBJECTS, _ALL_OBJECTS_LOCK, filter_by
+from atheriz.globals.objects import _ALL_OBJECTS, _ALL_OBJECTS_LOCK, filter_by
 
 # Core modules that should never be reloaded (would break server state)
 _EXCLUDED_MODULES = {
     "atheriz.atheriz",
     "atheriz.reloader",
     "atheriz.websocket",
-    "atheriz.singletons.get",
-    "atheriz.singletons.objects",
+    "atheriz.globals.get",
+    "atheriz.globals.objects",
 }
 
 
@@ -332,7 +332,7 @@ def reload_game_logic() -> str:
 
     try:
         # import here to avoid potential circular imports
-        from atheriz.singletons.get import get_node_handler
+        from atheriz.globals.get import get_node_handler
 
         nh = get_node_handler()
         if nh:
@@ -366,7 +366,7 @@ def reload_game_logic() -> str:
         _patch_object(obj)
 
     try:
-        from atheriz.singletons.get import get_loggedin_cmdset, get_unloggedin_cmdset
+        from atheriz.globals.get import get_loggedin_cmdset, get_unloggedin_cmdset
 
         global_sets = [get_loggedin_cmdset(), get_unloggedin_cmdset()]
         for s in global_sets:

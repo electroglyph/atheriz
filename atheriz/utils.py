@@ -4,7 +4,7 @@ from string import punctuation
 import colorsys
 import math
 from typing import TYPE_CHECKING, Any
-from atheriz.singletons.get import get_websocket_manager, get_node_handler
+from atheriz.globals.get import get_websocket_manager, get_node_handler
 from pathlib import Path
 
 if TYPE_CHECKING:

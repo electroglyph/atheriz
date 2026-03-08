@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Callable
 from atheriz.utils import is_iter, make_iter
 from typing import Any, Optional
-from atheriz.singletons.objects import get
+from atheriz.globals.objects import get
 import random
 from threading import RLock
 from typing import TYPE_CHECKING
@@ -11,9 +11,9 @@ from atheriz.utils import (
     wrap_xterm256,
 )
 from atheriz.objects import funcparser
-from atheriz.singletons.objects import get
+from atheriz.globals.objects import get
 from atheriz.objects.contents import search
-from atheriz.singletons.get import get_node_handler, get_async_ticker, get_map_handler
+from atheriz.globals.get import get_node_handler, get_async_ticker, get_map_handler
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name

@@ -1,8 +1,8 @@
 from __future__ import annotations
-from atheriz.singletons.objects import add_object, remove_object, filter_by, delete_objects
+from atheriz.globals.objects import add_object, remove_object, filter_by, delete_objects
 from atheriz.utils import ensure_thread_safe
-from atheriz.singletons.salt import get_salt
-from atheriz.singletons.get import get_unique_id
+from atheriz.globals.salt import get_salt
+from atheriz.globals.get import get_unique_id
 from atheriz.logger import logger
 import hashlib
 import atheriz.settings as settings

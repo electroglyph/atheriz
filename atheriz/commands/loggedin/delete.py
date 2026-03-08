@@ -1,7 +1,7 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
-from atheriz.singletons.get import get_node_handler
-from atheriz.singletons.objects import delete_objects
+from atheriz.globals.get import get_node_handler
+from atheriz.globals.objects import delete_objects
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:

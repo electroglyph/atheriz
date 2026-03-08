@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.singletons.node import Node
+    from atheriz.globals.node import Node
 
 
 class PutCommand(Command):
