@@ -28,7 +28,6 @@ Then, use `add_task` to pass the function you want to execute, followed immediat
 
 ```python
 def calculate_massive_damage(target, amount, element="fire"):
-    # This might take a long time to calculate!
     target.health -= amount
     print(f"{target.name} took {amount} {element} damage.")
 
