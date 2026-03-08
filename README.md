@@ -18,7 +18,7 @@ This isn't meant as a knock against Evennia, btw, I love it a lot.
 
 Object creation and deletion is slow in Evennia, which limits ability to create lots of things on the fly.
 
-Object creation doesn't require db access in AtheriZ, and deletion is fast.
+Object creation doesn't require db access in AtheriZ (so it's really fast), and deletion is fast, too.
 
 Because Evennia is single-threaded, you are limited in how much computation you can do on objects without slowing down the game.
 
@@ -28,7 +28,7 @@ at_tick() is possible for thousands of objects per second without slowing down t
 
 3d room coordinates are built in, coords = ("area", x, y, z)
 
-The included client has built in support for ascii maps, and building rooms in-game can optionally auto-generate maps.
+The included client has built in support for optional ascii maps, and building rooms in-game can optionally auto-generate maps.
 
 # Documentation
 
