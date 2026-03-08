@@ -1,4 +1,4 @@
-<img src="./AtheriZ.png" height="100" />
+<img src="./AtheriZ.png" alt="AtheriZ Logo" style="max-width: 100%; height: auto; max-height: 150px;" />
 
 # AtheriZ
 
