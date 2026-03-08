@@ -1,3 +1,5 @@
+![AtheriZ](./AtheriZ.png)
+
 # AtheriZ
 
 Discord server here: https://discord.gg/hb62HEBzQT
