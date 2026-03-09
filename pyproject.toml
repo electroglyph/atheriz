@@ -67,6 +67,7 @@ dependencies = [
   "dill",
   "polyleven @ git+https://github.com/electroglyph/polyleven.git",
   "prettytable",
+  "telnetlib3",
   # "inflect",
 ]
 

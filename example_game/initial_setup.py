@@ -23,8 +23,8 @@ class PushCommand(Command):
     category = "Danger?"
     use_parser = False
 
-    def run(self, caller: Connection | Object, args):
-        loc: Node = caller.location
+    def run(self, caller: Object, args):
+        loc: Node | None = caller.location
         if loc:
             loc.msg_contents(text="BEEEEEP!")
 

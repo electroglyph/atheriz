@@ -7,6 +7,13 @@ SERVERNAME = "AtheriZ"
 SERVER_HOSTNAME = "localhost"
 #TODO: reason for this setting to exist:
 WEBSOCKET_ENABLED = True
+TELNET_ENABLED = True
+TELNET_PORT = 4000
+TELNET_INTERFACE = "0.0.0.0"
+NETWORK_PROTOCOLS = [
+    "atheriz.network.websocket.WebSocketProtocol",
+    "atheriz.network.telnet.TelnetProtocol"
+]
 ACCOUNT_CREATION_ENABLED = True
 WEBSERVER_ENABLED = True
 WEBSERVER_PORT = 8000

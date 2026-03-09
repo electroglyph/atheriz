@@ -11,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from atheriz import settings
-from atheriz.websocket import websocket_endpoint, websocket_manager
+from atheriz.network import connection_manager
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
 from atheriz.globals.objects import add_object, get, load_objects, save_objects
@@ -38,7 +38,23 @@ server_state = ServerState()
 
 app = FastAPI(title=settings.SERVERNAME)
 
-app.websocket("/ws")(websocket_endpoint)
+def setup_protocols():
+    """Register all active protocols defined in settings."""
+    protocols = getattr(settings, "NETWORK_PROTOCOLS", [
+        "atheriz.network.websocket.WebSocketProtocol"
+    ])
+    for proto_path in protocols:
+        try:
+            mod_name, class_name = proto_path.rsplit(".", 1)
+            module = importlib.import_module(mod_name)
+            protocol_class = getattr(module, class_name)
+            protocol_class.setup(app)
+            print(f"Registered network protocol: {class_name}")
+        except Exception as e:
+            print(f"Failed to register protocol {proto_path}: {e}")
+            traceback.print_exc()
+
+setup_protocols()
 
 templates_dir = Path(__file__).parent / "web" / "templates"
 static_dir = Path(__file__).parent / "web" / "static"

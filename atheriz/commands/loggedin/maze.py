@@ -8,7 +8,7 @@ import time
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.base_obj import Object
 
 

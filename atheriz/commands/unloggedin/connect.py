@@ -7,7 +7,7 @@ import atheriz.settings as settings
 from atheriz.logger import logger
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.base_obj import Object
 
 
@@ -41,13 +41,14 @@ class ConnectCommand(Command):
             caller.msg("Invalid password.")
             caller.failed_login_attempts += 1
             if caller.failed_login_attempts > settings.MAX_LOGIN_ATTEMPTS:
+                host = getattr(caller, "client_host", "?")
                 logger.warning(
-                    f"Host {caller.websocket.client.host} has been banned for {settings.LOGIN_ATTEMPT_COOLDOWN} seconds due to too many failed login attempts."
+                    f"Host {host} has been banned for {settings.LOGIN_ATTEMPT_COOLDOWN} seconds due to too many failed login attempts."
                 )
                 caller.msg("Too many failed login attempts. Please try again later.")
                 caller.close()
                 with TEMP_BANNED_LOCK:
-                    TEMP_BANNED_IPS[caller.websocket.client.host] = (
+                    TEMP_BANNED_IPS[host] = (
                         time.time() + settings.LOGIN_ATTEMPT_COOLDOWN
                     )
             return

@@ -1,0 +1,271 @@
+============================= test session starts =============================
+platform win32 -- Python 3.14.3, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\anon\repos\atheriz\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\anon\repos\atheriz
+configfile: pyproject.toml
+plugins: anyio-4.12.1
+collecting ... collected 97 items / 17 errors
+
+=================================== ERRORS ====================================
+____________ ERROR collecting atheriz/tests/test_build_command.py _____________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_build_command.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_build_command.py:3: in <module>
+    from atheriz.commands.loggedin.build import BuildCommand, DIRECTIONS
+atheriz\commands\loggedin\build.py:2: in <module>
+    from atheriz.objects.nodes import Node, NodeLink, NodeGrid
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_______________ ERROR collecting atheriz/tests/test_channel.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_channel.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_channel.py:3: in <module>
+    from atheriz.commands.loggedin.channel import ChannelCommand as GlobalChannelCommand
+atheriz\commands\loggedin\channel.py:3: in <module>
+    from atheriz.utils import wrap_xterm256
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+________________ ERROR collecting atheriz/tests/test_delete.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_delete.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_delete.py:12: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+____________ ERROR collecting atheriz/tests/test_delete_command.py ____________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_delete_command.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_delete_command.py:3: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_________________ ERROR collecting atheriz/tests/test_door.py _________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_door.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_door.py:3: in <module>
+    from atheriz.commands.loggedin.door import DoorCommand
+atheriz\commands\loggedin\door.py:3: in <module>
+    from atheriz.objects.nodes import NodeLink, Node
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_________________ ERROR collecting atheriz/tests/test_give.py _________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_give.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_give.py:2: in <module>
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+________________ ERROR collecting atheriz/tests/test_locks.py _________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_locks.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_locks.py:7: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+________________ ERROR collecting atheriz/tests/test_modify.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_modify.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_modify.py:5: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_________________ ERROR collecting atheriz/tests/test_move.py _________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_move.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_move.py:2: in <module>
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_________________ ERROR collecting atheriz/tests/test_node.py _________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_node.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_node.py:2: in <module>
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Transition
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_______________ ERROR collecting atheriz/tests/test_pathfind.py _______________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_pathfind.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_pathfind.py:3: in <module>
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
+atheriz\objects\nodes.py:3: in <module>
+    from atheriz.utils import is_iter, make_iter
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+____________ ERROR collecting atheriz/tests/test_salt_creation.py _____________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_salt_creation.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_salt_creation.py:5: in <module>
+    from atheriz.globals.salt import get_salt
+atheriz\globals\salt.py:4: in <module>
+    from atheriz.utils import is_in_game_folder
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_______________ ERROR collecting atheriz/tests/test_scripts.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_scripts.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_scripts.py:12: in <module>
+    from atheriz.objects.base_obj import Object, hookable
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+_______________ ERROR collecting atheriz/tests/test_search2.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_search2.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_search2.py:1: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+____________ ERROR collecting atheriz/tests/test_serialization.py _____________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_serialization.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_serialization.py:4: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+________________ ERROR collecting atheriz/tests/test_sqlite.py ________________
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_sqlite.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_sqlite.py:7: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+______ ERROR collecting atheriz/tests/test_zdeadlock_takes_10_seconds.py ______
+ImportError while importing test module 'C:\Users\anon\repos\atheriz\atheriz\tests\test_zdeadlock_takes_10_seconds.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+..\..\AppData\Roaming\uv\python\cpython-3.14+freethreaded-windows-x86_64-none\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+atheriz\tests\test_zdeadlock_takes_10_seconds.py:18: in <module>
+    from atheriz.objects.base_obj import Object
+atheriz\objects\base_obj.py:4: in <module>
+    from atheriz.utils import compress_whitespace
+atheriz\utils.py:7: in <module>
+    from atheriz.globals.get import get_websocket_manager, get_node_handler
+E   ImportError: cannot import name 'get_websocket_manager' from 'atheriz.globals.get' (C:\Users\anon\repos\atheriz\atheriz\globals\get.py)
+=========================== short test summary info ===========================
+ERROR atheriz/tests/test_build_command.py
+ERROR atheriz/tests/test_channel.py
+ERROR atheriz/tests/test_delete.py
+ERROR atheriz/tests/test_delete_command.py
+ERROR atheriz/tests/test_door.py
+ERROR atheriz/tests/test_give.py
+ERROR atheriz/tests/test_locks.py
+ERROR atheriz/tests/test_modify.py
+ERROR atheriz/tests/test_move.py
+ERROR atheriz/tests/test_node.py
+ERROR atheriz/tests/test_pathfind.py
+ERROR atheriz/tests/test_salt_creation.py
+ERROR atheriz/tests/test_scripts.py
+ERROR atheriz/tests/test_search2.py
+ERROR atheriz/tests/test_serialization.py
+ERROR atheriz/tests/test_sqlite.py
+ERROR atheriz/tests/test_zdeadlock_takes_10_seconds.py
+!!!!!!!!!!!!!!!!!! Interrupted: 17 errors during collection !!!!!!!!!!!!!!!!!!!
+============================= 17 errors in 0.41s ==============================

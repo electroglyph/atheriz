@@ -5,7 +5,7 @@ import asyncio
 import atheriz.settings as settings
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.base_obj import Object
 
 

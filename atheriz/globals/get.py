@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
     from atheriz.globals.node import NodeHandler
     from atheriz.globals.map import MapHandler
-    from atheriz.websocket import WebSocketManager
+    from atheriz.network.manager import ConnectionManager
     from atheriz.globals.time import GameTime
 
     # from inflect import engine
@@ -23,7 +23,7 @@ _NODE_HANDLER: NodeHandler | None = None
 _MAP_HANDLER: MapHandler | None = None
 _SERVER_CHANNEL: Channel | None = None
 _ASYNC_TICKER: AsyncTicker | None = None
-_WEBSOCKET_MANAGER: WebSocketManager | None = None
+_CONNECTION_MANAGER: ConnectionManager | None = None
 _GAME_TIME: GameTime | None = None
 # _INFLECT_ENGINE: engine | None = None
 
@@ -63,13 +63,13 @@ def get_game_time() -> GameTime:
     return _GAME_TIME
 
 
-def get_websocket_manager() -> WebSocketManager:
-    global _WEBSOCKET_MANAGER
-    if not _WEBSOCKET_MANAGER:
-        from atheriz.websocket import websocket_manager
+def get_connection_manager() -> ConnectionManager:
+    global _CONNECTION_MANAGER
+    if not _CONNECTION_MANAGER:
+        from atheriz.network import connection_manager
 
-        _WEBSOCKET_MANAGER = websocket_manager
-    return _WEBSOCKET_MANAGER
+        _CONNECTION_MANAGER = connection_manager
+    return _CONNECTION_MANAGER
 
 
 def get_async_ticker() -> AsyncTicker:

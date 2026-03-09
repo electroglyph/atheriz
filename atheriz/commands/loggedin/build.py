@@ -8,7 +8,7 @@ import time
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
 
 DIRECTIONS = {
     "n": (0, 1, 0, "north", "south"),

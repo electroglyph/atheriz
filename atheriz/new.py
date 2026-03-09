@@ -164,6 +164,12 @@ from atheriz.settings import *
 # Example:
 # SERVERNAME = "My Custom Game"
 # WEBSERVER_PORT = 8001
+# TELNET_ENABLED = True
+# TELNET_PORT = 4000
+# NETWORK_PROTOCOLS = [
+#     "atheriz.network.websocket.WebSocketProtocol",
+#     "atheriz.network.telnet.TelnetProtocol"
+# ]
 
 # Class injection configuration
 # (local_module, class_name, target_import_path)
@@ -179,6 +185,7 @@ CLASS_INJECTIONS = [
     ("commands.unloggedin", "UnloggedinCmdSet", "atheriz.commands.unloggedin.cmdset"),
     ("inputfuncs", "InputFuncs", "atheriz.inputfuncs"),
     ("script", "Script", "atheriz.objects.base_script"),
+    # ("connection", "BaseConnection", "atheriz.network.connection"),
 ]
 
 '''

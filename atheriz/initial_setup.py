@@ -12,7 +12,7 @@ from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.base_obj import Object
 
 
@@ -22,8 +22,8 @@ class PushCommand(Command):
     category = "Danger?"
     use_parser = False
 
-    def run(self, caller: Connection | Object, args):
-        loc: Node = caller.location
+    def run(self, caller: Object, args):
+        loc: Node | None = caller.location
         if loc:
             loc.msg_contents(text="BEEEEEP!")
 

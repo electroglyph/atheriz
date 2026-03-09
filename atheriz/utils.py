@@ -4,7 +4,7 @@ from string import punctuation
 import colorsys
 import math
 from typing import TYPE_CHECKING, Any
-from atheriz.globals.get import get_websocket_manager, get_node_handler
+from atheriz.globals.get import get_connection_manager, get_node_handler
 from pathlib import Path
 
 if TYPE_CHECKING:
@@ -32,7 +32,7 @@ def msg_all(msg: str) -> None:
     Args:
         msg (str): message to send
     """
-    get_websocket_manager().broadcast(msg)
+    get_connection_manager().broadcast(msg)
 
 
 def ensure_thread_safe(obj):

@@ -4,7 +4,7 @@ from polyleven import levenshtein
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
 
 
 class NoneCommand(Command):

@@ -5,7 +5,7 @@ import atheriz.settings as settings
 from atheriz.connection_screen import render
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.nodes import Node
     from atheriz.objects.base_obj import Object
     
