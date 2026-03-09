@@ -13,7 +13,7 @@ from .commands.command import Command
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from atheriz.websocket import Connection
+    from atheriz.network.connection import BaseConnection as Connection
     from .object import Object
 
 

@@ -18,11 +18,11 @@ class TelnetConnection(BaseConnection):
         super().__init__(session_id)
         self.reader = reader
         self.writer = writer
-        self.writer.write("\r\n")  # clear connection initial artifacts
+        self.client_host = "?"
         try:
             self.client_host = writer.get_extra_info("peername")[0]
         except Exception:
-            self.client_host = "?"
+            pass
 
     def send_command(self, cmd: str, *args, **kwargs):
         """
@@ -37,11 +37,8 @@ class TelnetConnection(BaseConnection):
                     self.writer.write(text)
                 else:
                     self.loop.call_soon_threadsafe(self.writer.write, text)
-            except Exception as e:
-                logger.debug(f"[Telnet] Error writing to socket: {e}")
-        else:
-            # Ignore specialized UI commands like "term_size", "map_size" that only the web client supports
-            pass
+            except Exception:
+                pass
 
 
     def close(self):
@@ -88,8 +85,17 @@ class TelnetProtocol(BaseProtocol):
                 connection_manager.register_connection(conn_id, connection)
 
                 # Initialize terminal size if possible
-                writer.write("\x1b[1;1H\x1b[2J")  # Clear screen
+                writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen clear connection initial artifacts
                 
+                def on_naws(rows, cols):
+                    if connection.session:
+                        connection.session.term_width = cols
+                        connection.session.term_height = rows
+                
+                # Ask the client to report window size
+                writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
+                writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
+
                 # We mock a client_ready command since webclient normally sends it
                 connection_manager.dispatch(connection, "client_ready", [], {})
 
@@ -113,7 +119,8 @@ class TelnetProtocol(BaseProtocol):
             cls._server_task = await telnetlib3.create_server(
                 port=port, 
                 host=interface, 
-                shell=shell
+                shell=shell,
+                timeout=0
             )
             
         @app.on_event("shutdown")
