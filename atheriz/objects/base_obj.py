@@ -147,6 +147,7 @@ class Object(Flags, DbOps, AccessLock):
         if is_pc:
             obj.is_mapable = True
             obj.is_container = True
+            obj.add_lock("view", lambda x: not obj.is_pc or (obj.is_pc and obj.is_connected))
         obj.is_item = is_item
         obj.is_npc = is_npc
         obj.is_tickable = is_tickable
@@ -924,6 +925,8 @@ class Object(Flags, DbOps, AccessLock):
         Returns:
             str: The evaluated name string.
         """
+        if self.is_pc and not self.is_connected:
+            return f"{self.name} (offline)"
         return self.name
 
     def get_display_desc(self, looker: Object | None = None, **kwargs) -> str:
@@ -1377,8 +1380,8 @@ class Object(Flags, DbOps, AccessLock):
         if target is None:
             return "You see nothing here."
         if not target.access(self, "view"):
-            return f"You can't look at '{target.get_display_name(self, **kwargs)}'."
-        desc = target.return_appearance(self, **kwargs)
+            return f"You can't look at '{target.get_display_name(looker=self, **kwargs)}'."
+        desc = target.return_appearance(looker=self, **kwargs)
         target.at_desc(looker=self, **kwargs)
         return desc
 

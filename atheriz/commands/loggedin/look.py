@@ -18,8 +18,11 @@ class LookCommand(Command):
     def run(self, caller: Object, args):
         if not args:
             loc: Node | None = caller.location
-            if not loc or not loc.access(caller, "view"):
-                caller.msg("You can't tell if your eyes are open or closed.")
+            if not loc:
+                caller.msg("You are nowhere.")
+                return
+            elif not loc.access(caller, "view"):
+                caller.msg("You can't see anything.")
                 return
             caller.msg(caller.at_look(loc))
             return
@@ -47,7 +50,10 @@ class LookCommand(Command):
             caller.msg(caller.at_look(target))
         else:
             loc: Node | None = caller.location
-            if not loc or not loc.access(caller, "view"):
-                caller.msg("You can't tell if your eyes are open or closed.")
+            if not loc:
+                caller.msg("You are nowhere.")
+                return
+            elif not loc.access(caller, "view"):
+                caller.msg("You can't see anything.")
                 return
             caller.msg(caller.at_look(loc))

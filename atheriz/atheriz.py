@@ -730,10 +730,14 @@ def create_game_data(args):
                         f"Account '{args.accountname}' already has {settings.MAX_CHARACTERS} characters..."
                     )
                     return
+                nh = get_node_handler()
+                home = nh.get_node(settings.DEFAULT_HOME)
                 character = Object.create(None, args.charactername, is_pc=True)
+                character.home = home
                 r.add_character(character)
                 r.at_post_create_character(character)
                 add_object(character)
+                character.move_to(home)
                 save_objects()
                 print("Success! Character created.")
                 return

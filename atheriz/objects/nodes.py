@@ -662,7 +662,9 @@ class Node(Flags, AccessLock):
         Returns:
             str: The formatted string listing characters, or an empty string.
         """
-        characters = filter_contents(self, lambda x: (x.is_pc or x.is_npc) and x != looker)
+        if not looker:
+            return ""
+        characters = filter_contents(self, lambda x: (x.is_pc or x.is_npc) and x != looker and x.access(looker, "view"))
         character_names = group_by_name(characters, looker)
         return (
             f"{wrap_xterm256('Characters:', fg=15, bold=True)} {character_names}\n"
