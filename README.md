@@ -50,3 +50,5 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - telnet
 - follow and group system
 - room nouns
+
+<img src="./building.gif" alt="building animation" />
