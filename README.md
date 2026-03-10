@@ -12,6 +12,7 @@ This has some code from Evennia, and is loosely based on the same ideas.
 
 # Features
 
+- screenreader friendly
 - multi-threaded with automatic thread-safety for immutable object attributes
 - super fast object creation
 - fast object deletion
