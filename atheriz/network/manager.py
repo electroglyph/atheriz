@@ -82,12 +82,6 @@ class ConnectionManager:
         but protocols can map native wire constructs to this logic directly if needed.
         """
         try:
-            # First try parsing as JSON (from websocket)
-            # If a telnet connection sends raw string, the protocol implementation
-            # should wrap it or parse it before calling handle_command.
-            # We'll expect handle_command receives raw JSON if it's from WebSocket,
-            # but Telnet could just inject data differently. So we'll decouple JSON loading.
-            
             data = json.loads(raw_message)
 
             if not isinstance(data, list) or len(data) < 1:

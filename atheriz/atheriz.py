@@ -706,6 +706,8 @@ def spawn_daemon(args):
 
 def create_game_data(args):
     """Create a new account and character."""
+    setup_game_folder()
+
     print("Loading existing data...")
 
     save_path = Path(settings.SAVE_PATH)

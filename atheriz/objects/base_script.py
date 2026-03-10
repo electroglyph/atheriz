@@ -144,7 +144,11 @@ class Script(Flags, DbOps):
         object.__setattr__(self, "child", None)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = mro.index(__class__)
+        current_idx = next(
+            (i for i, c in enumerate(mro)
+             if c.__module__ == 'atheriz.objects.base_script' and c.__qualname__ == 'Script'),
+            len(mro)
+        )
         ancestors = mro[current_idx + 1:]
         for cls in reversed(ancestors):
             if '__setstate__' in cls.__dict__:

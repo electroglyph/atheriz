@@ -160,7 +160,11 @@ class Node(Flags, AccessLock):
         object.__setattr__(self, "hooks", {})
         # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = mro.index(__class__)
+        current_idx = next(
+            (i for i, c in enumerate(mro)
+             if c.__module__ == 'atheriz.objects.nodes' and c.__qualname__ == 'Node'),
+            len(mro)
+        )
         ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):
             if "__setstate__" in cls.__dict__:

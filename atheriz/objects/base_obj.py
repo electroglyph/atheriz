@@ -319,7 +319,11 @@ class Object(Flags, DbOps, AccessLock):
         object.__setattr__(self, "hooks", {})
         # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = mro.index(__class__)
+        current_idx = next(
+            (i for i, c in enumerate(mro)
+             if c.__module__ == 'atheriz.objects.base_obj' and c.__qualname__ == 'Object'),
+            len(mro)
+        )
         ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):
             if "__setstate__" in cls.__dict__:

@@ -91,6 +91,10 @@ class TelnetProtocol(BaseProtocol):
                     if connection.session:
                         connection.session.term_width = cols
                         connection.session.term_height = rows
+                        # try:
+                        #     connection.send_command("text", f"[DEBUG] Terminal size updated: {cols}x{rows}\r\n")
+                        # except Exception:
+                        #     pass
                 
                 # Ask the client to report window size
                 writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
