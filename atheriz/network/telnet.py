@@ -85,7 +85,7 @@ class TelnetProtocol(BaseProtocol):
                 connection_manager.register_connection(conn_id, connection)
 
                 # Initialize terminal size if possible
-                writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen clear connection initial artifacts
+                writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
                 
                 def on_naws(rows, cols):
                     if connection.session:
@@ -96,11 +96,11 @@ class TelnetProtocol(BaseProtocol):
                         # except Exception:
                         #     pass
                 
-                # Ask the client to report window size
+                # ask the client to report window size
                 writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
                 writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
 
-                # We mock a client_ready command since webclient normally sends it
+                # mock a client_ready command since webclient normally sends it
                 connection_manager.dispatch(connection, "client_ready", [], {})
 
                 try:
