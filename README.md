@@ -47,7 +47,7 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - ~~pathfinding~~
 - ~~door stuff + ability for custom doors~~
 - map tile highlight in game client
-- telnet
+- ~~telnet~~
 - follow and group system
 - room nouns
 
