@@ -10,25 +10,22 @@ This is an early draft and is not ready for production use, but it's getting clo
 
 This has some code from Evennia, and is loosely based on the same ideas.
 
-# Why use this instead of Evennia?
+# Features
 
-I created this to solve some of the issues I had with Evennia.
-
-This isn't meant as a knock against Evennia, btw, I love it a lot.
-
-Object creation and deletion is slow in Evennia, which limits ability to create lots of things on the fly.
-
-Object creation doesn't require db access in AtheriZ (so it's really fast), and deletion is fast, too.
-
-Because Evennia is single-threaded, you are limited in how much computation you can do on objects without slowing down the game.
-
-AtheriZ is multi-threaded, with automatic thread-safety for immutable object attributes.
-
-at_tick() is possible for thousands of objects per second without slowing down the game, while this pattern is not really possible in Evennia.
-
-3d room coordinates are built in, coords = ("area", x, y, z)
-
-The included client has built in support for optional ascii maps, and building rooms in-game can optionally auto-generate maps.
+- multi-threaded with automatic thread-safety for immutable object attributes
+- super fast object creation
+- fast object deletion
+- live map editing/room creation even with logged in players on the same map
+- at_tick() for thousands of objects is feasible
+- built-in web client based on xterm.js
+- 3d coordinate room system
+- optional ascii maps
+- built-in pathfinding
+- built-in door system
+- built-in script system
+- built-in tick system
+- built-in time system with sunset, sunrise, and moon phases
+- webclient has command history/completion, font size, etc. options
 
 # Documentation
 
