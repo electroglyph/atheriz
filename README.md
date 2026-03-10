@@ -50,3 +50,6 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - telnet
 - follow and group system
 - room nouns
+
+https://github.com/user-attachments/assets/fbb712a6-5b65-469c-a20d-bb031e80a571
+
