@@ -225,4 +225,4 @@ secret/
 *.sqlite3-shm
 *.sqlite3-wal
 telnetlib3/
-*.time
+example_game/save/time

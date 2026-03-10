@@ -645,7 +645,7 @@ class Node(Flags, AccessLock):
         Returns:
             str: The formatted string listing contents, or an empty string.
         """
-        things = filter_contents(self, lambda x: x.is_item)
+        things = filter_contents(self, lambda x: x.is_item and x.access(looker, "view"))
         thing_names = group_by_name(things, looker)
         return (
             f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n" if thing_names else ""
