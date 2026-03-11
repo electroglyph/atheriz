@@ -151,6 +151,8 @@ class Object(Flags, DbOps, AccessLock):
             obj.add_lock("get", lambda x: False)
         obj.is_item = is_item
         obj.is_npc = is_npc
+        if is_npc:
+            obj.add_lock("get", lambda x: False)
         obj.is_tickable = is_tickable
         obj.name = name
         obj.desc = desc
