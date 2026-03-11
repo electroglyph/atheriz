@@ -88,6 +88,48 @@ class TestAsyncThreadPool:
 
         atp.stop()
 
+    def test_delay_sync(self):
+        """Test delay with a sync function."""
+        atp = AsyncThreadPool(max_threads=2)
+        result_event = threading.Event()
+        result_data = {}
+
+        def my_task(key, val):
+            result_data[key] = val
+            result_event.set()
+
+        start_time = time.time()
+        atp.delay(0.2, my_task, "test_sync", 123)
+        
+        # Wait for task to complete
+        assert result_event.wait(timeout=2.0)
+        end_time = time.time()
+        
+        assert end_time - start_time >= 0.2
+        assert result_data["test_sync"] == 123
+        atp.stop()
+
+    def test_delay_async(self):
+        """Test delay with an async function."""
+        atp = AsyncThreadPool(max_threads=2)
+        result_event = threading.Event()
+        result_data = {}
+
+        async def my_task(key, val):
+            result_data[key] = val
+            result_event.set()
+
+        start_time = time.time()
+        atp.delay(0.2, my_task, "test_async", 456)
+        
+        # Wait for task to complete
+        assert result_event.wait(timeout=2.0)
+        end_time = time.time()
+        
+        assert end_time - start_time >= 0.2
+        assert result_data["test_async"] == 456
+        atp.stop()
+
 
 class TestAsyncTicker:
     def test_ticker(self):

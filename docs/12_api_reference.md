@@ -2463,6 +2463,26 @@ Default value: `'localhost'`
 Default value: `True`
 
 
+### `TELNET_ENABLED`
+
+Default value: `True`
+
+
+### `TELNET_PORT`
+
+Default value: `4000`
+
+
+### `TELNET_INTERFACE`
+
+Default value: `'0.0.0.0'`
+
+
+### `NETWORK_PROTOCOLS`
+
+Default value: `['atheriz.network.websocket.WebSocketProtocol', 'atheriz.network.telnet.TelnetProtocol']`
+
+
 ### `ACCOUNT_CREATION_ENABLED`
 
 Default value: `True`

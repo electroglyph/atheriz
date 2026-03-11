@@ -1,13 +1,12 @@
 import asyncio
 from asyncio import AbstractEventLoop
 import os
-from threading import Lock, Thread, RLock
-import time
+from threading import Thread, RLock
 from typing import Optional
 import traceback
 import queue
 from atheriz.logger import logger
-from atheriz.settings import DEBUG
+import atheriz.settings as settings
 from atheriz.globals.get import get_async_threadpool
 
 
@@ -59,7 +58,7 @@ class AsyncThreadPool:
                 await func(*args, **kwargs)
             except Exception as e:
                 tb = traceback.format_exc()
-                if DEBUG:
+                if settings.DEBUG:
                     try:
                         caller = args[0]
                         caller.msg(f"{tb}")
@@ -80,7 +79,7 @@ class AsyncThreadPool:
                     func(*args, **kwargs)
                 except Exception as e:
                     tb = traceback.format_exc()
-                    if DEBUG:
+                    if settings.DEBUG:
                         try:
                             caller = args[0]
                             caller.msg(f"{tb}")
@@ -108,6 +107,20 @@ class AsyncThreadPool:
             kwargs: func kwargs
         """
         self.task_queue.put((func, args, kwargs))
+        
+    def delay(self, delay: float, func, *args, **kwargs):
+        """
+        execute a function on the threadpool after a delay
+        Args:
+            delay (float): delay in seconds
+            func (callable): function to execute
+            args: func args
+            kwargs: func kwargs
+        """
+        async def _delayed_task():
+            await asyncio.sleep(delay)
+            self.add_task(func, *args, **kwargs)
+        asyncio.run_coroutine_threadsafe(_delayed_task(), self.loop)
 
 
 class AsyncTicker:
