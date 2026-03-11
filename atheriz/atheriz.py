@@ -18,6 +18,7 @@ from atheriz.globals.objects import add_object, get, load_objects, save_objects
 from atheriz.globals.startstop import do_shutdown, do_startup, do_reload
 from atheriz.globals.get import get_node_handler, get_unique_id
 from atheriz.database_setup import get_database
+from atheriz.server_events import at_char_create
 import secrets
 import shutil
 import atheriz.reloader as reloader
@@ -707,53 +708,13 @@ def spawn_daemon(args):
 def create_game_data(args):
     """Create a new account and character."""
     setup_game_folder()
-
     print("Loading existing data...")
-
     save_path = Path(settings.SAVE_PATH)
     if not save_path.exists():
         save_path.mkdir(parents=True)
-
     load_objects()
+    at_char_create(args.accountname, args.charactername, args.password)
 
-    result: list[Account] = filter_by(lambda x: x.is_account)
-    if result:
-        for r in result:
-            if r.name == args.accountname:
-                if not r.check_password(args.password):
-                    print(
-                        f"Account '{args.accountname}' already exists with a different password..."
-                    )
-                    return
-                if len(r.characters) >= settings.MAX_CHARACTERS:
-                    print(
-                        f"Account '{args.accountname}' already has {settings.MAX_CHARACTERS} characters..."
-                    )
-                    return
-                nh = get_node_handler()
-                home = nh.get_node(settings.DEFAULT_HOME)
-                character = Object.create(None, args.charactername, is_pc=True)
-                character.home = home
-                r.add_character(character)
-                r.at_post_create_character(character)
-                add_object(character)
-                character.move_to(home)
-                save_objects()
-                print("Success! Character created.")
-                return
-
-    print(f"Creating account '{args.accountname}'...")
-    account = Account.create(args.accountname, args.password)
-    if not account:
-        print(f"Account '{args.accountname}' already exists.")
-        return
-    print(f"Creating character '{args.charactername}'...")
-    character = Object.create(None, args.charactername, is_pc=True)
-    account.add_character(character)
-    add_object(account)
-    add_object(character)
-    save_objects()
-    print("Success! Account and character created.")
 
 
 def do_reload_command(args):

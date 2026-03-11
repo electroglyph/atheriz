@@ -105,6 +105,9 @@ class InputFuncs:
                 if not cmd:
                     cmd = get_loggedin_cmdset().get(cmd_key)
                 if cmd:
+                    if not cmd.access(connection.session.puppet):
+                        connection.session.puppet.msg("You can't do that.")
+                        return
                     func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args)
                     if func:
                         atp.add_task(func, caller, eargs)
@@ -144,6 +147,9 @@ class InputFuncs:
                     if not cmd:
                         cmd = get_loggedin_cmdset().get("none")
                     if cmd:
+                        if not cmd.access(connection.session.puppet):
+                            connection.session.puppet.msg("You can't do that.")
+                            return
                         func, caller, eargs = cmd.execute(connection.session.puppet, cmd_key)
                         if func:
                             atp.add_task(func, caller, eargs)
