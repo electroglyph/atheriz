@@ -85,8 +85,6 @@ class Node(Flags, AccessLock):
             return self.coord != other.coord
         return True
 
-    is_node = True
-
     def at_desc(self, looker: Object | None = None, **kwargs):
         """Called when the node is looked at."""
         pass
@@ -133,6 +131,7 @@ class Node(Flags, AccessLock):
         self.links = links if links else []
         self._contents = set()
         self.is_node = True
+        self.id = -1
         self.nouns = {}
         self.scripts: set[int] = set()
         self.hooks: dict[str, set[Callable]] = {}

@@ -69,14 +69,27 @@ def test_object_delete_recursive(caller, room):
 def test_object_delete_lock(caller, room):
     item = Object.create(None, "Protected")
     item.move_to(room)
-    
+    caller2 = Object.create(None, "caller")
+    caller2.privilege_level = 2
     # Add a lock that prevents deletion
     item.add_lock("delete", lambda x: False)
     
     # Deletion should be aborted (return None)
-    ops = item.delete(caller)
+    ops = item.delete(caller2)
     assert ops is None
     assert item.id in _ALL_OBJECTS
+    assert item.is_deleted is False
+    
+def test_object_delete_same_id(caller, room):
+    item = Object.create(None, "Blehhh")
+    item.id = 888
+    item.move_to(room)
+    caller2 = Object.create(None, "caller_yay")
+    caller2.privilege_level = 2
+    caller2.id = 888
+    # Deletion should be aborted (return None)
+    ops = item.delete(caller2)
+    assert ops is None
     assert item.is_deleted is False
 
 def test_node_delete_non_recursive(caller, room):
