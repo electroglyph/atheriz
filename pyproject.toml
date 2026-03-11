@@ -65,7 +65,7 @@ dependencies = [
   "jinja2",
   "psutil",
   "dill",
-  "polyleven @ git+https://github.com/electroglyph/polyleven.git",
+  "polyleven >= 0.11.0",
   "prettytable",
   "telnetlib3",
   # "inflect",
