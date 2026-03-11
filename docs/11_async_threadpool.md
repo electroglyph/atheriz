@@ -45,6 +45,16 @@ If you pass a synchronous function (like the example above), it is handed to one
 
 If you pass an `async def` coroutine, the server automatically routes it to the designated asyncio loop thread and schedules it safely using `asyncio.run_coroutine_threadsafe`.
 
+### 11.2.3 Delayed Tasks
+If you need a function to execute after a specified duration, you can use the `delay` method. It requires a delay in seconds as the first argument, followed by the function and any necessary arguments.
+
+```python
+# Wait 5.5 seconds, then queue the function! (delay, function, args..., kwargs...)
+atp.delay(5.5, calculate_massive_damage, my_target, 500, element="ice")
+```
+
+Just like `add_task`, the `delay` method supports both regular functions and `async def` coroutines, automatically routing them to the correct thread when the timer finishes.
+
 ## 11.3 Error Handling
 If a function executed by the threadpool crashes or raises an Exception, it will not crash the threadpool itself. Instead, the `AsyncThreadPool` catches the Exception and logs the traceback to the server log located in the save folder.
 

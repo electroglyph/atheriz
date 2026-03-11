@@ -113,7 +113,7 @@ class AsyncThreadPool:
         execute a function on the threadpool after a delay
         Args:
             delay (float): delay in seconds
-            func (callable): function to execute
+            func (callable): function to execute, can be coroutine or function
             args: func args
             kwargs: func kwargs
         """
