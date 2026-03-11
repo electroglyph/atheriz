@@ -1,13 +1,10 @@
-from __future__ import annotations
 from atheriz.globals.objects import save_objects
 from atheriz.globals.objects import add_object
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import filter_by
 from atheriz.objects.base_obj import Object
+from atheriz.objects.base_account import Account
 import atheriz.settings as settings
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from atheriz.objects.base_account import Account
 
 def at_server_start():
     pass
