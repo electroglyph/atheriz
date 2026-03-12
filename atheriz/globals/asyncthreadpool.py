@@ -131,7 +131,7 @@ class AsyncTicker:
             self.interval = interval
             self.coros = set()
             self.running = False
-            self.task = None
+            self._future = None
 
         def add_coro(self, coro):
             with self.lock:
@@ -139,32 +139,35 @@ class AsyncTicker:
 
         def remove_coro(self, coro):
             with self.lock:
-                try:
-                    self.coros.remove(coro)
-                except:
-                    pass
+                self.coros.discard(coro)
 
         def stop(self):
             with self.lock:
                 self.running = False
-                if self.task:
-                    self.task.cancel()
+                if self._future:
+                    self._future.cancel()
 
         async def timer(self):
-            while True:
-                with self.lock:
-                    if not self.running:
-                        return
-                    self.task = asyncio.create_task(asyncio.sleep(self.interval))
-                await self.task
-                with self.lock:
-                    for c in self.coros:
+            try:
+                while self.running:
+                    await asyncio.sleep(self.interval)
+                    with self.lock:
+                        if not self.running:
+                            break
+                        batch = list(self.coros)
+                    for c in batch:
                         self.atp.add_task(c)
+            except asyncio.CancelledError:
+                pass
 
         def start(self):
-            if not self.running:
-                self.running = True
-                self.atp.add_task(self.timer)
+            with self.lock:
+                if not self.running:
+                    self.running = True
+                    self._future = asyncio.run_coroutine_threadsafe(
+                        self.timer(), 
+                        self.atp.loop
+                    )
 
     def __init__(self) -> None:
         self.lock = RLock()

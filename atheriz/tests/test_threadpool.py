@@ -161,3 +161,76 @@ class TestAsyncTicker:
         # Should have run at least a few times
         # 0.5s / 0.05s = 10 times theoretically. Check for at least 3 to be safe against lag.
         assert current_count >= 3
+
+    def test_ticker_remove_coro(self):
+        """Test removing a coro from the ticker."""
+        atp = AsyncThreadPool(max_threads=2)
+        ticker = AsyncTicker()
+
+        counter = 0
+        lock = threading.Lock()
+
+        async def tick_task():
+            nonlocal counter
+            with lock:
+                counter += 1
+
+        interval = 0.05
+        ticker.add_coro(tick_task, interval)
+        time.sleep(0.1)  # give it time to start
+
+        # remove it
+        ticker.remove_coro(tick_task, interval)
+        
+        with lock:
+            current_count = counter
+
+        time.sleep(0.2)  # wait more
+
+        with lock:
+            after_count = counter
+            
+        ticker.stop()
+        atp.stop()
+
+        # Counter shouldn't have incremented more after removal (allowing for 1 delayed tick)
+        assert after_count <= current_count + 1
+
+    def test_ticker_clear(self):
+        """Test clearing all coros from the ticker."""
+        atp = AsyncThreadPool(max_threads=2)
+        ticker = AsyncTicker()
+
+        counter1, counter2 = 0, 0
+        lock = threading.Lock()
+
+        async def tick_task1():
+            nonlocal counter1
+            with lock:
+                counter1 += 1
+                
+        async def tick_task2():
+            nonlocal counter2
+            with lock:
+                counter2 += 1
+
+        ticker.add_coro(tick_task1, 0.05)
+        ticker.add_coro(tick_task2, 0.1)
+        
+        time.sleep(0.1)
+        
+        ticker.clear()
+        
+        with lock:
+            c1, c2 = counter1, counter2
+            
+        time.sleep(0.2)
+        
+        with lock:
+            c1_after, c2_after = counter1, counter2
+            
+        atp.stop()
+        
+        assert c1_after <= c1 + 1
+        assert c2_after <= c2 + 1
+
