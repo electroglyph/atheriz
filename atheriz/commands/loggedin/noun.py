@@ -9,6 +9,11 @@ if TYPE_CHECKING:
 class NounCommand(Command):
     key = "noun"
     desc = "Set noun description in current room"
+    category = "Building"
+
+    # pyrefly: ignore
+    def access(self, caller: Object) -> bool:
+        return caller.is_builder
 
     def setup_parser(self):
         self.parser.add_argument("noun", type=str, help="noun to add or change")

@@ -34,9 +34,9 @@ class UnquellCommand(Command):
     desc = "Unquell your privileges."
     use_parser = False
 
-    # pyrefly: ignore
-    def access(self, caller: Object) -> bool:
-        return caller.is_builder
+    # # pyrefly: ignore
+    # def access(self, caller: Object) -> bool:
+    #     return caller.is_builder
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
