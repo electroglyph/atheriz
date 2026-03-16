@@ -48,7 +48,9 @@ class AccessLock:
             self.locks.pop(lock_name, None)
 
     def _safe_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser and name != "delete":
+        if accessing_obj.id == self.id and name in ["delete", "get"]:
+            return False
+        if accessing_obj.is_superuser:
             return True
         with self.lock:
             lock_list = self.locks.get(name, [])
@@ -58,7 +60,9 @@ class AccessLock:
             return True
 
     def _fast_access(self, accessing_obj: Object, name: str):
-        if accessing_obj.is_superuser and name != "delete":
+        if accessing_obj.id == self.id and name in ["delete", "get"]:
+            return False
+        if accessing_obj.is_superuser:
             return True
         lock_list = self.locks.get(name, [])
         for lock in lock_list:

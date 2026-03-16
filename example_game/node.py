@@ -16,7 +16,7 @@ class Node(BaseNode, Flags, DbOps, AccessLock):
 
     def at_desc(self, looker=None, **kwargs):
         """Called when the node is looked at."""
-        pass
+        return super().at_desc(looker, **kwargs)
 
     def at_init(self):
         """Called after this node object is deserialized and all its attributes"""

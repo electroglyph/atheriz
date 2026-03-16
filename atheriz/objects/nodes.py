@@ -50,7 +50,7 @@ class NodeLink:
             aliases (list[str] | None, optional): exit aliases, i.e. 'n' (these will be added to object's cmdset on entering the room). Defaults to None.
         """
         self.name = name
-        self.aliases = aliases
+        self.aliases = aliases if aliases else []
         self.coord = coord
 
     def __eq__(self, other):
@@ -423,6 +423,13 @@ class Node(Flags, AccessLock):
         """
         with self.lock:
             return any(link.name == name for link in self.links)
+        
+    def get_link_by_name(self, name: str) -> NodeLink | None:
+        name = name.lower()
+        with self.lock:
+            for l in self.links:
+                if l.name.lower() == name or name in l.aliases:
+                    return l
 
     @property
     def area(self) -> Any:

@@ -1,6 +1,7 @@
 from atheriz.commands.base_cmd import Command
 import argparse
 from typing import TYPE_CHECKING
+from atheriz.globals.get import get_node_handler
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -34,6 +35,17 @@ class LookCommand(Command):
                 if loc and loc.access(caller, "view"):
                     target = loc.search(target_name)
                     if not target:
+                        n = loc.get_noun(target_name.lower())
+                        if n:
+                            caller.msg(n)
+                            return
+                        link = loc.get_link_by_name(target_name)
+                        if link:
+                            nh = get_node_handler()
+                            link_node = nh.get_node(link.coord)
+                            if link_node:
+                                caller.msg(link_node.return_appearance(caller))
+                                return
                         caller.msg(f"No match found for '{target_name}'.")
                         return
                     elif len(target) > 1:

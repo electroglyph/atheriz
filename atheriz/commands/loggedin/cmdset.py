@@ -34,6 +34,7 @@ from atheriz.commands.loggedin.open import OpenCommand
 from atheriz.commands.loggedin.open import CloseCommand
 from atheriz.commands.loggedin.open import LockCommand
 from atheriz.commands.loggedin.open import UnlockCommand
+from atheriz.commands.loggedin.noun import NounCommand
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -75,3 +76,4 @@ class LoggedinCmdSet(CmdSet):
         self.add(CloseCommand())
         self.add(LockCommand())
         self.add(UnlockCommand())
+        self.add(NounCommand())
