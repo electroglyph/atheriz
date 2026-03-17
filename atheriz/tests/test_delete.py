@@ -19,7 +19,7 @@ from atheriz.objects.base_channel import Channel
 @pytest.fixture
 def caller():
     c = Object.create(None, "Admin")
-    c.privilege_level = 4 # superuser
+    c.privilege_level = settings.Privelege.Admin
     return c
 
 @pytest.fixture
@@ -70,7 +70,7 @@ def test_object_delete_lock(caller, room):
     item = Object.create(None, "Protected")
     item.move_to(room)
     caller2 = Object.create(None, "caller")
-    caller2.privilege_level = 2
+    caller2.privilege_level = settings.Privelege.Player
     # Add a lock that prevents deletion
     item.add_lock("delete", lambda x: False)
     
@@ -85,7 +85,7 @@ def test_object_delete_same_id(caller, room):
     item.id = 888
     item.move_to(room)
     caller2 = Object.create(None, "caller_yay")
-    caller2.privilege_level = 2
+    caller2.privilege_level = settings.Privelege.Player
     caller2.id = 888
     # Deletion should be aborted (return None)
     ops = item.delete(caller2)

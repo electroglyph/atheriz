@@ -74,7 +74,7 @@ def do_setup(username=None, password=None):
     nh = get_node_handler()
     home = nh.get_node(settings.DEFAULT_HOME)
     character.home = home
-    character.privilege_level = 4
+    character.privilege_level = settings.Privelege.Admin
     character.move_to(home)
     button = Object.create(
         None,

@@ -570,12 +570,12 @@ class Object(Flags, DbOps, AccessLock):
     @property
     def is_superuser(self) -> bool:
         """bool: Indicates if this object possesses superuser administrative rights."""
-        return (self.privilege_level >= 4) and not self.quelled
+        return (self.privilege_level >= settings.Privelege.Admin) and not self.quelled
 
     @property
     def is_builder(self) -> bool:
         """bool: Indicates if this object possesses builder world-editing rights."""
-        return self.privilege_level >= 3 and not self.quelled
+        return self.privilege_level >= settings.Privelege.Builder and not self.quelled
 
     def execute_cmd(self, raw_string, session=None, **kwargs):
         """

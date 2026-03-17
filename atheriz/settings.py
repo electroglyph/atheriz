@@ -1,35 +1,38 @@
 import os
-from enum import IntEnum
+from enum import IntEnum, auto
 
 SAVE_PATH = "save"
 SECRET_PATH = "secret"
 SERVERNAME = "AtheriZ"
 SERVER_HOSTNAME = "localhost"
-#TODO: reason for this setting to exist:
 WEBSOCKET_ENABLED = True
 TELNET_ENABLED = True
 TELNET_PORT = 4000
-TELNET_INTERFACE = "0.0.0.0"  # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
+# Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
+TELNET_INTERFACE = "0.0.0.0"
 NETWORK_PROTOCOLS = [
     "atheriz.network.websocket.WebSocketProtocol",
-    "atheriz.network.telnet.TelnetProtocol"
+    "atheriz.network.telnet.TelnetProtocol",
 ]
 ACCOUNT_CREATION_ENABLED = True
 WEBSERVER_ENABLED = True
 WEBSERVER_PORT = 8000
-WEBSERVER_INTERFACE = "0.0.0.0"  # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
+# Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
+WEBSERVER_INTERFACE = "0.0.0.0"
 THREADPOOL_LIMIT = os.cpu_count()
 MAX_CHARACTERS = 5
 DEFAULT_TICK_SECONDS = 1.0
-#TODO: remove this or figure out something useful to do with it:
-PERMISSION_HIERARCHY = [
-    0,  # Guest, note-only used if GUEST_ENABLED=True
-    1,  # Player
-    2,  # Helper
-    3,  # Builder
-    4,  # Admin
-]
-#TODO:
+
+# only change these if you know what you're doing
+class Privelege(IntEnum):
+    Guest = auto()
+    Player = auto()
+    Helper = auto()
+    Builder = auto()
+    Admin = auto()
+
+
+# TODO:
 # GUEST_ENABLED = True
 FUNCPARSER_START_CHAR = "$"
 FUNCPARSER_ESCAPE_CHAR = "\\"
@@ -82,14 +85,20 @@ ROOM_PLACEHOLDER = "℣"
 PATH_PLACEHOLDER = "߶"
 ROAD_PLACEHOLDER = "᭤"
 # all symbols which can be rendered as a different shape according to neighbors
-ALL_SYMBOLS = [SINGLE_WALL_PLACEHOLDER, DOUBLE_WALL_PLACEHOLDER, ROUNDED_WALL_PLACEHOLDER, PATH_PLACEHOLDER, ROAD_PLACEHOLDER]
+ALL_SYMBOLS = [
+    SINGLE_WALL_PLACEHOLDER,
+    DOUBLE_WALL_PLACEHOLDER,
+    ROUNDED_WALL_PLACEHOLDER,
+    PATH_PLACEHOLDER,
+    ROAD_PLACEHOLDER,
+]
 # brown doors:
-NS_CLOSED_DOOR = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m━\x1b[0m'
-NS_OPEN_DOOR1 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┚\x1b[0m'
-NS_OPEN_DOOR2 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┒\x1b[0m'
-EW_CLOSED_DOOR = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┃\x1b[0m'
-EW_OPEN_DOOR1 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┙\x1b[0m'
-EW_OPEN_DOOR2 = '\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┕\x1b[0m'
+NS_CLOSED_DOOR = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m━\x1b[0m"
+NS_OPEN_DOOR1 = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┚\x1b[0m"
+NS_OPEN_DOOR2 = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┒\x1b[0m"
+EW_CLOSED_DOOR = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┃\x1b[0m"
+EW_OPEN_DOOR1 = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┙\x1b[0m"
+EW_OPEN_DOOR2 = "\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┕\x1b[0m"
 # --- time related settings ---
 TIME_SYSTEM_ENABLED = True
 # choose which objects receive sunrise, sunset messages
@@ -123,6 +132,7 @@ SUNRISE_HOUR = 6
 SUNSET_HOUR = 18
 SUNRISE_MESSAGE = "The sun rises on a new day."
 SUNSET_MESSAGE = "The sun begins to set."
+
 
 class Month(IntEnum):
     Ianuarius = 1
