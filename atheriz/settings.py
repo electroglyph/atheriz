@@ -9,7 +9,7 @@ SERVER_HOSTNAME = "localhost"
 WEBSOCKET_ENABLED = True
 TELNET_ENABLED = True
 TELNET_PORT = 4000
-TELNET_INTERFACE = "0.0.0.0"
+TELNET_INTERFACE = "0.0.0.0"  # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 NETWORK_PROTOCOLS = [
     "atheriz.network.websocket.WebSocketProtocol",
     "atheriz.network.telnet.TelnetProtocol"
@@ -17,7 +17,7 @@ NETWORK_PROTOCOLS = [
 ACCOUNT_CREATION_ENABLED = True
 WEBSERVER_ENABLED = True
 WEBSERVER_PORT = 8000
-WEBSERVER_INTERFACE = "0.0.0.0"
+WEBSERVER_INTERFACE = "0.0.0.0"  # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 THREADPOOL_LIMIT = os.cpu_count()
 MAX_CHARACTERS = 5
 DEFAULT_TICK_SECONDS = 1.0

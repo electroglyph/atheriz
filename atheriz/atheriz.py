@@ -316,9 +316,13 @@ def start_server():
 
     server_state.uvicorn_server = uvicorn.Server(config)
 
-    print(f"Web server listening on http://{host}:{port}")
+    display_host = host
+    if ":" in host:
+        display_host = f"[{host}]"
+
+    print(f"Web server listening on http://{display_host}:{port}")
     if settings.WEBSOCKET_ENABLED:
-        print(f"WebSocket server available at ws://{host}:{port}/ws")
+        print(f"WebSocket server available at ws://{display_host}:{port}/ws")
 
     # handle shutdown signals
     def signal_handler(signum, frame):
@@ -562,6 +566,7 @@ def main():
             settings.WEBSERVER_PORT = args.port
         if args.host:
             settings.WEBSERVER_INTERFACE = args.host
+            settings.TELNET_INTERFACE = args.host
 
         if args.foreground:
             start_server()
@@ -575,6 +580,7 @@ def main():
             settings.WEBSERVER_PORT = args.port
         if args.host:
             settings.WEBSERVER_INTERFACE = args.host
+            settings.TELNET_INTERFACE = args.host
 
         import os
 
@@ -633,6 +639,7 @@ def main():
             settings.WEBSERVER_PORT = args.port
         if args.host:
             settings.WEBSERVER_INTERFACE = args.host
+            settings.TELNET_INTERFACE = args.host
             
         print("Starting server...")
         if args.foreground:
@@ -699,10 +706,14 @@ def spawn_daemon(args):
 
     host = args.host or settings.WEBSERVER_INTERFACE
     port = args.port or settings.WEBSERVER_PORT
-    if host == "0.0.0.0":
+    display_host = host
+    if ":" in host:
+        display_host = f"[{host}]"
+
+    if host == "0.0.0.0" or host == "::":
         print(f"Web server running on http://localhost:{port}")
     else:
-        print(f"Web server running on http://{host}:{port}")
+        print(f"Web server running on http://{display_host}:{port}")
 
 
 def create_game_data(args):

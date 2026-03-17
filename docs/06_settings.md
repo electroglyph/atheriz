@@ -28,7 +28,7 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `WEBSOCKET_ENABLED`: If `True`, enables the WebSocket server functionality.
 - `WEBSERVER_ENABLED`: If `True`, hosts a web server for HTTP traffic.
 - `WEBSERVER_PORT`: The integer port where the web server listens (e.g., `8000`).
-- `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"`).
+- `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
 
 ### 6.2.2 System & Core Mechanics
 - `MAX_CHARACTERS`: Maximum number of characters allowed per account.
