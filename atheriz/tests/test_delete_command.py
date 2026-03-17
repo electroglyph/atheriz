@@ -50,7 +50,7 @@ def temp_env():
 @pytest.fixture
 def caller():
     c = Object.create(None, "Admin")
-    c.privilege_level = settings.Privelege.Builder
+    c.privilege_level = settings.Privilege.Builder
     c.msg = MagicMock()
     return c
 
@@ -156,7 +156,7 @@ def test_delete_permission_denied(caller, room):
     caller.location = room
     # Lower privilege player cannot delete
     player = Object.create(None, "Player")
-    player.privilege_level = settings.Privelege.Player
+    player.privilege_level = settings.Privilege.Player
     player.msg = MagicMock()
     player.location = room
     
@@ -171,7 +171,7 @@ def test_delete_permission_denied(caller, room):
     
     # 2. Test permission check inside run() for specific target
     # Builder privilege
-    caller.privilege_level = settings.Privelege.Builder
+    caller.privilege_level = settings.Privilege.Builder
     # Explicit lock denying delete
     item.add_lock("delete", lambda x: False)
     

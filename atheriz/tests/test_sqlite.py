@@ -15,7 +15,7 @@ import dill
 def superuser():
     # Create a superuser for performing deletions
     su = Object.create(None, "Superuser")
-    su.privilege_level = settings.Privelege.Admin # Ensure superuser status
+    su.privilege_level = settings.Privilege.Admin # Ensure superuser status
     return su
 
 def test_save_load_object(db_setup):

@@ -23,8 +23,9 @@ THREADPOOL_LIMIT = os.cpu_count()
 MAX_CHARACTERS = 5
 DEFAULT_TICK_SECONDS = 1.0
 
+
 # only change these if you know what you're doing
-class Privelege(IntEnum):
+class Privilege(IntEnum):
     Guest = auto()
     Player = auto()
     Helper = auto()

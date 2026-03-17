@@ -98,7 +98,7 @@ def test_access_superuser_bypasses_locks():
     """Test that superusers bypass all lock checks."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Admin
+    accessor.privilege_level = settings.Privilege.Admin
     accessor.quelled = False
 
     # Add a lock that always fails
@@ -112,7 +112,7 @@ def test_access_passes_when_no_locks():
     """Test that access passes when no locks exist for the name."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     assert obj.access(accessor, "nonexistent") is True
@@ -122,7 +122,7 @@ def test_access_passes_when_all_locks_pass():
     """Test that access passes when all locks return True."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Builder
+    accessor.privilege_level = settings.Privilege.Builder
     accessor.quelled = False
 
     obj.add_lock("control", lambda x: x.is_builder)
@@ -135,7 +135,7 @@ def test_access_fails_when_any_lock_fails():
     """Test that access fails if any lock returns False."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("control", lambda x: True)
@@ -148,7 +148,7 @@ def test_access_with_single_failing_lock():
     """Test access with a single lock that fails."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("view", lambda x: False)
@@ -160,7 +160,7 @@ def test_access_with_single_passing_lock():
     """Test access with a single lock that passes."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("view", lambda x: True)
@@ -172,7 +172,7 @@ def test_access_checks_correct_lock_name():
     """Test that access only checks locks for the specified name."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("control", lambda x: False)  # Would fail
@@ -203,7 +203,7 @@ def test_safe_access_behavior():
     """Test _safe_access method directly."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("test", lambda x: True)
@@ -219,7 +219,7 @@ def test_fast_access_behavior():
     """Test _fast_access method directly."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     obj.add_lock("test", lambda x: True)
@@ -235,7 +235,7 @@ def test_safe_and_fast_access_have_same_behavior():
     """Test that _safe_access and _fast_access produce identical results."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Player
+    accessor.privilege_level = settings.Privilege.Player
     accessor.quelled = False
 
     # No locks
@@ -250,7 +250,7 @@ def test_safe_and_fast_access_have_same_behavior():
     assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
 
     # Superuser
-    accessor.privilege_level = settings.Privelege.Admin
+    accessor.privilege_level = settings.Privilege.Admin
     assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
 
 
@@ -258,7 +258,7 @@ def test_quelled_superuser():
     """Test that a quelled superuser is checked against locks."""
     obj = MockObject()
     accessor = MockObject()
-    accessor.privilege_level = settings.Privelege.Admin
+    accessor.privilege_level = settings.Privilege.Admin
     accessor.quelled = True  # but quelled
 
     obj.add_lock("control", lambda x: x.is_superuser)
