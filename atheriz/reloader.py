@@ -115,7 +115,7 @@ def _reload_game_folder_modules():
     """
     from atheriz import settings
 
-    # Step 1: Discover new game folder modules from disk
+    # grab new game folder modules from disk
     new_count = _discover_new_game_modules()
     if new_count:
         print(f"[HotReload] Discovered {new_count} new game module(s).")
@@ -215,7 +215,7 @@ def reload_game_logic() -> str:
 
     logger.info("Server reload initiated.")
 
-    # Step 0: Discover new atheriz.* modules from disk (e.g. newly added command files)
+    # Discover new atheriz.* modules from disk (e.g. newly added command files)
     new_count = _discover_new_atheriz_modules()
     if new_count:
         print(f"[HotReload] Discovered {new_count} new module(s) from disk.")
