@@ -359,6 +359,9 @@ window.addEventListener('load', () => {
                 dividerEl.style.display = '';
                 loadDividerPosition();
                 redrawEverything();
+                if (recording) {
+                    addRecord('show_right', {});
+                }
             }
         }
 
@@ -368,6 +371,9 @@ window.addEventListener('load', () => {
                 dividerEl.style.display = 'none';
                 leftTerminalEl.style.width = '100%';
                 redrawEverything();
+                if (recording) {
+                    addRecord('hide_right', {});
+                }
             }
         }
 
@@ -428,15 +434,23 @@ window.addEventListener('load', () => {
                 rightTerminalEl.style.pointerEvents = 'auto';
                 saveDividerPos();
                 redrawEverything();
+                if (recording) {
+                    const containerWidth = terminalContainer.offsetWidth;
+                    const leftWidth = leftTerminalEl.offsetWidth;
+                    const divPct = containerWidth > 0 ? (leftWidth / containerWidth) * 100 : 50;
+                    addRecord('resize', {
+                        left: { cols: termLeft.cols, rows: termLeft.rows },
+                        right: { cols: termRight.cols, rows: termRight.rows },
+                        divider_pct: parseFloat(divPct.toFixed(2))
+                    });
+                }
             }
         });
 
         let recording_start = 0;
-        let recording_buffer = '';
+        let recording_events = [];
         let recording = false;
-        let recording_header = {
-            "version": 2, "width": 80, "height": 24, "timestamp": 0, "duration": 0, "title": "xtermia2 recording"
-        };
+        let recording_header = {};
         wrapWrite('\x1b[1;97mxtermia2\x1b[0m terminal emulator (made with xterm.js)\n');
         wrapWrite('revision \x1b[1;97m' + revision + '\x1b[0m\n');
         wrapWrite('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands')
@@ -582,24 +596,37 @@ window.addEventListener('load', () => {
         }
 
         function record(arg) {
-            // #TODO: reimplement for both terminals, make custom recording format
             recording_start = Date.now();
-            recording_header.width = term.cols;
-            recording_header.height = term.rows;
-            recording_header.timestamp = Math.round(recording_start / 1000);
+            const rightVisible = rightTerminalEl.style.display !== 'none';
+            const containerWidth = terminalContainer.offsetWidth;
+            const leftWidth = leftTerminalEl.offsetWidth;
+            const divPct = (rightVisible && containerWidth > 0)
+                ? parseFloat(((leftWidth / containerWidth) * 100).toFixed(2))
+                : 50.00;
+            recording_header = {
+                version: 3,
+                timestamp: Math.round(recording_start / 1000),
+                title: 'xtermia2 recording',
+                left: { cols: termLeft.cols, rows: termLeft.rows },
+                right: { cols: termRight.cols, rows: termRight.rows },
+                divider_pct: divPct,
+                right_visible: rightVisible
+            };
+            recording_events = [];
             recording = true;
+            wrapWriteln('Recording started.');
         }
 
-        function addRecord(str) {
-            const time = (Date.now() - recording_start) / 1000;
-            recording_buffer += JSON.stringify([time, "o", str]) + '\n';
+        function addRecord(type, data) {
+            const t = parseFloat(((Date.now() - recording_start) / 1000).toFixed(6));
+            recording_events.push([t, type, data]);
         }
 
         function wrapWrite(d, f) {
             // wrap all term.write() calls with this to enable recording
             termLeft.write(d, f);
             if (recording) {
-                addRecord(d);
+                addRecord('o', d);
             }
         }
 
@@ -607,15 +634,27 @@ window.addEventListener('load', () => {
             // wrap all term.writeln() calls with this to enable recording
             termLeft.writeln(d, f);
             if (recording) {
-                addRecord(d);
+                addRecord('o', d + '\r\n');
+            }
+        }
+
+        function wrapWriteRight(d, f) {
+            // wrap all termRight.write() calls with this to enable recording
+            termRight.write(d, f);
+            if (recording) {
+                addRecord('r', d);
             }
         }
 
         function stop(arg) {
             if (recording) {
                 recording = false;
-                recording_header.duration = (Date.now() - recording_start) / 1000;
-                saveBlob('recording.cast', JSON.stringify(recording_header) + '\n' + recording_buffer);
+                let out = JSON.stringify(recording_header) + '\n';
+                for (const ev of recording_events) {
+                    out += JSON.stringify(ev) + '\n';
+                }
+                saveBlob('recording.cast', out);
+                wrapWriteln('Recording saved.');
             } else {
                 wrapWriteln("Recording hasn't begun!");
             }
@@ -827,7 +866,7 @@ window.addEventListener('load', () => {
         });
 
         function writeMap() {
-            termRight.write('\x1b[2J\x1b[3J\x1b[H');
+            wrapWriteRight('\x1b[2J\x1b[3J\x1b[H');
             if (!new_map || new_map.length === 0 || termRight.rows === 0) {
                 return;
             }
@@ -868,7 +907,7 @@ window.addEventListener('load', () => {
                     current_row++;
                 }
             }
-            termRight.write(reset + update);
+            wrapWriteRight(reset + update);
         }
 
         ws.onopen = function () {

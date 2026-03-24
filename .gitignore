@@ -225,4 +225,5 @@ secret/
 *.sqlite3-shm
 *.sqlite3-wal
 telnetlib3/
+terminoid/
 example_game/save/time
