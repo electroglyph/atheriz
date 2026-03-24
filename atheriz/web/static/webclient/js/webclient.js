@@ -734,6 +734,7 @@ window.addEventListener('load', () => {
         let enter_pressed = false;
         let censor_input = true; // until login, don't echo input commands so that password isn't leaked
         let map = [];  // current map, split into lines
+        let highlight24_entries = new Map(); // key: "x,y" → {r, g, b}
         let plain_map = []; // cached plain map from server (no dynamic items)
         let map_min_x = 0; // map viewport offset X
         let map_max_y = 0; // map viewport offset Y
@@ -969,11 +970,66 @@ window.addEventListener('load', () => {
             return idx;
         }
 
+        function applyHighlight24(working_map) {
+            if (highlight24_entries.size === 0) return;
+            const getRawIndexNoSkip = (text, visualIndex) => {
+                let idx = 0;
+                let vIdx = 0;
+                let isAnsi = false;
+                while (idx < text.length && vIdx < visualIndex) {
+                    if (text[idx] === '\x1b') {
+                        isAnsi = true;
+                        idx++;
+                    } else if (isAnsi) {
+                        if (text[idx] === 'm' || text[idx] === 'K') {
+                            isAnsi = false;
+                        }
+                        idx++;
+                    } else {
+                        vIdx++;
+                        idx++;
+                    }
+                }
+                return idx;
+            };
+            for (const [key, {r, g, b}] of highlight24_entries) {
+                const parts = key.split(',');
+                const wx = parseInt(parts[0]);
+                const wy = parseInt(parts[1]);
+                const rel_x = wx - map_min_x;
+                const rel_y = map_max_y - wy;
+
+                if (rel_y < 0 || rel_y >= working_map.length) continue;
+                if (rel_x < 0) continue;
+
+                const bgEsc = `\x1b[48;2;${r};${g};${b}m`;
+                let line = working_map[rel_y];
+                const stripped = line.replace(ansi_color_regex, '');
+
+                if (rel_x >= stripped.length) {
+                    // Row exists but line is shorter than rel_x — pad and add a colored space
+                    const padding = ' '.repeat(rel_x - stripped.length);
+                    working_map[rel_y] = line + padding + bgEsc + ' ' + '\x1b[0m';
+                } else {
+                    // Inject BG escape before the character, reset after
+                    const startIdx = getRawIndex(line, rel_x);
+                    const endIdx = getRawIndexNoSkip(line, rel_x + 1);
+                    working_map[rel_y] =
+                        line.substring(0, startIdx) +
+                        bgEsc +
+                        line.substring(startIdx, endIdx) +
+                        '\x1b[0m' +
+                        line.substring(endIdx);
+                }
+            }
+        }
+
         function composeMap() {
             if (!plain_map || plain_map.length === 0) return;
 
             // Allow plain_map to be used as is if no composition needed
             let working_map = [...plain_map];
+            applyHighlight24(working_map);
 
             // Helper: get raw index for visual position, WITHOUT skipping preceding ANSI codes
             const getRawIndexNoSkip = (text, visualIndex) => {
@@ -1496,6 +1552,24 @@ window.addEventListener('load', () => {
                         composeMap();
                     }
                     break;
+                case 'highlight24': {
+                    if (map_enabled) {
+                        const data = msg[1][0];
+                        const [cr, cg, cb] = data.color;
+                        for (const [cx, cy] of data.coords) {
+                            highlight24_entries.set(`${cx},${cy}`, {r: cr, g: cg, b: cb});
+                        }
+                        composeMap();
+                    }
+                    break;
+                }
+                case 'unhighlight24': {
+                    if (map_enabled && highlight24_entries.size > 0) {
+                        highlight24_entries.clear();
+                        composeMap();
+                    }
+                    break;
+                }
                 case 'buffer':
                     // this is for writing buffers with flow control
                     // this command expects an array of strings to write sequentially to the terminal
