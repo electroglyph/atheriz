@@ -692,7 +692,9 @@ def spawn_daemon(args):
     if sys.platform == "win32":
         # DETACHED_PROCESS = 0x00000008
         # CREATE_NEW_PROCESS_GROUP = 0x00000200
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        # CREATE_NO_WINDOW = 0x08000000
+        CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     else:
         # separate process group
         kwargs["start_new_session"] = True
@@ -700,7 +702,7 @@ def spawn_daemon(args):
     # open log file for append
     with open(log_file, "a") as f:
         # spawn process
-        proc = subprocess.Popen(cmd, stdout=f, stderr=f, **kwargs)
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs)
 
     print(f"Server started with PID: {proc.pid}")
 
