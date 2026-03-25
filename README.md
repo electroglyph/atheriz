@@ -12,6 +12,7 @@ This has some code from Evennia, and is loosely based on the same ideas.
 
 # Features
 
+- Linux and Windows compatible, not tested on Mac yet
 - screenreader friendly
 - multi-threaded with automatic thread-safety for immutable object attributes
 - super fast object creation
@@ -44,7 +45,7 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - ~~time system~~
 - ~~pathfinding~~
 - ~~door stuff + ability for custom doors~~
-- map tile highlight in game client
+- ~~map tile highlight in game client~~
 - ~~telnet~~
 - follow and group system
 - ~~room nouns~~
