@@ -24,5 +24,7 @@ Welcome to the Atheriz documentation. Atheriz is a Python framework built for cr
     *Math/Map utilities, string formatters, FuncParser logic, and the hot-reloader.*
 11. **[11 The AsyncThreadPool](./11_async_threadpool.md)**  
     *Understanding concurrency, worker threads, and fire-and-forget execution.*
-12. **[12 API Reference](./12_api_reference.md)**  
+12. **[12 The Webclient](./12_webclient.md)**  
+    *Internal "colon" commands and the server-to-client WebSocket protocol.*
+13. **[13 API Reference](./13_api_reference.md)**  
     *Auto-generated documentation outlining public classes, methods, and functions.*

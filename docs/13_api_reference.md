@@ -1,10 +1,10 @@
-# 12 API Reference
+# 13 API Reference
 
 [Table of Contents](./table_of_contents.md)
 
 This document provides an auto-generated reference for the public classes, methods, and functions within Atheriz.
 
-## 12.1 `atheriz.objects.base_obj`
+## 13.1 `atheriz.objects.base_obj`
 
 ### Class: `Object`
 
@@ -691,7 +691,7 @@ Returns:
 
 
 
-## 12.2 `atheriz.objects.nodes`
+## 13.2 `atheriz.objects.nodes`
 
 ### Class: `Node`
 
@@ -887,6 +887,10 @@ Args:
     name (str): Name of the link to check
 Returns:
     bool: True if the link exists, False otherwise
+
+
+
+#### `def get_link_by_name(self, name)`
 
 
 
@@ -1091,7 +1095,7 @@ Returns:
 
 
 
-## 12.3 `atheriz.objects.base_account`
+## 13.3 `atheriz.objects.base_account`
 
 ### Class: `Account`
 
@@ -1214,7 +1218,7 @@ Returns:
 
 
 
-## 12.4 `atheriz.objects.base_channel`
+## 13.4 `atheriz.objects.base_channel`
 
 ### Class: `Channel`
 
@@ -1304,7 +1308,7 @@ Clear all history from the channel.
 
 
 
-## 12.5 `atheriz.objects.base_script`
+## 13.5 `atheriz.objects.base_script`
 
 ### Class: `Script`
 
@@ -1367,7 +1371,7 @@ Args:
 
 
 
-## 12.6 `atheriz.commands.base_cmd`
+## 13.6 `atheriz.commands.base_cmd`
 
 ### Class: `Command`
 
@@ -1438,7 +1442,7 @@ Returns:
 
 
 
-## 12.7 `atheriz.commands.base_cmdset`
+## 13.7 `atheriz.commands.base_cmdset`
 
 ### Class: `CmdSet`
 
@@ -1514,7 +1518,7 @@ Returns:
 
 
 
-## 12.8 `atheriz.inputfuncs`
+## 13.8 `atheriz.inputfuncs`
 
 ### Class: `InputFuncs`
 
@@ -1597,7 +1601,7 @@ Args:
 
 
 
-## 12.9 `atheriz.globals.objects`
+## 13.9 `atheriz.globals.objects`
 
 ### `def filter_by(l)`
 
@@ -1661,11 +1665,11 @@ Args:
 
 
 
-## 12.10 `atheriz.globals.map`
+## 13.10 `atheriz.globals.map`
 
-## 12.11 `atheriz.globals.time`
+## 13.11 `atheriz.globals.time`
 
-## 12.12 `atheriz.utils`
+## 13.12 `atheriz.utils`
 
 ### `def is_in_game_folder()`
 
@@ -1879,7 +1883,7 @@ Returns:
 
 
 
-## 12.13 `atheriz.objects.funcparser`
+## 13.13 `atheriz.objects.funcparser`
 
 Generic function parser for functions embedded in a string, on the form
 `$funcname(*args, **kwargs)`, for example:
@@ -2436,7 +2440,7 @@ Usage: $Pron(word, [options]) - always maps to a capitalized word.
 
 
 
-## 12.14 `atheriz.settings`
+## 13.14 `atheriz.settings`
 
 ### `SAVE_PATH`
 
@@ -2516,11 +2520,6 @@ Default value: `5`
 ### `DEFAULT_TICK_SECONDS`
 
 Default value: `1.0`
-
-
-### `PERMISSION_HIERARCHY`
-
-Default value: `[0, 1, 2, 3, 4]`
 
 
 ### `FUNCPARSER_START_CHAR`
