@@ -274,6 +274,20 @@ window.addEventListener('load', () => {
 
         function redrawEverything() {
             fitTerminals();
+            if (recording) {
+                if (termLeft.cols !== last_recorded_left_cols || termRight.cols !== last_recorded_right_cols) {
+                    const containerWidth = terminalContainer.offsetWidth;
+                    const leftWidth = leftTerminalEl.offsetWidth;
+                    const divPct = containerWidth > 0 ? (leftWidth / containerWidth) * 100 : 50;
+                    addRecord('resize', {
+                        left: { cols: termLeft.cols, rows: termLeft.rows },
+                        right: { cols: termRight.cols, rows: termRight.rows },
+                        divider_pct: parseFloat(divPct.toFixed(2))
+                    });
+                    last_recorded_left_cols = termLeft.cols;
+                    last_recorded_right_cols = termRight.cols;
+                }
+            }
             if (ws_ready) {
                 ws.send(JSON.stringify(['term_size', [termLeft.cols, termLeft.rows], {}]));
                 if (rightTerminalEl.style.display !== 'none' && map_enabled) {
@@ -434,16 +448,6 @@ window.addEventListener('load', () => {
                 rightTerminalEl.style.pointerEvents = 'auto';
                 saveDividerPos();
                 redrawEverything();
-                if (recording) {
-                    const containerWidth = terminalContainer.offsetWidth;
-                    const leftWidth = leftTerminalEl.offsetWidth;
-                    const divPct = containerWidth > 0 ? (leftWidth / containerWidth) * 100 : 50;
-                    addRecord('resize', {
-                        left: { cols: termLeft.cols, rows: termLeft.rows },
-                        right: { cols: termRight.cols, rows: termRight.rows },
-                        divider_pct: parseFloat(divPct.toFixed(2))
-                    });
-                }
             }
         });
 
@@ -451,6 +455,8 @@ window.addEventListener('load', () => {
         let recording_events = [];
         let recording = false;
         let recording_header = {};
+        let last_recorded_left_cols = 0;
+        let last_recorded_right_cols = 0;
         wrapWrite('\x1b[1;97mxtermia2\x1b[0m terminal emulator (made with xterm.js)\n');
         wrapWrite('revision \x1b[1;97m' + revision + '\x1b[0m\n');
         wrapWrite('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands')
@@ -612,6 +618,8 @@ window.addEventListener('load', () => {
                 divider_pct: divPct,
                 right_visible: rightVisible
             };
+            last_recorded_left_cols = termLeft.cols;
+            last_recorded_right_cols = termRight.cols;
             recording_events = [];
             recording = true;
             wrapWriteln('Recording started.');
