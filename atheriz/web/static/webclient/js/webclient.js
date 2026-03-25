@@ -734,7 +734,7 @@ window.addEventListener('load', () => {
         let enter_pressed = false;
         let censor_input = true; // until login, don't echo input commands so that password isn't leaked
         let map = [];  // current map, split into lines
-        let highlight24_entries = new Map(); // key: "x,y" → {r, g, b}
+        let background_entries = new Map(); // key: "x,y" → {r, g, b}
         let plain_map = []; // cached plain map from server (no dynamic items)
         let map_min_x = 0; // map viewport offset X
         let map_max_y = 0; // map viewport offset Y
@@ -970,8 +970,8 @@ window.addEventListener('load', () => {
             return idx;
         }
 
-        function applyHighlight24(working_map) {
-            if (highlight24_entries.size === 0) return;
+        function applyBackground(working_map) {
+            if (background_entries.size === 0) return;
             const getRawIndexNoSkip = (text, visualIndex) => {
                 let idx = 0;
                 let vIdx = 0;
@@ -992,7 +992,7 @@ window.addEventListener('load', () => {
                 }
                 return idx;
             };
-            for (const [key, {r, g, b}] of highlight24_entries) {
+            for (const [key, { r, g, b }] of background_entries) {
                 const parts = key.split(',');
                 const wx = parseInt(parts[0]);
                 const wy = parseInt(parts[1]);
@@ -1029,7 +1029,7 @@ window.addEventListener('load', () => {
 
             // Allow plain_map to be used as is if no composition needed
             let working_map = [...plain_map];
-            applyHighlight24(working_map);
+            applyBackground(working_map);
 
             // Helper: get raw index for visual position, WITHOUT skipping preceding ANSI codes
             const getRawIndexNoSkip = (text, visualIndex) => {
@@ -1552,20 +1552,20 @@ window.addEventListener('load', () => {
                         composeMap();
                     }
                     break;
-                case 'highlight24': {
+                case 'background': {
                     if (map_enabled) {
                         const data = msg[1][0];
                         const [cr, cg, cb] = data.color;
                         for (const [cx, cy] of data.coords) {
-                            highlight24_entries.set(`${cx},${cy}`, {r: cr, g: cg, b: cb});
+                            background_entries.set(`${cx},${cy}`, { r: cr, g: cg, b: cb });
                         }
                         composeMap();
                     }
                     break;
                 }
-                case 'unhighlight24': {
-                    if (map_enabled && highlight24_entries.size > 0) {
-                        highlight24_entries.clear();
+                case 'unbackground': {
+                    if (map_enabled && background_entries.size > 0) {
+                        background_entries.clear();
                         composeMap();
                     }
                     break;
