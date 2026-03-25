@@ -89,7 +89,7 @@ def astar(
     grid = start.grid
     if not grid:
         return False, [], []
-    max_iterations = len(grid) * 3
+    max_iterations = len(grid) * 100
     heapq.heapify(open_list)
     heapq.heappush(open_list, start_node)
     current_node = start_node
@@ -114,17 +114,18 @@ def astar(
                 continue
             child.g = current_node.g + 1
             child.h = (
-                ((child.position.coord[1] - end_node.position.coord[1]) ** 2)
-                + ((child.position.coord[2] - end_node.position.coord[2]) ** 2)
-                + ((child.position.coord[3] - end_node.position.coord[3]) ** 2)
+                abs(child.position.coord[1] - end_node.position.coord[1])
+                + abs(child.position.coord[2] - end_node.position.coord[2])
+                + abs(child.position.coord[3] - end_node.position.coord[3])
             )
             if child.position.coord[0] != end_node.position.coord[0]:  # coord = (area, x, y, z)
-                child.h **= 2
+                child.h += 50
             child.f = child.g + child.h
             if child in open_list:
                 idx = open_list.index(child)
                 if child.g < open_list[idx].g:
                     open_list[idx] = child
+                    heapq.heapify(open_list)
             else:
                 heapq.heappush(open_list, child)
         if len(open_list) == 0:

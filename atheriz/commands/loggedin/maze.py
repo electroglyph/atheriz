@@ -1,8 +1,9 @@
 from random import choice
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea
-from atheriz.globals.get import get_node_handler, get_map_handler
+from atheriz.globals.get import get_node_handler, get_map_handler, get_async_threadpool
 from atheriz.globals.map import MapInfo, LegendEntry
 from atheriz.commands.base_cmd import Command
+from atheriz.pathfind import astar
 from atheriz.utils import wrap_xterm256
 import time
 from typing import TYPE_CHECKING
@@ -92,6 +93,18 @@ class MazeCommand(Command):
         maze3_exit.add_link(NodeLink("down", ("maze1", 0, 0, 0), ["d"]))
         node = nh.get_node(("maze1", 0, 0, 0))
         end = maze1_exit
+        def do_pathfind(caller: Object, node2: Node, end2: Node):
+            start = time.time()
+            success, path, deadend = astar(node2, end2, caller)
+            elapsed = (time.time() - start) * 1000
+            caller.msg(unbackground="")
+            if success:
+                caller.msg(f"path found in: {elapsed:.2f} milliseconds")
+                caller.msg(background={"color": (83, 128, 56), "coords": [(n.coord[1], n.coord[2]) for n in path]})
+            else:
+                caller.msg(f"path not found in: {elapsed:.2f} milliseconds")
+                caller.msg(background={"color": (90, 0, 0), "coords": [(n.coord[1], n.coord[2]) for n in deadend]})
+        get_async_threadpool().add_task(do_pathfind, caller, node, end)
         if node:
             caller.msg(f"moving to: {node} ...")
             caller.map_enabled = True

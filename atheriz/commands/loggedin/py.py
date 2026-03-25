@@ -12,11 +12,11 @@ class PyCommand(Command):
     use_parser = False
 
     # pyrefly: ignore
-    def access(self, caller: "Object") -> bool:
+    def access(self, caller: Object) -> bool:
         return caller.is_superuser
 
     # pyrefly: ignore
-    def run(self, caller: "Object", args: str):
+    def run(self, caller: Object, args: str):
         if not args or not args.strip():
             caller.msg("Usage: py <expression>")
             return
