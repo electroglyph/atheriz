@@ -36,7 +36,6 @@ if TYPE_CHECKING:
     from atheriz.globals.node import Node
     from atheriz.objects.base_channel import Channel
     from atheriz.globals.map import MapInfo
-IGNORE_FIELDS = ["lock", "internal_cmdset", "external_cmdset", "access", "_contents", "session"]
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 
 
@@ -324,9 +323,12 @@ class Object(Flags, DbOps, AccessLock):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (i for i, c in enumerate(mro)
-             if c.__module__ == 'atheriz.objects.base_obj' and c.__qualname__ == 'Object'),
-            len(mro)
+            (
+                i
+                for i, c in enumerate(mro)
+                if c.__module__ == "atheriz.objects.base_obj" and c.__qualname__ == "Object"
+            ),
+            len(mro),
         )
         ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):
@@ -1093,7 +1095,9 @@ class Object(Flags, DbOps, AccessLock):
         )
 
     @hookable
-    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs) -> bool:
+    def at_msg_receive(
+        self, text: str | None = None, from_obj: Object | None = None, **kwargs
+    ) -> bool:
         """
         Called when this object is about to receive an arbitrary string message.
         Returning False aborts the message delivery.

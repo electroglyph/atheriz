@@ -14,8 +14,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
-IGNORE_FIELDS = ["lock"]
-
 
 class Account(Flags, DbOps):
     group_save: bool = False
@@ -54,18 +52,18 @@ class Account(Flags, DbOps):
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
         """
         Delete this account from the game entirely.
-        
+
         Args:
             caller (Object | None, optional): The object executing the deletion. Defaults to None.
             unused (bool, optional): Unused parameter for API compatibility. Defaults to True.
-            
+
         Returns:
             bool: True if the account was successfully deleted, False if aborted.
         """
         del unused
         if not self.at_delete(caller):
             return False
-            
+
         ops = [self.get_del_ops()]
         delete_objects(ops)
         remove_object(self)
@@ -75,10 +73,10 @@ class Account(Flags, DbOps):
     def at_pre_puppet(self, character: Object) -> bool:
         """
         Called before a character is puppeted by this account.
-        
+
         Args:
             character (Object): The character object to puppet.
-            
+
         Returns:
             bool: True to allow puppeting, False to cancel.
         """
@@ -87,10 +85,10 @@ class Account(Flags, DbOps):
     def at_delete(self, caller: Object | None = None) -> bool:
         """
         Called before the account is deleted.
-        
+
         Args:
             caller (Object | None, optional): The object executing the command. Defaults to None.
-            
+
         Returns:
             bool: True to proceed with deletion, False to stop.
         """
@@ -111,7 +109,7 @@ class Account(Flags, DbOps):
     def add_character(self, character: Object) -> None:
         """
         Add a character's ID to the list of characters owned by this account.
-        
+
         Args:
             character (Object): The character to add.
         """
@@ -121,7 +119,7 @@ class Account(Flags, DbOps):
     def remove_character(self, character: Object) -> None:
         """
         Remove a character's ID from the list of characters owned by this account.
-        
+
         Args:
             character (Object): The character to remove.
         """
@@ -132,10 +130,10 @@ class Account(Flags, DbOps):
     def hash_password(password: str) -> str:
         """
         Hash the given plaintext password using the system salt.
-        
+
         Args:
             password (str): The plaintext password to hash.
-            
+
         Returns:
             str: The SHA-256 hashed password string.
         """
@@ -144,10 +142,10 @@ class Account(Flags, DbOps):
     def check_password(self, password: str) -> bool:
         """
         Check if the provided plaintext password matches the account's hashed password.
-        
+
         Args:
             password (str): The plaintext password to test.
-            
+
         Returns:
             bool: True if the passwords match, False otherwise.
         """
@@ -156,7 +154,7 @@ class Account(Flags, DbOps):
     def set_password(self, password: str) -> None:
         """
         Update and hash the account's password.
-        
+
         Args:
             password (str): The new plaintext password.
         """
@@ -165,11 +163,11 @@ class Account(Flags, DbOps):
     def login(self, name: str, password: str) -> bool:
         """
         Attempt to log in to the account with given credentials.
-        
+
         Args:
             name (str): The provided account name.
             password (str): The plaintext password to verify.
-            
+
         Returns:
             bool: True on successful authentication, False otherwise.
         """
