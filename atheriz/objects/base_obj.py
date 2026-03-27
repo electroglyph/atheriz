@@ -191,7 +191,26 @@ class Object(Flags, DbOps, AccessLock):
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)
+            
+    def has_script_type(self, script_type: str) -> bool:
+        """
+        Check if this object has a script of the given type.
+        It checks the class name of all the attached scripts.
 
+        Args:
+            script_type (str): Class name of the script to check for, can be partial, case-insensitive.
+
+        Returns:
+            bool: True if the object has a script of the given type, False otherwise.
+        """
+        with self.lock:
+            if not self.scripts:
+                return False
+            return any(
+                script_type.lower() in scripts[0].__class__.__name__.lower()
+                for script_id in self.scripts
+                if (scripts := get(script_id))
+            )
     def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
         """Delete this object. If recursive, delete contents recursively.
         If not, move contents to container location.

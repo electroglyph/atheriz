@@ -45,6 +45,19 @@ Args:
 
 
 
+#### `def has_script_type(self, script_type)`
+
+Check if this object has a script of the given type.
+It checks the class name of all the attached scripts.
+
+Args:
+    script_type (str): Class name of the script to check for, can be partial, case-insensitive.
+
+Returns:
+    bool: True if the object has a script of the given type, False otherwise.
+
+
+
 #### `def delete(self, caller, recursive)`
 
 Delete this object. If recursive, delete contents recursively.
@@ -1112,7 +1125,7 @@ Delete this account from the game entirely.
 Args:
     caller (Object | None, optional): The object executing the deletion. Defaults to None.
     unused (bool, optional): Unused parameter for API compatibility. Defaults to True.
-    
+
 Returns:
     bool: True if the account was successfully deleted, False if aborted.
 
@@ -1124,7 +1137,7 @@ Called before a character is puppeted by this account.
 
 Args:
     character (Object): The character object to puppet.
-    
+
 Returns:
     bool: True to allow puppeting, False to cancel.
 
@@ -1136,7 +1149,7 @@ Called before the account is deleted.
 
 Args:
     caller (Object | None, optional): The object executing the command. Defaults to None.
-    
+
 Returns:
     bool: True to proceed with deletion, False to stop.
 
@@ -1178,7 +1191,7 @@ Hash the given plaintext password using the system salt.
 
 Args:
     password (str): The plaintext password to hash.
-    
+
 Returns:
     str: The SHA-256 hashed password string.
 
@@ -1190,7 +1203,7 @@ Check if the provided plaintext password matches the account's hashed password.
 
 Args:
     password (str): The plaintext password to test.
-    
+
 Returns:
     bool: True if the passwords match, False otherwise.
 
@@ -1212,7 +1225,7 @@ Attempt to log in to the account with given credentials.
 Args:
     name (str): The provided account name.
     password (str): The plaintext password to verify.
-    
+
 Returns:
     bool: True on successful authentication, False otherwise.
 

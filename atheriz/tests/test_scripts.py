@@ -249,3 +249,29 @@ def test_attached_script_persistence():
     restored_node.log = []
     assert restored_node.at_test_hook("n2") == "after_result"
     assert restored_node.log == ["at_test_hook: n2, None", "after: n2, None"]
+
+
+def test_has_script_type():
+    obj = DummyObj.create(None, "TestObj")
+    script1 = DummyBeforeScript.create(None, "Script1")
+    script2 = DummyAfterScript.create(None, "Script2")
+    
+    obj.add_script(script1)
+    
+    # Check absolute name
+    assert obj.has_script_type("DummyBeforeScript") is True
+    
+    # Check case variations
+    assert obj.has_script_type("dummybeforescript") is True
+    assert obj.has_script_type("DUMMYBEFORESCRIPT") is True
+    
+    # Check substring
+    assert obj.has_script_type("Before") is True
+    
+    # Missing type check
+    assert obj.has_script_type("DummyAfterScript") is False
+    assert obj.has_script_type("After") is False
+    
+    obj.add_script(script2)
+    assert obj.has_script_type("DummyAfterScript") is True
+    assert obj.has_script_type("After") is True

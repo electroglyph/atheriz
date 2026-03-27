@@ -92,4 +92,8 @@ Assigning scripts to target objects utilizes standard API methods:
 - `object.add_script(script_or_id)`
 - `object.remove_script(script_or_id)`
 
+### 4.3.3 Checking for Scripts
+Checking for scripts is done using the `has_script_type()` method:
+- `object.has_script_type(script_type)`
+
 [Table of Contents](./table_of_contents.md) | [Next: 05 Persistence](./05_persistence.md)
