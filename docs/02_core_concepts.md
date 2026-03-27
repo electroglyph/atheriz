@@ -139,5 +139,55 @@ foo.bar['key'] = "new_value"  # NOT THREAD-SAFE! May corrupt data and will fail 
 ### 2.5.4 Understanding RLocks (`self.lock`)
 Every standard entity (`Object`, `Node`, `Account`, etc.) initializes with `self.lock = RLock()` from Python's `threading` library. A Reentrant Lock (RLock) means that the same thread can acquire the lock multiple times without deadlocking itself. If your custom method acquires `self.lock`, and then calls another method on the same object that also acquires `self.lock`, execution proceeds safely. However, modifying or moving *multiple* objects simultaneously requires locking every object involved in a consistent order to prevent deadlocks (see `sort_locks` inside `Object.move_to()`).
 
----
+## 2.6 Access Control and Locks
+
+### 2.6.1 The AccessLock Class
+Atheriz provides an access control system built into objects via the `AccessLock` class. This allows you to restrict which objects (typically players or NPCs) can perform certain actions on an object.
+
+The `AccessLock` system manages a dictionary of lock names, where each name maps to a list of callable functions. When an object attempts an action, the system checks the corresponding lock.
+
+### 2.6.2 How Access Control Works
+When checking access, the `access()` method on the object is called. It takes two arguments: the object attempting the action, and the name of the lock (e.g., `target_obj.access(accessing_obj, "get")`).
+
+The access check logic evaluates in this order:
+1. **Self-Targeting Restriction:** An object cannot perform `get` or `delete` on itself. Any such interaction immediately returns `False`.
+2. **Superuser Bypass:** If the accessing object is a superuser (`accessing_obj.is_superuser == True`), access is always granted (`True`).
+3. **Callable Evaluation:** If neither exception applies, the system evaluates all callables associated with the lock name.
+   - If *any* callable returns `False`, access is immediately denied (`False`).
+   - If all callables return `True` (or if there are no callables defined for the lock), access is granted (`True`).
+
+Furthermore, lock evaluation supports two different modes determined by the `settings.SLOW_LOCKS` configuration:
+- **Fast Mode:** Callables execute without acquiring the object's thread lock. This relies on the callables being thread-safe and is best for read-only conditions.
+- **Slow Mode (Default):** Callables execute inside a `with self.lock:` block, adding an extra layer of thread safety during evaluation.
+
+### 2.6.3 Managing Locks
+Use `add_lock()` to append an evaluation function to an object's locks, and `clear_locks_by_name()` to wipe them.
+
+**Example 1: Restricting an object to only be picked up by builders**
+```python
+my_obj.add_lock("get", lambda x: x.is_builder)
+```
+
+**Example 2: Restricting an object to only be wielded by a specific character**
+```python
+owner_character_id = 99
+sword.add_lock("wield", lambda player: player.id == owner_character_id)
+```
+
+### 2.6.4 Default Lock Types
+
+This is a list of the lock types currently used by the server. You can add more as needed.
+
+- "put": Can an object be put here by the caller? This is also used to see if PCs/NPCs can be put into a Node.
+- "get": Who can pick this object up?
+- "give": Who can give this object?
+- "drop": Who can drop this object?
+- "view": Who can see this object or channel?
+- "delete": Who can delete this object?
+- "open": Who can open this object?
+- "close": Who can close this object?
+- "lock": Who can lock this object?
+- "unlock": Who can unlock this object?
+- "send": Who can send a message on this channel?
+
 [Table of Contents](./table_of_contents.md) | [Next: 03 Command System](./03_command_system.md)
