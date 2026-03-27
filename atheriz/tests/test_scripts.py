@@ -256,6 +256,7 @@ def test_has_script_type():
     script1 = DummyBeforeScript.create(None, "Script1")
     script2 = DummyAfterScript.create(None, "Script2")
     
+    assert obj.has_script_type("bleh") is False
     obj.add_script(script1)
     
     # Check absolute name
@@ -275,3 +276,39 @@ def test_has_script_type():
     obj.add_script(script2)
     assert obj.has_script_type("DummyAfterScript") is True
     assert obj.has_script_type("After") is True
+
+
+def test_get_scripts_by_type():
+    obj = DummyObj.create(None, "TestObj")
+    script1 = DummyBeforeScript.create(None, "Script1")
+    script2 = DummyAfterScript.create(None, "Script2")
+    script3 = DummyBeforeScript.create(None, "Script3")
+    
+    assert obj.get_scripts_by_type("bleh") == []
+    
+    obj.add_script(script1)
+    
+    # Exact name
+    assert obj.get_scripts_by_type("DummyBeforeScript") == [script1]
+    
+    # Check case variations
+    assert obj.get_scripts_by_type("dummybeforescript") == [script1]
+    assert obj.get_scripts_by_type("DUMMYBEFORESCRIPT") == [script1]
+    
+    # Check substring
+    assert obj.get_scripts_by_type("Before") == [script1]
+    
+    # Missing type check
+    assert obj.get_scripts_by_type("DummyAfterScript") == []
+    assert obj.get_scripts_by_type("After") == []
+    
+    obj.add_script(script2)
+    assert obj.get_scripts_by_type("DummyAfterScript") == [script2]
+    assert obj.get_scripts_by_type("After") == [script2]
+
+    # Multiple scripts of the same type
+    obj.add_script(script3)
+    returned_scripts = obj.get_scripts_by_type("Before")
+    assert len(returned_scripts) == 2
+    assert script1 in returned_scripts
+    assert script3 in returned_scripts

@@ -191,14 +191,14 @@ class Object(Flags, DbOps, AccessLock):
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)
-            
+
     def has_script_type(self, script_type: str) -> bool:
         """
         Check if this object has a script of the given type.
         It checks the class name of all the attached scripts.
 
         Args:
-            script_type (str): Class name of the script to check for, can be partial, case-insensitive.
+            script_type (str): Class name of the script to check for, can be partial. (case-insensitive)
 
         Returns:
             bool: True if the object has a script of the given type, False otherwise.
@@ -211,6 +211,30 @@ class Object(Flags, DbOps, AccessLock):
                 for script_id in self.scripts
                 if (scripts := get(script_id))
             )
+            
+    def get_scripts_by_type(self, script_type: str) -> list[Script]:
+        """
+        Get all scripts of a specific type attached to this object.
+
+        Args:
+            script_type (str): Class name of the script to check for, can be partial. (case-insensitive)
+
+        Returns:
+            list[Script]: A list of Script objects matching the given type.
+        """
+        matching_scripts = []
+        with self.lock:
+            if not self.scripts:
+                return matching_scripts
+            
+            for script_id in self.scripts:
+                if (scripts := get(script_id)):
+                    script = scripts[0]
+                    if script_type.lower() in script.__class__.__name__.lower():
+                        matching_scripts.append(script)
+                        
+        return matching_scripts
+
     def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
         """Delete this object. If recursive, delete contents recursively.
         If not, move contents to container location.

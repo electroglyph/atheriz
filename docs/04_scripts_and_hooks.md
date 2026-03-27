@@ -96,4 +96,8 @@ Assigning scripts to target objects utilizes standard API methods:
 Checking for scripts is done using the `has_script_type()` method:
 - `object.has_script_type(script_type)`
 
+### 4.3.4 Getting Scripts by Type
+Getting scripts of a specific type is done using the `get_scripts_by_type()` method:
+- `object.get_scripts_by_type(script_type)`
+
 [Table of Contents](./table_of_contents.md) | [Next: 05 Persistence](./05_persistence.md)

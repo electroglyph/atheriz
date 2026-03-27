@@ -51,10 +51,22 @@ Check if this object has a script of the given type.
 It checks the class name of all the attached scripts.
 
 Args:
-    script_type (str): Class name of the script to check for, can be partial, case-insensitive.
+    script_type (str): Class name of the script to check for, can be partial. (case-insensitive)
 
 Returns:
     bool: True if the object has a script of the given type, False otherwise.
+
+
+
+#### `def get_scripts_by_type(self, script_type)`
+
+Get all scripts of a specific type attached to this object.
+
+Args:
+    script_type (str): Class name of the script to check for, can be partial. (case-insensitive)
+
+Returns:
+    list[Script]: A list of Script objects matching the given type.
 
 
 
