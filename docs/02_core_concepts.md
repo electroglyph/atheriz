@@ -139,7 +139,7 @@ foo.bar['key'] = "new_value"  # NOT THREAD-SAFE! May corrupt data and will fail 
 ### 2.5.4 Understanding RLocks (`self.lock`)
 Every standard entity (`Object`, `Node`, `Account`, etc.) initializes with `self.lock = RLock()` from Python's `threading` library. A Reentrant Lock (RLock) means that the same thread can acquire the lock multiple times without deadlocking itself. If your custom method acquires `self.lock`, and then calls another method on the same object that also acquires `self.lock`, execution proceeds safely. However, modifying or moving *multiple* objects simultaneously requires locking every object involved in a consistent order to prevent deadlocks (see `sort_locks` inside `Object.move_to()`).
 
-## 2.6 Access Control and Locks
+## 2.6 Access Control
 
 ### 2.6.1 The AccessLock Class
 Atheriz provides an access control system built into objects via the `AccessLock` class. This allows you to restrict which objects (typically players or NPCs) can perform certain actions on an object.
