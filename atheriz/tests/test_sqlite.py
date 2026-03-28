@@ -24,9 +24,23 @@ def test_save_load_object(db_setup):
     obj_id = obj.id
     obj.is_modified = True # Ensure it gets saved
     
+    # Create a temporary object
+    temp_obj = Object.create(None, "Temp Object", "A temp object")
+    temp_obj_id = temp_obj.id
+    temp_obj.is_temporary = True
+    temp_obj.is_modified = True # Ensure it would get saved if not temporary
+
     # Save objects to DB
     save_objects()
     
+    # Verify temp object is not in DB
+    db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT count(*) FROM objects WHERE id=?", (temp_obj_id,))
+    assert cursor.fetchone()[0] == 0
+    conn.close()
+
     # Clear memory
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
@@ -38,6 +52,10 @@ def test_save_load_object(db_setup):
     assert len(loaded_obj) == 1
     assert loaded_obj[0].name == "Test Object"
     assert loaded_obj[0].desc == "A test object"
+    
+    # Temp object shouldn't be loaded
+    loaded_temp = get(temp_obj_id)
+    assert len(loaded_temp) == 0
 
 def test_delete_object(db_setup, superuser):
     # Create an object

@@ -54,4 +54,14 @@ class ExitCommand(Command):
                     return
                 else:
                     return
+        if c.following is not None:
+            leader = get(c.following)
+            if leader:
+                with leader[0].lock:
+                    leader[0].followers.discard(c.id)
+                if c.access(leader[0], "view"):
+                    leader[0].msg(f"{c.get_display_name(leader[0])} is no longer following you.")
+                if leader[0].access(c, "view"):
+                    c.msg(f"You are no longer following {leader[0].get_display_name(c)}.")
+            c.following = None
         c.move_to(dest, self.name)

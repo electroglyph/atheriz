@@ -108,7 +108,7 @@ def save_objects(force: bool = False):
     db = get_database()
     cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
-        snapshot = list(_ALL_OBJECTS.values())
+        snapshot = list(o for o in _ALL_OBJECTS.values() if not getattr(o, "is_temporary", False))
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         cursor.execute("BEGIN TRANSACTION")

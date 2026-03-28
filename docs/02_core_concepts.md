@@ -178,7 +178,7 @@ sword.add_lock("wield", lambda player: player.id == owner_character_id)
 
 This is a list of the lock types currently used by the server. You can add more as needed.
 
-- "put": Can an object be put here by the caller? This is also used to see if PCs/NPCs can be put into a Node.
+- "put": Can an object be put here by the caller?
 - "get": Who can pick this object up?
 - "give": Who can give this object?
 - "drop": Who can drop this object?
@@ -189,5 +189,7 @@ This is a list of the lock types currently used by the server. You can add more 
 - "lock": Who can lock this object?
 - "unlock": Who can unlock this object?
 - "send": Who can send a message on this channel?
+- "enter": Who can enter this node?
+- "exit": Who can exit this node?
 
 [Table of Contents](./table_of_contents.md) | [Next: 03 Command System](./03_command_system.md)

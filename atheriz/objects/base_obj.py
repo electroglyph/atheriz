@@ -101,6 +101,9 @@ class Object(Flags, DbOps, AccessLock):
         # list of channel ids subscribed to
         self.channels: list[int] = []
         self.session: Session | None = None
+        self.no_follow: bool = False
+        self.following: int | None = None
+        self.followers: set[int] = set()
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -820,7 +823,11 @@ class Object(Flags, DbOps, AccessLock):
         Returns:
             bool: True if the move should proceed, False to abort.
         """
-        return destination.access(self, "put") if destination else True
+        if self.location and not self.location.access(self, "exit"):
+            return False
+        if destination and not destination.access(self, "enter"):
+            return False
+        return True
 
     @hookable
     def at_post_move(
@@ -975,7 +982,12 @@ class Object(Flags, DbOps, AccessLock):
         """
         if self.is_pc and not self.is_connected:
             return f"{self.name} (offline)"
-        return self.name
+        if self.access(looker, "view"):
+            return self.name
+        else:
+            if self.is_pc or self.is_npc:
+                return "Someone"
+            return "Something"
 
     def get_display_desc(self, looker: Object | None = None, **kwargs) -> str:
         """
