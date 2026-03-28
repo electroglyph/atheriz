@@ -129,7 +129,7 @@ def test_move_into_object_with_lock():
     item = Object.create(None, "Gold", is_item=True)
     
     # Add a lock that always fails
-    container.add_lock("put", lambda x: False)
+    container.add_lock("enter", lambda x: False)
     
     success = item.move_to(container)
     assert success is False
