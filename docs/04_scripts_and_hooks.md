@@ -87,16 +87,25 @@ class StrengthBuff(Script):
             return
 ```
 
-### 4.3.2 Attaching and Removing Scripts
+### 4.3.2 Real World Example: The Follow Script
+
+For a practical example of custom script usage, see [`atheriz/commands/loggedin/follow.py`](../atheriz/commands/loggedin/follow.py). 
+
+The `FollowScript` showcases two very important script concepts:
+
+- **The `self.is_temporary` flag**: By setting `self.is_temporary = True` in the `__init__` method, you instruct the engine *not* to persist this script to the database. It only lives in memory and will be cleared upon a server restart.
+- **The `self.child` reference**: During hook execution, `self.child` provides a direct reference to the parent `Object` the script is attached to. This allows the script to neatly access or modify the object's properties natively (e.g., examining `self.child.followers` or `self.child.location`).
+
+### 4.3.3 Attaching and Removing Scripts
 Assigning scripts to target objects utilizes standard API methods:
 - `object.add_script(script_or_id)`
 - `object.remove_script(script_or_id)`
 
-### 4.3.3 Checking for Scripts
+### 4.3.4 Checking for Scripts
 Checking for scripts is done using the `has_script_type()` method:
 - `object.has_script_type(script_type)`
 
-### 4.3.4 Getting Scripts by Type
+### 4.3.5 Getting Scripts by Type
 Getting scripts of a specific type is done using the `get_scripts_by_type()` method:
 - `object.get_scripts_by_type(script_type)`
 
