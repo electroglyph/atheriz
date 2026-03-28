@@ -124,8 +124,9 @@ class Channel(Flags, DbOps, AccessLock):
         del unused
         if not self.at_delete(caller):
             return False
-        ops = [self.get_del_ops()]
-        delete_objects(ops)
+        if not self.is_temporary:
+            ops = [self.get_del_ops()]
+            delete_objects(ops)
         remove_object(self)
         self.is_deleted = True
         return True

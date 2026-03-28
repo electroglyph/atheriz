@@ -262,7 +262,8 @@ class Object(Flags, DbOps, AccessLock):
                 obj.session.account.remove_character(obj)
                 obj.session.connection.close()
             obj.is_deleted = True
-            ops.append(obj.get_del_ops())
+            if not obj.is_temporary:
+                ops.append(obj.get_del_ops())
             remove_object(obj)
 
         def _delete_recursive(obj: Object):

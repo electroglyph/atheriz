@@ -120,9 +120,9 @@ class Script(Flags, DbOps):
             if self.id in self.child.scripts:
                 self.child.scripts.remove(self.id)
                 self.child.is_modified = True
-
-        ops = [self.get_del_ops()]
-        delete_objects(ops)
+        if not self.is_temporary:
+            ops = [self.get_del_ops()]
+            delete_objects(ops)
         remove_object(self)
         return True
 
