@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "atheriz"
-version = "0.5.7"
+version = "0.5.8"
 maintainers = [{ name = "electroglyph", email = "electroglyph@gmail.com" }]
 description = "A server for text-based multiplayer games (MUDs, MU*, etc)."
 requires-python = ">=3.13"
@@ -99,4 +99,4 @@ atheriz = "atheriz.atheriz:main"
 
 
 [tool.black]
-line-length = 100
+line-length = 120

@@ -104,6 +104,8 @@ class Object(Flags, DbOps, AccessLock):
         self.no_follow: bool = False
         self.following: int | None = None
         self.followers: set[int] = set()
+        # this won't be saved:
+        self.group_channel: int | None = None
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
 
@@ -366,6 +368,7 @@ class Object(Flags, DbOps, AccessLock):
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
+        object.__setattr__(self, "group_channel", None)
         object.__setattr__(self, "hooks", {})
         # call __setstate__ for all parent classes
         mro = type(self).mro()
@@ -983,6 +986,8 @@ class Object(Flags, DbOps, AccessLock):
         """
         if self.is_pc and not self.is_connected:
             return f"{self.name} (offline)"
+        if not looker:
+            return self.name
         if self.access(looker, "view"):
             return self.name
         else:

@@ -37,6 +37,7 @@ from atheriz.commands.loggedin.open import UnlockCommand
 from atheriz.commands.loggedin.noun import NounCommand
 from atheriz.commands.loggedin.py import PyCommand
 from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand
+from atheriz.commands.loggedin.group import GroupCommand
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -82,3 +83,4 @@ class LoggedinCmdSet(CmdSet):
         self.add(PyCommand())
         self.add(FollowCommand())
         self.add(NoFollowCommand())
+        self.add(GroupCommand())

@@ -47,14 +47,12 @@ class FollowCommand(Command):
         )
 
     # pyrefly: ignore
-    def run(self, caller: "Object", args):
+    def run(self, caller: Object, args):
         if not args or not args.target:
             caller.msg("Follow who?")
             return
 
         target_name = args.target
-
-        # Search for the object
         matches = caller.search(target_name)
         if not matches:
             loc = caller.location
@@ -83,13 +81,12 @@ class FollowCommand(Command):
         if caller.following == target.id:
             caller.msg(f"You are already following {target.name}!")
             return
-        with caller.lock:
-            caller.following = target.id
+        caller.following = target.id
         with target.lock:
             target.followers.add(caller.id)
-            if not target.get_scripts_by_type("FollowScript"):
-                s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
-                target.add_script(s)
+        if not target.get_scripts_by_type("FollowScript"):
+            s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
+            target.add_script(s)
         loc = caller.location
         if loc and target.access(caller, "view"):
             loc.msg_contents(
@@ -105,6 +102,7 @@ class NoFollowCommand(Command):
     category = "General"
     desc = "Disallow others from following you."
     use_parser = False
+    extra_desc = "Nofollow is a toggle. Use it to allow or disallow others from following you. Anybody who is following you will immediately stop following you when you use this command."
 
     # pyrefly: ignore
     def run(self, caller: Object, args):

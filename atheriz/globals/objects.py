@@ -7,6 +7,9 @@ from typing import Any, Callable, TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+    from atheriz.objects.base_channel import Channel
+    from atheriz.objects.base_script import Script
+    from atheriz.objects.base_account import Account
 
 _IGNORE_FILES = [
     "salt.txt",
@@ -65,14 +68,14 @@ def get(ids: int | Iterable[int]) -> list[Any]:
         return [r for id in ids if (r := _ALL_OBJECTS.get(id)) is not None]
 
 
-def add_object(obj: Object) -> None:
+def add_object(obj: Object | Channel | Script | Account) -> None:
     """Add an object to the global object registry."""
     global _ALL_OBJECTS
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS[obj.id] = obj
 
 
-def remove_object(obj: Object) -> None:
+def remove_object(obj: Object | Channel | Script | Account) -> None:
     """Remove an object from the global object registry."""
     global _ALL_OBJECTS
     with _ALL_OBJECTS_LOCK:

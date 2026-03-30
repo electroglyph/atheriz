@@ -91,6 +91,7 @@ class Channel(Flags, DbOps, AccessLock):
         self.name: str = ""
         self.desc: str = ""
         self.id: int = -1
+        self.created_by: int = -1
         self.command: Command | None = None
         self.history: deque[tuple[int, str, str]] = deque(maxlen=settings.CHANNEL_HISTORY_LIMIT)
         self.listeners: dict[int, Object] = {}
@@ -99,13 +100,14 @@ class Channel(Flags, DbOps, AccessLock):
             ensure_thread_safe(self)
 
     @classmethod
-    def create(cls, name: str) -> "Channel":
+    def create(cls, name: str, caller: Object | None = None) -> "Channel":
         results = filter_by(lambda x: x.is_channel and x.name == name)
         if results:
             raise ValueError(f"Channel {name} already exists.")
         c = cls()
         c.name = name
         c.id = get_unique_id()
+        c.created_by = caller.id if caller else -1
         add_object(c)
         c.at_create()
         return c
