@@ -358,12 +358,17 @@ class Object(Flags, DbOps, AccessLock):
                     state["home"] = home.coord
                 else:
                     state["home"] = home.id
+            # Store as plain int to avoid dill recursion on IntEnum metaclass
+            state["privilege_level"] = int(state["privilege_level"])
 
             return state
 
     def __setstate__(self, state):
         # this object.__setattr__ bullshit is for bypassing the thread-safety patch
         object.__setattr__(self, "lock", RLock())
+        # Restore privilege_level as the proper IntEnum member
+        if "privilege_level" in state:
+            state["privilege_level"] = settings.Privilege(state["privilege_level"])
         self.__dict__.update(state)
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))

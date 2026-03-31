@@ -55,6 +55,20 @@ def test_object_serialization():
     assert object.__getattribute__(deserialized, "custom_ref").nested.value == 123
     assert isinstance(object.__getattribute__(deserialized, "custom_ref"), CustomData)
 
+def test_privilege_level_serialization():
+    import atheriz.settings as settings
+    for level in settings.Privilege:
+        obj = Object()
+        obj.id = 1
+        obj.privilege_level = level
+
+        serialized = dill.dumps(obj)
+        deserialized = dill.loads(serialized)
+
+        restored = object.__getattribute__(deserialized, "privilege_level")
+        assert restored == level, f"Value mismatch for {level}: got {restored}"
+        assert type(restored) is settings.Privilege, f"Type mismatch for {level}: got {type(restored)}"
+
 def test_account_serialization():
     acc = Account()
     acc.id = 200
