@@ -28,6 +28,7 @@ import os
 import sys
 import importlib
 
+
 # global state
 class ServerState:
     def __init__(self):
@@ -39,11 +40,12 @@ server_state = ServerState()
 
 app = FastAPI(title=settings.SERVERNAME)
 
+
 def setup_protocols():
     """Register all active protocols defined in settings."""
-    protocols = getattr(settings, "NETWORK_PROTOCOLS", [
-        "atheriz.network.websocket.WebSocketProtocol"
-    ])
+    protocols = getattr(
+        settings, "NETWORK_PROTOCOLS", ["atheriz.network.websocket.WebSocketProtocol"]
+    )
     for proto_path in protocols:
         try:
             mod_name, class_name = proto_path.rsplit(".", 1)
@@ -54,6 +56,7 @@ def setup_protocols():
         except Exception as e:
             print(f"Failed to register protocol {proto_path}: {e}")
             traceback.print_exc()
+
 
 setup_protocols()
 
@@ -85,21 +88,22 @@ def setup_game_folder(required=True):
     import sys
     import os
     import importlib
-    
+
     from atheriz.utils import is_in_game_folder
-    
+
     # check if we are in a game folder (looks for settings.py, save directory, and __init__.py)
     cwd = Path.cwd()
     if not is_in_game_folder():
         if required:
-            print("Error: This command must be run from a game folder (containing settings.py, save/, and __init__.py).")
+            print(
+                "Error: This command must be run from a game folder (containing settings.py, save/, and __init__.py)."
+            )
             print(f"Current directory: {cwd}")
             sys.exit(1)
         return False
 
-
     print(f"Game folder detected at {cwd}. Injecting custom classes and settings...")
-    
+
     parent_dir = str(cwd.parent.resolve())
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
@@ -107,7 +111,7 @@ def setup_game_folder(required=True):
 
     if str(cwd) not in sys.path:
         sys.path.insert(0, str(cwd))
-    
+
     try:
         local_settings = importlib.import_module(f"{pkg_name}.settings")
         # override values in atheriz.settings
@@ -118,6 +122,7 @@ def setup_game_folder(required=True):
     except (ImportError, ModuleNotFoundError):
         try:
             import settings as local_settings
+
             # override values in atheriz.settings
             for key in dir(local_settings):
                 if key.isupper():
@@ -153,7 +158,6 @@ def setup_game_folder(required=True):
         except Exception as e:
             print(f"  - Error injecting {cls_name}: {e}")
 
-
     # check if the game folder has a web/ directory to override templates and static files
     global templates_dir, static_dir, templates
     game_web = cwd / "web"
@@ -171,16 +175,14 @@ def setup_game_folder(required=True):
     return True
 
 
-
-
 @app.get("/", response_class=HTMLResponse)
 async def read_root(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/webclient/index.html", response_class=HTMLResponse)
 async def read_webclient(request: Request):
-    return templates.TemplateResponse("webclient/index.html", {"request": request})
+    return templates.TemplateResponse(request, "webclient/index.html")
 
 
 @app.post("/_internal/hot_reload")
@@ -391,7 +393,9 @@ def request_internal_shutdown(port: int | None = None) -> bool:
     except (urllib.error.URLError, Exception):
         pass
 
-    print("Could not contact server for graceful shutdown (server might be hung or stopped).")
+    print(
+        "Could not contact server for graceful shutdown (server might be hung or stopped)."
+    )
     return False
 
 
@@ -472,7 +476,11 @@ def stop_server(port: int | None = None):
 
                     print(" Done.")
                     return
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
+                except (
+                    psutil.NoSuchProcess,
+                    psutil.AccessDenied,
+                    psutil.ZombieProcess,
+                ):
                     pass
         print("No server process found.")
     except Exception as e:
@@ -484,7 +492,9 @@ def stop_server(port: int | None = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="AtheriZ - Text-based multiplayer game server")
+    parser = argparse.ArgumentParser(
+        description="AtheriZ - Text-based multiplayer game server"
+    )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
@@ -499,7 +509,10 @@ def main():
         "--host", type=str, default=None, help="Override the host interface to bind to"
     )
     start_parser.add_argument(
-        "--foreground", "-f", action="store_true", help="Run the server in the foreground"
+        "--foreground",
+        "-f",
+        action="store_true",
+        help="Run the server in the foreground",
     )
 
     restart_parser = subparsers.add_parser("restart", help="Restart the AtheriZ server")
@@ -513,7 +526,10 @@ def main():
         "--host", type=str, default=None, help="Override the host interface to bind to"
     )
     restart_parser.add_argument(
-        "--foreground", "-f", action="store_true", help="Run the server in the foreground"
+        "--foreground",
+        "-f",
+        action="store_true",
+        help="Run the server in the foreground",
     )
 
     stop_parser = subparsers.add_parser("stop", help="Stop the AtheriZ server")
@@ -532,15 +548,23 @@ def main():
         help=f"Override default port (default: {settings.WEBSERVER_PORT})",
     )
 
-    reset_parser = subparsers.add_parser("reset", help="Delete all game data and start fresh")
-    reset_parser.add_argument("-f", "--force", action="store_true", help="Skip confirmation prompt")
+    reset_parser = subparsers.add_parser(
+        "reset", help="Delete all game data and start fresh"
+    )
+    reset_parser.add_argument(
+        "-f", "--force", action="store_true", help="Skip confirmation prompt"
+    )
 
-    create_parser = subparsers.add_parser("create", help="Create a new account and character")
+    create_parser = subparsers.add_parser(
+        "create", help="Create a new account and character"
+    )
     create_parser.add_argument("accountname", help="Name of the account")
     create_parser.add_argument("charactername", help="Name of the character")
     create_parser.add_argument("password", help="Password for the account")
 
-    new_parser = subparsers.add_parser("new", help="Create a new game folder with template classes")
+    new_parser = subparsers.add_parser(
+        "new", help="Create a new game folder with template classes"
+    )
     new_parser.add_argument("foldername", help="Name of the folder to create")
     new_parser.add_argument(
         "--port",
@@ -552,12 +576,18 @@ def main():
         "--host", type=str, default=None, help="Override the host interface to bind to"
     )
     new_parser.add_argument(
-        "--foreground", "-f", action="store_true", help="Run the server in the foreground"
+        "--foreground",
+        "-f",
+        action="store_true",
+        help="Run the server in the foreground",
     )
 
-    test_parser = subparsers.add_parser("test", help="Run tests with local game objects")
-    test_parser.add_argument("pytest_args", nargs=argparse.REMAINDER, help="Additional arguments for pytest")
-
+    test_parser = subparsers.add_parser(
+        "test", help="Run tests with local game objects"
+    )
+    test_parser.add_argument(
+        "pytest_args", nargs=argparse.REMAINDER, help="Additional arguments for pytest"
+    )
 
     args = parser.parse_args()
 
@@ -630,17 +660,18 @@ def main():
     elif args.command == "new":
         import os
         from atheriz.new import create_game_folder
+
         create_game_folder(args.foldername)
-        
+
         print(f"\nChanging directory to '{args.foldername}'...")
         os.chdir(args.foldername)
-        
+
         if args.port:
             settings.WEBSERVER_PORT = args.port
         if args.host:
             settings.WEBSERVER_INTERFACE = args.host
             settings.TELNET_INTERFACE = args.host
-            
+
         print("Starting server...")
         if args.foreground:
             start_server()
@@ -649,7 +680,6 @@ def main():
     elif args.command == "test":
         do_test_command(args)
     else:
-
         parser.print_help()
 
 
@@ -702,7 +732,9 @@ def spawn_daemon(args):
     # open log file for append
     with open(log_file, "a") as f:
         # spawn process
-        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs)
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs
+        )
 
     print(f"Server started with PID: {proc.pid}")
 
@@ -727,7 +759,6 @@ def create_game_data(args):
         save_path.mkdir(parents=True)
     load_objects()
     at_char_create(args.accountname, args.charactername, args.password)
-
 
 
 def do_reload_command(args):
@@ -800,14 +831,14 @@ def do_reset_command(args):
     save_path.mkdir(parents=True)
 
     print("Setting up new world...")
-    
+
     # Try to use local initial_setup.py if it exists
     cwd = Path.cwd()
     parent_dir = str(cwd.parent.resolve())
     if parent_dir not in sys.path:
         sys.path.insert(0, parent_dir)
     pkg_name = cwd.name
-    
+
     try:
         local_setup = importlib.import_module(f"{pkg_name}.initial_setup")
         importlib.reload(local_setup)
@@ -818,6 +849,7 @@ def do_reset_command(args):
         sys.path.insert(0, str(cwd))
         try:
             import initial_setup as local_setup
+
             importlib.reload(local_setup)
             local_setup.do_setup()
             print("  - Used local initial_setup.py")
@@ -825,7 +857,6 @@ def do_reset_command(args):
             print("  - local initial_setup.py not found, using default.")
             initial_setup.do_setup()
 
-    
     print("Success! New world created.")
 
     if not hasattr(args, "port"):
@@ -853,13 +884,13 @@ def do_test_command(args):
         sys.exit(1)
 
     print(f"Running core tests from {test_path}...")
-    
+
     # 3. Run pytest
     # We pass the rest of the arguments to pytest
     pytest_args = ["-W", "ignore::pytest.PytestAssertRewriteWarning", str(test_path)]
     if args.pytest_args:
         pytest_args.extend(args.pytest_args)
-    
+
     sys.exit(pytest.main(pytest_args))
 
 
