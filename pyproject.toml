@@ -58,6 +58,7 @@ classifiers = [
   "Topic :: Internet :: WWW/HTTP :: WSGI :: Server",
 ]
 dependencies = [
+  "starlette>=1.0.0",
   "pytest",
   "fastapi",
   "uvicorn",
