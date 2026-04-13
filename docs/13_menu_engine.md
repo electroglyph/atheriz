@@ -1,6 +1,6 @@
 # 13 The Menu Engine
 
-Atheriz provides a simple, stateful `MenuEngine` for creating interactive, multi-step menus. The engine is designed to handle user inputs asynchronously in the background to avoid blocking the main server loop.
+Atheriz provides a simple, stateful `MenuEngine` for creating interactive, multi-step menus.
 
 ## 13.1 Core Components
 
