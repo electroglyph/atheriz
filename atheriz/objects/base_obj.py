@@ -88,7 +88,7 @@ class Object(Flags, DbOps, AccessLock):
         self.location = None
         self.home = None
         self._contents: set[int] = set()
-        self.privilege_level = 0
+        self.privilege_level = settings.Privilege.Guest
         self.created_by = -1
         self.last_touched_by = -1
         self._tick_seconds = settings.DEFAULT_TICK_SECONDS
@@ -216,7 +216,7 @@ class Object(Flags, DbOps, AccessLock):
                 for script_id in self.scripts
                 if (scripts := get(script_id))
             )
-            
+
     def get_scripts_by_type(self, script_type: str) -> list[Script]:
         """
         Get all scripts of a specific type attached to this object.
@@ -231,13 +231,13 @@ class Object(Flags, DbOps, AccessLock):
         with self.lock:
             if not self.scripts:
                 return matching_scripts
-            
+
             for script_id in self.scripts:
-                if (scripts := get(script_id)):
+                if scripts := get(script_id):
                     script = scripts[0]
                     if script_type.lower() in script.__class__.__name__.lower():
                         matching_scripts.append(script)
-                        
+
         return matching_scripts
 
     def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
@@ -378,11 +378,7 @@ class Object(Flags, DbOps, AccessLock):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (
-                i
-                for i, c in enumerate(mro)
-                if c.__module__ == "atheriz.objects.base_obj" and c.__qualname__ == "Object"
-            ),
+            (i for i, c in enumerate(mro) if c.__module__ == "atheriz.objects.base_obj" and c.__qualname__ == "Object"),
             len(mro),
         )
         ancestors = mro[current_idx + 1 :]
@@ -806,11 +802,7 @@ class Object(Flags, DbOps, AccessLock):
             # director-stance replacements
             outmessage = outmessage.format_map(
                 {
-                    key: (
-                        obj.get_display_name(looker=receiver)
-                        if hasattr(obj, "get_display_name")
-                        else str(obj)
-                    )
+                    key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
                     for key, obj in mapping.items()
                 }
             )
@@ -818,9 +810,7 @@ class Object(Flags, DbOps, AccessLock):
             receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
     @hookable
-    def at_pre_move(
-        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
-    ) -> bool:
+    def at_pre_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
         """
         Called before moving the object. Evaluates the destination's access locks.
 
@@ -839,9 +829,7 @@ class Object(Flags, DbOps, AccessLock):
         return True
 
     @hookable
-    def at_post_move(
-        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
-    ) -> None:
+    def at_post_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
         """
         Called after moving the object successfully completes.
 
@@ -929,11 +917,7 @@ class Object(Flags, DbOps, AccessLock):
             return True
 
         # from_exit is NodeLink | None
-        reverse_link = (
-            get_reverse_link(loc, destination)
-            if (loc and loc.is_node and destination.is_node)
-            else None
-        )
+        reverse_link = get_reverse_link(loc, destination) if (loc and loc.is_node and destination.is_node) else None
         from_exit = reverse_link.name if reverse_link else None
 
         def do_move():
@@ -1161,9 +1145,7 @@ class Object(Flags, DbOps, AccessLock):
         )
 
     @hookable
-    def at_msg_receive(
-        self, text: str | None = None, from_obj: Object | None = None, **kwargs
-    ) -> bool:
+    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs) -> bool:
         """
         Called when this object is about to receive an arbitrary string message.
         Returning False aborts the message delivery.
@@ -1358,9 +1340,7 @@ class Object(Flags, DbOps, AccessLock):
             # whisper mode
             msg_type = "whisper"
             msg_self = (
-                '{self} whisper to {all_receivers}, "\x1b[1;37m{speech}\x1b[0m"'
-                if msg_self is True
-                else msg_self
+                '{self} whisper to {all_receivers}, "\x1b[1;37m{speech}\x1b[0m"' if msg_self is True else msg_self
             )
             msg_receivers = msg_receivers or '{object} whispers: "\x1b[1;37m{speech}\x1b[0m"'
             msg_location = None
@@ -1379,15 +1359,14 @@ class Object(Flags, DbOps, AccessLock):
                 "object": self.get_display_name(self),
                 "location": location.get_display_name(self) if location else None,
                 "receiver": None,
-                "all_receivers": (
-                    ", ".join(recv.get_display_name(self) for recv in receivers)
-                    if receivers
-                    else None
-                ),
+                "all_receivers": (", ".join(recv.get_display_name(self) for recv in receivers) if receivers else None),
                 "speech": message,
             }
             self_mapping.update(custom_mapping)
-            self.msg(text=(msg_self.format_map(self_mapping), {"type": msg_type}), from_obj=self)
+            self.msg(
+                text=(msg_self.format_map(self_mapping), {"type": msg_type}),
+                from_obj=self,
+            )
 
         if receivers and msg_receivers:
             receiver_mapping = {
@@ -1404,15 +1383,16 @@ class Object(Flags, DbOps, AccessLock):
                     "location": location.get_display_name(receiver),
                     "receiver": receiver.get_display_name(receiver),
                     "all_receivers": (
-                        ", ".join(recv.get_display_name(recv) for recv in receivers)
-                        if receivers
-                        else None
+                        ", ".join(recv.get_display_name(recv) for recv in receivers) if receivers else None
                     ),
                 }
                 receiver_mapping.update(individual_mapping)
                 receiver_mapping.update(custom_mapping)
                 receiver.msg(
-                    text=(msg_receivers.format_map(receiver_mapping), {"type": msg_type}),
+                    text=(
+                        msg_receivers.format_map(receiver_mapping),
+                        {"type": msg_type},
+                    ),
                     from_obj=self,
                 )
 
