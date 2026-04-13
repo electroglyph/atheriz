@@ -1,9 +1,12 @@
 from importlib import metadata
 from atheriz.globals.objects import filter_by
 from typing import TYPE_CHECKING
+import atheriz.settings as settings
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+
+GUEST_TEXT = "enter 'guest' to create a temporary character" if settings.GUEST_ENABLED else ""
 
 SCREEN = r"""
    _____   __  .__                 .____________
@@ -20,6 +23,7 @@ SCREEN = r"""
 
 enter 'sr' for screenreader mode
 enter 'connect <account> <password>' to login
+{GUEST_TEXT}
 """
 
 SCREEN2 = r"""
@@ -30,6 +34,7 @@ SCREEN2 = r"""
 
 enter 'sr' for screenreader mode
 enter 'connect <account> <password>' to login
+{GUEST_TEXT}
 """
 
 
@@ -42,8 +47,14 @@ def render(session=None):
     online = get_online()
     if session and session.screenreader:
         return SCREEN2.format(
-            version=metadata.version("atheriz"), known=f"{online[1]}", online=f"{online[0]}"
+            version=metadata.version("atheriz"),
+            known=f"{online[1]}",
+            online=f"{online[0]}",
+            GUEST_TEXT=GUEST_TEXT,
         )
     return SCREEN.format(
-        version=metadata.version("atheriz"), known=f"{online[1]}", online=f"{online[0]}"
+        version=metadata.version("atheriz"),
+        known=f"{online[1]}",
+        online=f"{online[0]}",
+        GUEST_TEXT=GUEST_TEXT,
     )

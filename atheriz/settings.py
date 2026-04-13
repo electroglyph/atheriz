@@ -33,8 +33,7 @@ class Privilege(IntEnum):
     Admin = auto()
 
 
-# TODO:
-# GUEST_ENABLED = True
+GUEST_ENABLED = True
 FUNCPARSER_START_CHAR = "$"
 FUNCPARSER_ESCAPE_CHAR = "\\"
 FUNCPARSER_MAX_NESTING = 20

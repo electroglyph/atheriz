@@ -26,5 +26,7 @@ Welcome to the Atheriz documentation. Atheriz is a Python framework built for cr
     *Understanding concurrency, worker threads, and fire-and-forget execution.*
 12. **[12 The Webclient](./12_webclient.md)**  
     *Internal "colon" commands and the server-to-client WebSocket protocol.*
-13. **[13 API Reference](./13_api_reference.md)**  
+13. **[13 The Menu Engine](./13_menu_engine.md)**  
+    *Creating interactive text menus using MenuEngine, Nodes, Choices, and Context.*
+14. **[14 API Reference](./14_api_reference.md)**  
     *Auto-generated documentation outlining public classes, methods, and functions.*

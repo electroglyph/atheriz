@@ -73,4 +73,4 @@ The client also sends commands back to the server:
 - **`screenreader`**: Notification that the user toggled screen reader mode.
 - **`client_ready`**: Sent when the client initial load is complete.
 
-[Table of Contents](./table_of_contents.md) | [Next: 13 API Reference](./13_api_reference.md)
+[Table of Contents](./table_of_contents.md) | [Next: 13 The Menu Engine](./13_menu_engine.md)

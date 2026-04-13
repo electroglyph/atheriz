@@ -1,10 +1,10 @@
-# 13 API Reference
+# 14 API Reference
 
 [Table of Contents](./table_of_contents.md)
 
 This document provides an auto-generated reference for the public classes, methods, and functions within Atheriz.
 
-## 13.1 `atheriz.objects.base_obj`
+## 14.1 `atheriz.objects.base_obj`
 
 ### Class: `Object`
 
@@ -716,7 +716,7 @@ Returns:
 
 
 
-## 13.2 `atheriz.objects.nodes`
+## 14.2 `atheriz.objects.nodes`
 
 ### Class: `Node`
 
@@ -1120,7 +1120,7 @@ Returns:
 
 
 
-## 13.3 `atheriz.objects.base_account`
+## 14.3 `atheriz.objects.base_account`
 
 ### Class: `Account`
 
@@ -1243,11 +1243,11 @@ Returns:
 
 
 
-## 13.4 `atheriz.objects.base_channel`
+## 14.4 `atheriz.objects.base_channel`
 
 ### Class: `Channel`
 
-#### `def create(cls, name)`
+#### `def create(cls, name, caller)`
 
 
 
@@ -1333,7 +1333,7 @@ Clear all history from the channel.
 
 
 
-## 13.5 `atheriz.objects.base_script`
+## 14.5 `atheriz.objects.base_script`
 
 ### Class: `Script`
 
@@ -1396,7 +1396,7 @@ Args:
 
 
 
-## 13.6 `atheriz.commands.base_cmd`
+## 14.6 `atheriz.commands.base_cmd`
 
 ### Class: `Command`
 
@@ -1467,7 +1467,7 @@ Returns:
 
 
 
-## 13.7 `atheriz.commands.base_cmdset`
+## 14.7 `atheriz.commands.base_cmdset`
 
 ### Class: `CmdSet`
 
@@ -1543,7 +1543,7 @@ Returns:
 
 
 
-## 13.8 `atheriz.inputfuncs`
+## 14.8 `atheriz.inputfuncs`
 
 ### Class: `InputFuncs`
 
@@ -1626,7 +1626,7 @@ Args:
 
 
 
-## 13.9 `atheriz.globals.objects`
+## 14.9 `atheriz.globals.objects`
 
 ### `def filter_by(l)`
 
@@ -1690,11 +1690,11 @@ Args:
 
 
 
-## 13.10 `atheriz.globals.map`
+## 14.10 `atheriz.globals.map`
 
-## 13.11 `atheriz.globals.time`
+## 14.11 `atheriz.globals.time`
 
-## 13.12 `atheriz.utils`
+## 14.12 `atheriz.utils`
 
 ### `def is_in_game_folder()`
 
@@ -1908,7 +1908,7 @@ Returns:
 
 
 
-## 13.13 `atheriz.objects.funcparser`
+## 14.13 `atheriz.objects.funcparser`
 
 Generic function parser for functions embedded in a string, on the form
 `$funcname(*args, **kwargs)`, for example:
@@ -2465,7 +2465,7 @@ Usage: $Pron(word, [options]) - always maps to a capitalized word.
 
 
 
-## 13.14 `atheriz.settings`
+## 14.14 `atheriz.settings`
 
 ### `SAVE_PATH`
 
@@ -2545,6 +2545,11 @@ Default value: `5`
 ### `DEFAULT_TICK_SECONDS`
 
 Default value: `1.0`
+
+
+### `GUEST_ENABLED`
+
+Default value: `True`
 
 
 ### `FUNCPARSER_START_CHAR`
