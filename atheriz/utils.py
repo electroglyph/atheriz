@@ -1,3 +1,4 @@
+from random import uniform
 import re
 from random import randint
 from string import punctuation
@@ -18,11 +19,7 @@ _COLOR_REGEX = re.compile(_ANSI_COLOR)
 def is_in_game_folder() -> bool:
     """Check if the current directory is a game folder."""
     cwd = Path.cwd()
-    return (
-        (cwd / "settings.py").exists()
-        and (cwd / "save").is_dir()
-        and (cwd / "__init__.py").exists()
-    )
+    return (cwd / "settings.py").exists() and (cwd / "save").is_dir() and (cwd / "__init__.py").exists()
 
 
 def msg_all(msg: str) -> None:
@@ -247,6 +244,39 @@ def get_reverse_link(location: Node, destination: Node) -> NodeLink | None:
     return None
 
 
+def word_replace(input: str, replace_freq: float, replacement: str = "..."):
+    """Replace words in string at specified frequency
+
+    Args:
+        input (str): input string
+        replace_freq (float): 1 = 100%, .5 = 50%
+        replacement (str, optional): string to replace words with. Defaults to "...".
+    """
+    words = [w for w in input.split()]
+    for i in range(len(words)):
+        u = uniform(0.0, 1.0)
+        if u <= replace_freq:
+            words[i] = replacement
+    return " ".join(words)
+
+
+def get_points_in_sphere(
+    center: tuple[int, int, int], radius: float, ignore_center: bool = False
+) -> list[tuple[int, int, int]]:
+    cx, cy, cz = center
+    points = []
+    r2 = radius * radius
+    for x in range(cx - int(radius), cx + int(radius) + 1):
+        for y in range(cy - int(radius), cy + int(radius) + 1):
+            for z in range(cz - int(radius), cz + int(radius) + 1):
+                if ignore_center and cx == x and cy == y and cz == z:
+                    continue
+                dist_sq = (x - cx) ** 2 + (y - cy) ** 2 + (z - cz) ** 2
+                if dist_sq <= r2:
+                    points.append((x, y, z))
+    return points
+
+
 # everything below here is from Evennia (https://github.com/evennia/evennia)
 # see EVENNIA_LICENSE.txt for license (BSD-3-Clause)
 
@@ -350,10 +380,7 @@ def copy_word_case(base_word, new_word):
         maxlen = len(base_word)
         shared, excess = new_word[:maxlen], new_word[maxlen - 1 :]
         return (
-            "".join(
-                char.upper() if base_word[ic].isupper() else char.lower()
-                for ic, char in enumerate(new_word)
-            )
+            "".join(char.upper() if base_word[ic].isupper() else char.lower() for ic, char in enumerate(new_word))
             + excess
         )
 
@@ -448,11 +475,7 @@ def is_empty_method(method) -> bool:
 
         # Filter out informational opcodes like RESUME, CACHE, EXTENDED_ARG (if any)
         # We only care about actual logic.
-        meaningful_ops = [
-            i.opname
-            for i in instructions
-            if i.opname not in ("RESUME", "CACHE", "EXTENDED_ARG", "NOP")
-        ]
+        meaningful_ops = [i.opname for i in instructions if i.opname not in ("RESUME", "CACHE", "EXTENDED_ARG", "NOP")]
 
         if meaningful_ops == ["LOAD_CONST", "RETURN_VALUE"]:
             # Check if LOAD_CONST is loading None
@@ -485,9 +508,7 @@ def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
         if name.startswith("_") and name not in ALWAYS_INCLUDE:
             continue
 
-        should_include = (
-            any(name.startswith(p) for p in OVERRIDE_PATTERNS) or name in ALWAYS_INCLUDE
-        )
+        should_include = any(name.startswith(p) for p in OVERRIDE_PATTERNS) or name in ALWAYS_INCLUDE
 
         if should_include:
             sig = None

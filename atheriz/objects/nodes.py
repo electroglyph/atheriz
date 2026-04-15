@@ -160,9 +160,12 @@ class Node(Flags, AccessLock):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (i for i, c in enumerate(mro)
-             if c.__module__ == 'atheriz.objects.nodes' and c.__qualname__ == 'Node'),
-            len(mro)
+            (
+                i
+                for i, c in enumerate(mro)
+                if c.__module__ == "atheriz.objects.nodes" and c.__qualname__ == "Node"
+            ),
+            len(mro),
         )
         ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):
@@ -214,7 +217,6 @@ class Node(Flags, AccessLock):
             at.add_coro(self.at_tick, self._tick_seconds)
         else:
             at.remove_coro(self.at_tick, self._tick_seconds)
-
 
     # def pre_emit_sound(
     #     self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
@@ -298,7 +300,9 @@ class Node(Flags, AccessLock):
         """
         pass
 
-    def delete(self, caller: Object, recursive: bool = False) -> tuple[int, list] | None:
+    def delete(
+        self, caller: Object, recursive: bool = False
+    ) -> tuple[int, list] | None:
         """Delete this node.
 
         Args:
@@ -412,7 +416,7 @@ class Node(Flags, AccessLock):
         """
         with self.lock:
             return self.links.copy() if self.links else []
-        
+
     def has_link_name(self, name: str) -> bool:
         """
         Check if this node has a link with the given name.
@@ -423,7 +427,7 @@ class Node(Flags, AccessLock):
         """
         with self.lock:
             return any(link.name == name for link in self.links)
-        
+
     def get_link_by_name(self, name: str) -> NodeLink | None:
         name = name.lower()
         with self.lock:
@@ -654,7 +658,9 @@ class Node(Flags, AccessLock):
         things = filter_contents(self, lambda x: x.is_item and x.access(looker, "view"))
         thing_names = group_by_name(things, looker)
         return (
-            f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n" if thing_names else ""
+            f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n"
+            if thing_names
+            else ""
         )
 
     def get_display_characters(self, looker: Object | None = None, **kwargs) -> str:
@@ -670,7 +676,12 @@ class Node(Flags, AccessLock):
         """
         if not looker:
             return ""
-        characters = filter_contents(self, lambda x: (x.is_pc or x.is_npc) and x != looker and x.access(looker, "view"))
+        characters = filter_contents(
+            self,
+            lambda x: (
+                (x.is_pc or x.is_npc) and x != looker and x.access(looker, "view")
+            ),
+        )
         character_names = group_by_name(characters, looker)
         return (
             f"{wrap_xterm256('Characters:', fg=15, bold=True)} {character_names}\n"
@@ -759,7 +770,8 @@ class Node(Flags, AccessLock):
         with self.lock:
             if looker.is_builder:
                 return wrap_truecolor(
-                    f"({self.coord[0]},{self.coord[1]},{self.coord[2]},{self.coord[3]})\n", fg=170
+                    f"({self.coord[0]},{self.coord[1]},{self.coord[2]},{self.coord[3]})\n",
+                    fg=170,
                 )
         return ""
 
@@ -789,7 +801,9 @@ class Node(Flags, AccessLock):
 
 class NodeGrid:
     # args are actually required, this is just to simplify deserialization
-    def __init__(self, area: str | None = None, z: int | None = None, data: dict | None = None):
+    def __init__(
+        self, area: str | None = None, z: int | None = None, data: dict | None = None
+    ):
         self.area: str | None = area
         self.z = z
         self.is_modified = True
@@ -842,7 +856,9 @@ class NodeGrid:
         if node.links:
             nh = get_node_handler()
             for l in node.links:
-                if self.area != l.coord[0]:  # does this have an exit leading to a different area?
+                if (
+                    self.area != l.coord[0]
+                ):  # does this have an exit leading to a different area?
                     nh.add_transition(Transition(node.coord, l.coord, l.name))
 
     def remove_node(self, coord: tuple[int, int]):
@@ -884,7 +900,9 @@ class NodeArea:
         self.grids: dict[int, NodeGrid] = {}  # {z: map}
         self.lock = RLock()
         self.data = {}
-        self.linked_areas = None  # any yells from this area will be broadcast to these areas
+        self.linked_areas = (
+            None  # any yells from this area will be broadcast to these areas
+        )
 
     def __len__(self):
         return len(self.grids)
@@ -916,6 +934,39 @@ class NodeArea:
                         n = g.nodes.get((c[0], c[1]))
                     if n:
                         result.append(n)
+        return result
+
+    def get_nodes_in_sphere(
+        self, center: tuple[int, int, int], radius: float, ignore_center: bool = False
+    ) -> list[Node]:
+        cx, cy, cz = center
+        r2 = radius * radius
+        ri = int(radius)
+        result = []
+        with self.lock:
+            for z in range(cz - ri, cz + ri + 1):
+                dz = z - cz
+                dz2 = dz * dz
+                if dz2 > r2:
+                    continue
+                g = self.grids.get(z)
+                if not g:
+                    continue
+                max_dxy2 = r2 - dz2
+                max_dxy = int(max_dxy2**0.5)
+                with g.lock:
+                    for x in range(cx - max_dxy, cx + max_dxy + 1):
+                        dx2 = (x - cx) ** 2
+                        remaining = max_dxy2 - dx2
+                        if remaining < 0:
+                            continue
+                        max_dy = int(remaining**0.5)
+                        for y in range(cy - max_dy, cy + max_dy + 1):
+                            if ignore_center and x == cx and y == cy and z == cz:
+                                continue
+                            n = g.nodes.get((x, y))
+                            if n:
+                                result.append(n)
         return result
 
     def set_data(self, key, value):
