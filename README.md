@@ -42,5 +42,6 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - make the map system less painful to use
 - sound propagation
 - optional save timer
+- map editor/designer in the webclient (in progress)
 
 https://github.com/user-attachments/assets/fbb712a6-5b65-469c-a20d-bb031e80a571
