@@ -23,6 +23,7 @@ This has some code from Evennia, and is loosely based on the same ideas.
 - 3d coordinate room system
 - optional ascii maps
 - built-in pathfinding
+- follow and group commands
 - built-in door system
 - built-in script system
 - built-in tick system
@@ -33,22 +34,13 @@ This has some code from Evennia, and is loosely based on the same ideas.
 
 First version of the docs are up, view them here: [docs](docs/table_of_contents.md)
 
-
 # TODO:
 
-- ~~docs~~
+- flesh out the docs more
 - example game
 - more tests (getting there!)
-- ~~node hooks~~
-- ~~scripts~~
-- ~~tick system~~
-- ~~time system~~
-- ~~pathfinding~~
-- ~~door stuff + ability for custom doors~~
-- ~~map tile highlight in game client~~
-- ~~telnet~~
-- follow and group system
-- ~~room nouns~~
+- make the map system less painful to use
+- sound propagation
+- optional save timer
 
 https://github.com/user-attachments/assets/fbb712a6-5b65-469c-a20d-bb031e80a571
-
