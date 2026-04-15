@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Callable
+from math import gcd
 from atheriz.utils import is_iter, make_iter
 from typing import Any, Optional
 from atheriz.globals.objects import get
@@ -967,6 +968,29 @@ class NodeArea:
                             n = g.nodes.get((x, y))
                             if n:
                                 result.append(n)
+        return result
+
+    def get_rays_in_sphere(
+        self, center: tuple[int, int, int], radius: float, ignore_center: bool = True
+    ) -> list[list[Node]]:
+        nodes = self.get_nodes_in_sphere(center, radius, ignore_center)
+        cx, cy, cz = center
+        rays: dict[tuple[int, int, int], list[tuple[int, Node]]] = {}
+        for n in nodes:
+            nx, ny, nz = n.coord[1], n.coord[2], n.coord[3]
+            dx, dy, dz = nx - cx, ny - cy, nz - cz
+            g = gcd(gcd(abs(dx), abs(dy)), abs(dz))
+            direction = (dx // g, dy // g, dz // g)
+            dist_sq = dx * dx + dy * dy + dz * dz
+            bucket = rays.get(direction)
+            if bucket is None:
+                rays[direction] = [(dist_sq, n)]
+            else:
+                bucket.append((dist_sq, n))
+        result = []
+        for bucket in rays.values():
+            bucket.sort()
+            result.append([n for _, n in bucket])
         return result
 
     def set_data(self, key, value):
