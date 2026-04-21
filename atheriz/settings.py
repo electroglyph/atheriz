@@ -22,7 +22,18 @@ WEBSERVER_INTERFACE = "0.0.0.0"
 THREADPOOL_LIMIT = os.cpu_count()
 MAX_CHARACTERS = 5
 DEFAULT_TICK_SECONDS = 1.0
-
+# sound related settings
+# NOTE: these are just defaults, each room can override these
+# default sound attenuation in decibels for enclosed rooms
+# this should probably be higher for more realism, but sound is fun
+# decrease this number to make sounds travel further
+DEFAULT_ENCLOSED_SOUND_ATTENUATION = 20.0
+# default sound attenuation in decibels for open rooms
+# i.e. open door, hallway, forest, etc.
+DEFAULT_OPEN_SOUND_ATTENUATION = 10.0
+# default ambient sound level in decibels
+# if incoming sounds are lower than the room's ambient level, they will be ignored
+DEFAULT_AMBIENT_SOUND_LEVEL = 5.0
 
 # only change these if you know what you're doing
 class Privilege(IntEnum):
@@ -33,6 +44,7 @@ class Privilege(IntEnum):
     Admin = auto()
 
 
+# allow guests to connect without an account?
 GUEST_ENABLED = True
 FUNCPARSER_START_CHAR = "$"
 FUNCPARSER_ESCAPE_CHAR = "\\"

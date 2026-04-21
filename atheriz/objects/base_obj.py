@@ -11,6 +11,7 @@ from atheriz.globals.get import (
     get_unique_id,
     get_loggedin_cmdset,
     get_async_ticker,
+    get_async_threadpool,
 )
 from atheriz.objects.contents import search, group_by_name
 from atheriz.commands.base_cmdset import CmdSet
@@ -122,6 +123,7 @@ class Object(Flags, DbOps, AccessLock):
         is_mapable: bool = False,
         is_container: bool = False,
         is_tickable: bool = False,
+        can_hear: bool = False,
         tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ) -> Self:
         """
@@ -160,6 +162,7 @@ class Object(Flags, DbOps, AccessLock):
         obj.is_tickable = is_tickable
         obj.name = name
         obj.desc = desc
+        obj.can_hear = can_hear
         obj._tick_seconds = tick_seconds
         obj.aliases = aliases if aliases else []
         obj.internal_cmdset = CmdSet()
@@ -1277,6 +1280,128 @@ class Object(Flags, DbOps, AccessLock):
             str: The potentially modified message string.
         """
         return message
+
+    @hookable
+    def at_pre_hear(
+        self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool
+    ) -> tuple[bool, Object, str, str, float, bool]:
+        """
+        Optionally modify parameters before the sound is heard.
+        Return False for the first argument to prevent the sound from being heard.
+        However, to prevent sound transmission, you must reduce the loudness
+
+        Args:
+            emitter (Object): The object emitting the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loud (bool): Whether the sound is loud.
+            is_say (bool): Whether the sound is a say.
+
+        Returns:
+            tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+        """
+        # this function can modify any of the args before returning them
+        return True, emitter, sound_desc, sound_msg, loudness, is_say
+
+    @hookable
+    def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
+        """
+        Called when this object hears a sound.
+
+        Args:
+            emitter (Object): The object that made the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loudness (float): The loudness of the sound.
+            is_say (bool): Whether the sound is a say.
+        """
+        pass
+
+    @hookable
+    def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
+        """
+        Optionally modify parameters before the sound is emitted.
+        Return False for the first argument to prevent the sound from being emitted.
+
+        Args:
+            emitter (Object): The object emitting the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loudness (float): The loudness of the sound.
+            is_say (bool): Whether the sound is a say.
+
+        Returns:
+            tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+        """
+        # this function can modify any of the args before returning them
+        return True, emitter, sound_desc, sound_msg, loudness, is_say
+
+    @hookable
+    def at_emit_sound(self, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
+        """
+        Called when this object emits a sound.
+
+        Args:
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loudness (float): The loudness of the sound.
+            is_say (bool): Whether the sound is a say.
+        """
+        if not sound_msg:
+            return
+        loc = self.location
+        allow, emitter, sound_desc, sound_msg, loudness, is_say = self.at_pre_emit_sound(self, sound_desc, sound_msg, loudness, is_say)
+        if not allow:
+            return
+        if loc:
+            allow, emitter, sound_desc, sound_msg, loudness, is_say = loc.at_pre_emit_sound(self, sound_desc, sound_msg, loudness, is_say)
+            if not allow:
+                return
+            for o in loc.contents:
+                if o.can_hear:
+                    allow, emitter, sound_desc, sound_msg, loudness, is_say = o.at_pre_hear(
+                        emitter, sound_desc, sound_msg, loudness, is_say
+                    )
+                    if not allow:
+                        continue
+                    o.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
+            c = loc.coord
+            nh = get_node_handler()
+            area = nh.get_area(c[0])
+            if area:
+                open = False
+                doors = nh.get_doors(c)
+                if doors:
+                    # update for windows later?
+                    for door in doors.values():
+                        if door.open:
+                            open = True
+                            break
+                else:
+                    # if no doors, we'll just assume room has at least 1 open exit
+                    open = True
+                loudness = loudness - loc.attenuation
+                radius = (loudness / settings.DEFAULT_OPEN_SOUND_ATTENUATION) if open else (loudness / settings.DEFAULT_ENCLOSED_SOUND_ATTENUATION)
+                rays = area.get_rays_in_sphere(c[1:], radius)
+                _ray_state = (emitter, sound_desc, sound_msg, loudness, is_say)
+                for ray in rays:
+                    emitter, sound_desc, sound_msg, loudness, is_say = _ray_state
+                    for n in ray:
+                        loudness = n.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
+                        if loudness <= 0:
+                            break
+
+    def emit_sound(self, sound_desc: str, sound_msg: str, loudness: float, is_say: bool = False):
+        """Emit a sound.
+
+        Args:
+            sound_desc (str): Description of the sound
+            sound_msg (str): Message of the sound
+            loudness (float): Loudness of the sound
+            is_say (bool, optional): Whether the sound is a say. Defaults to False.
+        """
+        atp = get_async_threadpool()
+        atp.add_task(self.at_emit_sound, sound_desc, sound_msg, loudness, is_say)
 
     # this is from Evennia, see EVENNIA_LICENSE.txt
     @hookable

@@ -15,6 +15,7 @@ class Flags:
         object.__setattr__(self, "is_deleted", False)
         object.__setattr__(self, "is_connected", False)
         object.__setattr__(self, "is_temporary", False)
+        object.__setattr__(self, "can_hear", False)
         super().__init__()
 
         

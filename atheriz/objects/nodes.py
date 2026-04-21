@@ -117,12 +117,13 @@ class Node(Flags, AccessLock):
         theme: str = None,
         symbol: str = None,
         legend_desc: str = None,
-        data: dict = None,
         links: list[NodeLink] = None,
         tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ):
         self.lock = RLock()
         super().__init__()
+        self.attenuation = settings.DEFAULT_OPEN_SOUND_ATTENUATION
+        self.ambient_sound_level = settings.DEFAULT_AMBIENT_SOUND_LEVEL
         self.coord = coord
         self.desc = desc
         self._tick_seconds = tick_seconds
@@ -161,11 +162,7 @@ class Node(Flags, AccessLock):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (
-                i
-                for i, c in enumerate(mro)
-                if c.__module__ == "atheriz.objects.nodes" and c.__qualname__ == "Node"
-            ),
+            (i for i, c in enumerate(mro) if c.__module__ == "atheriz.objects.nodes" and c.__qualname__ == "Node"),
             len(mro),
         )
         ancestors = mro[current_idx + 1 :]
@@ -219,26 +216,73 @@ class Node(Flags, AccessLock):
         else:
             at.remove_coro(self.at_tick, self._tick_seconds)
 
-    # def pre_emit_sound(
-    #     self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool
-    # ) -> tuple:
-    #     """set sound_msg to '' to cancel sound propagation"""
-    #     return emitter, sound_desc, sound_msg, loud, is_say
+    def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
+        """
+        Optionally modify parameters before the sound is emitted.
+        Return False for the first argument to prevent the sound from being emitted.
 
-    # def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loud: bool, is_say: bool):
-    #     emitter, sound_desc, sound_msg, loud, is_say = self.pre_emit_sound(
-    #         emitter, sound_desc, sound_msg, loud, is_say
-    #     )
-    #     if not sound_msg:
-    #         return
-    #     objs = self.get_objects(True, True, True)
-    #     for o in objs:
-    #         if o.can_hear:
-    #             o.at_hear(emitter, sound_desc, sound_msg, loud, is_say)
+        Args:
+            emitter (Object): The object emitting the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loudness (float): The loudness of the sound.
+            is_say (bool): Whether the sound is a say.
 
-    def at_pre_object_leave(
-        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
-    ) -> bool:
+        Returns:
+            tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+        """
+        # this function can modify any of the args before returning them
+        return True, emitter, sound_desc, sound_msg, loudness, is_say
+
+    def at_pre_hear(
+        self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool
+    ) -> tuple[bool, Object, str, str, float, bool]:
+        """
+        Optionally modify parameters before the sound is heard.
+        Return False for the first argument to prevent the sound from being heard.
+        However, to prevent sound transmission, you must reduce the loudness
+
+        Args:
+            emitter (Object): The object emitting the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loud (bool): Whether the sound is loud.
+            is_say (bool): Whether the sound is a say.
+
+        Returns:
+            tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+        """
+        # this function can modify any of the args before returning them
+        return True, emitter, sound_desc, sound_msg, loudness, is_say
+
+    def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool) -> float:
+        """
+        Args:
+            emitter (Object): The object emitting the sound.
+            sound_desc (str): The description of the sound.
+            sound_msg (str): The message of the sound.
+            loudness (float): The loudness of the sound.
+            is_say (bool): Whether the sound is a say.
+
+        Returns:
+            float: The remaining loudness of the sound.
+        """
+        allow, emitter, sound_desc, sound_msg, loudness, is_say = self.at_pre_hear(
+            emitter, sound_desc, sound_msg, loudness, is_say
+        )
+        if not allow:
+            return loudness - self.attenuation
+        for o in self.contents:
+            if o.can_hear:
+                allow, emitter, sound_desc, sound_msg, loudness, is_say = o.at_pre_hear(
+                    emitter, sound_desc, sound_msg, loudness, is_say
+                )
+                if not allow:
+                    continue
+                o.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
+        return loudness - self.attenuation
+
+    def at_pre_object_leave(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
         """
         Called before an object leaves the node. Returning False aborts the move.
 
@@ -252,9 +296,7 @@ class Node(Flags, AccessLock):
         """
         return True
 
-    def at_object_leave(
-        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
-    ) -> None:
+    def at_object_leave(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
         """
         Called after an object has successfully left the node.
 
@@ -265,9 +307,7 @@ class Node(Flags, AccessLock):
         """
         pass
 
-    def at_pre_object_receive(
-        self, source: Node | Object | None, from_exit: str | None = None, **kwargs
-    ) -> bool:
+    def at_pre_object_receive(self, source: Node | Object | None, from_exit: str | None = None, **kwargs) -> bool:
         """
         Called before an object enters the node. Returning False aborts the entry.
 
@@ -281,9 +321,7 @@ class Node(Flags, AccessLock):
         """
         return True
 
-    def at_object_receive(
-        self, source: Node | Object | None, from_exit: str | None = None, **kwargs
-    ) -> None:
+    def at_object_receive(self, source: Node | Object | None, from_exit: str | None = None, **kwargs) -> None:
         """
         Called after an object has successfully entered the node.
 
@@ -301,9 +339,7 @@ class Node(Flags, AccessLock):
         """
         pass
 
-    def delete(
-        self, caller: Object, recursive: bool = False
-    ) -> tuple[int, list] | None:
+    def delete(self, caller: Object, recursive: bool = False) -> tuple[int, list] | None:
         """Delete this node.
 
         Args:
@@ -635,11 +671,7 @@ class Node(Flags, AccessLock):
             )
             outmessage = outmessage.format_map(
                 {
-                    key: (
-                        obj.get_display_name(looker=receiver)
-                        if hasattr(obj, "get_display_name")
-                        else str(obj)
-                    )
+                    key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
                     for key, obj in mapping.items()
                 }
             )
@@ -658,11 +690,7 @@ class Node(Flags, AccessLock):
         """
         things = filter_contents(self, lambda x: x.is_item and x.access(looker, "view"))
         thing_names = group_by_name(things, looker)
-        return (
-            f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n"
-            if thing_names
-            else ""
-        )
+        return f"{wrap_xterm256('You see:', fg=15, bold=True)} {thing_names}\n" if thing_names else ""
 
     def get_display_characters(self, looker: Object | None = None, **kwargs) -> str:
         """
@@ -679,16 +707,10 @@ class Node(Flags, AccessLock):
             return ""
         characters = filter_contents(
             self,
-            lambda x: (
-                (x.is_pc or x.is_npc) and x != looker and x.access(looker, "view")
-            ),
+            lambda x: ((x.is_pc or x.is_npc) and x != looker and x.access(looker, "view")),
         )
         character_names = group_by_name(characters, looker)
-        return (
-            f"{wrap_xterm256('Characters:', fg=15, bold=True)} {character_names}\n"
-            if character_names
-            else ""
-        )
+        return f"{wrap_xterm256('Characters:', fg=15, bold=True)} {character_names}\n" if character_names else ""
 
     def get_display_exits(self, looker: Object | None = None, **kwargs) -> str:
         """
@@ -709,11 +731,7 @@ class Node(Flags, AccessLock):
                 exit_names += self.links[x].name
                 if x != len(self.links) - 1:
                     exit_names += ", "
-        return (
-            f"{wrap_xterm256('Exits:', fg=15, bold=True)} {exit_names}\n"
-            if exit_names != ""
-            else ""
-        )
+        return f"{wrap_xterm256('Exits:', fg=15, bold=True)} {exit_names}\n" if exit_names != "" else ""
 
     def get_display_doors(self, looker: Object | None = None, **kwargs) -> str:
         """
@@ -802,9 +820,7 @@ class Node(Flags, AccessLock):
 
 class NodeGrid:
     # args are actually required, this is just to simplify deserialization
-    def __init__(
-        self, area: str | None = None, z: int | None = None, data: dict | None = None
-    ):
+    def __init__(self, area: str | None = None, z: int | None = None, data: dict | None = None):
         self.area: str | None = area
         self.z = z
         self.is_modified = True
@@ -818,12 +834,7 @@ class NodeGrid:
     def __eq__(self, other):
         if not isinstance(other, NodeGrid):
             return False
-        return (
-            self.area == other.area
-            and self.z == other.z
-            and self.nodes == other.nodes
-            and self.data == other.data
-        )
+        return self.area == other.area and self.z == other.z and self.nodes == other.nodes and self.data == other.data
 
     def __len__(self):
         return len(self.nodes)
@@ -857,9 +868,7 @@ class NodeGrid:
         if node.links:
             nh = get_node_handler()
             for l in node.links:
-                if (
-                    self.area != l.coord[0]
-                ):  # does this have an exit leading to a different area?
+                if self.area != l.coord[0]:  # does this have an exit leading to a different area?
                     nh.add_transition(Transition(node.coord, l.coord, l.name))
 
     def remove_node(self, coord: tuple[int, int]):
@@ -901,17 +910,13 @@ class NodeArea:
         self.grids: dict[int, NodeGrid] = {}  # {z: map}
         self.lock = RLock()
         self.data = {}
-        self.linked_areas = (
-            None  # any yells from this area will be broadcast to these areas
-        )
+        self.linked_areas = None  # any yells from this area will be broadcast to these areas
 
     def __len__(self):
         return len(self.grids)
 
     def __str__(self):
-        return f"Area {self.name}: ".join(
-            f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items()
-        )
+        return f"Area {self.name}: ".join(f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items())
 
     def __eq__(self, other):
         if not isinstance(other, NodeArea):
