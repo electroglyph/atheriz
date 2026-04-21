@@ -122,7 +122,8 @@ class Node(Flags, AccessLock):
     ):
         self.lock = RLock()
         super().__init__()
-        self.attenuation = settings.DEFAULT_OPEN_SOUND_ATTENUATION
+        self.open_attenuation = settings.DEFAULT_OPEN_SOUND_ATTENUATION
+        self.enclosed_attenuation = settings.DEFAULT_ENCLOSED_SOUND_ATTENUATION
         self.ambient_sound_level = settings.DEFAULT_AMBIENT_SOUND_LEVEL
         self.coord = coord
         self.desc = desc
@@ -270,8 +271,19 @@ class Node(Flags, AccessLock):
         allow, emitter, sound_desc, sound_msg, loudness, is_say = self.at_pre_hear(
             emitter, sound_desc, sound_msg, loudness, is_say
         )
-        if not allow:
-            return loudness - self.attenuation
+        open = False
+        ndh = get_node_handler()
+        doors = ndh.get_doors(self.coord)
+        if doors:
+            for door in doors.values():
+                if door.open:
+                    open = True
+                    break
+        else:
+            open = True
+        attenuation = self.open_attenuation if open else self.enclosed_attenuation
+        if not allow or loudness <= self.ambient_sound_level:
+            return loudness - attenuation
         for o in self.contents:
             if o.can_hear:
                 allow, emitter, sound_desc, sound_msg, loudness, is_say = o.at_pre_hear(
@@ -280,7 +292,7 @@ class Node(Flags, AccessLock):
                 if not allow:
                     continue
                 o.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
-        return loudness - self.attenuation
+        return loudness - attenuation
 
     def at_pre_object_leave(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
         """

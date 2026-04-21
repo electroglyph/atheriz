@@ -1380,8 +1380,10 @@ class Object(Flags, DbOps, AccessLock):
                 else:
                     # if no doors, we'll just assume room has at least 1 open exit
                     open = True
-                loudness = loudness - loc.attenuation
-                radius = (loudness / settings.DEFAULT_OPEN_SOUND_ATTENUATION) if open else (loudness / settings.DEFAULT_ENCLOSED_SOUND_ATTENUATION)
+                attenuation = loc.open_attenuation if open else loc.enclosed_attenuation
+                loudness = loudness - attenuation
+                # default to larger radius
+                radius = loudness / settings.DEFAULT_OPEN_SOUND_ATTENUATION
                 rays = area.get_rays_in_sphere(c[1:], radius)
                 _ray_state = (emitter, sound_desc, sound_msg, loudness, is_say)
                 for ray in rays:
