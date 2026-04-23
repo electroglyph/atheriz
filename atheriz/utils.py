@@ -206,14 +206,14 @@ def clamp(minimum, value, maximum):
 
 def get_dir(origin: tuple, dest: tuple) -> str:
     """
-    get map direction between two points. (0,0) is lower left.
+    get map direction between two coords.
     returns '' if origin == dest
     """
-    ns_vec = abs(origin[1] - dest[1])
-    if origin[1] > dest[1]:
+    ns_vec = abs(origin[2] - dest[2])
+    if origin[2] > dest[2]:
         ns_vec *= -1
-    ew_vec = abs(origin[0] - dest[0])
-    if origin[0] > dest[0]:
+    ew_vec = abs(origin[1] - dest[1])
+    if origin[1] > dest[1]:
         ew_vec *= -1
     dir = ""
     if ns_vec > 0:
