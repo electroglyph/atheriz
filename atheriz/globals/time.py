@@ -147,9 +147,9 @@ class GameTime:
             for id, repeat, data in callers:
                 if not repeat:
                     self.remove_alarm(after_time["hour"], after_time["minute"], id)
-                obj = get(id)
-                if obj:
-                    func = getattr(obj, "at_alarm")  # at_alarm(self, time, data)
+                objs = get(id)
+                if objs:
+                    func = getattr(objs[0], "at_alarm")
                     atp.add_task(func, after_time, data)
                 else:
                     print(f"obj not found for alarm: {id}")
