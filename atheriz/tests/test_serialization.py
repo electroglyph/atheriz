@@ -252,3 +252,24 @@ def test_resolve_relations():
     # ASSERT PASS 2 STATE: Relations successfully re-linked
     assert object.__getattribute__(deserialized, "location") is nav_node
     assert object.__getattribute__(deserialized, "home") is target_obj
+
+
+class AlarmObj(Object):
+    alarm_fired = False
+
+    def at_alarm(self, time, data):
+        self.alarm_fired = True
+
+
+def test_subclass_object_serialization_preserves_overrides():
+    obj = AlarmObj()
+    obj.id = 999
+    obj.name = "Test Alarm"
+
+    serialized = dill.dumps(obj)
+    deserialized = dill.loads(serialized)
+
+    assert isinstance(deserialized, AlarmObj)
+    assert not object.__getattribute__(deserialized, "alarm_fired")
+    deserialized.at_alarm({}, None)
+    assert object.__getattribute__(deserialized, "alarm_fired")

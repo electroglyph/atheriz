@@ -23,6 +23,15 @@ class TrackingNode(Node):
         return super().at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
 
 
+class TrackingPCObject(Object):
+    def __init__(self):
+        super().__init__()
+        self.heard_sounds = []
+
+    def at_hear(self, emitter, sound_desc, sound_msg, loudness, is_say):
+        self.heard_sounds.append((emitter, sound_desc, sound_msg, loudness, is_say))
+
+
 class TrackingObject(Object):
     def __init__(self):
         super().__init__()
@@ -94,7 +103,7 @@ def _expected_loudness(original, hop):
 
 def _place(nh, coord):
     node = nh.get_node(coord)
-    emitter = TrackingObject.create(None, "Emitter", can_hear=True)
+    emitter = TrackingObject.create(None, "Emitter", is_npc=True)
     emitter.location = node
     node._contents.add(emitter.id)
     return emitter, node
@@ -143,6 +152,25 @@ def test_center_emission_loudness_tapering(cube):
             errors.append(f"{node.coord}: expected {expected}, got {actual}")
 
     assert not errors, f"{len(errors)} failures:\n" + "\n".join(errors[:10])
+
+
+def test_single_ray_loudness_reduces_per_hop(cube):
+    nh, area = cube
+    center = (AREA, 4, 4, 4)
+    emitter, _ = _place(nh, center)
+    original = 100.0
+    emitter.at_emit_sound("bang", "bang!", original, False)
+
+    expected = original - ATTEN
+    for hop, x in enumerate(range(5, 9), start=1):
+        coord = (AREA, x, 4, 4)
+        node = nh.get_node(coord)
+        assert node.heard_sounds, f"Hop {hop} at {coord}: no sound received"
+        actual = node.heard_sounds[0][3]
+        assert actual == pytest.approx(expected, abs=0.01), (
+            f"Hop {hop} at {coord}: expected {expected}, got {actual}"
+        )
+        expected -= ATTEN
 
 
 def test_center_emission_axis_ray(cube):
@@ -282,7 +310,7 @@ def test_source_room_objects_hear_at_full_loudness(cube):
     nh, area = cube
     center = (AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
-    listener = TrackingObject.create(None, "Listener", can_hear=True)
+    listener = TrackingObject.create(None, "Listener", is_npc=True)
     listener.location = center_node
     center_node._contents.add(listener.id)
 
@@ -304,7 +332,7 @@ def test_remote_room_objects_hear_at_attenuated_loudness(cube):
 
     remote = (AREA, 6, 4, 4)
     remote_node = nh.get_node(remote)
-    listener = TrackingObject.create(None, "RemoteListener", can_hear=True)
+    listener = TrackingObject.create(None, "RemoteListener", is_npc=True)
     listener.location = remote_node
     remote_node._contents.add(listener.id)
 
@@ -322,7 +350,7 @@ def test_beyond_range_objects_dont_hear(cube):
 
     far = (AREA, 3, 0, 0)
     far_node = nh.get_node(far)
-    listener = TrackingObject.create(None, "FarListener", can_hear=True)
+    listener = TrackingObject.create(None, "FarListener", is_npc=True)
     listener.location = far_node
     far_node._contents.add(listener.id)
 
@@ -335,7 +363,7 @@ def test_non_hearing_object_ignored(cube):
     nh, area = cube
     center = (AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
-    deaf = TrackingObject.create(None, "Deaf", can_hear=False)
+    deaf = TrackingObject.create(None, "Deaf")
     deaf.location = center_node
     center_node._contents.add(deaf.id)
 
@@ -352,7 +380,7 @@ def test_at_pre_emit_sound_blocks_emission(cube):
     center = (AREA, 4, 4, 4)
     node = nh.get_node(center)
 
-    emitter = BlockingEmitterObject.create(None, "Mute", can_hear=True)
+    emitter = BlockingEmitterObject.create(None, "Mute", is_npc=True)
     emitter.location = node
     node._contents.add(emitter.id)
 
@@ -376,15 +404,15 @@ def test_node_at_pre_hear_skips_contents_but_continues_ray():
     area.add_grid(grid)
     nh.add_area(area)
 
-    emitter = TrackingObject.create(None, "Emitter", can_hear=True)
+    emitter = TrackingObject.create(None, "Emitter", is_npc=True)
     emitter.location = source
     source._contents.add(emitter.id)
 
-    obj_in_blocker = TrackingObject.create(None, "Inside", can_hear=True)
+    obj_in_blocker = TrackingObject.create(None, "Inside", is_npc=True)
     obj_in_blocker.location = blocker
     blocker._contents.add(obj_in_blocker.id)
 
-    obj_in_beyond = TrackingObject.create(None, "Beyond", can_hear=True)
+    obj_in_beyond = TrackingObject.create(None, "Beyond", is_npc=True)
     obj_in_beyond.location = beyond
     beyond._contents.add(obj_in_beyond.id)
 
@@ -404,7 +432,7 @@ def test_object_at_pre_hear_blocks_hearing(cube):
     center = (AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
 
-    blocker = BlockingRoomObject.create(None, "Blocker", can_hear=True)
+    blocker = BlockingRoomObject.create(None, "Blocker", is_npc=True)
     blocker.location = center_node
     center_node._contents.add(blocker.id)
 
@@ -421,7 +449,7 @@ def test_empty_message_no_propagation(cube):
     nh, area = cube
     center = (AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
-    listener = TrackingObject.create(None, "L", can_hear=True)
+    listener = TrackingObject.create(None, "L", is_npc=True)
     listener.location = center_node
     center_node._contents.add(listener.id)
 
@@ -436,7 +464,7 @@ def test_none_message_no_propagation(cube):
     nh, area = cube
     center = (AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
-    listener = TrackingObject.create(None, "L", can_hear=True)
+    listener = TrackingObject.create(None, "L", is_npc=True)
     listener.location = center_node
     center_node._contents.add(listener.id)
 
@@ -446,7 +474,7 @@ def test_none_message_no_propagation(cube):
 
 
 def test_no_location_no_propagation():
-    emitter = TrackingObject.create(None, "Float", can_hear=True)
+    emitter = TrackingObject.create(None, "Float", is_npc=True)
     emitter.at_emit_sound("desc", "msg", 100.0, False)
 
 
@@ -464,7 +492,7 @@ def test_at_pre_hear_called_once_per_remote_node():
     area.add_grid(grid)
     nh.add_area(area)
 
-    emitter = TrackingObject.create(None, "E", can_hear=True)
+    emitter = TrackingObject.create(None, "E", is_npc=True)
     emitter.location = source
     source._contents.add(emitter.id)
 
@@ -475,3 +503,52 @@ def test_at_pre_hear_called_once_per_remote_node():
         "Node.at_pre_hear is called both from the ray loop in at_emit_sound AND "
         "inside Node.at_hear — double invocation is a bug."
     )
+
+
+def test_pc_can_hear_sound_in_same_room(cube):
+    nh, area = cube
+    center = (AREA, 4, 4, 4)
+    emitter, center_node = _place(nh, center)
+
+    pc = TrackingPCObject.create(None, "TestPC", is_pc=True)
+    pc.location = center_node
+    center_node._contents.add(pc.id)
+
+    emitter.at_emit_sound("bang", "A loud bang!", 100.0, False)
+
+    assert len(pc.heard_sounds) == 1
+    assert pc.heard_sounds[0][2] == "A loud bang!"
+    assert pc.heard_sounds[0][3] == pytest.approx(100.0)
+
+
+def test_pc_can_hear_sound_in_remote_room(cube):
+    nh, area = cube
+    center = (AREA, 4, 4, 4)
+    emitter, _ = _place(nh, center)
+
+    remote = (AREA, 6, 4, 4)
+    remote_node = nh.get_node(remote)
+    pc = TrackingPCObject.create(None, "TestPC", is_pc=True)
+    pc.location = remote_node
+    remote_node._contents.add(pc.id)
+
+    emitter.at_emit_sound("shout", "A shout!", 100.0, False)
+
+    assert len(pc.heard_sounds) == 1
+    expected = _expected_loudness(100.0, 2)
+    assert pc.heard_sounds[0][3] == pytest.approx(expected)
+
+
+def test_pc_cannot_hear_without_can_hear(cube):
+    nh, area = cube
+    center = (AREA, 4, 4, 4)
+    emitter, center_node = _place(nh, center)
+
+    pc = TrackingPCObject.create(None, "DeafPC", is_pc=True)
+    pc.can_hear = False
+    pc.location = center_node
+    center_node._contents.add(pc.id)
+
+    emitter.at_emit_sound("bang", "A loud bang!", 100.0, False)
+
+    assert len(pc.heard_sounds) == 0

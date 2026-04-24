@@ -610,9 +610,8 @@ def create_game_folder(folder_name: str) -> None:
         local_setup.do_setup(username, password)
 
     except Exception as e:
-        print(f"Error during initial setup: {e}")
-        import traceback
-        traceback.print_exc()
+        from atheriz.logger import logger
+        logger.exception(f"Error during initial setup: {e}")
         return
      
     print(f"\nSuccess! Game folder '{folder_name}' created with:")

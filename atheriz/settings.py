@@ -67,7 +67,7 @@ MAX_LOGIN_ATTEMPTS = 3
 LOGIN_ATTEMPT_COOLDOWN = 100
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False
-DEFAULT_HOME = ("limbo", 0, 0, 0)
+DEFAULT_HOME = ("limbo", 4, 4, 4)
 MAP_ENABLED = True
 LEGEND_ENABLED = True
 # maximum frames per second for map rendering, recommended to be around 5-10
@@ -127,7 +127,7 @@ LUNAR_RECEIVER_LAMBDA = lambda x: x.is_pc and x.is_connected
 TIME_UPDATE_SECONDS = 1.0
 START_YEAR = 888
 # minutes the clock should advance for every update tick above
-TICK_MINUTES = 1.0
+TICK_MINUTES = 5.0
 SECONDS_PER_MINUTE = 60
 MINUTES_PER_HOUR = 60
 HOURS_PER_DAY = 24
@@ -159,3 +159,25 @@ class Month(IntEnum):
     October = 10
     November = 11
     December = 12
+
+# mapping of decibels to description
+
+LOUDNESS_LEVELS = (
+    (20, "nearly inaudible"),
+    (40, "faint"),
+    (60, "clear"),
+    (80, "loud"),
+    (100, "very loud"),
+    (120, "extremely loud"),
+)
+
+# percentage of words to replace with "..." at certain decibel levels
+# first number is decibels, second is percentage
+REPLACE_LEVELS = (
+    (1, 90.0),
+    (10, 75.0),
+    (20, 50.0),
+    (30, 30.0),
+    (40, 15.0),
+    (50, 10.0),
+)

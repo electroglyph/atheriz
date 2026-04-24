@@ -1,7 +1,8 @@
 from __future__ import annotations
 from atheriz.objects.base_flags import Flags
 from atheriz.globals.objects import save_objects
-from atheriz.utils import compress_whitespace
+from atheriz.utils import compress_whitespace, get_dir, word_replace
+from atheriz.settings import LOUDNESS_LEVELS
 from typing import Callable
 from atheriz.globals.objects import get, add_object, remove_object
 from atheriz.globals.get import (
@@ -123,7 +124,6 @@ class Object(Flags, DbOps, AccessLock):
         is_mapable: bool = False,
         is_container: bool = False,
         is_tickable: bool = False,
-        can_hear: bool = False,
         tick_seconds: float = settings.DEFAULT_TICK_SECONDS,
     ) -> Self:
         """
@@ -150,7 +150,9 @@ class Object(Flags, DbOps, AccessLock):
         obj.is_pc = is_pc
         obj.is_mapable = is_mapable
         obj.is_container = is_container
+        obj.can_hear = False
         if is_pc:
+            obj.can_hear = True
             obj.is_mapable = True
             obj.is_container = True
             obj.add_lock("view", lambda x: not obj.is_pc or (obj.is_pc and obj.is_connected))
@@ -158,11 +160,11 @@ class Object(Flags, DbOps, AccessLock):
         obj.is_item = is_item
         obj.is_npc = is_npc
         if is_npc:
+            obj.can_hear = True
             obj.add_lock("get", lambda x: False)
         obj.is_tickable = is_tickable
         obj.name = name
         obj.desc = desc
-        obj.can_hear = can_hear
         obj._tick_seconds = tick_seconds
         obj.aliases = aliases if aliases else []
         obj.internal_cmdset = CmdSet()
@@ -1315,7 +1317,28 @@ class Object(Flags, DbOps, AccessLock):
             loudness (float): The loudness of the sound.
             is_say (bool): Whether the sound is a say.
         """
-        pass
+        if not self.is_pc:
+            return
+        loc = self.location
+        if not loc:
+            return
+        adj = next((desc for threshold, desc in LOUDNESS_LEVELS if loudness < threshold), "deafening")
+
+        if is_say and sound_msg:
+            replace_pct = next((pct for threshold, pct in settings.REPLACE_LEVELS if loudness < threshold), 0)
+            if replace_pct > 0:
+                sound_msg = word_replace(sound_msg, replace_pct / 100.0)
+
+        emitter_loc = emitter.location
+        if emitter_loc == loc or not emitter_loc:
+            self.msg(f"{wrap_xterm256(f'You hear something {adj}:', fg=15, bold=True)} {sound_desc}{sound_msg}")
+        else:
+            direction = get_dir(loc.coord, emitter_loc.coord)
+            z_diff = emitter_loc.coord[3] - loc.coord[3]
+            z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
+            self.msg(
+                f"{wrap_xterm256(f'You hear something {adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
+            )
 
     @hookable
     def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
@@ -1350,11 +1373,15 @@ class Object(Flags, DbOps, AccessLock):
         if not sound_msg:
             return
         loc = self.location
-        allow, emitter, sound_desc, sound_msg, loudness, is_say = self.at_pre_emit_sound(self, sound_desc, sound_msg, loudness, is_say)
+        allow, emitter, sound_desc, sound_msg, loudness, is_say = self.at_pre_emit_sound(
+            self, sound_desc, sound_msg, loudness, is_say
+        )
         if not allow:
             return
         if loc:
-            allow, emitter, sound_desc, sound_msg, loudness, is_say = loc.at_pre_emit_sound(self, sound_desc, sound_msg, loudness, is_say)
+            allow, emitter, sound_desc, sound_msg, loudness, is_say = loc.at_pre_emit_sound(
+                self, sound_desc, sound_msg, loudness, is_say
+            )
             if not allow:
                 return
             for o in loc.contents:
