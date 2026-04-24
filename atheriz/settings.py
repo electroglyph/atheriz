@@ -174,10 +174,10 @@ LOUDNESS_LEVELS = (
 # percentage of words to replace with "..." at certain decibel levels
 # first number is decibels, second is percentage
 REPLACE_LEVELS = (
-    (1, 90.0),
-    (10, 75.0),
-    (20, 50.0),
-    (30, 30.0),
-    (40, 15.0),
+    (1, 95.0),
+    (10, 80.0),
+    (20, 60.0),
+    (30, 40.0),
+    (40, 20.0),
     (50, 10.0),
 )
