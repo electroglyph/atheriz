@@ -1010,6 +1010,18 @@ class NodeArea:
             result.append([n for _, n in bucket])
         return result
 
+    def get_neighbors(self, coord: tuple[int, int, int]) -> list[Node]:
+        x, y, z = coord
+        neighbors = []
+        with self.lock:
+            for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
+                g = self.grids.get(z + dz)
+                if g:
+                    n = g.nodes.get((x + dx, y + dy))
+                    if n:
+                        neighbors.append(n)
+        return neighbors
+
     def set_data(self, key, value):
         """save arbitrary data for this area... make sure it can be pickled"""
         with self.lock:

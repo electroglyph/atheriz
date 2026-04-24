@@ -1331,13 +1331,13 @@ class Object(Flags, DbOps, AccessLock):
 
         emitter_loc = emitter.location
         if emitter_loc == loc or not emitter_loc:
-            self.msg(f"{wrap_xterm256(f'You hear something {adj}:', fg=15, bold=True)} {sound_desc}{sound_msg}")
+            self.msg(f"{wrap_xterm256(f'You hear something{adj}:', fg=15, bold=True)} {sound_desc}{sound_msg}")
         else:
             direction = get_dir(loc.coord, emitter_loc.coord)
             z_diff = emitter_loc.coord[3] - loc.coord[3]
             z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
             self.msg(
-                f"{wrap_xterm256(f'You hear something {adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
+                f"{wrap_xterm256(f'You hear something{adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
             )
 
     @hookable
@@ -1409,16 +1409,28 @@ class Object(Flags, DbOps, AccessLock):
                     open = True
                 attenuation = loc.open_attenuation if open else loc.enclosed_attenuation
                 loudness = loudness - attenuation
-                # default to larger radius
-                radius = loudness / settings.DEFAULT_OPEN_SOUND_ATTENUATION
-                rays = area.get_rays_in_sphere(c[1:], radius)
-                _ray_state = (emitter, sound_desc, sound_msg, loudness, is_say)
-                for ray in rays:
-                    emitter, sound_desc, sound_msg, loudness, is_say = _ray_state
-                    for n in ray:
-                        loudness = n.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
-                        if loudness <= 0:
-                            break
+                from collections import deque
+                source_local = (c[1], c[2], c[3])
+                visited = {source_local}
+                seen = {source_local}
+                queue = deque()
+                for neighbor in area.get_neighbors(source_local):
+                    ncoord = (neighbor.coord[1], neighbor.coord[2], neighbor.coord[3])
+                    seen.add(ncoord)
+                    queue.append((neighbor, loudness))
+                while queue:
+                    node, node_loudness = queue.popleft()
+                    ncoord = (node.coord[1], node.coord[2], node.coord[3])
+                    if ncoord in visited:
+                        continue
+                    visited.add(ncoord)
+                    ret = node.at_hear(emitter, sound_desc, sound_msg, node_loudness, is_say)
+                    if ret > 0:
+                        for neighbor in area.get_neighbors(ncoord):
+                            nnc = (neighbor.coord[1], neighbor.coord[2], neighbor.coord[3])
+                            if nnc not in seen:
+                                seen.add(nnc)
+                                queue.append((neighbor, ret))
 
     def emit_sound(self, sound_desc: str, sound_msg: str, loudness: float, is_say: bool = False):
         """Emit a sound.

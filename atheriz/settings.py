@@ -127,7 +127,7 @@ LUNAR_RECEIVER_LAMBDA = lambda x: x.is_pc and x.is_connected
 TIME_UPDATE_SECONDS = 1.0
 START_YEAR = 888
 # minutes the clock should advance for every update tick above
-TICK_MINUTES = 5.0
+TICK_MINUTES = 1.0
 SECONDS_PER_MINUTE = 60
 MINUTES_PER_HOUR = 60
 HOURS_PER_DAY = 24
@@ -163,12 +163,12 @@ class Month(IntEnum):
 # mapping of decibels to description
 
 LOUDNESS_LEVELS = (
-    (20, "nearly inaudible"),
-    (40, "faint"),
-    (60, "clear"),
-    (80, "loud"),
-    (100, "very loud"),
-    (120, "extremely loud"),
+    (20, " nearly inaudible"),
+    (40, " faint"),
+    (60, ""),
+    (80, " loud"),
+    (100, " very loud"),
+    (120, " extremely loud"),
 )
 
 # percentage of words to replace with "..." at certain decibel levels
