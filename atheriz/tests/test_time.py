@@ -82,6 +82,13 @@ def _make_gt(ticks: int = 0) -> GameTime:
 class TestGetTimespanDefaults:
     """Tests using the default settings (TICK_MINUTES=1.0)."""
 
+    @pytest.fixture(autouse=True)
+    def _save_restore_settings(self):
+        original = settings.TICK_MINUTES
+        settings.TICK_MINUTES = 1.0
+        yield
+        settings.TICK_MINUTES = original
+
     def test_zero_ticks(self):
         gt = _make_gt(0)
         result = gt.get_timespan(0)
@@ -315,6 +322,13 @@ class TestGetTimespanFractionalTickMinutes:
 
 class TestGetTimeDefaults:
     """Tests for get_time with default settings (TICK_MINUTES=1.0)."""
+
+    @pytest.fixture(autouse=True)
+    def _save_restore_settings(self):
+        original = settings.TICK_MINUTES
+        settings.TICK_MINUTES = 1.0
+        yield
+        settings.TICK_MINUTES = original
 
     def test_tick_zero(self):
         gt = _make_gt(0)
@@ -564,6 +578,13 @@ class TestGetTimeFractionalTickMinutes:
 class TestSunUp:
     """Test sun_up and sun_up_alt methods."""
 
+    @pytest.fixture(autouse=True)
+    def _save_restore_settings(self):
+        original = settings.TICK_MINUTES
+        settings.TICK_MINUTES = 1.0
+        yield
+        settings.TICK_MINUTES = original
+
     def test_sun_up_at_sunrise(self):
         ticks = int(settings.SUNRISE_HOUR * settings.MINUTES_PER_HOUR)
         gt = _make_gt(ticks)
@@ -751,6 +772,7 @@ class TestEdgeCases:
     @pytest.fixture(autouse=True)
     def _save_restore_settings(self):
         original = settings.TICK_MINUTES
+        settings.TICK_MINUTES = 1.0
         yield
         settings.TICK_MINUTES = original
 
@@ -839,6 +861,14 @@ class TestEdgeCases:
 
 class TestTimeEvents:
     """Test solar and lunar events Triggering through at_solar_event and at_lunar_event."""
+
+    @pytest.fixture(autouse=True)
+    def _save_restore_settings(self):
+        original = settings.TICK_MINUTES
+        settings.TICK_MINUTES = 1.0
+        yield
+        settings.TICK_MINUTES = original
+
     @patch("atheriz.globals.time.filter_by")
     def test_solar_events(self, mock_filter_by):
         mock_character = MagicMock()
