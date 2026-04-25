@@ -8,6 +8,7 @@ from atheriz.commands.base_cmd import Command
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea, Transition
 from atheriz.globals.map import LegendEntry, MapInfo
 from atheriz.objects.base_door import Door
+from atheriz.objects.base_script import Script
 
 class CustomData:
     """A small custom class to test reference serialization."""
@@ -259,6 +260,37 @@ class AlarmObj(Object):
 
     def at_alarm(self, time, data):
         self.alarm_fired = True
+
+
+def test_script_serialization():
+    script = Script.create(None, "TestScript", "A test script")
+    script.custom_data = CustomData("script_data")
+
+    deserialized = assert_serialization(script)
+    assert object.__getattribute__(deserialized, "name") == "TestScript"
+    assert object.__getattribute__(deserialized, "desc") == "A test script"
+    assert object.__getattribute__(deserialized, "custom_data").value == "script_data"
+    assert object.__getattribute__(deserialized, "id") == script.id
+
+
+def test_script_serialization_clears_child():
+    """Script.__getstate__ must pop 'child' so circular refs aren't pickled."""
+    from atheriz.objects.base_obj import Object
+
+    obj = Object()
+    obj.id = 1
+    obj.name = "ChildObj"
+
+    script = Script.create(None, "HookScript")
+    script.child = obj
+
+    assert script.child is obj
+
+    serialized = dill.dumps(script)
+    deserialized = dill.loads(serialized)
+
+    assert object.__getattribute__(deserialized, "child") is None
+    assert object.__getattribute__(deserialized, "name") == "HookScript"
 
 
 def test_subclass_object_serialization_preserves_overrides():

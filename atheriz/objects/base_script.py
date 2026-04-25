@@ -13,6 +13,7 @@ from atheriz.utils import ensure_thread_safe
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+    from atheriz.objects.nodes import Node
 
 
 def before(func: Callable) -> Callable:
@@ -166,7 +167,7 @@ class Script(Flags, DbOps):
         """
         pass
 
-    def install_hooks(self, child: Object) -> None:
+    def install_hooks(self, child: Object | Node) -> None:
         """
         Attaches all properly-decorated `at_*` hook methods in this script to a child object.
         
@@ -185,7 +186,7 @@ class Script(Flags, DbOps):
                 child.hooks[name] = s
         self.at_install()
 
-    def remove_hooks(self, child: Object | None = None) -> None:
+    def remove_hooks(self, child: Object | Node | None = None) -> None:
         """
         Detaches all hook methods in this Script from the currently-assigned child object.
         

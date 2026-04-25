@@ -23,6 +23,7 @@ from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.objects.base_lock import AccessLock
 from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_obj import hookable
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -86,10 +87,12 @@ class Node(Flags, AccessLock):
             return self.coord != other.coord
         return True
 
+    @hookable
     def at_desc(self, looker: Object | None = None, **kwargs):
         """Called when the node is looked at."""
         pass
 
+    @hookable
     def at_tick(self):
         """
         Called every tick.
@@ -217,6 +220,7 @@ class Node(Flags, AccessLock):
         else:
             at.remove_coro(self.at_tick, self._tick_seconds)
 
+    @hookable
     def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
         """
         Optionally modify parameters before the sound is emitted.
@@ -235,6 +239,7 @@ class Node(Flags, AccessLock):
         # this function can modify any of the args before returning them
         return True, emitter, sound_desc, sound_msg, loudness, is_say
 
+    @hookable
     def at_pre_hear(
         self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool
     ) -> tuple[bool, Object, str, str, float, bool]:
@@ -256,6 +261,7 @@ class Node(Flags, AccessLock):
         # this function can modify any of the args before returning them
         return True, emitter, sound_desc, sound_msg, loudness, is_say
 
+    @hookable
     def at_hear(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool) -> float:
         """
         Args:
@@ -294,6 +300,7 @@ class Node(Flags, AccessLock):
                 o.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
         return loudness - attenuation
 
+    @hookable
     def at_pre_object_leave(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
         """
         Called before an object leaves the node. Returning False aborts the move.
@@ -308,6 +315,7 @@ class Node(Flags, AccessLock):
         """
         return True
 
+    @hookable
     def at_object_leave(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> None:
         """
         Called after an object has successfully left the node.
@@ -319,6 +327,7 @@ class Node(Flags, AccessLock):
         """
         pass
 
+    @hookable
     def at_pre_object_receive(self, source: Node | Object | None, from_exit: str | None = None, **kwargs) -> bool:
         """
         Called before an object enters the node. Returning False aborts the entry.
@@ -333,6 +342,7 @@ class Node(Flags, AccessLock):
         """
         return True
 
+    @hookable
     def at_object_receive(self, source: Node | Object | None, from_exit: str | None = None, **kwargs) -> None:
         """
         Called after an object has successfully entered the node.
@@ -344,6 +354,7 @@ class Node(Flags, AccessLock):
         """
         pass
 
+    @hookable
     def at_init(self):
         """
         Called after this node object is deserialized and all its attributes
@@ -388,6 +399,7 @@ class Node(Flags, AccessLock):
         _self_delete()
         return 0, all_ops
 
+    @hookable
     def at_delete(self, caller: Object) -> bool:
         """
         Called before a node is fundamentally deleted from the world grid.

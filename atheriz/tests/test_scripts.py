@@ -1,6 +1,9 @@
 import pytest
 import tempfile
 import shutil
+import sqlite3
+import os
+import dill
 from atheriz import settings
 from atheriz.database_setup import do_setup
 from atheriz.globals import get as globals_get
@@ -312,3 +315,78 @@ def test_get_scripts_by_type():
     assert len(returned_scripts) == 2
     assert script1 in returned_scripts
     assert script3 in returned_scripts
+
+
+def test_temporary_script_not_saved(db_setup):
+    """Temporary scripts should be excluded from DB save and load."""
+    script = DummyBeforeScript.create(None, "TempScript")
+    script.is_temporary = True
+    script.is_modified = True
+    obj_singleton.add_object(script)
+
+    save_objects()
+
+    # Verify temp script is not in DB
+    db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT count(*) FROM objects WHERE id=?", (script.id,))
+    assert cursor.fetchone()[0] == 0
+    conn.close()
+
+    # Clear memory and reload
+    script_id = script.id
+    _ALL_OBJECTS.clear()
+    if db_mod._DATABASE:
+        db_mod._DATABASE.close()
+    db_mod._DATABASE = None
+    db_mod.do_setup()
+    load_objects()
+
+    loaded = obj_singleton.get(script_id)
+    assert len(loaded) == 0
+
+
+def test_script_dill_preserves_attributes():
+    """Direct dill serialization of a script preserves core attributes."""
+    script = DummyBeforeScript.create(None, "DillScript", "DillDesc")
+    script.custom_attr = "preserved"
+
+    serialized = dill.dumps(script)
+    deserialized = dill.loads(serialized)
+
+    assert deserialized.name == "DillScript"
+    assert deserialized.desc == "DillDesc"
+    assert deserialized.custom_attr == "preserved"
+    assert deserialized.id == script.id
+
+
+def test_script_dill_clears_child_and_hooks():
+    """After dill round-trip, child is None and hooks must be re-installed."""
+    obj = DummyObj.create(None, "HookHost")
+    script = DummyBeforeScript.create(None, "HookScript")
+    obj.add_script(script)
+
+    # Pre-conditions
+    assert script.child is obj
+    assert len(obj.hooks.get("at_test_hook", set())) == 1
+
+    # Serialize / deserialize script independently
+    serialized = dill.dumps(script)
+    deserialized = dill.loads(serialized)
+
+    # Child must be cleared
+    assert deserialized.child is None
+
+    # Hooks dict on the new script instance should be empty
+    # (hooks live on the child object, not the script)
+    # But the script itself shouldn't magically know about obj
+    assert deserialized not in obj.hooks.get("at_test_hook", set())
+
+    # Re-install and verify it works
+    obj.remove_script(script)  # remove original to avoid duplicate hooks
+    deserialized.install_hooks(obj)
+    obj.log.clear()
+    res = obj.at_test_hook("roundtrip")
+    assert obj.log == ["before: roundtrip, None", "at_test_hook: roundtrip, None"]
+    assert res == "original_result"
