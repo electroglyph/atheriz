@@ -30,3 +30,5 @@ Welcome to the Atheriz documentation. Atheriz is a Python framework built for cr
     *Creating interactive text menus using MenuEngine, Nodes, Choices, and Context.*
 14. **[14 API Reference](./14_api_reference.md)**  
     *Auto-generated documentation outlining public classes, methods, and functions.*
+15. **[15 Sound Propagation](./15_sound_propagation.md)**  
+    *Acoustic system, BFS room traversal, loudness attenuation, and hooks for emitting and hearing sounds.*

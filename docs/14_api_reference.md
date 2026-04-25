@@ -641,6 +641,78 @@ Returns:
 
 
 
+#### `def at_pre_hear(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Optionally modify parameters before the sound is heard.
+Return False for the first argument to prevent the sound from being heard.
+However, to prevent sound transmission, you must reduce the loudness
+
+Args:
+    emitter (Object): The object emitting the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loud (bool): Whether the sound is loud.
+    is_say (bool): Whether the sound is a say.
+
+Returns:
+    tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+
+
+
+#### `def at_hear(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Called when this object hears a sound.
+
+Args:
+    emitter (Object): The object that made the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loudness (float): The loudness of the sound.
+    is_say (bool): Whether the sound is a say.
+
+
+
+#### `def at_pre_emit_sound(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Optionally modify parameters before the sound is emitted.
+Return False for the first argument to prevent the sound from being emitted.
+
+Args:
+    emitter (Object): The object emitting the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loudness (float): The loudness of the sound.
+    is_say (bool): Whether the sound is a say.
+
+Returns:
+    tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+
+
+
+#### `def at_emit_sound(self, sound_desc, sound_msg, loudness, is_say)`
+
+Called when this object emits a sound.
+
+Args:
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loudness (float): The loudness of the sound.
+    is_say (bool): Whether the sound is a say.
+
+
+
+#### `def emit_sound(self, sound_desc, sound_msg, loudness, is_say)`
+
+Emit a sound.
+
+Args:
+    sound_desc (str): Description of the sound
+    sound_msg (str): Message of the sound
+    loudness (float): Loudness of the sound
+    is_say (bool, optional): Whether the sound is a say. Defaults to False.
+
+
+
 #### `def at_say(self, message, msg_self, msg_location, receivers, msg_receivers, **kwargs)`
 
 Display the actual say (or whisper) of self.
@@ -768,6 +840,55 @@ bool: Indicates if this node is currently registered with the asynchronous ticke
 
 
 #### `@is_tickable.setter def is_tickable(self, value)`
+
+
+
+#### `def at_pre_emit_sound(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Optionally modify parameters before the sound is emitted.
+Return False for the first argument to prevent the sound from being emitted.
+
+Args:
+    emitter (Object): The object emitting the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loudness (float): The loudness of the sound.
+    is_say (bool): Whether the sound is a say.
+
+Returns:
+    tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+
+
+
+#### `def at_pre_hear(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Optionally modify parameters before the sound is heard.
+Return False for the first argument to prevent the sound from being heard.
+However, to prevent sound transmission, you must reduce the loudness
+
+Args:
+    emitter (Object): The object emitting the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loud (bool): Whether the sound is loud.
+    is_say (bool): Whether the sound is a say.
+
+Returns:
+    tuple[bool, Object, str, str, float, bool]: If first element is False, the sound will not be emitted.
+
+
+
+#### `def at_hear(self, emitter, sound_desc, sound_msg, loudness, is_say)`
+
+Args:
+    emitter (Object): The object emitting the sound.
+    sound_desc (str): The description of the sound.
+    sound_msg (str): The message of the sound.
+    loudness (float): The loudness of the sound.
+    is_say (bool): Whether the sound is a say.
+
+Returns:
+    float: The remaining loudness of the sound.
 
 
 
@@ -1779,7 +1900,7 @@ Returns:
 
 ### `def get_dir(origin, dest)`
 
-get map direction between two points. (0,0) is lower left.
+get map direction between two coords.
 returns '' if origin == dest
 
 
@@ -1789,6 +1910,21 @@ returns '' if origin == dest
 
 
 ### `def get_reverse_link(location, destination)`
+
+
+
+### `def word_replace(input, replace_freq, replacement)`
+
+Replace words in string at specified frequency
+
+Args:
+    input (str): input string
+    replace_freq (float): 1 = 100%, .5 = 50%
+    replacement (str, optional): string to replace words with. Defaults to "...".
+
+
+
+### `def get_points_in_sphere(center, radius, ignore_center)`
 
 
 
@@ -2547,6 +2683,21 @@ Default value: `5`
 Default value: `1.0`
 
 
+### `DEFAULT_ENCLOSED_SOUND_ATTENUATION`
+
+Default value: `20.0`
+
+
+### `DEFAULT_OPEN_SOUND_ATTENUATION`
+
+Default value: `10.0`
+
+
+### `DEFAULT_AMBIENT_SOUND_LEVEL`
+
+Default value: `5.0`
+
+
 ### `GUEST_ENABLED`
 
 Default value: `True`
@@ -2619,7 +2770,7 @@ Default value: `False`
 
 ### `DEFAULT_HOME`
 
-Default value: `('limbo', 0, 0, 0)`
+Default value: `('limbo', 4, 4, 4)`
 
 
 ### `MAP_ENABLED`
@@ -2836,3 +2987,15 @@ Default value: `'The sun rises on a new day.'`
 
 Default value: `'The sun begins to set.'`
 
+
+### `LOUDNESS_LEVELS`
+
+Default value: `((20, ' nearly inaudible'), (40, ' faint'), (60, ''), (80, ' loud'), (100, ' very loud'), (120, ' extremely loud'))`
+
+
+### `REPLACE_LEVELS`
+
+Default value: `((1, 95.0), (10, 80.0), (20, 60.0), (30, 40.0), (40, 20.0), (50, 10.0))`
+
+
+[Previous: 13 The Menu Engine](./13_menu_engine.md) | [Table of Contents](./table_of_contents.md) | [Next: 15 Sound Propagation](./15_sound_propagation.md)

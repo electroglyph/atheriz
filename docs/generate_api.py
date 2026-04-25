@@ -135,6 +135,8 @@ def generate_markdown():
                             except Exception:
                                 pass
 
+    output.append("[Previous: 13 The Menu Engine](./13_menu_engine.md) | [Table of Contents](./table_of_contents.md) | [Next: 15 Sound Propagation](./15_sound_propagation.md)\n")
+    
     output_path = os.path.join(os.path.dirname(__file__), '14_api_reference.md')
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(output))
