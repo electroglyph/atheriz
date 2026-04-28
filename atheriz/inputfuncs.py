@@ -94,44 +94,46 @@ class InputFuncs:
                 return
 
             parts = text.split(" ", 1)
-            cmd_key = parts[0].lower()
+            raw_cmd_key = parts[0].lower()
             cmd_args = parts[1] if len(parts) > 1 else ""
+            matched_alias = raw_cmd_key
 
             atp = get_async_threadpool()
 
             if connection.session.puppet:
                 # Player is logged in
-                cmd = connection.session.puppet.internal_cmdset.get(cmd_key)
+                cmd = connection.session.puppet.internal_cmdset.get(raw_cmd_key)
                 if not cmd:
-                    cmd = get_loggedin_cmdset().get(cmd_key)
+                    cmd = get_loggedin_cmdset().get(raw_cmd_key)
                 if cmd:
                     if not cmd.access(connection.session.puppet):
                         connection.session.puppet.msg("You can't do that.")
                         return
-                    func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args)
+                    func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args, cmdstring=matched_alias)
                     if func:
                         atp.add_task(func, caller, eargs)
                     else:
-                        logger.warning(f"Command {cmd_key} execute returned no func")
+                        logger.warning(f"Command {raw_cmd_key} execute returned no func")
                 else:
                     # handle aliasing / short commands
                     # this makes 'bleh work as `say bleh`
                     cmd = get_loggedin_cmdset().get(text[:1])
                     if cmd:
-                        cmd_key = text[1:]
+                        matched_alias = text[:1]
+                        cmd_args = text[1:]
                     else:
                         # check for commands provided by objects in the players location
                         loc: Object | Node = connection.session.puppet.location
                         if loc:
                             objs = loc.contents
                             for obj in objs:
-                                if cmd := obj.external_cmdset.get(cmd_key):
+                                if cmd := obj.external_cmdset.get(raw_cmd_key):
                                     break
                         if not cmd:
                             # check for commands provided by objects in the players inventory
                             objs = connection.session.puppet.contents
                             for obj in objs:
-                                if cmd := obj.external_cmdset.get(cmd_key):
+                                if cmd := obj.external_cmdset.get(raw_cmd_key):
                                     break
 
                     if not cmd and settings.AUTO_COMMAND_ALIASING:
@@ -139,25 +141,26 @@ class InputFuncs:
                         for key in keys:
                             if key in _IGNORE_KEYS:
                                 continue
-                            if key.startswith(cmd_key):
+                            if key.startswith(raw_cmd_key):
                                 cmd = get_loggedin_cmdset().get(key)
-                                # using the execute below, so set our args properly
-                                cmd_key = cmd_args
+                                matched_alias = key
                                 break
                     if not cmd:
                         cmd = get_loggedin_cmdset().get("none")
+                        matched_alias = "none"
+                        cmd_args = raw_cmd_key
                     if cmd:
                         if not cmd.access(connection.session.puppet):
                             connection.session.puppet.msg("You can't do that.")
                             return
-                        func, caller, eargs = cmd.execute(connection.session.puppet, cmd_key)
+                        func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args, cmdstring=matched_alias)
                         if func:
                             atp.add_task(func, caller, eargs)
             else:
                 # Player is NOT logged in
-                cmd = get_unloggedin_cmdset().get(cmd_key)
+                cmd = get_unloggedin_cmdset().get(raw_cmd_key)
                 if cmd:
-                    func, caller, eargs = cmd.execute(connection, cmd_args)
+                    func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
                     if func:
                         atp.add_task(func, caller, eargs)
                 else:
@@ -166,15 +169,16 @@ class InputFuncs:
                         for key in keys:
                             if key in _IGNORE_KEYS:
                                 continue
-                            if key.startswith(cmd_key):
+                            if key.startswith(raw_cmd_key):
                                 cmd = get_unloggedin_cmdset().get(key)
-                                # using the execute below, so set our args properly
-                                cmd_key = cmd_args
+                                matched_alias = key
                                 break
                     if not cmd:
                         cmd = get_unloggedin_cmdset().get("none")
+                        matched_alias = "none"
+                        cmd_args = raw_cmd_key
                     if cmd:
-                        func, caller, eargs = cmd.execute(connection, cmd_key)
+                        func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
                         if func:
                             atp.add_task(func, caller, eargs)
         except Exception:

@@ -38,6 +38,7 @@ from atheriz.commands.loggedin.noun import NounCommand
 from atheriz.commands.loggedin.py import PyCommand
 from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand
 from atheriz.commands.loggedin.group import GroupCommand
+from atheriz.commands.loggedin.socials import CmdSocials
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -84,3 +85,4 @@ class LoggedinCmdSet(CmdSet):
         self.add(FollowCommand())
         self.add(NoFollowCommand())
         self.add(GroupCommand())
+        self.add(CmdSocials())

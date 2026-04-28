@@ -120,7 +120,7 @@ class Command:
         pass
 
     def execute(
-        self, caller: Object | Connection, args_string: str
+        self, caller: Object | Connection, args_string: str, cmdstring: str = ""
     ) -> (
         tuple[Callable[[Object | Connection, Any], None], Object | Connection, Any]
         | tuple[None, None, None]
@@ -131,6 +131,7 @@ class Command:
         Args:
             caller: The object/player calling the command.
             args_string: The string containing the arguments (command name stripped).
+            cmdstring: The string of the alias actually invoked.
 
         Returns:
             tuple[Callable[[Object | Connection, Any], None], Object | Connection, Any]: the run function, caller, and the parsed arguments
@@ -145,6 +146,7 @@ class Command:
             arg_list = shlex.split(args_string, posix=False)
         try:
             parsed_args = self.parser.parse_args(arg_list)
+            parsed_args.cmdstring = cmdstring
         except:
             help_text = self.print_help()
             caller.msg(help_text)
