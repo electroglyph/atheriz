@@ -11,7 +11,7 @@ class QuitCommand(Command):
     desc = "Quit."
     use_parser = False
     aliases = ["exit", "quit", "logout", "disconnect"]
-    
+
     # pyrefly: ignore
     def run(self, caller: Object, args):
         caller.msg("Goodbye!")

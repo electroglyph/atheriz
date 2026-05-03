@@ -4,7 +4,7 @@ from atheriz.commands.unloggedin.guest import GuestCommand
 from atheriz.commands.unloggedin.none import NoneCommand
 from atheriz.commands.unloggedin.screenreader import ScreenReaderCommand
 from atheriz.commands.unloggedin.help import HelpCommand
-
+from atheriz.commands.unloggedin.quit import QuitCommand
 
 class UnloggedinCmdSet(CmdSet):
     def __init__(self):
@@ -14,3 +14,4 @@ class UnloggedinCmdSet(CmdSet):
         self.add(NoneCommand())
         self.add(ScreenReaderCommand())
         self.add(HelpCommand())
+        self.add(QuitCommand())

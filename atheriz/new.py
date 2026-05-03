@@ -412,27 +412,35 @@ def create_game_folder(folder_name: str) -> None:
 
     folder_path = Path(folder_name)
 
-    if folder_path.exists():
-        print(f"Error: Folder '{folder_name}' already exists.")
-        return
+    folder_exists_initially = folder_path.exists()
 
-    # Get superuser credentials from env or prompt
-    username = os.environ.get("ATHERIZ_SUPERUSER_USERNAME")
-    if not username:
-        username = input("Enter superuser username: ").strip()
+    if folder_exists_initially:
+        ans = input(f"Folder '{folder_name}' already exists. Replace files? (y/n): ").strip().lower()
+        if ans != 'y':
+            print("Aborted.")
+            return
+
+    username = None
+    password = None
+
+    if not folder_exists_initially:
+        # Get superuser credentials from env or prompt
+        username = os.environ.get("ATHERIZ_SUPERUSER_USERNAME")
         if not username:
-            print("Error: Username cannot be empty.")
-            return
+            username = input("Enter superuser username: ").strip()
+            if not username:
+                print("Error: Username cannot be empty.")
+                return
 
-    password = os.environ.get("ATHERIZ_SUPERUSER_PASSWORD")
-    if not password:
-        password = getpass.getpass("Enter superuser password: ")
+        password = os.environ.get("ATHERIZ_SUPERUSER_PASSWORD")
         if not password:
-            print("Error: Password cannot be empty.")
-            return
+            password = getpass.getpass("Enter superuser password: ")
+            if not password:
+                print("Error: Password cannot be empty.")
+                return
 
     print(f"Creating game folder: {folder_name}")
-    folder_path.mkdir(parents=True)
+    folder_path.mkdir(parents=True, exist_ok=True)
 
     # Create __init__.py
     init_file = folder_path / "__init__.py"
@@ -489,7 +497,7 @@ def create_game_folder(folder_name: str) -> None:
     # Create commands directory
     print("  Creating commands directory...")
     commands_path = folder_path / "commands"
-    commands_path.mkdir(parents=True)
+    commands_path.mkdir(parents=True, exist_ok=True)
     (commands_path / "__init__.py").write_text("")
 
     print("  Creating commands/command.py...")
@@ -571,56 +579,58 @@ def create_game_folder(folder_name: str) -> None:
     import shutil
     web_src = Path(__file__).parent / "web"
     if web_src.exists():
-        shutil.copytree(web_src, folder_path / "web")
+        shutil.copytree(web_src, folder_path / "web", dirs_exist_ok=True)
     else:
         print(f"  Warning: Web folder not found at {web_src}")
 
     # Create save directory in the game folder
     save_path = folder_path / "save"
-    save_path.mkdir(parents=True)
+    save_path.mkdir(parents=True, exist_ok=True)
 
-    # Set up initial world and superuser account
-    print("\nSetting up initial world state...")
+    # Set up initial world and superuser account if new folder
+    if not folder_exists_initially:
+        print("\nSetting up initial world state...")
 
-    # Set up sys.path to include the parent of the new game folder
-    # This allows importing the game folder as a package for relative imports
-    import sys
-    import importlib
-    parent_dir = str(folder_path.parent.resolve())
-    if parent_dir not in sys.path:
-        sys.path.insert(0, parent_dir)
-    pkg_name = folder_path.name
+        # Set up sys.path to include the parent of the new game folder
+        # This allows importing the game folder as a package for relative imports
+        import sys
+        import importlib
+        parent_dir = str(folder_path.parent.resolve())
+        if parent_dir not in sys.path:
+            sys.path.insert(0, parent_dir)
+        pkg_name = folder_path.name
 
-    # Import settings to configure paths
-    game_settings = importlib.import_module(f"{pkg_name}.settings")
+        # Import settings to configure paths
+        game_settings = importlib.import_module(f"{pkg_name}.settings")
 
-    
-    # Override save path keys in the global settings to match the new game folder
-    import atheriz.settings as global_settings
-    global_settings.SAVE_PATH = str(save_path.resolve())
-    
-    secret_path = folder_path / "secret"
-    secret_path.mkdir(parents=True, exist_ok=True)
-    global_settings.SECRET_PATH = str(secret_path.resolve())
+        
+        # Override save path keys in the global settings to match the new game folder
+        import atheriz.settings as global_settings
+        global_settings.SAVE_PATH = str(save_path.resolve())
+        
+        secret_path = folder_path / "secret"
+        secret_path.mkdir(parents=True, exist_ok=True)
+        global_settings.SECRET_PATH = str(secret_path.resolve())
 
 
-    # Import and run initial_setup from the new game folder as a package
-    try:
-        local_setup = importlib.import_module(f"{pkg_name}.initial_setup")
-        local_setup.do_setup(username, password)
+        # Import and run initial_setup from the new game folder as a package
+        try:
+            local_setup = importlib.import_module(f"{pkg_name}.initial_setup")
+            local_setup.do_setup(username, password)
 
-    except Exception as e:
-        from atheriz.logger import logger
-        logger.exception(f"Error during initial setup: {e}")
-        return
-     
-    print(f"\nSuccess! Game folder '{folder_name}' created with:")
+        except Exception as e:
+            from atheriz.logger import logger
+            logger.exception(f"Error during initial setup: {e}")
+            return
+         
+    print(f"\nSuccess! Game folder '{folder_name}' created/updated with:")
     print(f"  Template files:")
     print(f"    - account.py, channel.py, object.py, node.py")
     print(f"    - script.py, flags.py, access.py, door.py, objects.py, database_setup.py")
     print(f"    - commands/, inputfuncs.py, settings.py")
     print(f"    - initial_setup.py, connection_screen.py")
     print(f"    - web/ (templates and static files)")
-    print(f"  Initial world:")
-    print(f"    - Superuser account: {username}")
-    print(f"    - Starting room at {game_settings.DEFAULT_HOME}")
+    if not folder_exists_initially:
+        print(f"  Initial world:")
+        print(f"    - Superuser account: {username}")
+        print(f"    - Starting room at {game_settings.DEFAULT_HOME}")
