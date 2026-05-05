@@ -1099,26 +1099,28 @@ window.addEventListener('load', () => {
                         continue;
                     }
 
-                    const strippedSym = sym.replace(ansi_color_regex, '');
+                     const strippedSym = sym.replace(ansi_color_regex, '');
+                     const fgColor = extractTrueColorFg(sym);
+                     const colorKey = strippedSym + '|' + (fgColor ? fgColor.r + ',' + fgColor.g + ',' + fgColor.b : 'none');
 
-                    if (seenSymbols.hasOwnProperty(strippedSym)) {
-                        // Duplicate symbol found - assign a unique color
-                        let hue = seenSymbols[strippedSym];
-                        let rgb = hslToRgb(hue / 360, 1.0, 0.5);
-                        sym = wrapTrueColor(strippedSym, rgb[0], rgb[1], rgb[2]);
+                     if (seenSymbols.hasOwnProperty(colorKey)) {
+                         // Duplicate symbol with same color found - assign a unique color
+                         let hue = seenSymbols[colorKey];
+                         let rgb = hslToRgb(hue / 360, 1.0, 0.5);
+                         sym = wrapTrueColor(strippedSym, rgb[0], rgb[1], rgb[2]);
 
-                        // Update next hue
-                        let nextHue = hue + 57.0;
-                        if (nextHue > 360) nextHue %= 360;
-                        seenSymbols[strippedSym] = nextHue;
-                    } else {
-                        // First time seeing this symbol - initialize for next sighting
-                        seenSymbols[strippedSym] = 131.0;
+                         // Update next hue
+                         let nextHue = hue + 57.0;
+                         if (nextHue > 360) nextHue %= 360;
+                         seenSymbols[colorKey] = nextHue;
+                     } else {
+                         // First time seeing this specific symbol+color combo
+                         seenSymbols[colorKey] = 131.0;
 
-                        if (!sym.endsWith('\x1b[0m')) {
-                            sym += '\x1b[0m';
-                        }
-                    }
+                         if (!sym.endsWith('\x1b[0m')) {
+                             sym += '\x1b[0m';
+                         }
+                     }
                     colorizedEntries.push([sym, desc, coords]);
                 }
 
