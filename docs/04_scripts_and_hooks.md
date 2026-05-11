@@ -105,7 +105,7 @@ class SpikeTrapScript(Script):
 A strength buff script alters an object's combat calculations for multiple ticks, eliminating itself after the duration lapses.
 
 ```python
-from atheriz.objects.base_script import Script, replace
+from atheriz.objects.base_script import Script, after
 
 class StrengthBuff(Script):
     def at_install(self):
