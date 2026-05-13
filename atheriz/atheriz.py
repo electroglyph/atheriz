@@ -583,10 +583,11 @@ def main():
     )
 
     test_parser = subparsers.add_parser(
-        "test", help="Run tests with local game objects"
+        "test", help="Run tests. Runs game tests by default, or core tests with 'test core'."
     )
     test_parser.add_argument(
-        "pytest_args", nargs=argparse.REMAINDER, help="Additional arguments for pytest"
+        "pytest_args", nargs=argparse.REMAINDER, 
+        help="Use 'core' as the first argument to run core AtheriZ tests. Any other arguments are passed to pytest."
     )
 
     args = parser.parse_args()
@@ -868,30 +869,35 @@ def do_reset_command(args):
 
 
 def do_test_command(args):
-    """Run core tests using local game objects."""
+    """Run tests."""
     import sys
     import pytest
     from pathlib import Path
+    from atheriz.utils import is_in_game_folder
 
     # 1. Setup game folder (injections)
-    setup_game_folder(required=False)
+    in_game_folder = setup_game_folder(required=False)
 
-    # 2. Find internal tests directory
+    pytest_args = list(args.pytest_args or [])
+    
+    run_core = False
+    if pytest_args and pytest_args[0] == "core":
+        run_core = True
+        pytest_args.pop(0)
+    elif not in_game_folder:
+        run_core = True
 
-    test_path = Path(__file__).parent / "tests"
-    if not test_path.exists():
-        print(f"Error: Could not find core tests at {test_path}")
-        sys.exit(1)
+    if run_core:
+        # For core tests, we MUST point to the core tests directory
+        test_path = Path(__file__).parent / "tests"
+        pytest_args.append(str(test_path))
+        print(f"Running core tests from {test_path}...")
+    else:
+        print("Running game tests...")
 
-    print(f"Running core tests from {test_path}...")
-
-    # 3. Run pytest
-    # We pass the rest of the arguments to pytest
-    pytest_args = ["-W", "ignore::pytest.PytestAssertRewriteWarning", str(test_path)]
-    if args.pytest_args:
-        pytest_args.extend(args.pytest_args)
-
-    sys.exit(pytest.main(pytest_args))
+    # 2. Run pytest
+    final_args = ["-W", "ignore::pytest.PytestAssertRewriteWarning"] + pytest_args
+    sys.exit(pytest.main(final_args))
 
 
 if __name__ == "__main__":
