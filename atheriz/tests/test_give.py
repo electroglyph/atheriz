@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_obj import Object
@@ -17,7 +18,7 @@ def setup_give_scenario():
     handler = NodeHandler()
     area = NodeArea(name="testarea")
     grid = NodeGrid(z=0)
-    node = Node(coord=("testarea", 0, 0, 0))
+    node = Node(coord=Coord("testarea", 0, 0, 0))
     grid.add_node(node)
     area.add_grid(grid)
     handler.add_area(area)

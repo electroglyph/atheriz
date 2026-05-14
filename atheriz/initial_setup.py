@@ -8,6 +8,7 @@ from atheriz.globals.objects import add_object, save_objects
 import atheriz.settings as settings
 from atheriz.database_setup import do_setup as do_db_setup
 from atheriz.logger import logger
+from atheriz.utils import Coord
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
 
@@ -55,7 +56,7 @@ def do_setup(username=None, password=None):
         grid = NodeGrid(area=LIMBO_AREA, z=z)
         for x in range(LIMBO_GRID):
             for y in range(LIMBO_GRID):
-                node = Node(coord=(LIMBO_AREA, x, y, z), desc=LIMBO_DESC)
+                node = Node(coord=Coord(LIMBO_AREA, x, y, z), desc=LIMBO_DESC)
                 grid.nodes[(x, y)] = node
         area.add_grid(grid)
     DIRS = [
@@ -75,9 +76,9 @@ def do_setup(username=None, password=None):
                         if ng:
                             neighbor = ng.nodes.get((nx, ny))
                             if neighbor:
-                                node.add_link(NodeLink(name=name, coord=(LIMBO_AREA, nx, ny, nz), aliases=[alias]))
+                                node.add_link(NodeLink(name=name, coord=Coord(LIMBO_AREA, nx, ny, nz), aliases=[alias]))
                                 neighbor.add_link(
-                                    NodeLink(name=rev_name, coord=(LIMBO_AREA, x, y, z), aliases=[rev_alias])
+                                    NodeLink(name=rev_name, coord=Coord(LIMBO_AREA, x, y, z), aliases=[rev_alias])
                                 )
 
     nh.add_area(area)
@@ -109,7 +110,7 @@ def do_setup(username=None, password=None):
         if not password:
             password = getpass.getpass("Enter superuser password: ")
 
-    alarm_node = nh.get_node((LIMBO_AREA, 0, 0, LIMBO_GRID - 1))
+    alarm_node = nh.get_node(Coord(LIMBO_AREA, 0, 0, LIMBO_GRID - 1))
     alarm_obj = AlarmObject.create(
         None,
         "A flashing dashboard",

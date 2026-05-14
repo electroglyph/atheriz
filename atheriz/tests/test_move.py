@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_obj import Object
@@ -18,13 +19,13 @@ def test_npc_move_announcements():
     grid = NodeGrid(z=0)
     
     # Node 1 (Source)
-    node1 = Node(coord=("TestArea", 0, 0, 0))
-    link_n = NodeLink(name="north", coord=("TestArea", 0, 1, 0))
+    node1 = Node(coord=Coord("TestArea", 0, 0, 0))
+    link_n = NodeLink(name="north", coord=Coord("TestArea", 0, 1, 0))
     node1.add_link(link_n)
     
     # Node 2 (Destination)
-    node2 = Node(coord=("TestArea", 0, 1, 0))
-    link_s = NodeLink(name="south", coord=("TestArea", 0, 0, 0))
+    node2 = Node(coord=Coord("TestArea", 0, 1, 0))
+    link_s = NodeLink(name="south", coord=Coord("TestArea", 0, 0, 0))
     node2.add_link(link_s)
     
     grid.add_node(node1)

@@ -1,5 +1,6 @@
 
 import pytest
+from atheriz.utils import Coord
 import os
 import shutil
 import tempfile
@@ -167,11 +168,11 @@ def test_node_handler_persistence(db_setup):
     
     # Create Transition
     # Transition signature: from_coord, to_coord
-    t = Transition(("OtherArea", 0, 0, 0), ("TestArea", 1, 1, 0))
+    t = Transition(Coord("OtherArea", 0, 0, 0), Coord("TestArea", 1, 1, 0))
     nh.add_transition(t)
     
     # Create Door
-    door = Door(("TestArea", 5, 5, 0), "exit", ("TestArea", 6, 5, 0), "entrance")
+    door = Door(Coord("TestArea", 5, 5, 0), "exit", Coord("TestArea", 6, 5, 0), "entrance")
     nh.add_door(door)
     
     # Save
@@ -190,7 +191,7 @@ def test_node_handler_persistence(db_setup):
     
     # Fix for door check: doors in DB are stored by coordinate blocks
     # One row per coordinate that has doors
-    cursor.execute("SELECT count(*) FROM doors WHERE area=? AND x=? AND y=? AND z=?", ("TestArea", 5, 5, 0))
+    cursor.execute("SELECT count(*) FROM doors WHERE area=? AND x=? AND y=? AND z=?", Coord("TestArea", 5, 5, 0))
     assert cursor.fetchone()[0] == 1
     
     conn.close()
@@ -199,9 +200,9 @@ def test_node_handler_persistence(db_setup):
     nh2 = NodeHandler()
     
     assert "TestArea" in nh2.areas
-    assert ("TestArea", 1, 1, 0) in nh2.transitions
-    assert ("TestArea", 5, 5, 0) in nh2.doors
-    assert "exit" in nh2.doors[("TestArea", 5, 5, 0)]
+    assert Coord("TestArea", 1, 1, 0) in nh2.transitions
+    assert Coord("TestArea", 5, 5, 0) in nh2.doors
+    assert "exit" in nh2.doors[Coord("TestArea", 5, 5, 0)]
 
 def test_loaded_objects_threadsafe(db_setup):
     """
@@ -233,7 +234,7 @@ def test_loaded_objects_threadsafe(db_setup):
     
     # Create Node and save it
     nh = NodeHandler()
-    node = Node(coord=("TestAreaTS", 10, 10, 0))
+    node = Node(coord=Coord("TestAreaTS", 10, 10, 0))
     
     if "TestAreaTS" not in nh.areas:
         nh.add_area(NodeArea("TestAreaTS"))
@@ -262,7 +263,7 @@ def test_loaded_objects_threadsafe(db_setup):
     loaded_chan = get(chan.id)[0]
     loaded_acc = get(acc.id)[0]
     loaded_script = get(script.id)[0]
-    loaded_node = nh2.get_node(("TestAreaTS", 10, 10, 0))
+    loaded_node = nh2.get_node(Coord("TestAreaTS", 10, 10, 0))
     
     # Test if classes have had ensure_thread_safe applied
     assert getattr(loaded_obj.__class__, "_is_thread_safe", False) is True, "Object missing thread_safe patch!"

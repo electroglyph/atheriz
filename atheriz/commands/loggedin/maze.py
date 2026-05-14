@@ -4,7 +4,7 @@ from atheriz.globals.get import get_node_handler, get_map_handler, get_async_thr
 from atheriz.globals.map import MapInfo, LegendEntry
 from atheriz.commands.base_cmd import Command
 from atheriz.pathfind import astar
-from atheriz.utils import wrap_xterm256
+from atheriz.utils import wrap_xterm256, Coord
 import time
 from typing import TYPE_CHECKING
 
@@ -60,7 +60,7 @@ class MazeCommand(Command):
             map1,
             [
                 LegendEntry(
-                    wrap_xterm256("!", fg=9), "to maze2", (maze1_exit.coord[1], maze1_exit.coord[2])
+                    wrap_xterm256("!", fg=9), "to maze2", (maze1_exit.coord.x, maze1_exit.coord.y)
                 )
             ],
         )
@@ -70,7 +70,7 @@ class MazeCommand(Command):
             map2,
             [
                 LegendEntry(
-                    wrap_xterm256("!", fg=9), "to maze3", (maze2_exit.coord[1], maze2_exit.coord[2])
+                    wrap_xterm256("!", fg=9), "to maze3", (maze2_exit.coord.x, maze2_exit.coord.y)
                 )
             ],
         )
@@ -80,7 +80,7 @@ class MazeCommand(Command):
             map3,
             [
                 LegendEntry(
-                    wrap_xterm256("!", fg=9), "to maze1", (maze3_exit.coord[1], maze3_exit.coord[2])
+                    wrap_xterm256("!", fg=9), "to maze1", (maze3_exit.coord.x, maze3_exit.coord.y)
                 )
             ],
         )
@@ -88,10 +88,10 @@ class MazeCommand(Command):
         mh.set_mapinfo("maze1", 0, mi1)
         mh.set_mapinfo("maze2", 0, mi2)
         mh.set_mapinfo("maze3", 0, mi3)
-        maze1_exit.add_link(NodeLink("down", ("maze2", 0, 0, 0), ["d"]))
-        maze2_exit.add_link(NodeLink("down", ("maze3", 0, 0, 0), ["d"]))
-        maze3_exit.add_link(NodeLink("down", ("maze1", 0, 0, 0), ["d"]))
-        node = nh.get_node(("maze1", 0, 0, 0))
+        maze1_exit.add_link(NodeLink("down", Coord("maze2", 0, 0, 0), ["d"]))
+        maze2_exit.add_link(NodeLink("down", Coord("maze3", 0, 0, 0), ["d"]))
+        maze3_exit.add_link(NodeLink("down", Coord("maze1", 0, 0, 0), ["d"]))
+        node = nh.get_node(Coord("maze1", 0, 0, 0))
         end = maze1_exit
         def do_pathfind(caller: Object, node2: Node, end2: Node):
             start = time.time()
@@ -100,10 +100,10 @@ class MazeCommand(Command):
             caller.msg(unbackground="")
             if success:
                 caller.msg(f"path found in: {elapsed:.2f} milliseconds")
-                caller.msg(background={"color": (83, 128, 56), "coords": [(n.coord[1], n.coord[2]) for n in path]})
+                caller.msg(background={"color": (83, 128, 56), "coords": [(n.coord.x, n.coord.y) for n in path]})
             else:
                 caller.msg(f"path not found in: {elapsed:.2f} milliseconds")
-                caller.msg(background={"color": (90, 0, 0), "coords": [(n.coord[1], n.coord[2]) for n in deadend]})
+                caller.msg(background={"color": (90, 0, 0), "coords": [(n.coord.x, n.coord.y) for n in deadend]})
         get_async_threadpool().add_task(do_pathfind, caller, node, end)
         if node:
             caller.msg(f"moving to: {node} ...")
@@ -207,15 +207,15 @@ def create_map(maze: dict, width: int, height: int, area: str):
     grid = NodeGrid(area, 0)
     for k, v in maze.items():
         dirs = get_dirs(k, v, maze)
-        node = Node((area, k[0], k[1], 0), "Somewhere in a mysterious maze.")
+        node = Node(Coord(area, k[0], k[1], 0), "Somewhere in a mysterious maze.")
         if dirs[0]:
-            node.add_link(NodeLink("north", (area, k[0], k[1] + 1, 0), ["n"]))
+            node.add_link(NodeLink("north", Coord(area, k[0], k[1] + 1, 0), ["n"]))
         if dirs[1]:
-            node.add_link(NodeLink("south", (area, k[0], k[1] - 1, 0), ["s"]))
+            node.add_link(NodeLink("south", Coord(area, k[0], k[1] - 1, 0), ["s"]))
         if dirs[2]:
-            node.add_link(NodeLink("east", (area, k[0] + 1, k[1], 0), ["e"]))
+            node.add_link(NodeLink("east", Coord(area, k[0] + 1, k[1], 0), ["e"]))
         if dirs[3]:
-            node.add_link(NodeLink("west", (area, k[0] - 1, k[1], 0), ["w"]))
+            node.add_link(NodeLink("west", Coord(area, k[0] - 1, k[1], 0), ["w"]))
         grid.add_node(node)
         if dirs[0] and dirs[1] and dirs[2] and dirs[3]:
             map[(k[0], k[1])] = "╬"

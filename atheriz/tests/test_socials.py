@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import MagicMock
 from argparse import Namespace
 
@@ -13,7 +14,7 @@ def test_env():
     area = NodeArea(name="TestAreaSocials")
     grid = NodeGrid(z=0)
     
-    room = Node(coord=("TestAreaSocials", 0, 0, 0))
+    room = Node(coord=Coord("TestAreaSocials", 0, 0, 0))
     grid.add_node(room)
     area.add_grid(grid)
     handler.add_area(area)

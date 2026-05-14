@@ -3,6 +3,7 @@ from atheriz.globals.get import get_node_handler
 from atheriz.objects.nodes import NodeLink, Node
 from atheriz.objects.base_door import Door
 import atheriz.settings as settings
+from atheriz.utils import Coord
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -110,14 +111,8 @@ class DoorCommand(Command):
                     caller.msg("There is no door down.")
         else:
             if args.north:
-                # coord[0] = area, coord[1] = x, coord[2] = y, coord[3] = z
-                to_coord = list(loc.coord)
-                door_coord = list(loc.coord)
-                door_coord[2] += 1
-                # y + 2 because the door is between the two rooms
-                to_coord[2] += 2
-                door_coord = tuple(door_coord)
-                to_coord = tuple(to_coord)
+                to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y + 2, loc.coord.z)
+                door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y + 1, loc.coord.z)
                 to_node = nh.get_node(to_coord)
                 if not to_node:
                     if args.auto:
@@ -171,7 +166,7 @@ class DoorCommand(Command):
                     "north",
                     to_coord,
                     "south",
-                    (door_coord[1], door_coord[2]),
+                    (door_coord.x, door_coord.y),
                     settings.NS_CLOSED_DOOR,
                     settings.NS_OPEN_DOOR1,
                 )
@@ -179,12 +174,8 @@ class DoorCommand(Command):
                 caller.msg(f"Created door at {door_coord}.")
                 return
             if args.south:
-                to_coord = list(loc.coord)
-                door_coord = list(loc.coord)
-                door_coord[2] -= 1
-                to_coord[2] -= 2
-                door_coord = tuple(door_coord)
-                to_coord = tuple(to_coord)
+                to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y - 2, loc.coord.z)
+                door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y - 1, loc.coord.z)
                 to_node = nh.get_node(to_coord)
                 if not to_node:
                     if args.auto:
@@ -238,7 +229,7 @@ class DoorCommand(Command):
                     "south",
                     to_coord,
                     "north",
-                    (door_coord[1], door_coord[2]),
+                    (door_coord.x, door_coord.y),
                     settings.NS_CLOSED_DOOR,
                     settings.NS_OPEN_DOOR2,
                 )
@@ -246,12 +237,8 @@ class DoorCommand(Command):
                 caller.msg(f"Created door at {door_coord}.")
                 return
             if args.east:
-                to_coord = list(loc.coord)
-                door_coord = list(loc.coord)
-                door_coord[1] += 1
-                to_coord[1] += 2
-                door_coord = tuple(door_coord)
-                to_coord = tuple(to_coord)
+                to_coord = Coord(loc.coord.area, loc.coord.x + 2, loc.coord.y, loc.coord.z)
+                door_coord = Coord(loc.coord.area, loc.coord.x + 1, loc.coord.y, loc.coord.z)
                 to_node = nh.get_node(to_coord)
                 if not to_node:
                     if args.auto:
@@ -305,7 +292,7 @@ class DoorCommand(Command):
                     "east",
                     to_coord,
                     "west",
-                    (door_coord[1], door_coord[2]),
+                    (door_coord.x, door_coord.y),
                     settings.EW_CLOSED_DOOR,
                     settings.EW_OPEN_DOOR1,
                 )
@@ -313,12 +300,8 @@ class DoorCommand(Command):
                 caller.msg(f"Created door at {door_coord}.")
                 return
             if args.west:
-                to_coord = list(loc.coord)
-                door_coord = list(loc.coord)
-                door_coord[1] -= 1
-                to_coord[1] -= 2
-                door_coord = tuple(door_coord)
-                to_coord = tuple(to_coord)
+                to_coord = Coord(loc.coord.area, loc.coord.x - 2, loc.coord.y, loc.coord.z)
+                door_coord = Coord(loc.coord.area, loc.coord.x - 1, loc.coord.y, loc.coord.z)
                 to_node = nh.get_node(to_coord)
                 if not to_node:
                     if args.auto:
@@ -372,7 +355,7 @@ class DoorCommand(Command):
                     "west",
                     to_coord,
                     "east",
-                    (door_coord[1], door_coord[2]),
+                    (door_coord.x, door_coord.y),
                     settings.EW_CLOSED_DOOR,
                     settings.EW_OPEN_DOOR2,
                 )

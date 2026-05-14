@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import MagicMock, patch, PropertyMock
 from atheriz.commands.loggedin.door import DoorCommand
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
@@ -50,7 +51,7 @@ def setup_area(node_handler):
     """Create a basic area with a grid and a starting node at (0,0)."""
     area = NodeArea(name="TestArea")
     grid = NodeGrid(area="TestArea", z=0)
-    start_node = Node(coord=("TestArea", 0, 0, 0))
+    start_node = Node(coord=Coord("TestArea", 0, 0, 0))
     grid.nodes[(0, 0)] = start_node
     area.add_grid(grid)
     node_handler.add_area(area)
@@ -108,7 +109,7 @@ def test_door_command_parser_setup():
 def test_remove_without_direction(node_handler):
     """door -r without a direction should show error."""
     cmd = DoorCommand()
-    caller = MockCaller(location=Node(coord=("TestArea", 0, 0, 0)))
+    caller = MockCaller(location=Node(coord=Coord("TestArea", 0, 0, 0)))
     args = make_args(remove=True)
     cmd.run(caller, args)
     assert any("must specify a direction" in m for m in caller.messages)
@@ -145,15 +146,15 @@ def test_create_door_north_auto(setup_area):
     cmd.run(caller, args)
 
     # Destination node at y+2 should have been created
-    dest_node = nh.get_node(("TestArea", 0, 2, 0))
+    dest_node = nh.get_node(Coord("TestArea", 0, 2, 0))
     assert dest_node is not None
 
     # Door should exist from both sides
-    doors_from = nh.get_doors(("TestArea", 0, 0, 0))
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert doors_from is not None
     assert "north" in doors_from
 
-    doors_to = nh.get_doors(("TestArea", 0, 2, 0))
+    doors_to = nh.get_doors(Coord("TestArea", 0, 2, 0))
     assert doors_to is not None
     assert "south" in doors_to
 
@@ -162,8 +163,8 @@ def test_create_door_north_auto(setup_area):
 
     # Door properties
     door = doors_from["north"]
-    assert door.from_coord == ("TestArea", 0, 0, 0)
-    assert door.to_coord == ("TestArea", 0, 2, 0)
+    assert door.from_coord == Coord("TestArea", 0, 0, 0)
+    assert door.to_coord == Coord("TestArea", 0, 2, 0)
     assert door.from_exit == "north"
     assert door.to_exit == "south"
     assert door.closed is True
@@ -181,20 +182,20 @@ def test_create_door_north_links(setup_area):
     here_links = start_node.get_links()
     north_links = [l for l in here_links if l.name == "north"]
     assert len(north_links) == 1
-    assert north_links[0].coord == ("TestArea", 0, 2, 0)
+    assert north_links[0].coord == Coord("TestArea", 0, 2, 0)
 
     # Destination should have a "south" link
-    dest_node = nh.get_node(("TestArea", 0, 2, 0))
+    dest_node = nh.get_node(Coord("TestArea", 0, 2, 0))
     dest_links = dest_node.get_links()
     south_links = [l for l in dest_links if l.name == "south"]
     assert len(south_links) == 1
-    assert south_links[0].coord == ("TestArea", 0, 0, 0)
+    assert south_links[0].coord == Coord("TestArea", 0, 0, 0)
 
 
 def test_create_door_north_with_existing_dest(setup_area):
     """door -n with a pre-existing destination node (no -a needed)."""
     nh, area, grid, start_node = setup_area
-    dest_node = Node(coord=("TestArea", 0, 2, 0))
+    dest_node = Node(coord=Coord("TestArea", 0, 2, 0))
     grid.nodes[(0, 2)] = dest_node
 
     cmd = DoorCommand()
@@ -202,7 +203,7 @@ def test_create_door_north_with_existing_dest(setup_area):
     args = make_args(north=True)
     cmd.run(caller, args)
 
-    doors_from = nh.get_doors(("TestArea", 0, 0, 0))
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert doors_from is not None
     assert "north" in doors_from
     assert any("Created door" in m for m in caller.messages)
@@ -212,10 +213,10 @@ def test_create_door_north_removes_door_node(setup_area):
     """If a node exists at the door coord (y+1), it should be removed."""
     nh, area, grid, start_node = setup_area
     # Place a node at the door coordinate
-    door_coord_node = Node(coord=("TestArea", 0, 1, 0))
+    door_coord_node = Node(coord=Coord("TestArea", 0, 1, 0))
     grid.nodes[(0, 1)] = door_coord_node
     # Place destination
-    dest_node = Node(coord=("TestArea", 0, 2, 0))
+    dest_node = Node(coord=Coord("TestArea", 0, 2, 0))
     grid.nodes[(0, 2)] = dest_node
 
     cmd = DoorCommand()
@@ -224,7 +225,7 @@ def test_create_door_north_removes_door_node(setup_area):
     cmd.run(caller, args)
 
     # The node at (0,1) should have been removed
-    assert nh.get_node(("TestArea", 0, 1, 0)) is None
+    assert nh.get_node(Coord("TestArea", 0, 1, 0)) is None
     assert any("Removed node" in m for m in caller.messages)
 
 
@@ -236,7 +237,7 @@ def test_create_door_north_symbol(setup_area):
     args = make_args(north=True, auto=True)
     cmd.run(caller, args)
 
-    door = nh.get_doors(("TestArea", 0, 0, 0))["north"]
+    door = nh.get_doors(Coord("TestArea", 0, 0, 0))["north"]
     assert door.closed_symbol == settings.NS_CLOSED_DOOR
     assert door.open_symbol == settings.NS_OPEN_DOOR1
     assert door.symbol_coord == (0, 1)
@@ -253,13 +254,13 @@ def test_create_door_south_auto(setup_area):
     args = make_args(south=True, auto=True)
     cmd.run(caller, args)
 
-    dest_node = nh.get_node(("TestArea", 0, -2, 0))
+    dest_node = nh.get_node(Coord("TestArea", 0, -2, 0))
     assert dest_node is not None
 
-    doors_from = nh.get_doors(("TestArea", 0, 0, 0))
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert "south" in doors_from
 
-    doors_to = nh.get_doors(("TestArea", 0, -2, 0))
+    doors_to = nh.get_doors(Coord("TestArea", 0, -2, 0))
     assert "north" in doors_to
 
     door = doors_from["south"]
@@ -279,13 +280,13 @@ def test_create_door_south_links(setup_area):
     here_links = start_node.get_links()
     south_links = [l for l in here_links if l.name == "south"]
     assert len(south_links) == 1
-    assert south_links[0].coord == ("TestArea", 0, -2, 0)
+    assert south_links[0].coord == Coord("TestArea", 0, -2, 0)
 
-    dest_node = nh.get_node(("TestArea", 0, -2, 0))
+    dest_node = nh.get_node(Coord("TestArea", 0, -2, 0))
     dest_links = dest_node.get_links()
     north_links = [l for l in dest_links if l.name == "north"]
     assert len(north_links) == 1
-    assert north_links[0].coord == ("TestArea", 0, 0, 0)
+    assert north_links[0].coord == Coord("TestArea", 0, 0, 0)
 
 
 # ==================== Door Creation Tests (East) ====================
@@ -299,13 +300,13 @@ def test_create_door_east_auto(setup_area):
     args = make_args(east=True, auto=True)
     cmd.run(caller, args)
 
-    dest_node = nh.get_node(("TestArea", 2, 0, 0))
+    dest_node = nh.get_node(Coord("TestArea", 2, 0, 0))
     assert dest_node is not None
 
-    doors_from = nh.get_doors(("TestArea", 0, 0, 0))
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert "east" in doors_from
 
-    doors_to = nh.get_doors(("TestArea", 2, 0, 0))
+    doors_to = nh.get_doors(Coord("TestArea", 2, 0, 0))
     assert "west" in doors_to
 
     door = doors_from["east"]
@@ -326,7 +327,7 @@ def test_create_door_east_links(setup_area):
     here_links = start_node.get_links()
     east_links = [l for l in here_links if l.name == "east"]
     assert len(east_links) == 1
-    assert east_links[0].coord == ("TestArea", 2, 0, 0)
+    assert east_links[0].coord == Coord("TestArea", 2, 0, 0)
 
 
 # ==================== Door Creation Tests (West) ====================
@@ -340,13 +341,13 @@ def test_create_door_west_auto(setup_area):
     args = make_args(west=True, auto=True)
     cmd.run(caller, args)
 
-    dest_node = nh.get_node(("TestArea", -2, 0, 0))
+    dest_node = nh.get_node(Coord("TestArea", -2, 0, 0))
     assert dest_node is not None
 
-    doors_from = nh.get_doors(("TestArea", 0, 0, 0))
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert "west" in doors_from
 
-    doors_to = nh.get_doors(("TestArea", -2, 0, 0))
+    doors_to = nh.get_doors(Coord("TestArea", -2, 0, 0))
     assert "east" in doors_to
 
     door = doors_from["west"]
@@ -367,7 +368,7 @@ def test_create_door_west_links(setup_area):
     here_links = start_node.get_links()
     west_links = [l for l in here_links if l.name == "west"]
     assert len(west_links) == 1
-    assert west_links[0].coord == ("TestArea", -2, 0, 0)
+    assert west_links[0].coord == Coord("TestArea", -2, 0, 0)
 
 
 # ==================== Door Removal Tests ====================
@@ -382,8 +383,8 @@ def test_remove_door_north(setup_area):
     cmd.run(caller, make_args(north=True, auto=True))
 
     # Verify door exists
-    assert nh.get_doors(("TestArea", 0, 0, 0)) is not None
-    assert "north" in nh.get_doors(("TestArea", 0, 0, 0))
+    assert nh.get_doors(Coord("TestArea", 0, 0, 0)) is not None
+    assert "north" in nh.get_doors(Coord("TestArea", 0, 0, 0))
 
     # Now remove it
     caller.messages.clear()
@@ -391,7 +392,7 @@ def test_remove_door_north(setup_area):
 
     assert any("Removed" in m for m in caller.messages)
     # Door should be gone from the source side
-    doors = nh.get_doors(("TestArea", 0, 0, 0))
+    doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     if doors:
         assert "north" not in doors
 
@@ -407,7 +408,7 @@ def test_remove_door_south(setup_area):
     cmd.run(caller, make_args(remove=True, south=True))
 
     assert any("Removed" in m for m in caller.messages)
-    doors = nh.get_doors(("TestArea", 0, 0, 0))
+    doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     if doors:
         assert "south" not in doors
 
@@ -423,7 +424,7 @@ def test_remove_door_east(setup_area):
     cmd.run(caller, make_args(remove=True, east=True))
 
     assert any("Removed" in m for m in caller.messages)
-    doors = nh.get_doors(("TestArea", 0, 0, 0))
+    doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     if doors:
         assert "east" not in doors
 
@@ -439,7 +440,7 @@ def test_remove_door_west(setup_area):
     cmd.run(caller, make_args(remove=True, west=True))
 
     assert any("Removed" in m for m in caller.messages)
-    doors = nh.get_doors(("TestArea", 0, 0, 0))
+    doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     if doors:
         assert "west" not in doors
 
@@ -493,11 +494,11 @@ def test_wrong_link_replaced(setup_area):
     """If a 'north' link points to the wrong coord, it should be replaced."""
     nh, area, grid, start_node = setup_area
     # Add a wrong link
-    wrong_link = NodeLink("north", ("TestArea", 99, 99, 0), ["n"])
+    wrong_link = NodeLink("north", Coord("TestArea", 99, 99, 0), ["n"])
     start_node.add_link(wrong_link)
 
     # Create destination
-    dest_node = Node(coord=("TestArea", 0, 2, 0))
+    dest_node = Node(coord=Coord("TestArea", 0, 2, 0))
     grid.nodes[(0, 2)] = dest_node
 
     cmd = DoorCommand()
@@ -509,7 +510,7 @@ def test_wrong_link_replaced(setup_area):
     here_links = start_node.get_links()
     north_links = [l for l in here_links if l.name == "north"]
     assert len(north_links) == 1
-    assert north_links[0].coord == ("TestArea", 0, 2, 0)
+    assert north_links[0].coord == Coord("TestArea", 0, 2, 0)
 
 
 # ==================== Access Control Test ====================
@@ -537,16 +538,16 @@ def test_access_granted_for_builder(node_handler):
 def test_door_create():
     """Door.create should produce a valid Door with correct attributes."""
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
         symbol_coord=(0, 1),
         closed_symbol="X",
         open_symbol="O",
     )
-    assert door.from_coord == ("A", 0, 0, 0)
-    assert door.to_coord == ("A", 0, 2, 0)
+    assert door.from_coord == Coord("A", 0, 0, 0)
+    assert door.to_coord == Coord("A", 0, 2, 0)
     assert door.from_exit == "north"
     assert door.to_exit == "south"
     assert door.closed is True
@@ -558,9 +559,9 @@ def test_door_create():
 
 def test_door_str():
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
     )
     s = str(door)
@@ -570,24 +571,24 @@ def test_door_str():
 
 def test_door_desc_from_side():
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
     )
-    desc = door.desc(("A", 0, 0, 0))
+    desc = door.desc(Coord("A", 0, 0, 0))
     assert "north" in desc
     assert "closed" in desc.lower()
 
 
 def test_door_desc_to_side():
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
     )
-    desc = door.desc(("A", 0, 2, 0))
+    desc = door.desc(Coord("A", 0, 2, 0))
     assert "south" in desc
 
 
@@ -597,32 +598,32 @@ def test_door_desc_to_side():
 def test_nodehandler_add_door():
     nh = NodeHandler()
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
     )
     with patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()):
         nh.add_door(door)
 
-    assert nh.get_doors(("A", 0, 0, 0))["north"] is door
-    assert nh.get_doors(("A", 0, 2, 0))["south"] is door
+    assert nh.get_doors(Coord("A", 0, 0, 0))["north"] is door
+    assert nh.get_doors(Coord("A", 0, 2, 0))["south"] is door
 
 
 def test_nodehandler_remove_door():
     nh = NodeHandler()
     door = Door.create(
-        from_coord=("A", 0, 0, 0),
+        from_coord=Coord("A", 0, 0, 0),
         from_exit="north",
-        to_coord=("A", 0, 2, 0),
+        to_coord=Coord("A", 0, 2, 0),
         to_exit="south",
     )
     with patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()):
         nh.add_door(door)
         nh.remove_door(door)
 
-    doors_from = nh.get_doors(("A", 0, 0, 0))
-    doors_to = nh.get_doors(("A", 0, 2, 0))
+    doors_from = nh.get_doors(Coord("A", 0, 0, 0))
+    doors_to = nh.get_doors(Coord("A", 0, 2, 0))
     if doors_from:
         assert "north" not in doors_from
     if doors_to:
@@ -631,4 +632,4 @@ def test_nodehandler_remove_door():
 
 def test_nodehandler_get_doors_empty():
     nh = NodeHandler()
-    assert nh.get_doors(("A", 0, 0, 0)) is None
+    assert nh.get_doors(Coord("A", 0, 0, 0)) is None

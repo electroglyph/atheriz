@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import MagicMock, patch
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
 from atheriz.globals.node import NodeHandler
@@ -41,29 +42,29 @@ def setup_pathfind_area(node_handler):
     nodes = {}
     for x in (0, 1, 2):
         for y in (0, 1):
-            n = Node(coord=("PathArea", x, y, 0))
+            n = Node(coord=Coord("PathArea", x, y, 0))
             nodes[(x, y)] = n
             grid.nodes[(x, y)] = n
             
     # Add links for the direct path (y=0)
-    nodes[(0,0)].add_link(NodeLink("east", ("PathArea", 1, 0, 0), ["e"]))
-    nodes[(1,0)].add_link(NodeLink("west", ("PathArea", 0, 0, 0), ["w"]))
+    nodes[(0,0)].add_link(NodeLink("east", Coord("PathArea", 1, 0, 0), ["e"]))
+    nodes[(1,0)].add_link(NodeLink("west", Coord("PathArea", 0, 0, 0), ["w"]))
     
-    nodes[(1,0)].add_link(NodeLink("east", ("PathArea", 2, 0, 0), ["e"]))
-    nodes[(2,0)].add_link(NodeLink("west", ("PathArea", 1, 0, 0), ["w"]))
+    nodes[(1,0)].add_link(NodeLink("east", Coord("PathArea", 2, 0, 0), ["e"]))
+    nodes[(2,0)].add_link(NodeLink("west", Coord("PathArea", 1, 0, 0), ["w"]))
     
     # Add links for the detour path (via y=1)
-    nodes[(0,0)].add_link(NodeLink("north", ("PathArea", 0, 1, 0), ["n"]))
-    nodes[(0,1)].add_link(NodeLink("south", ("PathArea", 0, 0, 0), ["s"]))
+    nodes[(0,0)].add_link(NodeLink("north", Coord("PathArea", 0, 1, 0), ["n"]))
+    nodes[(0,1)].add_link(NodeLink("south", Coord("PathArea", 0, 0, 0), ["s"]))
     
-    nodes[(0,1)].add_link(NodeLink("east", ("PathArea", 1, 1, 0), ["e"]))
-    nodes[(1,1)].add_link(NodeLink("west", ("PathArea", 0, 1, 0), ["w"]))
+    nodes[(0,1)].add_link(NodeLink("east", Coord("PathArea", 1, 1, 0), ["e"]))
+    nodes[(1,1)].add_link(NodeLink("west", Coord("PathArea", 0, 1, 0), ["w"]))
     
-    nodes[(1,1)].add_link(NodeLink("east", ("PathArea", 2, 1, 0), ["e"]))
-    nodes[(2,1)].add_link(NodeLink("west", ("PathArea", 1, 1, 0), ["w"]))
+    nodes[(1,1)].add_link(NodeLink("east", Coord("PathArea", 2, 1, 0), ["e"]))
+    nodes[(2,1)].add_link(NodeLink("west", Coord("PathArea", 1, 1, 0), ["w"]))
     
-    nodes[(2,1)].add_link(NodeLink("south", ("PathArea", 2, 0, 0), ["s"]))
-    nodes[(2,0)].add_link(NodeLink("north", ("PathArea", 2, 1, 0), ["n"]))
+    nodes[(2,1)].add_link(NodeLink("south", Coord("PathArea", 2, 0, 0), ["s"]))
+    nodes[(2,0)].add_link(NodeLink("north", Coord("PathArea", 2, 1, 0), ["n"]))
 
     area.add_grid(grid)
     node_handler.add_area(area)
@@ -92,9 +93,9 @@ def test_astar_open_door(setup_pathfind_area):
     
     # Door between (0,0) and (1,0)
     door = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=False,
     )
@@ -115,9 +116,9 @@ def test_astar_closed_unlocked_door_can_open(setup_pathfind_area):
     end = nodes[(2,0)]
     
     door = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=True,
         locked=False
@@ -142,9 +143,9 @@ def test_astar_closed_unlocked_door_cannot_open_routes_around(setup_pathfind_are
     end = nodes[(2,0)]
     
     door = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=True,
         locked=False
@@ -172,9 +173,9 @@ def test_astar_locked_door_can_unlock(setup_pathfind_area):
     end = nodes[(2,0)]
     
     door = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=True,
         locked=True
@@ -198,9 +199,9 @@ def test_astar_locked_door_cannot_unlock_routes_around(setup_pathfind_area):
     end = nodes[(2,0)]
     
     door = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=True,
         locked=True
@@ -233,9 +234,9 @@ def test_astar_blocked_completely(setup_pathfind_area):
     
     # Block direct route
     door1 = Door.create(
-        from_coord=("PathArea", 0, 0, 0),
+        from_coord=Coord("PathArea", 0, 0, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 0, 0),
+        to_coord=Coord("PathArea", 1, 0, 0),
         to_exit="west",
         closed=True,
         locked=True
@@ -244,9 +245,9 @@ def test_astar_blocked_completely(setup_pathfind_area):
     
     # Block detour route at (0,1) -> (1,1)
     door2 = Door.create(
-        from_coord=("PathArea", 0, 1, 0),
+        from_coord=Coord("PathArea", 0, 1, 0),
         from_exit="east",
-        to_coord=("PathArea", 1, 1, 0),
+        to_coord=Coord("PathArea", 1, 1, 0),
         to_exit="west",
         closed=True,
         locked=True

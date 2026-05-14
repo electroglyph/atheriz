@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import MagicMock
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
@@ -10,12 +11,12 @@ def setup_test_nodes():
     area = NodeArea(name="TestArea")
     grid = NodeGrid(z=0)
     
-    node1 = Node(coord=("TestArea", 0, 0, 0))
-    link_n = NodeLink(name="north", coord=("TestArea", 0, 1, 0))
+    node1 = Node(coord=Coord("TestArea", 0, 0, 0))
+    link_n = NodeLink(name="north", coord=Coord("TestArea", 0, 1, 0))
     node1.add_link(link_n)
     
-    node2 = Node(coord=("TestArea", 0, 1, 0))
-    link_s = NodeLink(name="south", coord=("TestArea", 0, 0, 0))
+    node2 = Node(coord=Coord("TestArea", 0, 1, 0))
+    link_s = NodeLink(name="south", coord=Coord("TestArea", 0, 0, 0))
     node2.add_link(link_s)
     
     grid.add_node(node1)

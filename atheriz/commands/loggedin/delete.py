@@ -2,6 +2,7 @@ from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import delete_objects
+from atheriz.utils import Coord
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ class DeleteCommand(Command):
                         x = int(parts[1])
                         y = int(parts[2])
                         z = int(parts[3])
-                        coord = (area, x, y, z)
+                        coord = Coord(area, x, y, z)
                         target = get_node_handler().get_node(coord)
                     except ValueError:
                         pass

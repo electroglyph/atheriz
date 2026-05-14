@@ -5,6 +5,7 @@ from string import punctuation
 import colorsys
 import math
 from typing import TYPE_CHECKING, Any
+from atheriz.coord import Coord  # noqa: F401 — re-exported for callers
 from atheriz.globals.get import get_connection_manager, get_node_handler
 from pathlib import Path
 

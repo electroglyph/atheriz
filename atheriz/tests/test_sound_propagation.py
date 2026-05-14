@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea
 from atheriz.objects.base_obj import Object
@@ -42,7 +43,7 @@ def cube():
         grid = NodeGrid(area=AREA, z=z)
         for x in range(GRID):
             for y in range(GRID):
-                node = TrackingNode(coord=(AREA, x, y, z))
+                node = TrackingNode(coord=Coord(AREA, x, y, z))
                 grid.nodes[(x, y)] = node
         area.add_grid(grid)
     nh.add_area(area)
@@ -67,7 +68,7 @@ def _all_nodes(area):
 
 def test_source_room_objects_hear_at_full_loudness(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
     listener = TrackingObject.create(None, "Listener", is_npc=True)
     listener.location = center_node
@@ -83,14 +84,14 @@ def test_source_room_objects_hear_at_full_loudness(cube):
 
 def test_single_axis_hop_attenuation(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, _ = _place(nh, center)
 
     emitter.at_emit_sound("bang", "bang!", 100.0, False)
 
     expected = 100.0 - ATTEN
     for hop, x in enumerate(range(5, 9), start=1):
-        coord = (AREA, x, 4, 4)
+        coord = Coord(AREA, x, 4, 4)
         node = nh.get_node(coord)
         assert node.heard_sounds, f"Hop {hop} at {coord}: no sound received"
         actual = node.heard_sounds[0][3]
@@ -102,18 +103,18 @@ def test_single_axis_hop_attenuation(cube):
 
 def test_all_six_directions_propagate(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, _ = _place(nh, center)
 
     emitter.at_emit_sound("bang", "bang!", 100.0, False)
 
     directions = [
-        (AREA, 5, 4, 4),
-        (AREA, 3, 4, 4),
-        (AREA, 4, 5, 4),
-        (AREA, 4, 3, 4),
-        (AREA, 4, 4, 5),
-        (AREA, 4, 4, 3),
+        Coord(AREA, 5, 4, 4),
+        Coord(AREA, 3, 4, 4),
+        Coord(AREA, 4, 5, 4),
+        Coord(AREA, 4, 3, 4),
+        Coord(AREA, 4, 4, 5),
+        Coord(AREA, 4, 4, 3),
     ]
     expected_loudness = 100.0 - ATTEN
     for coord in directions:
@@ -127,12 +128,12 @@ def test_all_six_directions_propagate(cube):
 
 def test_diagonal_node_attenuation(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, _ = _place(nh, center)
 
     emitter.at_emit_sound("bang", "bang!", 100.0, False)
 
-    diagonal = (AREA, 5, 5, 4)
+    diagonal = Coord(AREA, 5, 5, 4)
     node = nh.get_node(diagonal)
     assert node.heard_sounds, f"{diagonal}: no sound received"
     actual = node.heard_sounds[0][3]
@@ -144,7 +145,7 @@ def test_diagonal_node_attenuation(cube):
 
 def test_node_hears_once(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, _ = _place(nh, center)
 
     emitter.at_emit_sound("bang", "bang!", 100.0, False)
@@ -158,17 +159,17 @@ def test_node_hears_once(cube):
 
 def test_sound_stops_at_zero_loudness(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, _ = _place(nh, center)
     loudness = 30.0
 
     emitter.at_emit_sound("tap", "tap.", loudness, False)
 
-    near = (AREA, 5, 4, 4)
+    near = Coord(AREA, 5, 4, 4)
     near_node = nh.get_node(near)
     assert near_node.heard_sounds, "1-hop neighbor should hear"
 
-    far = (AREA, 7, 4, 4)
+    far = Coord(AREA, 7, 4, 4)
     far_node = nh.get_node(far)
     assert not far_node.heard_sounds, "3-hop node should not hear with loudness 30"
 
@@ -177,9 +178,9 @@ def test_blocking_node_skips_contents_but_propagates():
     nh = get_node_handler()
     area = NodeArea(name="bfs_block_test")
     grid = NodeGrid(area="bfs_block_test", z=0)
-    source = TrackingNode(coord=("bfs_block_test", 0, 0, 0))
-    blocker = BlockingNode(coord=("bfs_block_test", 1, 0, 0))
-    beyond = TrackingNode(coord=("bfs_block_test", 2, 0, 0))
+    source = TrackingNode(coord=Coord("bfs_block_test", 0, 0, 0))
+    blocker = BlockingNode(coord=Coord("bfs_block_test", 1, 0, 0))
+    beyond = TrackingNode(coord=Coord("bfs_block_test", 2, 0, 0))
     grid.nodes[(0, 0)] = source
     grid.nodes[(1, 0)] = blocker
     grid.nodes[(2, 0)] = beyond
@@ -211,7 +212,7 @@ def test_blocking_node_skips_contents_but_propagates():
 
 def test_empty_message_no_propagation(cube):
     nh, area = cube
-    center = (AREA, 4, 4, 4)
+    center = Coord(AREA, 4, 4, 4)
     emitter, center_node = _place(nh, center)
     listener = TrackingObject.create(None, "L", is_npc=True)
     listener.location = center_node

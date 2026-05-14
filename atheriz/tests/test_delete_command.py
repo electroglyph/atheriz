@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import MagicMock
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node
@@ -56,7 +57,7 @@ def caller():
 
 @pytest.fixture
 def room():
-    r = Node(coord=("test", 0, 0, 0))
+    r = Node(coord=Coord("test", 0, 0, 0))
     # Node.name is read-only, r.name = "Test Room" would fail
     
     handler = get_node_handler()

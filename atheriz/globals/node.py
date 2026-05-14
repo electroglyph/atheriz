@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from atheriz.logger import logger
 import dill
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
+from atheriz.utils import Coord
 
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Transition
@@ -21,10 +22,10 @@ class NodeHandler:
         self.lock2 = RLock()
         self.areas: dict[str, NodeArea] = {}
         # these keep track of transitions between different areas
-        self.transitions: dict[tuple[str, int, int, int], Transition] = {}
+        self.transitions: dict[Coord, Transition] = {}
         # guards self.doors:
         self.lock3 = RLock()
-        self.doors: dict[tuple[str, int, int, int], dict[str, Door]] = {}
+        self.doors: dict[Coord, dict[str, Door]] = {}
 
         self.load()
 
@@ -86,12 +87,12 @@ class NodeHandler:
                 for t in transitions_snapshot:
                     cursor.execute(
                         "INSERT OR REPLACE INTO transitions (to_area, to_x, to_y, to_z, data) VALUES (?, ?, ?, ?, ?)",
-                        (t.to_coord[0], t.to_coord[1], t.to_coord[2], t.to_coord[3], dill.dumps(t)),
+                        (t.to_coord.area, t.to_coord.x, t.to_coord.y, t.to_coord.z, dill.dumps(t)),
                     )
                 for coord, doors_dict in doors_snapshot:
                     cursor.execute(
                         "INSERT OR REPLACE INTO doors (area, x, y, z, data) VALUES (?, ?, ?, ?, ?)",
-                        (coord[0], coord[1], coord[2], coord[3], dill.dumps(doors_dict)),
+                        (coord.area, coord.x, coord.y, coord.z, dill.dumps(doors_dict)),
                     )
 
                 cursor.execute("COMMIT")
@@ -99,7 +100,7 @@ class NodeHandler:
                 cursor.execute("ROLLBACK")
                 logger.error(f"Error saving node data to DB: {e}")
 
-    def get_doors(self, coord: tuple[str, int, int, int]) -> dict[str, Door] | None:
+    def get_doors(self, coord: Coord) -> dict[str, Door] | None:
         with self.lock3:
             d = self.doors.get(coord)
             return d
@@ -119,7 +120,7 @@ class NodeHandler:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.from_coord[0], door.from_coord[3])
+        mi = mh.get_mapinfo(door.from_coord.area, door.from_coord.z)
         if mi:
             if door.closed:
                 mi.update_grid(door.symbol_coord, door.closed_symbol)
@@ -145,24 +146,24 @@ class NodeHandler:
                 for k in rem_keys:
                     del d[k]
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.from_coord[0], door.from_coord[3])
+        mi = mh.get_mapinfo(door.from_coord.area, door.from_coord.z)
         if mi:
             mi.update_grid(door.symbol_coord, " ")
             mi.render(True)
 
     def add_node(self, node: Node):
-        area = self.get_area(node.coord[0])
+        area = self.get_area(node.coord.area)
         if area:
-            grid = area.get_grid(node.coord[3])
+            grid = area.get_grid(node.coord.z)
             if grid:
                 grid.add_node(node)
             else:
-                grid = NodeGrid(node.coord[0], node.coord[3])
+                grid = NodeGrid(node.coord.area, node.coord.z)
                 grid.add_node(node)
                 area.add_grid(grid)
         else:
-            area = NodeArea(node.coord[0])
-            grid = NodeGrid(node.coord[0], node.coord[3])
+            area = NodeArea(node.coord.area)
+            grid = NodeGrid(node.coord.area, node.coord.z)
             grid.add_node(node)
             area.add_grid(grid)
             self.add_area(area)
@@ -195,22 +196,22 @@ class NodeHandler:
         with self.lock:
             return [x for x in self.areas.values()]
 
-    def get_node(self, coord: tuple[str, int, int, int]) -> Node | None:
-        area = self.get_area(coord[0])
+    def get_node(self, coord: Coord) -> Node | None:
+        area = self.get_area(coord.area)
         if area:
-            grid = area.get_grid(coord[3])
+            grid = area.get_grid(coord.z)
             if grid:
-                return grid.get_node((coord[1], coord[2]))
+                return grid.get_node((coord.x, coord.y))
         return None
 
-    def remove_node(self, coord: tuple[str, int, int, int]):
-        area = self.get_area(coord[0])
+    def remove_node(self, coord: Coord):
+        area = self.get_area(coord.area)
         if area:
-            grid = area.get_grid(coord[3])
+            grid = area.get_grid(coord.z)
             if grid:
-                grid.remove_node((coord[1], coord[2]))
+                grid.remove_node((coord.x, coord.y))
 
-    def get_nodes(self, coords: list[tuple[str, int, int, int]]) -> list:
+    def get_nodes(self, coords: list[Coord]) -> list:
         result = []
         for c in coords:
             n = self.get_node(c)
@@ -222,7 +223,7 @@ class NodeHandler:
         with self.lock2:
             self.transitions[transition.to_coord] = transition  # key = destination
 
-    def remove_transition(self, destination: tuple[str, int, int, int]):
+    def remove_transition(self, destination: Coord):
         with self.lock2:
             del self.transitions[destination]
 
@@ -242,22 +243,22 @@ class NodeHandler:
         with self.lock2:
             for t in self.transitions.values():
                 matches = 0
-                if from_z and t.from_coord[3] == from_z:
+                if from_z and t.from_coord.z == from_z:
                     matches += 1
                     if matches == required_matches:
                         result.append(t)
                         continue
-                if to_z and t.to_coord[3] == to_z:
+                if to_z and t.to_coord.z == to_z:
                     matches += 1
                     if matches == required_matches:
                         result.append(t)
                         continue
-                if from_area and t.from_coord[0] == from_area:
+                if from_area and t.from_coord.area == from_area:
                     matches += 1
                     if matches == required_matches:
                         result.append(t)
                         continue
-                if to_area and t.to_coord[0] == to_area:
+                if to_area and t.to_coord.area == to_area:
                     matches += 1
                     if matches == required_matches:
                         result.append(t)

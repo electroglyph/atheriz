@@ -3,6 +3,7 @@ from threading import RLock
 from atheriz.globals.node import Node
 from atheriz.logger import logger
 import atheriz.settings as settings
+from atheriz.utils import Coord
 import dill
 import time
 import copy
@@ -364,7 +365,7 @@ class MapInfo:
                 return
             # Pre-compute entries once, tagged with source id for per-listener filtering
             obj_entries = [
-                (o.id, (o.symbol, o.name, (o.location.coord[1], o.location.coord[2])))
+                (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
                 for o in self.objects.values()
             ]
             static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
@@ -392,7 +393,7 @@ class MapInfo:
                 len(self.objects) + len(self.legend_entries) <= settings.MAX_OBJECTS_PER_LEGEND
             )
             obj_entries = [
-                (o.id, (o.symbol, o.name, (o.location.coord[1], o.location.coord[2])))
+                (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
                 for o in self.objects.values()
             ]
             static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
@@ -500,14 +501,14 @@ class MapHandler:
         loc: Node | None = mapable.location
         if loc:
             with self.lock:
-                mi = self.data.get((loc.coord[0], loc.coord[3]))
+                mi = self.data.get((loc.coord.area, loc.coord.z))
             if mi:
                 mi.add_mapable(mapable)
                 mi.render()
             else:
-                mi = MapInfo(name=loc.coord[0])
+                mi = MapInfo(name=loc.coord.area)
                 mi.add_mapable(mapable)
-                self.set_mapinfo(loc.coord[0], loc.coord[3], mi)
+                self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
                 mi.render()
 
     def add_listener(self, listener: Object):
@@ -517,13 +518,13 @@ class MapHandler:
         loc: Node | None = listener.location
         if loc:
             with self.lock:
-                mi = self.data.get((loc.coord[0], loc.coord[3]))
+                mi = self.data.get((loc.coord.area, loc.coord.z))
             if mi:
                 mi.add_listener(listener)
             else:
-                mi = MapInfo(name=loc.coord[0])
+                mi = MapInfo(name=loc.coord.area)
                 mi.add_listener(listener)
-                self.set_mapinfo(loc.coord[0], loc.coord[3], mi)
+                self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
 
     def remove_listener(self, listener: Object):
         """
@@ -532,26 +533,26 @@ class MapHandler:
         loc: Node | None = listener.location
         if loc:
             with self.lock:
-                mi = self.data.get((loc.coord[0], loc.coord[3]))
+                mi = self.data.get((loc.coord.area, loc.coord.z))
             if mi:
                 mi.remove_listener(listener)
 
     def move_listener(
         self,
         listener: Object,
-        to_coord: tuple[str, int, int, int],
-        from_coord: tuple[str, int, int, int] | None = None,
+        to_coord: Coord,
+        from_coord: Coord | None = None,
     ):
-        # if from_coord and from_coord[0] == to_coord[0] and from_coord[3] == to_coord[3]:
+        # if from_coord and from_coord.area == to_coord.area and from_coord.z == to_coord.z:
         #     return
         from_map = None
         with self.lock:
             if from_coord:
-                from_map = self.data.get((from_coord[0], from_coord[3]))
-            to_map = self.data.get((to_coord[0], to_coord[3]))
+                from_map = self.data.get((from_coord.area, from_coord.z))
+            to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
             to_map = MapInfo()
-            self.set_mapinfo(to_coord[0], to_coord[3], to_map)
+            self.set_mapinfo(to_coord.area, to_coord.z, to_map)
         if from_map:
             from_map.remove_listener(listener)
         if to_map:
@@ -560,29 +561,29 @@ class MapHandler:
     def move_mapable(
         self,
         mapable: Object,
-        to_coord: tuple[str, int, int, int],
-        from_coord: tuple[str, int, int, int] | None = None,
+        to_coord: Coord,
+        from_coord: Coord | None = None,
     ):
-        if from_coord and from_coord[0] == to_coord[0] and from_coord[3] == to_coord[3]:
+        if from_coord and from_coord.area == to_coord.area and from_coord.z == to_coord.z:
             with self.lock:
-                current_map = self.data.get((to_coord[0], to_coord[3]))
+                current_map = self.data.get((to_coord.area, to_coord.z))
             if current_map:
                 current_map.add_mapable(mapable)
                 current_map.render(True)
             else:
                 current_map = MapInfo()
-                self.set_mapinfo(to_coord[0], to_coord[3], current_map)
+                self.set_mapinfo(to_coord.area, to_coord.z, current_map)
                 current_map.add_mapable(mapable)
                 current_map.render(True)
             return
         from_map = None
         with self.lock:
             if from_coord:
-                from_map = self.data.get((from_coord[0], from_coord[3]))
-            to_map = self.data.get((to_coord[0], to_coord[3]))
+                from_map = self.data.get((from_coord.area, from_coord.z))
+            to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
             to_map = MapInfo()
-            self.set_mapinfo(to_coord[0], to_coord[3], to_map)
+            self.set_mapinfo(to_coord.area, to_coord.z, to_map)
         if from_map:
             from_map.remove_mapable(mapable)
             from_map.render(True)

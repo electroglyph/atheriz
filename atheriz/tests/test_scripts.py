@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 import tempfile
 import shutil
 import sqlite3
@@ -176,7 +177,7 @@ def test_script_db_serialization():
     assert getattr(loaded_script, "date_created", None) is not None
 
 def test_node_add_remove_script():
-    node = DummyNode(coord=("test_area", 0, 0, 0))
+    node = DummyNode(coord=Coord("test_area", 0, 0, 0))
     script = DummyBeforeScript()
     script.id = 201
 
@@ -189,7 +190,7 @@ def test_node_add_remove_script():
     assert len(node.hooks.get("at_test_hook", set())) == 0
 
 def test_node_hooks():
-    node = DummyNode(coord=("test_area", 0, 0, 1))
+    node = DummyNode(coord=Coord("test_area", 0, 0, 1))
     script = DummyBeforeScript()
     script.id = 202
     node.add_script(script)
@@ -202,7 +203,7 @@ def test_attached_script_persistence():
     # Setup
     obj = DummyObj.create(None, "PersistObj")
     # Coordinates must be valid (area, x, y, z)
-    coord = ("persist_area", 1, 1, 1)
+    coord = Coord("persist_area", 1, 1, 1)
     node = DummyNode(coord=coord)
     
     # Scripts

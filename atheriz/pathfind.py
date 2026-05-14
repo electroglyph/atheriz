@@ -114,11 +114,11 @@ def astar(
                 continue
             child.g = current_node.g + 1
             child.h = (
-                abs(child.position.coord[1] - end_node.position.coord[1])
-                + abs(child.position.coord[2] - end_node.position.coord[2])
-                + abs(child.position.coord[3] - end_node.position.coord[3])
+                abs(child.position.coord.x - end_node.position.coord.x)
+                + abs(child.position.coord.y - end_node.position.coord.y)
+                + abs(child.position.coord.z - end_node.position.coord.z)
             )
-            if child.position.coord[0] != end_node.position.coord[0]:  # coord = (area, x, y, z)
+            if child.position.coord.area != end_node.position.coord.area:  # coord = Coord
                 child.h += 50
             child.f = child.g + child.h
             if child in open_list:

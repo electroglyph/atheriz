@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 import dill
 import os
 from atheriz.objects.base_obj import Object
@@ -116,16 +117,16 @@ def test_command_serialization():
     assert object.__getattribute__(deserialized, "custom_attr").value == "cmd_attr"
 
 def test_node_serialization():
-    node = Node(coord=("limbo", 0, 0, 0), desc="Empty space")
+    node = Node(coord=Coord("limbo", 0, 0, 0), desc="Empty space")
     node.theme = "void"
     node.data = {"key": "val", "custom": CustomData("node_data")}
     
     deserialized = assert_serialization(node)
-    assert object.__getattribute__(deserialized, "coord") == ("limbo", 0, 0, 0)
+    assert object.__getattribute__(deserialized, "coord") == Coord("limbo", 0, 0, 0)
     assert object.__getattribute__(deserialized, "data")["custom"].value == "node_data"
 
 def test_nodelink_serialization():
-    link = NodeLink(name="North", coord=("forest", 0, 1, 0), aliases=["n"])
+    link = NodeLink(name="North", coord=Coord("forest", 0, 1, 0), aliases=["n"])
     link.meta = CustomData("link_meta")
     
     deserialized = assert_serialization(link)
@@ -134,7 +135,7 @@ def test_nodelink_serialization():
 
 def test_nodegrid_serialization():
     grid = NodeGrid(area="forest", z=0)
-    node = Node(coord=("forest", 0, 0, 0))
+    node = Node(coord=Coord("forest", 0, 0, 0))
     grid.nodes[(0, 0)] = node
     grid.data = {"custom": CustomData("grid_data")}
     
@@ -155,7 +156,7 @@ def test_nodearea_serialization():
     assert 0 in object.__getattribute__(deserialized, "grids")
 
 def test_transition_serialization():
-    trans = Transition(from_coord=("a", 0, 0, 0), to_coord=("b", 0, 0, 0), from_link="path")
+    trans = Transition(from_coord=Coord("a", 0, 0, 0), to_coord=Coord("b", 0, 0, 0), from_link="path")
     trans.custom = CustomData("trans_data")
     # Transition has RLock in __setstate__ but not explicitly in __init__ or __getstate__?
     # Actually Transition.__setstate__ adds self.lock = RLock()
@@ -168,9 +169,9 @@ def test_transition_serialization():
 
 def test_door_serialization():
     door = Door(
-        from_coord=("room1", 1, 0, 0),
+        from_coord=Coord("room1", 1, 0, 0),
         from_exit="east",
-        to_coord=("room2", 2, 0, 0),
+        to_coord=Coord("room2", 2, 0, 0),
         to_exit="west",
         closed=True,
         locked=False
@@ -219,7 +220,7 @@ def test_resolve_relations():
     obj_singleton.add_object(target_obj)
     
     # 2. Create a Target Node
-    nav_node = Node(coord=("test_area", 1, 1, 1))
+    nav_node = Node(coord=Coord("test_area", 1, 1, 1))
     nav_node.id = 501
     
     # Setup NodeHandler
@@ -244,7 +245,7 @@ def test_resolve_relations():
     deserialized = dill.loads(serialized)
     
     # ASSERT PASS 1 STATE: Raw data restoration only
-    assert object.__getattribute__(deserialized, "location") == ("test_area", 1, 1, 1)
+    assert object.__getattribute__(deserialized, "location") == Coord("test_area", 1, 1, 1)
     assert object.__getattribute__(deserialized, "home") == 500
     
     # Resolution (Pass 2 of Loading)

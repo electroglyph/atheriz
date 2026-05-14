@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from unittest.mock import patch, MagicMock
 from atheriz.commands.loggedin.build import BuildCommand, DIRECTIONS
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
@@ -75,7 +76,7 @@ def env():
     mh = MockMapHandler()
     area = NodeArea(name="TestArea")
     grid = NodeGrid(area="TestArea", z=0)
-    start_node = Node(coord=("TestArea", 0, 0, 0))
+    start_node = Node(coord=Coord("TestArea", 0, 0, 0))
     grid.nodes[(0, 0)] = start_node
     area.add_grid(grid)
     nh.add_area(area)
@@ -153,18 +154,18 @@ def test_build_room_north(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
 
     # Start node should have a "north" link
     north_links = [l for l in start_node.get_links() if l.name == "north"]
     assert len(north_links) == 1
-    assert north_links[0].coord == ("TestArea", 0, 1, 0)
+    assert north_links[0].coord == Coord("TestArea", 0, 1, 0)
 
     # New node should have a "south" link back
     south_links = [l for l in new_node.get_links() if l.name == "south"]
     assert len(south_links) == 1
-    assert south_links[0].coord == ("TestArea", 0, 0, 0)
+    assert south_links[0].coord == Coord("TestArea", 0, 0, 0)
 
     # Caller should have moved
     assert caller.location == new_node
@@ -175,7 +176,7 @@ def test_build_room_south(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(s=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 0, -1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, -1, 0))
     assert new_node is not None
     south_links = [l for l in start_node.get_links() if l.name == "south"]
     assert len(south_links) == 1
@@ -188,7 +189,7 @@ def test_build_room_east(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(e=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 1, 0, 0))
+    new_node = nh.get_node(Coord("TestArea", 1, 0, 0))
     assert new_node is not None
     east_links = [l for l in start_node.get_links() if l.name == "east"]
     assert len(east_links) == 1
@@ -201,7 +202,7 @@ def test_build_room_west(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(w=True, room=True))
 
-    new_node = nh.get_node(("TestArea", -1, 0, 0))
+    new_node = nh.get_node(Coord("TestArea", -1, 0, 0))
     assert new_node is not None
     west_links = [l for l in start_node.get_links() if l.name == "west"]
     assert len(west_links) == 1
@@ -214,7 +215,7 @@ def test_build_room_up(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(u=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 0, 0, 1))
+    new_node = nh.get_node(Coord("TestArea", 0, 0, 1))
     assert new_node is not None
     up_links = [l for l in start_node.get_links() if l.name == "up"]
     assert len(up_links) == 1
@@ -227,7 +228,7 @@ def test_build_room_down(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(d=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 0, 0, -1))
+    new_node = nh.get_node(Coord("TestArea", 0, 0, -1))
     assert new_node is not None
     down_links = [l for l in start_node.get_links() if l.name == "down"]
     assert len(down_links) == 1
@@ -255,7 +256,7 @@ def test_build_with_desc(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, room=True, desc="A magical forest"))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
     assert new_node.desc == "A magical forest"
 
@@ -274,7 +275,7 @@ def test_build_existing_node_updates_desc(env):
     """Building toward an existing node with --desc should update that node's description."""
     nh, mh, area, grid, start_node, caller = env
     # Create a node to the north first
-    north_node = Node(coord=("TestArea", 0, 1, 0), desc="Old desc")
+    north_node = Node(coord=Coord("TestArea", 0, 1, 0), desc="Old desc")
     grid.nodes[(0, 1)] = north_node
 
     cmd = BuildCommand()
@@ -292,7 +293,7 @@ def test_build_road(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, road=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
     # MapInfo should have been created and have the road placeholder
     mi = mh.get_mapinfo("TestArea", 0)
@@ -305,7 +306,7 @@ def test_build_path(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, path=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
     mi = mh.get_mapinfo("TestArea", 0)
     assert mi is not None
@@ -318,7 +319,7 @@ def test_default_mode_is_room(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
     mi = mh.get_mapinfo("TestArea", 0)
     assert mi is not None
@@ -365,7 +366,7 @@ def test_build_with_no_walls(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, room=True, none=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert new_node is not None
     # With --none, no ROOM_PLACEHOLDER or walls should be placed (char is "")
     mi = mh.get_mapinfo("TestArea", 0)
@@ -384,7 +385,7 @@ def test_link_not_duplicated_on_rebuild(env):
 
     # Build north, creating new node
     cmd.run(caller, make_args(n=True, room=True))
-    north_node = nh.get_node(("TestArea", 0, 1, 0))
+    north_node = nh.get_node(Coord("TestArea", 0, 1, 0))
 
     # Move back
     caller.location = start_node
@@ -405,7 +406,7 @@ def test_caller_moved_after_build(env):
     cmd = BuildCommand()
     cmd.run(caller, make_args(n=True, room=True))
 
-    new_node = nh.get_node(("TestArea", 0, 1, 0))
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert caller.location == new_node
     assert len(caller._moved_to) == 1
 
@@ -440,7 +441,7 @@ def test_has_link(env):
     nh, mh, area, grid, start_node, caller = env
     cmd = BuildCommand()
     assert cmd._has_link(start_node, "north") is False
-    start_node.add_link(NodeLink("north", ("TestArea", 0, 1, 0), ["n"]))
+    start_node.add_link(NodeLink("north", Coord("TestArea", 0, 1, 0), ["n"]))
     assert cmd._has_link(start_node, "north") is True
     assert cmd._has_link(start_node, "south") is False
 
@@ -468,13 +469,13 @@ def test_build_multiple_directions(env):
     caller.location = start_node
     cmd.run(caller, make_args(n=True, e=True, room=True))
 
-    # Both nodes should exist, built from the starting room (TestArea, 0, 0, 0)
-    north_node = nh.get_node(("TestArea", 0, 1, 0))
+    # Both nodes should exist, built from the starting room Coord(TestArea, 0, 0, 0)
+    north_node = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert north_node is not None
 
     # build.py keeps 'loc' as the original caller.location during the loop, 
     # so east is built from the start node, not from the north node.
-    east_node = nh.get_node(("TestArea", 1, 0, 0))
+    east_node = nh.get_node(Coord("TestArea", 1, 0, 0))
     assert east_node is not None
 
 
@@ -503,19 +504,19 @@ def test_2x2_room_grid(env):
     # From room 3, build north -> room 1
     caller.location = room3
     cmd.run(caller, make_args(n=True, room=True))
-    room1 = nh.get_node(("TestArea", 0, 1, 0))
+    room1 = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert room1 is not None
 
     # From room 1, build east -> room 2
     assert caller.location == room1
     cmd.run(caller, make_args(e=True, room=True))
-    room2 = nh.get_node(("TestArea", 1, 1, 0))
+    room2 = nh.get_node(Coord("TestArea", 1, 1, 0))
     assert room2 is not None
 
     # From room 2, build south -> room 4
     assert caller.location == room2
     cmd.run(caller, make_args(s=True, room=True))
-    room4 = nh.get_node(("TestArea", 1, 0, 0))
+    room4 = nh.get_node(Coord("TestArea", 1, 0, 0))
     assert room4 is not None
 
     # From room 4, build west -> room 3 (already exists, should just link)
@@ -529,30 +530,30 @@ def test_2x2_room_grid(env):
     # Room 1 (0,1): south -> room 3 (0,0), east -> room 2 (1,1)
     r1_links = {l.name: l.coord for l in room1.get_links()}
     assert "south" in r1_links
-    assert r1_links["south"] == ("TestArea", 0, 0, 0)
+    assert r1_links["south"] == Coord("TestArea", 0, 0, 0)
     assert "east" in r1_links
-    assert r1_links["east"] == ("TestArea", 1, 1, 0)
+    assert r1_links["east"] == Coord("TestArea", 1, 1, 0)
 
     # Room 2 (1,1): west -> room 1 (0,1), south -> room 4 (1,0)
     r2_links = {l.name: l.coord for l in room2.get_links()}
     assert "west" in r2_links
-    assert r2_links["west"] == ("TestArea", 0, 1, 0)
+    assert r2_links["west"] == Coord("TestArea", 0, 1, 0)
     assert "south" in r2_links
-    assert r2_links["south"] == ("TestArea", 1, 0, 0)
+    assert r2_links["south"] == Coord("TestArea", 1, 0, 0)
 
     # Room 3 (0,0): north -> room 1 (0,1), east -> room 4 (1,0)
     r3_links = {l.name: l.coord for l in room3.get_links()}
     assert "north" in r3_links
-    assert r3_links["north"] == ("TestArea", 0, 1, 0)
+    assert r3_links["north"] == Coord("TestArea", 0, 1, 0)
     assert "east" in r3_links
-    assert r3_links["east"] == ("TestArea", 1, 0, 0)
+    assert r3_links["east"] == Coord("TestArea", 1, 0, 0)
 
     # Room 4 (1,0): north -> room 2 (1,1), west -> room 3 (0,0)
     r4_links = {l.name: l.coord for l in room4.get_links()}
     assert "north" in r4_links
-    assert r4_links["north"] == ("TestArea", 1, 1, 0)
+    assert r4_links["north"] == Coord("TestArea", 1, 1, 0)
     assert "west" in r4_links
-    assert r4_links["west"] == ("TestArea", 0, 0, 0)
+    assert r4_links["west"] == Coord("TestArea", 0, 0, 0)
 
     # Verify no duplicate links on any room
     for room, name in [(room1, "Room 1"), (room2, "Room 2"), (room3, "Room 3"), (room4, "Room 4")]:
@@ -586,19 +587,19 @@ def test_2x2_room_grid_ensure_links(env):
     # Build room 1 north of room 3
     caller.location = room3
     cmd.run(caller, make_args(n=True, room=True, single=True))
-    room1 = nh.get_node(("TestArea", 0, 1, 0))
+    room1 = nh.get_node(Coord("TestArea", 0, 1, 0))
     assert room1 is not None
 
     # Build room 2 east of room 1
     assert caller.location == room1
     cmd.run(caller, make_args(e=True, room=True, single=True))
-    room2 = nh.get_node(("TestArea", 1, 1, 0))
+    room2 = nh.get_node(Coord("TestArea", 1, 1, 0))
     assert room2 is not None
 
     # Build room 4 south of room 2
     assert caller.location == room2
     cmd.run(caller, make_args(s=True, room=True, single=True))
-    room4 = nh.get_node(("TestArea", 1, 0, 0))
+    room4 = nh.get_node(Coord("TestArea", 1, 0, 0))
     assert room4 is not None
 
     # At this point ensure_links should have detected adjacency:
@@ -608,16 +609,16 @@ def test_2x2_room_grid_ensure_links(env):
     # Room 3 (0,0): should have north and east
     r3_links = {l.name: l.coord for l in room3.get_links()}
     assert "north" in r3_links, f"Room 3 missing north link. Links: {r3_links}"
-    assert r3_links["north"] == ("TestArea", 0, 1, 0)
+    assert r3_links["north"] == Coord("TestArea", 0, 1, 0)
     assert "east" in r3_links, f"Room 3 missing east link. Links: {r3_links}"
-    assert r3_links["east"] == ("TestArea", 1, 0, 0)
+    assert r3_links["east"] == Coord("TestArea", 1, 0, 0)
 
     # Room 4 (1,0): should have north and west
     r4_links = {l.name: l.coord for l in room4.get_links()}
     assert "north" in r4_links, f"Room 4 missing north link. Links: {r4_links}"
-    assert r4_links["north"] == ("TestArea", 1, 1, 0)
+    assert r4_links["north"] == Coord("TestArea", 1, 1, 0)
     assert "west" in r4_links, f"Room 4 missing west link. Links: {r4_links}"
-    assert r4_links["west"] == ("TestArea", 0, 0, 0)
+    assert r4_links["west"] == Coord("TestArea", 0, 0, 0)
 
     # Room 1 (0,1): should have south and east
     r1_links = {l.name: l.coord for l in room1.get_links()}

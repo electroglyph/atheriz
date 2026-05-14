@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 import tempfile
 import shutil
 import os
@@ -24,7 +25,7 @@ def caller():
 
 @pytest.fixture
 def room():
-    r = Node(coord=("test", 0, 0, 0))
+    r = Node(coord=Coord("test", 0, 0, 0))
     handler = get_node_handler()
     handler.add_node(r)
     return r
@@ -99,7 +100,7 @@ def test_node_delete_non_recursive(caller, room):
     item.home = room # Normally home would be set to something else if we want to test move to home
     
     # Create another room to act as 'home'
-    home_room = Node(coord=("test", 1, 1, 1))
+    home_room = Node(coord=Coord("test", 1, 1, 1))
     get_node_handler().add_node(home_room)
     item.home = home_room
     

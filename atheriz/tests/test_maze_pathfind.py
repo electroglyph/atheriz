@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 import tempfile
 import shutil
 from unittest.mock import MagicMock
@@ -61,12 +62,12 @@ def test_maze_astar():
     maze2_exit = list(grid2.nodes.values())[-1]
     maze3_exit = list(grid3.nodes.values())[-1]
     
-    maze1_exit.add_link(NodeLink("down", ("maze2", 0, 0, 0), ["d"]))
-    maze2_exit.add_link(NodeLink("down", ("maze3", 0, 0, 0), ["d"]))
-    maze3_exit.add_link(NodeLink("down", ("maze1", 0, 0, 0), ["d"]))
+    maze1_exit.add_link(NodeLink("down", Coord("maze2", 0, 0, 0), ["d"]))
+    maze2_exit.add_link(NodeLink("down", Coord("maze3", 0, 0, 0), ["d"]))
+    maze3_exit.add_link(NodeLink("down", Coord("maze1", 0, 0, 0), ["d"]))
     
     # Test pathfinding from maze1 start to maze3 exit
-    start_node = nh.get_node(("maze1", 0, 0, 0))
+    start_node = nh.get_node(Coord("maze1", 0, 0, 0))
     if not start_node:
         start_node = list(grid1.nodes.values())[0]
         

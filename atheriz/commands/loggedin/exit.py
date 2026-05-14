@@ -2,6 +2,7 @@ from atheriz.commands.base_cmd import Command
 from atheriz.globals.objects import get
 from atheriz.globals.get import get_node_handler
 from atheriz.logger import logger
+from atheriz.utils import Coord
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,8 +15,8 @@ class ExitCommand(Command):
     aliases: list[str] | None = None
     desc = "bleh"
     caller_id: int = -1
-    location: tuple[str, int, int, int] | None = None
-    destination: tuple[str, int, int, int] | None = None
+    location: Coord | None = None
+    destination: Coord | None = None
     tag = "exits"
     name: str = ""
     # don't show in help list

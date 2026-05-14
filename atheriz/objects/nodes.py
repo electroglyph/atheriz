@@ -24,6 +24,7 @@ import atheriz.settings as settings
 from atheriz.objects.base_lock import AccessLock
 from atheriz.objects.base_flags import Flags
 from atheriz.objects.base_obj import hookable
+from atheriz.utils import Coord
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -42,7 +43,7 @@ class NodeLink:
     def __init__(
         self,
         name: str = None,
-        coord: tuple[str, int, int, int] = None,
+        coord: Coord = None,
         aliases: Optional[list[str]] = None,
     ):
         """
@@ -115,7 +116,7 @@ class Node(Flags, AccessLock):
     # coord is actually required, this is just to simplify deserialization
     def __init__(
         self,
-        coord: tuple[str, int, int, int] = None,
+        coord: Coord = None,
         desc: str = None,
         theme: str = None,
         symbol: str = None,
@@ -500,15 +501,15 @@ class Node(Flags, AccessLock):
     def area(self) -> Any:
         """NodeArea | None: The NodeArea object that encompasses this node."""
         nh = get_node_handler()
-        return nh.get_area(self.coord[0])
+        return nh.get_area(self.coord.area)
 
     @property
     def grid(self) -> Any:
         """NodeGrid | None: The NodeGrid object corresponding to this node's Z-level."""
         nh = get_node_handler()
-        a = nh.get_area(self.coord[0])
+        a = nh.get_area(self.coord.area)
         if a:
-            return a.get_grid(self.coord[3])
+            return a.get_grid(self.coord.z)
 
     @property
     def name(self) -> str:
@@ -564,7 +565,7 @@ class Node(Flags, AccessLock):
             for o in self.contents:
                 self.add_exits(o)
 
-            if link.coord[0] != self.coord[0]:
+            if link.coord.area != self.coord.area:
                 nh = get_node_handler()
                 nh.add_transition(Transition(self.coord, link.coord, link.name))
 
@@ -586,7 +587,7 @@ class Node(Flags, AccessLock):
                 if index != -1:
                     found = self.links.pop(index)
         if found:
-            if self.coord[0] != found.coord[0]:  # need to remove a transition too
+            if self.coord.area != found.coord.area:  # need to remove a transition too
                 nh = get_node_handler()
                 nh.remove_transition(found.coord)
 
@@ -813,7 +814,7 @@ class Node(Flags, AccessLock):
         with self.lock:
             if looker.is_builder:
                 return wrap_truecolor(
-                    f"({self.coord[0]},{self.coord[1]},{self.coord[2]},{self.coord[3]})\n",
+                    f"({self.coord.area},{self.coord.x},{self.coord.y},{self.coord.z})\n",
                     fg=170,
                 )
         return ""
@@ -887,12 +888,12 @@ class NodeGrid:
 
     def add_node(self, node: Node):
         with self.lock:
-            self.nodes[(node.coord[1], node.coord[2])] = node
+            self.nodes[(node.coord.x, node.coord.y)] = node
             self.is_modified = True
         if node.links:
             nh = get_node_handler()
             for l in node.links:
-                if self.area != l.coord[0]:  # does this have an exit leading to a different area?
+                if self.area != l.coord.area:  # does this have an exit leading to a different area?
                     nh.add_transition(Transition(node.coord, l.coord, l.name))
 
     def remove_node(self, coord: tuple[int, int]):
@@ -903,7 +904,7 @@ class NodeGrid:
             if node.links:
                 nh = get_node_handler()
                 for l in node.links:
-                    if self.area != l.coord[0]:  # need to remove a transition too
+                    if self.area != l.coord.area:  # need to remove a transition too
                         nh.remove_transition(l.coord)
 
     def get_node(self, coord: tuple[int, int]) -> Node | None:
@@ -1006,7 +1007,7 @@ class NodeArea:
         cx, cy, cz = center
         rays: dict[tuple[int, int, int], list[tuple[int, Node]]] = {}
         for n in nodes:
-            nx, ny, nz = n.coord[1], n.coord[2], n.coord[3]
+            nx, ny, nz = n.coord.x, n.coord.y, n.coord.z
             dx, dy, dz = nx - cx, ny - cy, nz - cz
             g = gcd(gcd(abs(dx), abs(dy)), abs(dz))
             direction = (dx // g, dy // g, dz // g)
@@ -1109,8 +1110,8 @@ class Transition:
     # these are all actually required, this is just to simplify deserialization
     def __init__(
         self,
-        from_coord: tuple[str, int, int, int] = None,
-        to_coord: tuple[str, int, int, int] = None,
+        from_coord: Coord = None,
+        to_coord: Coord = None,
         from_link: str = None,
     ):
         self.from_coord = from_coord

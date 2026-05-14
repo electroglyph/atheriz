@@ -4,6 +4,7 @@ from atheriz.globals.get import get_node_handler, get_map_handler
 import atheriz.settings as settings
 from atheriz.globals.map import MapInfo
 from typing import TYPE_CHECKING
+from atheriz.utils import Coord
 import time
 
 if TYPE_CHECKING:
@@ -136,21 +137,21 @@ class BuildCommand(Command):
             if not c:
                 caller.msg("Error: Current location not found.")
                 return
-            new_coord = (c[0], c[1] + dx, c[2] + dy, c[3] + dz)
+            new_coord = Coord(c.area, c.x + dx, c.y + dy, c.z + dz)
             new_node = nh.get_node(new_coord)
 
             if not new_node:
                 desc = args.desc if args.desc else "Placeholder desc, use desc command to change"
                 new_node = Node(new_coord, desc=desc)
 
-                area = nh.get_area(c[0])
+                area = nh.get_area(c.area)
                 if not area:
                     caller.msg("Error: Current area not found.")
                     return
 
-                grid = area.get_grid(new_coord[3])
+                grid = area.get_grid(new_coord.z)
                 if not grid:
-                    grid = NodeGrid(c[0], new_coord[3])
+                    grid = NodeGrid(c.area, new_coord.z)
                     area.add_grid(grid)
 
                 grid.add_node(new_node)
@@ -170,10 +171,10 @@ class BuildCommand(Command):
                     aliases = [alias] if alias else []
                     new_node.add_link(NodeLink(back_link_name, loc.coord, aliases))
 
-            mi = mh.get_mapinfo(new_coord[0], new_coord[3])
+            mi = mh.get_mapinfo(new_coord.area, new_coord.z)
             if not mi:
                 mi = MapInfo()
-                mh.set_mapinfo(new_coord[0], new_coord[3], mi)
+                mh.set_mapinfo(new_coord.area, new_coord.z, mi)
 
             def get_room_dirs(mi: MapInfo, coord: tuple[int, int]) -> tuple[bool, bool, bool, bool]:
                 n, s, e, w = False, False, False, False
@@ -199,11 +200,11 @@ class BuildCommand(Command):
                     if not node.has_link_name("north"):
                         link = NodeLink(
                             "north",
-                            (node.coord[0], node.coord[1], node.coord[2] + 1, node.coord[3]),
+                            Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z),
                             ["n"],
                         )
                         node.add_link(link)
-                    to_coord = (node.coord[0], node.coord[1], node.coord[2] + 1, node.coord[3])
+                    to_coord = Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z)
                     to_node = nh.get_node(to_coord)
                     if to_node:
                         if not to_node.has_link_name("south"):
@@ -214,11 +215,11 @@ class BuildCommand(Command):
                     if not node.has_link_name("south"):
                         link = NodeLink(
                             "south",
-                            (node.coord[0], node.coord[1], node.coord[2] - 1, node.coord[3]),
+                            Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z),
                             ["s"],
                         )
                         node.add_link(link)
-                    to_coord = (node.coord[0], node.coord[1], node.coord[2] - 1, node.coord[3])
+                    to_coord = Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z)
                     to_node = nh.get_node(to_coord)
                     if to_node:
                         if not to_node.has_link_name("north"):
@@ -229,11 +230,11 @@ class BuildCommand(Command):
                     if not node.has_link_name("east"):
                         link = NodeLink(
                             "east",
-                            (node.coord[0], node.coord[1] + 1, node.coord[2], node.coord[3]),
+                            Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z),
                             ["e"],
                         )
                         node.add_link(link)
-                    to_coord = (node.coord[0], node.coord[1] + 1, node.coord[2], node.coord[3])
+                    to_coord = Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z)
                     to_node = nh.get_node(to_coord)
                     if to_node:
                         if not to_node.has_link_name("west"):
@@ -244,11 +245,11 @@ class BuildCommand(Command):
                     if not node.has_link_name("west"):
                         link = NodeLink(
                             "west",
-                            (node.coord[0], node.coord[1] - 1, node.coord[2], node.coord[3]),
+                            Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z),
                             ["w"],
                         )
                         node.add_link(link)
-                    to_coord = (node.coord[0], node.coord[1] - 1, node.coord[2], node.coord[3])
+                    to_coord = Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z)
                     to_node = nh.get_node(to_coord)
                     if to_node:
                         if not to_node.has_link_name("east"):
@@ -274,16 +275,16 @@ class BuildCommand(Command):
                     elif settings.DEFAULT_ROOM_OUTLINE == "rounded":
                         char = settings.ROUNDED_WALL_PLACEHOLDER
                 if char:
-                    mi.update_grid((new_coord[1], new_coord[2]), settings.ROOM_PLACEHOLDER)
-                    mi.place_walls((new_coord[1], new_coord[2]), char)
-                    n, s, e, w = get_room_dirs(mi, (new_coord[1], new_coord[2]))
+                    mi.update_grid((new_coord.x, new_coord.y), settings.ROOM_PLACEHOLDER)
+                    mi.place_walls((new_coord.x, new_coord.y), char)
+                    n, s, e, w = get_room_dirs(mi, (new_coord.x, new_coord.y))
                     ensure_links(new_node, n, s, e, w)
 
             elif args.road:
-                mi.update_grid((new_coord[1], new_coord[2]), settings.ROAD_PLACEHOLDER)
+                mi.update_grid((new_coord.x, new_coord.y), settings.ROAD_PLACEHOLDER)
             elif args.path:
-                mi.update_grid((new_coord[1], new_coord[2]), settings.PATH_PLACEHOLDER)
-                mi.place_walls((new_coord[1], new_coord[2]), settings.PATH_PLACEHOLDER)
+                mi.update_grid((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
+                mi.place_walls((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
             caller.move_to(new_node)
 
     def _get_alias(self, name):

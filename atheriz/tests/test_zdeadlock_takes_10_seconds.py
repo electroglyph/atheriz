@@ -5,6 +5,7 @@ import sys
 import os
 import random
 import pytest
+from atheriz.utils import Coord
 
 # Ensure we can import the local package
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
@@ -32,12 +33,12 @@ def test_stress_deadlock():
     # Area "TestArea", Z=0
     
     # Node 1
-    room1 = Node(coord=("TestArea", 1, 0, 0), desc="This is Room 1")
+    room1 = Node(coord=Coord("TestArea", 1, 0, 0), desc="This is Room 1")
     room1.id = get_unique_id()
     add_object(room1)
     
     # Node 2
-    room2 = Node(coord=("TestArea", 2, 0, 0), desc="This is Room 2")
+    room2 = Node(coord=Coord("TestArea", 2, 0, 0), desc="This is Room 2")
     room2.id = get_unique_id()
     add_object(room2)
     

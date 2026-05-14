@@ -1,5 +1,6 @@
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.get import get_node_handler
+from atheriz.coord import Coord
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -49,7 +50,7 @@ class MoveCommand(Command):
             caller.msg("x, y, and z must be integers.")
             return
 
-        coord = (area, x, y, z)
+        coord = Coord(area, x, y, z)
         nh = get_node_handler()
         node = nh.get_node(coord)
         if not node:

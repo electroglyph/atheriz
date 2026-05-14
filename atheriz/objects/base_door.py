@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
+    from atheriz.utils import Coord
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.get import get_map_handler
 from atheriz.objects.base_lock import AccessLock
@@ -14,9 +15,9 @@ from threading import RLock
 class Door(AccessLock):
     def __init__(
         self,
-        from_coord: tuple[str, int, int, int] = None,
+        from_coord: Coord = None,
         from_exit: str = None,
-        to_coord: tuple[str, int, int, int] = None,
+        to_coord: Coord = None,
         to_exit: str = None,
         symbol_coord: tuple[int, int] = None,  # map coord to show the door symbol
         closed_symbol: str = None,
@@ -49,9 +50,9 @@ class Door(AccessLock):
     @classmethod
     def create(
         cls,
-        from_coord: tuple[str, int, int, int],
+        from_coord: Coord,
         from_exit: str,
-        to_coord: tuple[str, int, int, int],
+        to_coord: Coord,
         to_exit: str,
         symbol_coord: tuple[int, int] = None,
         closed_symbol: str = "",
@@ -77,7 +78,7 @@ class Door(AccessLock):
             f" {self.to_exit})"
         )
 
-    def desc(self, from_coord: tuple[str, int, int, int]) -> str:
+    def desc(self, from_coord: Coord) -> str:
         with self.lock:
             status = "A closed" if self.closed else "An open"
         if from_coord == self.from_coord:
@@ -249,13 +250,13 @@ class Door(AccessLock):
     def map_close(self):
         if self.symbol_coord:
             mh = get_map_handler()
-            mi = mh.get_mapinfo(self.from_coord[0], self.from_coord[3])
+            mi = mh.get_mapinfo(self.from_coord.area, self.from_coord.z)
             if mi:
                 mi.update_grid(self.symbol_coord, self.closed_symbol)
 
     def map_open(self):
         if self.symbol_coord:
             mh = get_map_handler()
-            mi = mh.get_mapinfo(self.to_coord[0], self.to_coord[3])
+            mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
             if mi:
                 mi.update_grid(self.symbol_coord, self.open_symbol)

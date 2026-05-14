@@ -23,8 +23,8 @@ class Wanderer(Object):
             return
         # Debug: trace NPC movement
         from atheriz.logger import logger
-        old_area = loc.coord[0] if loc.is_node else "???"
-        new_area = node.coord[0]
+        old_area = loc.coord.area if loc.is_node else "???"
+        new_area = node.coord.area
         if old_area != new_area:
             logger.warning(f"NPC {self.name} (#{self.id}) crossing areas: {loc.coord} -> {node.coord} via link '{link.name}' (link.coord={link.coord})")
         self.move_to(node, link.name)
@@ -52,13 +52,13 @@ class WanderCommand(Command):
             return
         
         nh = get_node_handler()
-        area = nh.get_area(loc.coord[0])
+        area = nh.get_area(loc.coord.area)
         if not area:
             caller.msg("Could not find your current area.")
             return
         
         # Get the grid for the current z-level
-        grid = area.get_grid(loc.coord[3])
+        grid = area.get_grid(loc.coord.z)
         if not grid:
             caller.msg("Could not find the grid for your current z-level.")
             return
@@ -72,4 +72,4 @@ class WanderCommand(Command):
                 random_node = grid.get_random_node()
                 npc.move_to(random_node)
         end = time.time()
-        caller.msg(f"Spawned {count} NPCs across area '{loc.coord[0]}' in {(end - start) * 1000:.2f} milliseconds")
+        caller.msg(f"Spawned {count} NPCs across area '{loc.coord.area}' in {(end - start) * 1000:.2f} milliseconds")

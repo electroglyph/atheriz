@@ -1,6 +1,7 @@
+from atheriz.utils import Coord
 import time
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea
-from atheriz.utils import get_points_in_sphere
+from atheriz.utils import get_points_in_sphere, Coord
 
 
 def _build_sparse_area(name="SphereTest"):
@@ -9,7 +10,7 @@ def _build_sparse_area(name="SphereTest"):
         grid = NodeGrid(z=z)
         for x in range(0, 25, 3):
             for y in range(0, 25, 3):
-                grid.nodes[(x, y)] = Node(coord=(name, x, y, z))
+                grid.nodes[(x, y)] = Node(coord=Coord(name, x, y, z))
         area.add_grid(grid)
     return area
 
@@ -76,7 +77,7 @@ def test_get_rays_in_sphere_correctness_and_speed():
     for ray in rays:
         dists = []
         for n in ray:
-            nx, ny, nz = n.coord[1], n.coord[2], n.coord[3]
+            nx, ny, nz = n.coord.x, n.coord.y, n.coord.z
             dx, dy, dz = nx - center[0], ny - center[1], nz - center[2]
             dists.append(dx * dx + dy * dy + dz * dz)
         assert dists == sorted(dists), f"Ray not sorted by distance: {dists}"
@@ -98,8 +99,8 @@ def test_get_rays_in_sphere_correctness_and_speed():
 def test_get_nodes_in_sphere_ignore_center():
     area = NodeArea(name="CenterTest")
     grid = NodeGrid(z=0)
-    grid.nodes[(0, 0)] = Node(coord=("CenterTest", 0, 0, 0))
-    grid.nodes[(1, 0)] = Node(coord=("CenterTest", 1, 0, 0))
+    grid.nodes[(0, 0)] = Node(coord=Coord("CenterTest", 0, 0, 0))
+    grid.nodes[(1, 0)] = Node(coord=Coord("CenterTest", 1, 0, 0))
     area.add_grid(grid)
 
     with_center = area.get_nodes_in_sphere((0, 0, 0), 2)

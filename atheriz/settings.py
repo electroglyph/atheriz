@@ -1,5 +1,6 @@
 import os
 from enum import IntEnum, auto
+from atheriz.coord import Coord
 
 SAVE_PATH = "save"
 SECRET_PATH = "secret"
@@ -67,7 +68,7 @@ MAX_LOGIN_ATTEMPTS = 3
 LOGIN_ATTEMPT_COOLDOWN = 100
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False
-DEFAULT_HOME = ("limbo", 4, 4, 4)
+DEFAULT_HOME = Coord("limbo", 4, 4, 4)
 MAP_ENABLED = True
 LEGEND_ENABLED = True
 # maximum frames per second for map rendering, recommended to be around 5-10

@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from atheriz.objects.nodes import Node
 from atheriz.objects.base_script import Script, before, after, replace
 
@@ -34,7 +35,7 @@ class NodeTickBeforeScript(Script):
 
 
 def test_node_add_remove_script():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeDescBeforeScript()
     script.id = 301
 
@@ -48,7 +49,7 @@ def test_node_add_remove_script():
 
 
 def test_node_at_desc_before_hook():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeDescBeforeScript()
     script.id = 302
     node.add_script(script)
@@ -58,7 +59,7 @@ def test_node_at_desc_before_hook():
 
 
 def test_node_at_pre_object_leave_replace_hook():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeBlockLeaveScript()
     script.id = 303
     node.add_script(script)
@@ -68,7 +69,7 @@ def test_node_at_pre_object_leave_replace_hook():
 
 
 def test_node_at_delete_after_hook():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeDeleteAfterScript()
     script.id = 304
     node.add_script(script)
@@ -87,7 +88,7 @@ def test_node_at_delete_after_hook():
 
 
 def test_node_unmarked_hook_raises():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeUnmarkedScript()
     script.id = 305
     node.add_script(script)
@@ -98,7 +99,7 @@ def test_node_unmarked_hook_raises():
 
 
 def test_node_at_tick_before_hook():
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script = NodeTickBeforeScript()
     script.id = 306
     node.add_script(script)
@@ -109,7 +110,7 @@ def test_node_at_tick_before_hook():
 
 def test_node_multiple_hooks():
     """Ensure multiple scripts can register hooks on the same node method."""
-    node = Node(coord=("test_area", 0, 0, 0))
+    node = Node(coord=Coord("test_area", 0, 0, 0))
     script1 = NodeTickBeforeScript()
     script1.id = 307
     script2 = NodeTickBeforeScript()

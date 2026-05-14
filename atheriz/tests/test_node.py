@@ -1,4 +1,5 @@
 import pytest
+from atheriz.utils import Coord
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Transition
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_door import Door
@@ -14,14 +15,14 @@ import shutil
 
 
 def test_nodelink_init():
-    link = NodeLink(name="north", coord=("TestArea", 0, 1, 0), aliases=["n"])
+    link = NodeLink(name="north", coord=Coord("TestArea", 0, 1, 0), aliases=["n"])
     assert link.name == "north"
-    assert link.coord == ("TestArea", 0, 1, 0)
+    assert link.coord == Coord("TestArea", 0, 1, 0)
     assert link.aliases == ["n"]
 
 
 def test_nodelink_str():
-    link = NodeLink(name="south", coord=("TestArea", 0, 0, 0))
+    link = NodeLink(name="south", coord=Coord("TestArea", 0, 0, 0))
     s = str(link)
     assert "south" in s
     assert "TestArea" in s
@@ -31,29 +32,29 @@ def test_nodelink_str():
 
 
 def test_node_init():
-    node = Node(coord=("TestArea", 1, 2, 3), desc="A dark room")
-    assert node.coord == ("TestArea", 1, 2, 3)
+    node = Node(coord=Coord("TestArea", 1, 2, 3), desc="A dark room")
+    assert node.coord == Coord("TestArea", 1, 2, 3)
     assert node.desc == "A dark room"
     assert node.links == []
 
 
 def test_node_with_links():
-    link = NodeLink(name="north", coord=("TestArea", 0, 1, 0))
-    node = Node(coord=("TestArea", 0, 0, 0), links=[link])
+    link = NodeLink(name="north", coord=Coord("TestArea", 0, 1, 0))
+    node = Node(coord=Coord("TestArea", 0, 0, 0), links=[link])
     assert len(node.links) == 1
     assert node.links[0].name == "north"
 
 
 def test_node_add_link():
-    node = Node(coord=("TestArea", 0, 0, 0))
-    link = NodeLink(name="east", coord=("TestArea", 1, 0, 0))
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    link = NodeLink(name="east", coord=Coord("TestArea", 1, 0, 0))
     node.add_link(link)
     assert len(node.links) == 1
     assert node.links[0].name == "east"
 
 
 def test_node_nouns():
-    node = Node(coord=("TestArea", 0, 0, 0))
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
     node.add_noun("fountain", "A marble fountain with clear water")
     assert node.get_noun("fountain") == "A marble fountain with clear water"
     node.remove_noun("fountain")
@@ -61,9 +62,9 @@ def test_node_nouns():
 
 
 def test_node_equality():
-    node1 = Node(coord=("TestArea", 0, 0, 0))
-    node2 = Node(coord=("TestArea", 0, 0, 0))
-    node3 = Node(coord=("TestArea", 1, 0, 0))
+    node1 = Node(coord=Coord("TestArea", 0, 0, 0))
+    node2 = Node(coord=Coord("TestArea", 0, 0, 0))
+    node3 = Node(coord=Coord("TestArea", 1, 0, 0))
 
     assert node1 == node2
     assert node1 != node3
@@ -80,7 +81,7 @@ def test_nodegrid_init():
 
 def test_nodegrid_add_get_node():
     grid = NodeGrid(z=0)
-    node = Node(coord=("TestArea", 1, 2, 0))
+    node = Node(coord=Coord("TestArea", 1, 2, 0))
     grid.nodes[(1, 2)] = node
 
     assert len(grid) == 1
@@ -90,8 +91,8 @@ def test_nodegrid_add_get_node():
 
 def test_nodegrid_clear():
     grid = NodeGrid(z=0)
-    grid.nodes[(0, 0)] = Node(coord=("TestArea", 0, 0, 0))
-    grid.nodes[(1, 1)] = Node(coord=("TestArea", 1, 1, 0))
+    grid.nodes[(0, 0)] = Node(coord=Coord("TestArea", 0, 0, 0))
+    grid.nodes[(1, 1)] = Node(coord=Coord("TestArea", 1, 1, 0))
     assert len(grid) == 2
 
     grid.clear()
@@ -155,8 +156,8 @@ def test_nodearea_data():
 def test_nodearea_get_nodes():
     area = NodeArea(name="TestArea")
     grid = NodeGrid(z=0)
-    node1 = Node(coord=("TestArea", 0, 0, 0))
-    node2 = Node(coord=("TestArea", 1, 1, 0))
+    node1 = Node(coord=Coord("TestArea", 0, 0, 0))
+    node2 = Node(coord=Coord("TestArea", 1, 1, 0))
     grid.nodes[(0, 0)] = node1
     grid.nodes[(1, 1)] = node2
     area.add_grid(grid)
@@ -172,10 +173,10 @@ def test_nodearea_get_nodes():
 
 def test_transition_init():
     trans = Transition(
-        from_coord=("Area1", 0, 0, 0), to_coord=("Area2", 0, 0, 0), from_link="north"
+        from_coord=Coord("Area1", 0, 0, 0), to_coord=Coord("Area2", 0, 0, 0), from_link="north"
     )
-    assert trans.from_coord == ("Area1", 0, 0, 0)
-    assert trans.to_coord == ("Area2", 0, 0, 0)
+    assert trans.from_coord == Coord("Area1", 0, 0, 0)
+    assert trans.to_coord == Coord("Area2", 0, 0, 0)
     assert trans.from_link == "north"
 
 
@@ -224,52 +225,52 @@ def test_nodehandler_get_node():
     handler = NodeHandler()
     area = NodeArea(name="TestArea")
     grid = NodeGrid(z=0)
-    node = Node(coord=("TestArea", 5, 10, 0))
+    node = Node(coord=Coord("TestArea", 5, 10, 0))
     grid.nodes[(5, 10)] = node
     area.add_grid(grid)
     handler.add_area(area)
 
-    result = handler.get_node(("TestArea", 5, 10, 0))
+    result = handler.get_node(Coord("TestArea", 5, 10, 0))
     assert result == node
 
-    assert handler.get_node(("TestArea", 99, 99, 0)) is None
-    assert handler.get_node(("NonexistentArea", 0, 0, 0)) is None
+    assert handler.get_node(Coord("TestArea", 99, 99, 0)) is None
+    assert handler.get_node(Coord("NonexistentArea", 0, 0, 0)) is None
 
 
 def test_nodehandler_get_nodes():
     handler = NodeHandler()
     area = NodeArea(name="TestArea")
     grid = NodeGrid(z=0)
-    node1 = Node(coord=("TestArea", 0, 0, 0))
-    node2 = Node(coord=("TestArea", 1, 1, 0))
+    node1 = Node(coord=Coord("TestArea", 0, 0, 0))
+    node2 = Node(coord=Coord("TestArea", 1, 1, 0))
     grid.nodes[(0, 0)] = node1
     grid.nodes[(1, 1)] = node2
     area.add_grid(grid)
     handler.add_area(area)
 
-    nodes = handler.get_nodes([("TestArea", 0, 0, 0), ("TestArea", 1, 1, 0)])
+    nodes = handler.get_nodes([Coord("TestArea", 0, 0, 0), Coord("TestArea", 1, 1, 0)])
     assert len(nodes) == 2
 
 
 def test_nodehandler_add_remove_transition():
     handler = NodeHandler()
     trans = Transition(
-        from_coord=("Area1", 0, 0, 0), to_coord=("Area2", 0, 0, 0), from_link="north"
+        from_coord=Coord("Area1", 0, 0, 0), to_coord=Coord("Area2", 0, 0, 0), from_link="north"
     )
 
     handler.add_transition(trans)
-    assert ("Area2", 0, 0, 0) in handler.transitions
+    assert Coord("Area2", 0, 0, 0) in handler.transitions
 
-    handler.remove_transition(("Area2", 0, 0, 0))
-    assert ("Area2", 0, 0, 0) not in handler.transitions
+    handler.remove_transition(Coord("Area2", 0, 0, 0))
+    assert Coord("Area2", 0, 0, 0) not in handler.transitions
 
 
 def test_nodehandler_find_transitions():
     handler = NodeHandler()
 
-    t1 = Transition(from_coord=("Area1", 0, 0, 0), to_coord=("Area2", 0, 0, 0), from_link="north")
-    t2 = Transition(from_coord=("Area1", 0, 0, 1), to_coord=("Area3", 0, 0, 1), from_link="up")
-    t3 = Transition(from_coord=("Area2", 0, 0, 0), to_coord=("Area1", 0, 0, 0), from_link="south")
+    t1 = Transition(from_coord=Coord("Area1", 0, 0, 0), to_coord=Coord("Area2", 0, 0, 0), from_link="north")
+    t2 = Transition(from_coord=Coord("Area1", 0, 0, 1), to_coord=Coord("Area3", 0, 0, 1), from_link="up")
+    t3 = Transition(from_coord=Coord("Area2", 0, 0, 0), to_coord=Coord("Area1", 0, 0, 0), from_link="south")
 
     handler.add_transition(t1)
     handler.add_transition(t2)
@@ -287,8 +288,8 @@ def test_nodehandler_find_transitions():
 def test_nodehandler_add_door():
     handler = NodeHandler()
     door = Door(
-        from_coord=("Area1", 0, 0, 0),
-        to_coord=("Area2", 0, 0, 0),
+        from_coord=Coord("Area1", 0, 0, 0),
+        to_coord=Coord("Area2", 0, 0, 0),
         from_exit="north",
         to_exit="south",
     )
@@ -296,8 +297,8 @@ def test_nodehandler_add_door():
     handler.add_door(door)
 
     # Door should be accessible from both sides
-    doors_from = handler.get_doors(("Area1", 0, 0, 0))
-    doors_to = handler.get_doors(("Area2", 0, 0, 0))
+    doors_from = handler.get_doors(Coord("Area1", 0, 0, 0))
+    doors_to = handler.get_doors(Coord("Area2", 0, 0, 0))
 
     assert "north" in doors_from
     assert "south" in doors_to
@@ -326,16 +327,16 @@ def test_nodegrid_add_node_creates_transition():
     area1.add_grid(grid)
 
     # Create a node with a link to area2
-    link = NodeLink(name="north", coord=("Area2", 0, 0, 0))
-    node = Node(coord=("Area1", 0, 0, 0), links=[link])
+    link = NodeLink(name="north", coord=Coord("Area2", 0, 0, 0))
+    node = Node(coord=Coord("Area1", 0, 0, 0), links=[link])
 
     # Add node via grid - this should create a transition
     grid.add_node(node)
 
     # Verify transition was created
-    assert ("Area2", 0, 0, 0) in handler.transitions
-    trans = handler.transitions[("Area2", 0, 0, 0)]
-    assert trans.from_coord == ("Area1", 0, 0, 0)
+    assert Coord("Area2", 0, 0, 0) in handler.transitions
+    trans = handler.transitions[Coord("Area2", 0, 0, 0)]
+    assert trans.from_coord == Coord("Area1", 0, 0, 0)
     assert trans.from_link == "north"
 
 
@@ -354,18 +355,18 @@ def test_nodegrid_remove_node_removes_transition():
     grid = NodeGrid(z=0)
     area1.add_grid(grid)
 
-    link = NodeLink(name="north", coord=("Area2", 0, 0, 0))
-    node = Node(coord=("Area1", 0, 0, 0), links=[link])
+    link = NodeLink(name="north", coord=Coord("Area2", 0, 0, 0))
+    node = Node(coord=Coord("Area1", 0, 0, 0), links=[link])
     grid.add_node(node)
 
     # Verify transition exists
-    assert ("Area2", 0, 0, 0) in handler.transitions
+    assert Coord("Area2", 0, 0, 0) in handler.transitions
 
     # Remove the node
     grid.remove_node((0, 0))
 
     # Verify transition was removed
-    assert ("Area2", 0, 0, 0) not in handler.transitions
+    assert Coord("Area2", 0, 0, 0) not in handler.transitions
 
 
 def test_node_remove_link_removes_transition():
@@ -383,18 +384,18 @@ def test_node_remove_link_removes_transition():
     grid = NodeGrid(z=0)
     area1.add_grid(grid)
 
-    link = NodeLink(name="north", coord=("Area2", 0, 0, 0))
-    node = Node(coord=("Area1", 0, 0, 0), links=[link])
+    link = NodeLink(name="north", coord=Coord("Area2", 0, 0, 0))
+    node = Node(coord=Coord("Area1", 0, 0, 0), links=[link])
     grid.add_node(node)
 
     # Verify transition exists
-    assert ("Area2", 0, 0, 0) in handler.transitions
+    assert Coord("Area2", 0, 0, 0) in handler.transitions
 
     # Remove the link from the node
     node.remove_link("north")
 
     # Verify transition was removed
-    assert ("Area2", 0, 0, 0) not in handler.transitions
+    assert Coord("Area2", 0, 0, 0) not in handler.transitions
     assert len(node.links) == 0
 
 
@@ -411,8 +412,8 @@ def test_node_remove_link_same_area_no_transition():
     area.add_grid(grid)
 
     # Link to same area - no transition should be created
-    link = NodeLink(name="north", coord=("TestArea", 0, 1, 0))
-    node = Node(coord=("TestArea", 0, 0, 0), links=[link])
+    link = NodeLink(name="north", coord=Coord("TestArea", 0, 1, 0))
+    node = Node(coord=Coord("TestArea", 0, 0, 0), links=[link])
     grid.add_node(node)
 
     # No transition should exist (same area)

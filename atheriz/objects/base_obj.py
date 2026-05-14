@@ -558,8 +558,11 @@ class Object(Flags, DbOps, AccessLock):
         # The map string is rendered with (min_x, max_y) at top-left
         pos = (0, 0)
         if self.location:
-            player_x = self.location.coord[1]
-            player_y = self.location.coord[2]
+            coord = self.location.coord
+            # Handle both Coord NamedTuple and legacy 4-tuple
+            player_x = getattr(coord, "x", coord[1] if len(coord) > 1 else 0)
+            player_y = getattr(coord, "y", coord[2] if len(coord) > 2 else 0)
+            
             # rel_x = column index in map string (0 = left)
             # rel_y = row index in map string (0 = top)
             rel_x = player_x - min_x
@@ -1069,13 +1072,13 @@ class Object(Flags, DbOps, AccessLock):
                 mh.add_listener(self)
                 if self.is_mapable:
                     mh.add_mapable(self)
+            self.move_to(self.location)
             if settings.MAP_ENABLED and self.map_enabled:
-                mh = get_map_handler()
                 self.msg(map_enable="")
-                mi: MapInfo | None = mh.get_mapinfo(self.location.coord[0], self.location.coord[3])
+                mh = get_map_handler()
+                mi: MapInfo | None = mh.get_mapinfo(self.location.coord.area, self.location.coord.z)
                 if mi:
                     mi.render(True)
-            self.move_to(self.location)
 
     def announce_move_from(self, destination: Node, from_exit: str | None, **kwargs):
         """
@@ -1333,12 +1336,14 @@ class Object(Flags, DbOps, AccessLock):
         if emitter_loc == loc or not emitter_loc:
             self.msg(f"{wrap_xterm256(f'You hear something{adj}:', fg=15, bold=True)} {sound_desc}{sound_msg}")
         else:
-            direction = get_dir(loc.coord, emitter_loc.coord)
-            z_diff = emitter_loc.coord[3] - loc.coord[3]
-            z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
-            self.msg(
-                f"{wrap_xterm256(f'You hear something{adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
-            )
+            z_str = ""
+            if emitter_loc.coord.area == loc.coord.area:
+                direction = get_dir(loc.coord, emitter_loc.coord)
+                z_diff = emitter_loc.coord.z - loc.coord.z
+                z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
+                self.msg(
+                    f"{wrap_xterm256(f'You hear something{adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
+                )
 
     @hookable
     def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
@@ -1394,7 +1399,7 @@ class Object(Flags, DbOps, AccessLock):
                     o.at_hear(emitter, sound_desc, sound_msg, loudness, is_say)
             c = loc.coord
             nh = get_node_handler()
-            area = nh.get_area(c[0])
+            area = nh.get_area(c.area)
             if area:
                 open = False
                 doors = nh.get_doors(c)
@@ -1410,27 +1415,31 @@ class Object(Flags, DbOps, AccessLock):
                 attenuation = loc.open_attenuation if open else loc.enclosed_attenuation
                 loudness = loudness - attenuation
                 from collections import deque
-                source_local = (c[1], c[2], c[3])
+                mcoord = (c.x, c.y, c.z)
+                source_local = mcoord
                 visited = {source_local}
                 seen = {source_local}
                 queue = deque()
                 for neighbor in area.get_neighbors(source_local):
-                    ncoord = (neighbor.coord[1], neighbor.coord[2], neighbor.coord[3])
-                    seen.add(ncoord)
-                    queue.append((neighbor, loudness))
+                    if neighbor:
+                        ncoord = (neighbor.coord.x, neighbor.coord.y, neighbor.coord.z)
+                        seen.add(ncoord)
+                        queue.append((neighbor, loudness))
                 while queue:
                     node, node_loudness = queue.popleft()
-                    ncoord = (node.coord[1], node.coord[2], node.coord[3])
-                    if ncoord in visited:
-                        continue
-                    visited.add(ncoord)
-                    ret = node.at_hear(emitter, sound_desc, sound_msg, node_loudness, is_say)
-                    if ret > 0:
-                        for neighbor in area.get_neighbors(ncoord):
-                            nnc = (neighbor.coord[1], neighbor.coord[2], neighbor.coord[3])
-                            if nnc not in seen:
-                                seen.add(nnc)
-                                queue.append((neighbor, ret))
+                    if node:
+                        ncoord = (node.coord.x, node.coord.y, node.coord.z)
+                        if ncoord in visited:
+                            continue
+                        visited.add(ncoord)
+                        ret = node.at_hear(emitter, sound_desc, sound_msg, node_loudness, is_say)
+                        if ret > 0:
+                            for neighbor in area.get_neighbors(ncoord):
+                                if neighbor:
+                                    nnc = (neighbor.coord.x, neighbor.coord.y, neighbor.coord.z)
+                                    if nnc not in seen:
+                                        seen.add(nnc)
+                                        queue.append((neighbor, ret))
 
     def emit_sound(self, sound_desc: str, sound_msg: str, loudness: float, is_say: bool = False):
         """Emit a sound.
