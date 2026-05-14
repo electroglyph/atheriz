@@ -1325,7 +1325,7 @@ class Object(Flags, DbOps, AccessLock):
         loc = self.location
         if not loc:
             return
-        adj = next((desc for threshold, desc in LOUDNESS_LEVELS if loudness < threshold), "deafening")
+        adj = next((desc for threshold, desc in LOUDNESS_LEVELS if loudness < threshold), " deafening")
 
         if is_say and sound_msg:
             replace_pct = next((pct for threshold, pct in settings.REPLACE_LEVELS if loudness < threshold), 0)
@@ -1340,9 +1340,14 @@ class Object(Flags, DbOps, AccessLock):
             if emitter_loc.coord.area == loc.coord.area:
                 direction = get_dir(loc.coord, emitter_loc.coord)
                 z_diff = emitter_loc.coord.z - loc.coord.z
-                z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
+                z_str = "" if z_diff == 0 else (" from above you" if z_diff > 0 else " from below you")
+                
+                if direction:
+                    dir_str = f" to the {direction}"
+                else:
+                    dir_str = ""
                 self.msg(
-                    f"{wrap_xterm256(f'You hear something{adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
+                    f"{wrap_xterm256(f'You hear something{adj}{z_str}{dir_str}:', fg=15, bold=True)} {sound_desc}{sound_msg}"
                 )
 
     @hookable

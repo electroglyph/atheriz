@@ -34,7 +34,7 @@ class AlarmObject(Object):
         self.emit_sound(
             "A robotic voice intones: ",
             "Hands to ACTION STATIONS! Hands to ACTION STATIONS! Assume damage control state one condition ZULU. This is not a drill!",
-            120.0,
+            130.0,
             True,
         )
 
