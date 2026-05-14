@@ -117,7 +117,7 @@ class HistoryManager {
 }
 
 window.addEventListener('load', () => {
-    const revision = 13;
+    const revision = 14;
     const font = new FontFaceObserver('Fira Custom');
     font.load().then(() => {
         console.log('Font loaded.');
@@ -1518,6 +1518,8 @@ window.addEventListener('load', () => {
                     if (map_enabled) {
                         // msg: ['map', [{map:..., pos:..., symbol:..., legend:..., min_x:..., max_y:..., show_legend:...}], {}]
                         const data = msg[1][0];
+                        // Clear any tile highlights from the previous area
+                        background_entries.clear();
                         // Cache plain map rules
                         plain_map = data.map.split(/\r?\n/);
                         map_min_x = data.min_x;
