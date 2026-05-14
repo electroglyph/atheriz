@@ -12,6 +12,17 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
 
+# Maps each placeholder character to its box-drawing style.
+# Used by pre_render for a single-pass placeholder resolution.
+_PLACEHOLDER_STYLES: dict[str, str] = {
+    settings.SINGLE_WALL_PLACEHOLDER: "single",
+    settings.DOUBLE_WALL_PLACEHOLDER: "double",
+    settings.ROUNDED_WALL_PLACEHOLDER: "rounded",
+    settings.PATH_PLACEHOLDER: "rounded",
+    settings.ROAD_PLACEHOLDER: "double",
+}
+
+
 class LegendEntry:
     """
     this is for adding information about environment symbols on the map.
@@ -55,9 +66,9 @@ class MapInfo:
     def __init__(
         self,
         name: str = "unknown",
-        pre_grid: dict[tuple[int, int], str] = {},
-        post_grid: dict[tuple[int, int], str] = {},
-        legend_entries: list[LegendEntry] = [],
+        pre_grid: dict[tuple[int, int], str] | None = None,
+        post_grid: dict[tuple[int, int], str] | None = None,
+        legend_entries: list[LegendEntry] | None = None,
     ) -> None:
         self.name = name
         self.map_changed = True
@@ -116,7 +127,7 @@ class MapInfo:
         Returns: tuple of (rendered_string, min_x, max_y)
         """
         if not grid:
-            print("grid is empty")
+            logger.warning("render_grid called with empty grid")
             return "", 0, 0
         keys = grid.keys()
         min_x = min(k[0] for k in keys)
@@ -271,21 +282,73 @@ class MapInfo:
         grid.update(to_place)
         return grid
 
+    @staticmethod
+    def _resolve_char(n: bool, s: bool, e: bool, w: bool, style: str) -> str:
+        """
+        Returns the box-drawing character for the given neighbor directions and wall style.
+        Used by pre_render for single-pass placeholder resolution.
+        """
+        if style == "single":
+            if n and s and e and w: return "┼"
+            elif n and s and e: return "├"
+            elif n and s and w: return "┤"
+            elif n and e and w: return "┴"
+            elif s and e and w: return "┬"
+            elif n and e: return "└"
+            elif n and w: return "┘"
+            elif s and e: return "┌"
+            elif s and w: return "┐"
+            elif n and s: return "│"
+            elif e and w: return "─"
+            elif n or s: return "│"
+            else: return "─"
+        elif style == "double":
+            if n and s and e and w: return "╬"
+            elif n and s and e: return "╠"
+            elif n and s and w: return "╣"
+            elif n and e and w: return "╩"
+            elif s and e and w: return "╦"
+            elif n and e: return "╚"
+            elif n and w: return "╝"
+            elif s and e: return "╔"
+            elif s and w: return "╗"
+            elif n and s: return "║"
+            elif e and w: return "═"
+            elif n or s: return "║"
+            else: return "═"
+        elif style == "rounded":
+            if n and s and e and w: return "┼"
+            elif n and s and e: return "├"
+            elif n and s and w: return "┤"
+            elif n and e and w: return "┴"
+            elif s and e and w: return "┬"
+            elif n and e: return "╰"
+            elif n and w: return "╯"
+            elif s and e: return "╭"
+            elif s and w: return "╮"
+            elif n and s: return "│"
+            elif e and w: return "─"
+            elif n or s: return "│"
+            else: return "─"
+        return "─"
+
     def pre_render(self):
+        """
+        Resolves all placeholder characters to their final box-drawing glyphs
+        in a single pass over the grid, then stores the result in post_grid.
+        """
         with self.lock:
             rendered = copy.deepcopy(self.pre_grid)
             original = self.pre_grid.copy()
-        MapInfo.render_char(rendered, original, settings.SINGLE_WALL_PLACEHOLDER, "single")
-        MapInfo.render_char(rendered, original, settings.DOUBLE_WALL_PLACEHOLDER, "double")
-        MapInfo.render_char(rendered, original, settings.ROUNDED_WALL_PLACEHOLDER, "rounded")
-        MapInfo.render_char(rendered, original, settings.PATH_PLACEHOLDER, "rounded")
-        MapInfo.render_char(rendered, original, settings.ROAD_PLACEHOLDER, "double")
-        rooms = []
+        to_place = {}
         for k, v in rendered.items():
-            if v == settings.ROOM_PLACEHOLDER:
-                rooms.append(k)
-        for room in rooms:
-            rendered[room] = " "
+            style = _PLACEHOLDER_STYLES.get(v)
+            if style is not None:
+                n, s, e, w = MapInfo.get_dirs(original, k, settings.ALL_SYMBOLS)
+                to_place[k] = MapInfo._resolve_char(n, s, e, w, style)
+            elif v == settings.ROOM_PLACEHOLDER:
+                to_place[k] = " "
+        rendered.update(to_place)
         with self.lock:
             self.post_grid = rendered
 
@@ -299,45 +362,54 @@ class MapInfo:
         with self.lock:
             if len(self.objects) + len(self.legend_entries) > settings.MAX_OBJECTS_PER_LEGEND:
                 return
-            for l in self.listeners.values():
-                entries = [
-                    (o.symbol, o.name, (o.location.coord[1], o.location.coord[2]))
-                    for o in self.objects.values()
-                    if o.id != l.id
-                ]
-                entries.extend([(e.symbol, e.desc, e.coord) for e in self.legend_entries])
-                l.at_legend_update(entries, True, self.name)
+            # Pre-compute entries once, tagged with source id for per-listener filtering
+            obj_entries = [
+                (o.id, (o.symbol, o.name, (o.location.coord[1], o.location.coord[2])))
+                for o in self.objects.values()
+            ]
+            static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+            listeners = list(self.listeners.values())
+        for l in listeners:
+            entries = [e for oid, e in obj_entries if oid != l.id]
+            entries.extend(static_entries)
+            l.at_legend_update(entries, True, self.name)
 
     def render(self, force=False):
-        if force or self.map_changed:
-            if self.pre_grid:
-                self.pre_render()
-            self.map_changed = False
-        t = time.time()
+        # Atomically read and reset map_changed to prevent a race where
+        # update_grid() sets it True between our check and our reset.
         with self.lock:
-            show_legend = True
-            if len(self.objects) + len(self.legend_entries) > settings.MAX_OBJECTS_PER_LEGEND:
-                show_legend = False
-            for l in self.listeners.values():
-                entries = [
-                    (o.symbol, o.name, (o.location.coord[1], o.location.coord[2]))
-                    for o in self.objects.values()
-                    if o.id != l.id
-                ]
-                entries.extend([(e.symbol, e.desc, e.coord) for e in self.legend_entries])
-                grid_copy = self.post_grid.copy()
-                # grid_copy = copy.deepcopy(self.post_grid)
-                # l.at_legend_update(list(mapables.values()) + legend_entries)
-                last_map_time = l.last_map_time
-                if last_map_time:
-                    if t - last_map_time > 1 / settings.MAP_FPS_LIMIT or force:
-                        grid_copy = l.at_pre_map_render(grid_copy)
-                        map_str, min_x, max_y = MapInfo.render_grid(grid_copy)
-                        l.at_map_update(map_str, entries, min_x, max_y, show_legend, self.name)
-                else:
-                    grid_copy = l.at_pre_map_render(grid_copy)
-                    map_str, min_x, max_y = MapInfo.render_grid(grid_copy)
-                    l.at_map_update(map_str, entries, min_x, max_y, show_legend, self.name)
+            needs_pre_render = (force or self.map_changed) and bool(self.pre_grid)
+            self.map_changed = False
+        if needs_pre_render:
+            self.pre_render()
+
+        t = time.time()
+        # Snapshot everything needed under the lock, then do per-listener
+        # work (at_pre_map_render, render_grid, at_map_update) outside it
+        # to keep the critical section tight.
+        with self.lock:
+            show_legend = (
+                len(self.objects) + len(self.legend_entries) <= settings.MAX_OBJECTS_PER_LEGEND
+            )
+            obj_entries = [
+                (o.id, (o.symbol, o.name, (o.location.coord[1], o.location.coord[2])))
+                for o in self.objects.values()
+            ]
+            static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+            listeners = list(self.listeners.values())
+            grid_snapshot = self.post_grid.copy()
+
+        fps_limit = 1 / settings.MAP_FPS_LIMIT
+        for l in listeners:
+            last_map_time = l.last_map_time
+            if last_map_time and not force and (t - last_map_time) <= fps_limit:
+                continue
+            entries = [e for oid, e in obj_entries if oid != l.id]
+            entries.extend(static_entries)
+            grid_copy = grid_snapshot.copy()
+            grid_copy = l.at_pre_map_render(grid_copy)
+            map_str, min_x, max_y = MapInfo.render_grid(grid_copy)
+            l.at_map_update(map_str, entries, min_x, max_y, show_legend, self.name)
 
     def add_legend_entry(self, entry: LegendEntry):
         with self.lock:
@@ -369,7 +441,7 @@ class MapInfo:
 
     def add_mapable_list(self, mapables: list[Object]):
         with self.lock:
-            self.objects.update(dict([(m.id, m) for m in mapables]))
+            self.objects.update({m.id: m for m in mapables})
         self.render_legend()
 
 
