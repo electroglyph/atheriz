@@ -162,7 +162,8 @@ class HealingAuraScript(Script):
                 obj.health = min(obj.max_health, getattr(obj, "health", 0) + 2)
 
 # Create a node and attach the script
-room = Node(coord=("forest", 5, 5, 0), desc="A warm, soothing grove.")
+from atheriz.utils import Coord
+room = Node(coord=Coord("forest", 5, 5, 0), desc="A warm, soothing grove.")
 room.add_script(HealingAuraScript.create(None, "HealingAura"))
 ```
 

@@ -16,8 +16,8 @@ Standard math wrappers are included in [`atheriz/utils.py`](../atheriz/utils.py)
 
 ### 10.1.3 Map Utilities
 Functions for spatial calculations:
-- `get_dir(origin_coord, dest_coord)`: Returns the cardinal direction from origin to destination.
-- `dist_3d(origin_coord, dest_coord)`: Calculates the 3D Euclidean distance between two coordinates.
+- `get_dir(origin_coord, dest_coord)`: Returns the cardinal direction from origin to destination `Coord` objects.
+- `dist_3d(origin_coord, dest_coord)`: Calculates the 3D Euclidean distance between two `Coord` objects.
 - `get_reverse_link(direction)`: Returns the opposite compass direction (e.g., "north" returns "south").
 
 ## 10.2 The FuncParser

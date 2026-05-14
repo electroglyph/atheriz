@@ -65,7 +65,7 @@ In `base_obj.py`, the default `at_hear` implementation processes the sound's lou
             self.msg(f"{wrap_xterm256(f'You hear something{adj}:', fg=15, bold=True)} {sound_desc}{sound_msg}")
         else:
             direction = get_dir(loc.coord, emitter_loc.coord)
-            z_diff = emitter_loc.coord[3] - loc.coord[3]
+            z_diff = emitter_loc.coord.z - loc.coord.z
             z_str = "" if z_diff == 0 else ("from above you " if z_diff > 0 else "from below you ")
             self.msg(
                 f"{wrap_xterm256(f'You hear something{adj} {z_str}to the {direction}:', fg=15, bold=True)} {sound_desc}{sound_msg}"

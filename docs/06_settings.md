@@ -32,7 +32,7 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 
 ### 6.2.2 System & Core Mechanics
 - `MAX_CHARACTERS`: Maximum number of characters allowed per account.
-- `DEFAULT_HOME`: The default `(area, x, y, z)` coordinates where players spawn or respawn.
+- `DEFAULT_HOME`: The default `Coord` coordinates where players spawn or respawn.
 - `DEFAULT_TICK_SECONDS`: How often the game loop ticks for objects with `is_tickable = True`.
 - `AUTO_COMMAND_ALIASING`: If `True`, automatically prefixes matches for player commands (e.g., typing `exa` correctly triggers `examine`).
 - `THREADPOOL_LIMIT`: Maximum number of threads to use in the threadpool (defaults to system CPU count).

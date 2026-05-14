@@ -44,14 +44,14 @@ class NodeHandler:
             cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
             for area, x, y, z, blob in cursor:
                 try:
-                    self.transitions[(area, x, y, z)] = dill.loads(blob)
+                    self.transitions[Coord(area, x, y, z)] = dill.loads(blob)
                 except Exception as e:
                     logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
 
             cursor.execute("SELECT area, x, y, z, data FROM doors")
             for area, x, y, z, blob in cursor:
                 try:
-                    self.doors[(area, x, y, z)] = dill.loads(blob)
+                    self.doors[Coord(area, x, y, z)] = dill.loads(blob)
                 except Exception as e:
                     logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
 

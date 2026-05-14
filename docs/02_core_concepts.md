@@ -64,12 +64,13 @@ When players use the `look` command on an object, the visual output is managed b
 ## 2.2 Nodes (Rooms)
 
 ### 2.2.1 What is a Node?
-A `Node` represents a discrete room or map location. It holds spatial coordinates defined as `(area_string, x_int, y_int, z_int)`. Key properties involve `coord`, `desc`, `theme`, `symbol`, `legend_desc`, arbitrary `data`, and connected `links`. View `Node.__init__` in [`atheriz/objects/nodes.py`](../atheriz/objects/nodes.py) for specific details.
+A `Node` represents a discrete room or map location. It holds spatial coordinates defined as a `Coord` object (a named tuple with attributes `area`, `x`, `y`, and `z`). Key properties involve `coord`, `desc`, `theme`, `symbol`, `legend_desc`, arbitrary `data`, and connected `links`. View `Node.__init__` in [`atheriz/objects/nodes.py`](../atheriz/objects/nodes.py) for specific details.
 
 ### 2.2.2 NodeLinks (Exits)
 Room exits are defined by `NodeLink` objects containing a `name`, destination `coord`, and an array of `aliases`. When a player enters a node, its links are dynamically parsed into actionable commands.
 ```python
-NodeLink("North", ("forest", 0, 1, 0), aliases=["n"])
+from atheriz.utils import Coord
+NodeLink("North", Coord("forest", 0, 1, 0), aliases=["n"])
 ```
 
 ### 2.2.3 Node Hooks
