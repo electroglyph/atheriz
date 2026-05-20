@@ -51,34 +51,57 @@ class TemplateGenerator:
         """Add methods to generate stubs for."""
         self.methods = methods
 
+    def _format_annotation(self, annotation: Any) -> str:
+        """Return a string representation of a type annotation, or '' if absent."""
+        if annotation is inspect.Parameter.empty:
+            return ""
+        if isinstance(annotation, str):
+            return annotation
+        if annotation is None or annotation is type(None):
+            return "None"
+        if hasattr(annotation, "__name__"):
+            return annotation.__name__
+        return str(annotation)
+
     def _format_signature(self, name: str, sig: Any) -> str:
-        """Format a method signature for the template."""
+        """Format a method signature for the template, including type annotations."""
         if sig is None:
             # Fallback if signature couldn't be inspected
             return f"def {name}(self, *args, **kwargs):"
 
         params = []
         for param_name, param in sig.parameters.items():
+            ann = self._format_annotation(param.annotation)
+
             if param_name == "self":
                 params.append("self")
+            elif param.kind == inspect.Parameter.VAR_POSITIONAL:
+                params.append(f"*{param_name}")
+            elif param.kind == inspect.Parameter.VAR_KEYWORD:
+                params.append(f"**{param_name}")
             elif param.default is inspect.Parameter.empty:
-                if param.kind == inspect.Parameter.VAR_POSITIONAL:
-                    params.append(f"*{param_name}")
-                elif param.kind == inspect.Parameter.VAR_KEYWORD:
-                    params.append(f"**{param_name}")
+                if ann:
+                    params.append(f"{param_name}: {ann}")
                 else:
                     params.append(param_name)
             else:
                 # Has default value
                 default = param.default
                 if isinstance(default, str):
-                    params.append(f'{param_name}="{default}"')
+                    default_str = f'"{default}"'
                 elif default is None:
-                    params.append(f"{param_name}=None")
+                    default_str = "None"
                 else:
-                    params.append(f"{param_name}={default!r}")
+                    default_str = repr(default)
+                if ann:
+                    params.append(f"{param_name}: {ann} = {default_str}")
+                else:
+                    params.append(f"{param_name}={default_str}")
 
-        return f"def {name}({', '.join(params)}):"
+        ret_ann = self._format_annotation(sig.return_annotation)
+        ret_str = f" -> {ret_ann}" if ret_ann else ""
+
+        return f"def {name}({', '.join(params)}){ret_str}:"
 
     def _format_body(self, name: str, sig: Any, is_empty: bool) -> str:
         """Format the method body."""

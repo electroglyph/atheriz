@@ -30,6 +30,7 @@ import atheriz.settings as settings
 from threading import RLock
 from atheriz.objects.base_db_ops import DbOps
 from atheriz.objects.base_lock import AccessLock
+import functools
 import time
 
 if TYPE_CHECKING:
@@ -42,6 +43,7 @@ _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 
 
 def hookable(func):
+    @functools.wraps(func)
     def wrapper(self: "Object", *args, **kwargs):
         h_dict = getattr(self, "hooks", {})
         hooks = h_dict.get(func.__name__, set())

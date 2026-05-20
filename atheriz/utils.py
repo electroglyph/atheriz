@@ -489,6 +489,63 @@ def is_empty_method(method) -> bool:
         return False
 
 
+def _build_signature_from_code(func) -> "Any":
+    """
+    Build an inspect.Signature from a function's __code__ object, ignoring
+    annotations.  Used as a fallback when inspect.signature() raises because
+    of unresolvable forward-reference type hints (e.g. ``Object | None``).
+    Returns None on any failure so callers can still fall back to *args/**kwargs.
+    """
+    import inspect
+
+    CO_VARARGS = 0x04
+    CO_VARKEYWORDS = 0x08
+
+    try:
+        func = getattr(func, "__func__", func)
+        code = func.__code__
+
+        n_pos = code.co_argcount
+        n_kw = code.co_kwonlyargcount
+        has_varargs = bool(code.co_flags & CO_VARARGS)
+        has_varkw = bool(code.co_flags & CO_VARKEYWORDS)
+        varnames = code.co_varnames
+
+        pos_names = varnames[:n_pos]
+        varargs_name = varnames[n_pos] if has_varargs else None
+        kwonly_start = n_pos + (1 if has_varargs else 0)
+        kwonly_names = varnames[kwonly_start : kwonly_start + n_kw]
+        varkw_name = varnames[kwonly_start + n_kw] if has_varkw else None
+
+        defaults = func.__defaults__ or ()
+        kwdefaults = func.__kwdefaults__ or {}
+        n_defaults = len(defaults)
+
+        params = []
+        for i, pname in enumerate(pos_names):
+            default_idx = i - (n_pos - n_defaults)
+            default = defaults[default_idx] if default_idx >= 0 else inspect.Parameter.empty
+            params.append(
+                inspect.Parameter(pname, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default)
+            )
+
+        if varargs_name:
+            params.append(inspect.Parameter(varargs_name, kind=inspect.Parameter.VAR_POSITIONAL))
+
+        for pname in kwonly_names:
+            default = kwdefaults.get(pname, inspect.Parameter.empty)
+            params.append(
+                inspect.Parameter(pname, kind=inspect.Parameter.KEYWORD_ONLY, default=default)
+            )
+
+        if varkw_name:
+            params.append(inspect.Parameter(varkw_name, kind=inspect.Parameter.VAR_KEYWORD))
+
+        return inspect.Signature(params)
+    except Exception:
+        return None
+
+
 def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
     """
     Inspect a class to extract methods meant to be overridden (hooks).
@@ -517,10 +574,9 @@ def get_class_hooks(cls: type) -> list[tuple[str, Any, str | None, bool]]:
                 # Use eval_str=False to avoid evaluating forward references
                 sig = inspect.signature(method, eval_str=False)
             except Exception:
-                # If signature fails, we still want to include it.
-                # We can't easily rebuild the signature here without more effort,
-                # but we can return None or a dummy.
-                pass
+                # Fallback: rebuild from __code__ to preserve real param names
+                # even when annotations contain unresolvable forward references.
+                sig = _build_signature_from_code(method)
 
             doc = inspect.getdoc(method)
             is_empty = is_empty_method(method)
