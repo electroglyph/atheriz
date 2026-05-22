@@ -40,7 +40,7 @@ It is strongly recommended to install Atheriz inside a virtual environment to ke
 
 **With uv (recommended):**
 ```sh
-uv venv --python 3.14t .venv
+uv venv --python 3.14t
 source .venv/bin/activate
 ```
 
