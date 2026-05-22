@@ -29,6 +29,7 @@ This has some code from Evennia, and is loosely based on the same ideas.
 - built-in tick system
 - built-in time system with sunset, sunrise, and moon phases
 - webclient has command history/completion, font size, etc. options
+- 3d sound propagation thru rooms, with per-room sound attenuation
 
 # Documentation
 
@@ -40,7 +41,6 @@ First version of the docs are up, view them here: [docs](docs/table_of_contents.
 - example game
 - more tests (getting there!)
 - make the map system less painful to use
-- sound propagation
 - optional save timer
 - map editor/designer in the webclient (in progress)
 
