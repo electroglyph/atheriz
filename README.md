@@ -10,6 +10,10 @@ This is an early draft and is not ready for production use, but it's getting clo
 
 This has some code from Evennia, and is loosely based on the same ideas.
 
+NOTE: This engine is meant to be used with Python 3.14 free-threaded (3.14t).
+
+You *can* use it with regular Python builds, but you lose out on the whole reason I created this engine: better performance.
+
 # Features
 
 - Linux and Windows compatible, not tested on Mac yet
