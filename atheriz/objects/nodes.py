@@ -650,35 +650,34 @@ class Node(Flags, AccessLock):
             self.is_modified = True
         obj.internal_cmdset.remove_by_tag("exits")
 
-    # this is mostly from Evennia, see EVENNIA_LICENSE.txt
+    # this is started out as Evennia code, see EVENNIA_LICENSE.txt
     def msg_contents(
         self,
-        text=None,
-        exclude=None,
+        text: str | None = None,
+        exclude: list | None = None,
         from_obj=None,
-        mapping=None,
-        raise_funcparse_errors=False,
+        mapping: dict | None = None,
+        raise_funcparse_errors: bool = False,
+        msg_type: str | None = None,
         **kwargs,
     ):
         """send a message to all objects in this node
 
         Args:
-            text (str | tuple, optional): message to send. Defaults to None.
+            text (str, optional): message to send. Defaults to None.
             exclude (list, optional): objects to exclude from message. Defaults to None.
             from_obj (Object, optional): object sending message. Defaults to None.
             mapping (dict, optional): mapping for funcparse. Defaults to None.
             raise_funcparse_errors (bool, optional): raise funcparse errors. Defaults to False.
-            internal (bool, optional): internal message, bypass lock if True. Defaults to False.
+            msg_type (str | None, optional): The type of message. Defaults to None.
             **kwargs: additional keyword arguments to pass to msg
         """
-        is_outcmd = text and is_iter(text)
-        inmessage = text[0] if is_outcmd else text
-        outkwargs = text[1] if is_outcmd and len(text) > 1 else {}
         mapping = mapping or {}
         you = from_obj or self
 
         if "you" not in mapping:
             mapping["you"] = you
+            
         contents = self.contents
         if exclude:
             exclude = make_iter(exclude)
@@ -687,20 +686,21 @@ class Node(Flags, AccessLock):
         for receiver in contents:
             # actor-stance replacements
             outmessage = _MSG_CONTENTS_PARSER.parse(
-                inmessage,
+                text,
                 raise_errors=raise_funcparse_errors,
                 return_string=True,
                 caller=you,
                 receiver=receiver,
                 mapping=mapping,
             )
-            outmessage = outmessage.format_map(
-                {
-                    key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
-                    for key, obj in mapping.items()
-                }
-            )
-            receiver.msg(text=outmessage, from_obj=from_obj, **outkwargs)
+            if outmessage:
+                outmessage = outmessage.format_map(
+                    {
+                        key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
+                        for key, obj in mapping.items()
+                    }
+                )
+            receiver.msg(text=outmessage, from_obj=from_obj, msg_type=msg_type, **kwargs)
 
     def get_display_things(self, looker: Object | None = None, **kwargs) -> str:
         """

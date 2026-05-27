@@ -564,7 +564,7 @@ class Object(Flags, DbOps, AccessLock):
             # Handle both Coord NamedTuple and legacy 4-tuple
             player_x = getattr(coord, "x", coord[1] if len(coord) > 1 else 0)
             player_y = getattr(coord, "y", coord[2] if len(coord) > 2 else 0)
-            
+
             # rel_x = column index in map string (0 = left)
             # rel_y = row index in map string (0 = top)
             rel_x = player_x - min_x
@@ -661,14 +661,15 @@ class Object(Flags, DbOps, AccessLock):
             **kwargs: Extra arguments, primarily including 'from_obj' and 'text'.
         """
         from_obj = kwargs.pop("from_obj", None)
+        msg_type = kwargs.pop("msg_type", None)
         if from_obj:
             for obj in make_iter(from_obj):
-                obj.at_msg_send(to_obj=self, **kwargs)
+                obj.at_msg_send(to_obj=self, msg_type=msg_type, **kwargs)
         if "text" in kwargs:
-            if not self.at_msg_receive(from_obj=from_obj, **kwargs):
+            if not self.at_msg_receive(from_obj=from_obj, msg_type=msg_type, **kwargs):
                 return
         elif args:
-            if not self.at_msg_receive(text=args[0], from_obj=from_obj):
+            if not self.at_msg_receive(text=args[0], msg_type=msg_type, from_obj=from_obj):
                 return
         if self.session is not None:
             self.session.msg(*args, **kwargs)
@@ -699,25 +700,23 @@ class Object(Flags, DbOps, AccessLock):
         for obj in contents:
             func(obj, **kwargs)
 
-    # this is from Evennia (https://github.com/evennia/evennia)
+    # this is based on code from Evennia (https://github.com/evennia/evennia)
     # see EVENNIA_LICENSE.txt for license (BSD-3-Clause)
     def msg_contents(
         self,
-        text=None,
-        exclude=None,
+        text: str | None = None,
+        exclude: list | None = None,
         from_obj=None,
-        mapping=None,
-        raise_funcparse_errors=False,
+        mapping: dict | None = None,
+        raise_funcparse_errors: bool = False,
+        msg_type: str | None = None,
         **kwargs,
     ):
         """
         Emits a message to all objects inside this object.
 
         Args:
-            text (str or tuple): Message to send. If a tuple, this should be
-                on the valid OOB outmessage form `(message, {kwargs})`,
-                where kwargs are optional data passed to the `text`
-                outputfunc. The message will be parsed for `{key}` formatting and
+            text (str, optional): Message to send. The message will be parsed for `{key}` formatting and
                 `$You/$you()/$You()`, `$obj(name)`, `$conj(verb)` and `$pron(pronoun, option)`
                 inline function callables.
                 The `name` is taken from the `mapping` kwarg {"name": object, ...}`.
@@ -736,6 +735,7 @@ class Object(Flags, DbOps, AccessLock):
             raise_funcparse_errors (bool, optional): If set, a failing `$func()` will
                 lead to an outright error. If unset (default), the failing `$func()`
                 will instead appear in output unparsed.
+            msg_type (str, optional): The type of message.
 
             **kwargs: Keyword arguments will be passed on to `obj.msg()` for all
                 messaged objects.
@@ -783,10 +783,6 @@ class Object(Flags, DbOps, AccessLock):
             - player2 will see: 'The First girl attacks Player2'
 
         """
-        # we also accept an outcommand on the form (message, {kwargs})
-        is_outcmd = text and is_iter(text)
-        inmessage = text[0] if is_outcmd else text
-        outkwargs = text[1] if is_outcmd and len(text) > 1 else {}
         mapping = mapping or {}
         you = from_obj or self
 
@@ -801,7 +797,7 @@ class Object(Flags, DbOps, AccessLock):
         for receiver in contents:
             # actor-stance replacements
             outmessage = _MSG_CONTENTS_PARSER.parse(
-                inmessage,
+                text,
                 raise_errors=raise_funcparse_errors,
                 return_string=True,
                 caller=you,
@@ -809,15 +805,16 @@ class Object(Flags, DbOps, AccessLock):
                 mapping=mapping,
             )
 
-            # director-stance replacements
-            outmessage = outmessage.format_map(
-                {
-                    key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
-                    for key, obj in mapping.items()
-                }
-            )
+            if outmessage:
+                # director-stance replacements
+                outmessage = outmessage.format_map(
+                    {
+                        key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
+                        for key, obj in mapping.items()
+                    }
+                )
 
-            receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
+            receiver.msg(text=outmessage, from_obj=from_obj, msg_type=msg_type, **kwargs)
 
     @hookable
     def at_pre_move(self, destination: Node | Object | None, to_exit: str | None = None, **kwargs) -> bool:
@@ -1155,7 +1152,9 @@ class Object(Flags, DbOps, AccessLock):
         )
 
     @hookable
-    def at_msg_receive(self, text: str | None = None, from_obj: Object | None = None, **kwargs) -> bool:
+    def at_msg_receive(
+        self, text: str | None = None, from_obj: Object | None = None, msg_type: str | None = None, **kwargs
+    ) -> bool:
         """
         Called when this object is about to receive an arbitrary string message.
         Returning False aborts the message delivery.
@@ -1163,6 +1162,7 @@ class Object(Flags, DbOps, AccessLock):
         Args:
             text (str | None, optional): The message content. Defaults to None.
             from_obj (Object | None, optional): The sender of the message. Defaults to None.
+            msg_type (str | None, optional): The type of message. Defaults to None.
             **kwargs: Extra arguments.
 
         Returns:
@@ -1171,13 +1171,16 @@ class Object(Flags, DbOps, AccessLock):
         return True
 
     @hookable
-    def at_msg_send(self, text: str | None = None, to_obj: Object | None = None, **kwargs) -> None:
+    def at_msg_send(
+        self, text: str | None = None, to_obj: Object | None = None, msg_type: str | None = None, **kwargs
+    ) -> None:
         """
         Called when this object sends an arbitrary string message to another object.
 
         Args:
             text (str | None, optional): The message content. Defaults to None.
             to_obj (Object | None, optional): The intended receiver. Defaults to None.
+            msg_type (str | None, optional): The type of message. Defaults to None.
             **kwargs: Extra arguments.
         """
         pass
@@ -1343,7 +1346,7 @@ class Object(Flags, DbOps, AccessLock):
                 direction = get_dir(loc.coord, emitter_loc.coord)
                 z_diff = emitter_loc.coord.z - loc.coord.z
                 z_str = "" if z_diff == 0 else (" from above you" if z_diff > 0 else " from below you")
-                
+
                 if direction:
                     dir_str = f" to the {direction}"
                 else:
@@ -1422,6 +1425,7 @@ class Object(Flags, DbOps, AccessLock):
                 attenuation = loc.open_attenuation if open else loc.enclosed_attenuation
                 loudness = loudness - attenuation
                 from collections import deque
+
                 mcoord = (c.x, c.y, c.z)
                 source_local = mcoord
                 visited = {source_local}
@@ -1469,6 +1473,7 @@ class Object(Flags, DbOps, AccessLock):
         msg_location=None,
         receivers=None,
         msg_receivers=None,
+        msg_type: str | None = None,
         **kwargs,
     ):
         """
@@ -1489,6 +1494,7 @@ class Object(Flags, DbOps, AccessLock):
                 message (by default only used by whispers).
             msg_receivers(str): Specific message to pass to the receiver(s). This will parsed
                 with the {receiver} placeholder replaced with the given receiver.
+            msg_type (str | None, optional): The type of message. Defaults to None.
         Keyword Args:
             whisper (bool): If this is a whisper rather than a say. Kwargs
                 can be used by other verbal commands in a similar way.
@@ -1546,8 +1552,9 @@ class Object(Flags, DbOps, AccessLock):
             }
             self_mapping.update(custom_mapping)
             self.msg(
-                text=(msg_self.format_map(self_mapping), {"type": msg_type}),
+                text=msg_self.format_map(self_mapping),
                 from_obj=self,
+                msg_type=msg_type,
             )
 
         if receivers and msg_receivers:
@@ -1571,11 +1578,9 @@ class Object(Flags, DbOps, AccessLock):
                 receiver_mapping.update(individual_mapping)
                 receiver_mapping.update(custom_mapping)
                 receiver.msg(
-                    text=(
-                        msg_receivers.format_map(receiver_mapping),
-                        {"type": msg_type},
-                    ),
+                    text=msg_receivers.format_map(receiver_mapping),
                     from_obj=self,
+                    msg_type=msg_type,
                 )
 
         if self.location and msg_location:
@@ -1594,10 +1599,11 @@ class Object(Flags, DbOps, AccessLock):
             if receivers:
                 exclude.extend(receivers)
             self.location.msg_contents(
-                text=(msg_location, {"type": msg_type}),
+                text=msg_location,
                 from_obj=self,
                 exclude=exclude,
                 mapping=location_mapping,
+                msg_type=msg_type,
             )
 
     @hookable
