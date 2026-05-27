@@ -97,7 +97,7 @@ class CmdSocials(Command):
                 msg = templates[0]
             else:
                 msg = templates
-            caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller})
+            caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller}, msg_type="emote")
         else:
             target = caller.search(target_name)
             if not target:
@@ -114,4 +114,4 @@ class CmdSocials(Command):
                     base_msg = base_msg[:-1]
                 msg = f"{base_msg} at $you(target)."
                 
-            caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller, "target": target})
+            caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller, "target": target}, msg_type="emote")
