@@ -664,7 +664,24 @@ class Object(Flags, DbOps, AccessLock):
         if from_obj:
             for obj in make_iter(from_obj):
                 obj.at_msg_send(to_obj=self, **kwargs)
+                
+        args = list(args)
+        if args and isinstance(args[0], tuple):
+            try:
+                text, extra = args[0]
+                args[0] = text
+                kwargs.update(extra)
+            except (ValueError, IndexError):
+                pass
+
         if "text" in kwargs:
+            text = kwargs["text"]
+            if isinstance(text, tuple):
+                try:
+                    kwargs["text"] = text[0]
+                    kwargs.update(text[1])
+                except (ValueError, IndexError):
+                    pass
             if not self.at_msg_receive(from_obj=from_obj, **kwargs):
                 return
         elif args:

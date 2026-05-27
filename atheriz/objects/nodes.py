@@ -700,7 +700,7 @@ class Node(Flags, AccessLock):
                     for key, obj in mapping.items()
                 }
             )
-            receiver.msg(text=outmessage, from_obj=from_obj, **outkwargs)
+            receiver.msg(text=(outmessage, outkwargs), from_obj=from_obj, **kwargs)
 
     def get_display_things(self, looker: Object | None = None, **kwargs) -> str:
         """

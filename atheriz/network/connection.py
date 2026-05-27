@@ -46,6 +46,12 @@ class BaseConnection:
         if kwargs:
             text = kwargs.pop("text", None)
             if text:
+                if isinstance(text, tuple):
+                    try:
+                        text, extra = text
+                        kwargs.update(extra)
+                    except ValueError:
+                        pass
                 args.insert(0, text)
             else:
                 k, v = kwargs.popitem()

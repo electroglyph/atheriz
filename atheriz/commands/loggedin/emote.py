@@ -22,6 +22,6 @@ class EmoteCommand(Command):
             return
         loc = caller.location
         if args.text and loc:
-            loc.msg_contents(f"{caller.name} {" ".join(args.text)}", from_obj=caller)
+            loc.msg_contents(f"{caller.name} {" ".join(args.text)}", from_obj=caller, type="emote")
         else:
             caller.msg(self.print_help())
