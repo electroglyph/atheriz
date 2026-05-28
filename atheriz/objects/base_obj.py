@@ -1063,6 +1063,11 @@ class Object(Flags, DbOps, AccessLock):
             channel.msg(f"{wrap_xterm256(self.name, fg=15, bold=True)} (#{self.id}) has logged in.")
         cs = get_loggedin_cmdset()
         commands = [cmd.key for cmd in cs.get_all() if cmd.access(self) and not cmd.hide]
+        try:
+            from atheriz.commands.loggedin.socials import SOCIALS_DICT
+            commands.extend(SOCIALS_DICT.keys())
+        except ImportError:
+            pass
         self.msg(player_commands=commands)
         self.msg(f"You become {wrap_xterm256(self.name, fg=15, bold=True)}.")
         if self.location:
