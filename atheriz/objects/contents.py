@@ -76,7 +76,8 @@ def search(obj: Object | Node, query: str) -> list[Any]:
     Args:
         query (str): search query
     """
-    if query == "me" or query == obj.name:
+    query = query.lower()
+    if query == "me" or query == obj.name.lower():
         return [obj]
     if query.startswith("#"):
         try:
@@ -139,7 +140,7 @@ def search(obj: Object | Node, query: str) -> list[Any]:
     for x in range(len(objs)):
         found = False
         for s in required:
-            if s in "".join(objs[x].aliases) + "".join(objs[x].name):
+            if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
                 found = True
             else:
                 found = False
@@ -152,7 +153,7 @@ def search(obj: Object | Node, query: str) -> list[Any]:
                 if len(matches) == count and index == 0:
                     return [v for v in matches.values()]
         for s in optional:
-            if s in "".join(objs[x].aliases) + "".join(objs[x].name):
+            if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
                 if count == 1 and index == 0:
                     return [objs[x]]
                 else:

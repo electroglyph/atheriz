@@ -1560,6 +1560,7 @@ class Object(Flags, DbOps, AccessLock):
                 text=msg_self.format_map(self_mapping),
                 from_obj=self,
                 msg_type=msg_type,
+                raw_msg=message,
             )
 
         if receivers and msg_receivers:
@@ -1586,6 +1587,7 @@ class Object(Flags, DbOps, AccessLock):
                     text=msg_receivers.format_map(receiver_mapping),
                     from_obj=self,
                     msg_type=msg_type,
+                    raw_msg=message,
                 )
 
         if self.location and msg_location:
@@ -1609,6 +1611,7 @@ class Object(Flags, DbOps, AccessLock):
                 exclude=exclude,
                 mapping=location_mapping,
                 msg_type=msg_type,
+                raw_msg=message,
             )
 
     @hookable
