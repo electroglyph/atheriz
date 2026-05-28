@@ -74,8 +74,12 @@ class CmdSocials(Command):
     aliases = list(SOCIALS_DICT.keys())
     category = "Socials"
     use_parser = True
-    hide = True
-    desc = "Social commands."
+    desc = "Social commands. Use 'help socials' for list."
+
+    def print_help(self):
+        base_help = self.parser.format_help()
+        socials_list = ", ".join(self.aliases)
+        return f"{base_help}\nAvailable socials:\n{socials_list}\n"
 
     def setup_parser(self):
         self.parser.add_argument("target", nargs="*", help="Who or what to do this to.")
