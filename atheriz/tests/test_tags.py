@@ -112,6 +112,30 @@ def test_get_by_tag_empty_list(global_test_env):
     assert result == []
 
 
+def test_get_by_tag_all(global_test_env):
+    a = _make_obj(26, {"warrior", "hero"})
+    b = _make_obj(27, {"warrior"})
+    c = _make_obj(28, {"mage"})
+    
+    # Must have both
+    result = get_by_tag(["warrior", "hero"], all=True)
+    assert a in result
+    assert b not in result
+    assert c not in result
+    
+    # Must have warrior
+    result = get_by_tag(["warrior"], all=True)
+    assert a in result
+    assert b in result
+    assert c not in result
+    
+    # Empty set requirement trivially satisfied by all objects
+    result = get_by_tag([], all=True)
+    assert a in result
+    assert b in result
+    assert c in result
+
+
 # ---------------------------------------------------------------------------
 # get_by_tag – objects without tags attribute (legacy deserialization guard)
 # ---------------------------------------------------------------------------

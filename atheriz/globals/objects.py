@@ -50,16 +50,22 @@ def filter_by(l: Callable[[Any], bool]) -> list[Any]:
         return [r for r in _ALL_OBJECTS.values() if l(r)]
 
 
-def get_by_tag(tag: str | list[str]) -> list[Any]:
-    """Search for objects by tag. Matches objects that have ANY of the given tags.
+def get_by_tag(tag: str | list[str] | set[str], all: bool = False) -> list[Any]:
+    """Search for objects by tag.
+
+    By default, matches objects that have ANY of the given tags.
+    If `all` is True, returns only objects that have ALL of the given tags.
 
     Args:
-        tag (str | list[str]): A single tag or list of tags to search for.
+        tag (str | list[str] | set[str]): A single tag or list/set of tags to search for.
+        all (bool, optional): If True, require all tags to be present. Defaults to False.
 
     Returns:
-        list[Any]: The list of objects that have at least one of the given tags.
+        list[Any]: The list of objects that match the tag criteria.
     """
     tags = {tag} if isinstance(tag, str) else set(tag)
+    if all:
+        return filter_by(lambda x: tags.issubset(getattr(x, "tags", set())))
     return filter_by(lambda x: bool(tags & getattr(x, "tags", set())))
 
 

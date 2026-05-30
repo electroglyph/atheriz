@@ -87,8 +87,11 @@ from atheriz.globals.objects import get_by_tag
 # Single tag – returns every object that carries it
 merchants = get_by_tag("merchant")
 
-# Multiple tags – returns every object that carries ANY of them
+# Multiple tags – returns every object that carries ANY of them (default)
 npcs = get_by_tag(["merchant", "questgiver", "guard"])
+
+# Multiple tags – returns every object that carries ALL of them
+elite_guards = get_by_tag(["guard", "elite"], all=True)
 ```
 
 `get_by_tag` is thread-safe (it delegates to `filter_by` which holds `_ALL_OBJECTS_LOCK`) and is safe to call on objects that pre-date the introduction of tags — missing attributes are treated as empty sets rather than raising an error.
