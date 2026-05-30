@@ -16,6 +16,7 @@ class Flags:
         object.__setattr__(self, "is_connected", False)
         object.__setattr__(self, "is_temporary", False)
         object.__setattr__(self, "can_hear", False)
+        object.__setattr__(self, "tags", set())
         super().__init__()
 
         

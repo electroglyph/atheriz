@@ -46,8 +46,58 @@ Locating objects depends on search requirements.
   merchants = filter_by(lambda x: x.is_npc and x.name == "Merchant")
   ```
 - `get()`: Used for direct ID-based lookups from the global cache.
+- `get_by_tag()`: Searches the global cache for objects that carry a specific tag (or any tag from a list). See [2.1.6 Tags](#216-tags) below.
 
-### 2.1.6 Messaging
+### 2.1.6 Tags
+
+Every `Object` starts with an empty `tags` attribute (a `set[str]`) initialised in `Flags.__init__`. Tags are free-form strings you can use to categorise objects without adding custom boolean flags.
+
+#### Adding and removing tags
+
+```python
+# Single string
+obj.add_tag("questgiver")
+
+# List or set – all are added atomically under the object's lock
+obj.add_tag(["merchant", "friendly"])
+obj.remove_tag("friendly")
+obj.remove_tag({"merchant", "questgiver"})  # silently ignores missing tags
+```
+
+Both methods acquire `self.lock` and set `is_modified = True` so changes are picked up by the next save cycle.
+
+#### Checking for tags
+
+```python
+# Returns True if the object has the "merchant" tag
+is_merchant = obj.has_tag("merchant")
+
+# Returns True if the object has ANY of the specified tags (default)
+is_hostile = obj.has_tag(["enemy", "aggressive"])
+
+# Returns True only if the object has ALL of the specified tags
+is_rare_merchant = obj.has_tag(["merchant", "rare"], all=True)
+```
+
+#### Searching by tag
+
+```python
+from atheriz.globals.objects import get_by_tag
+
+# Single tag – returns every object that carries it
+merchants = get_by_tag("merchant")
+
+# Multiple tags – returns every object that carries ANY of them
+npcs = get_by_tag(["merchant", "questgiver", "guard"])
+```
+
+`get_by_tag` is thread-safe (it delegates to `filter_by` which holds `_ALL_OBJECTS_LOCK`) and is safe to call on objects that pre-date the introduction of tags — missing attributes are treated as empty sets rather than raising an error.
+
+#### Serialisation
+
+The `tags` set is a plain Python `set`, so it is pickled and restored automatically alongside the rest of the object's state. No special handling is required.
+
+### 2.1.7 Messaging
 Text is delivered to players through the messaging system.
 - `Object.msg(text)`: Transmits data strictly to the player controlling that specific `Object`.
 - `Node.msg_contents(text)`: Broadcasts text to all objects present within a room.
@@ -58,7 +108,7 @@ node.msg_contents("$You() $conj(swing) the sword.", from_obj=attacker)
 ```
 The attacker sees "You swing the sword", while onlookers read "Bob swings the sword". Refer to [`atheriz/objects/funcparser.py`](../atheriz/objects/funcparser.py) for all supported inline functions.
 
-### 2.1.7 The `appearance_template`
+### 2.1.8 The `appearance_template`
 When players use the `look` command on an object, the visual output is managed by the `appearance_template` string assigned on the `Object` class. This string utilizes standard format variables such as `{name}`, `{desc}`, and `{things}`. Complete formatting logic can be bypassed and reconstructed by overriding the `format_appearance()` method.
 
 ## 2.2 Nodes (Rooms)

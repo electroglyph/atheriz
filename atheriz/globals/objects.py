@@ -47,7 +47,20 @@ def filter_by(l: Callable[[Any], bool]) -> list[Any]:
         list[Any]: The list of objects that match the search criteria.
     """
     with _ALL_OBJECTS_LOCK:
-        return [r for id in _ALL_OBJECTS.keys() if (r := _ALL_OBJECTS.get(id)) is not None and l(r)]
+        return [r for r in _ALL_OBJECTS.values() if l(r)]
+
+
+def get_by_tag(tag: str | list[str]) -> list[Any]:
+    """Search for objects by tag. Matches objects that have ANY of the given tags.
+
+    Args:
+        tag (str | list[str]): A single tag or list of tags to search for.
+
+    Returns:
+        list[Any]: The list of objects that have at least one of the given tags.
+    """
+    tags = {tag} if isinstance(tag, str) else set(tag)
+    return filter_by(lambda x: bool(tags & getattr(x, "tags", set())))
 
 
 def get(ids: int | Iterable[int]) -> list[Any]:
