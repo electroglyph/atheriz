@@ -925,7 +925,8 @@ def do_test_command(args):
     if run_core:
         # For core tests, we MUST point to the core tests directory
         test_path = Path(__file__).parent / "tests"
-        pytest_args.append(str(test_path))
+        pytest_args = [arg for arg in pytest_args if arg.startswith("-")]
+        pytest_args.extend(["--rootdir", str(test_path), str(test_path)])
         print(f"Running core tests from {test_path}...")
     else:
         print("Running game tests...")
