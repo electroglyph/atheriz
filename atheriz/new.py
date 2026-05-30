@@ -615,8 +615,13 @@ def create_game_folder(folder_name: str) -> None:
 
     print("  Creating access.py...")
     import atheriz.objects.base_lock
-    access_src = Path(atheriz.objects.base_lock.__file__)
-    (folder_path / "access.py").write_text(access_src.read_text())
+    from atheriz.objects.base_lock import AccessLock as BaseAccessLock
+    access_inspector = ClassInspector(BaseAccessLock)
+    access_methods = access_inspector.get_all_public_methods()
+    access_gen = TemplateGenerator("AccessLock", "atheriz.objects.base_lock", "AccessLock")
+    access_gen.add_methods(access_methods)
+    access_gen.add_type_checking_imports(get_type_checking_imports(atheriz.objects.base_lock))
+    (folder_path / "access.py").write_text(access_gen.generate())
 
     print("  Creating door.py...")
     import atheriz.objects.base_door
