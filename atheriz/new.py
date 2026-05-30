@@ -6,8 +6,23 @@ that inherit from the base atheriz classes.
 """
 
 import inspect
+import ast
 from pathlib import Path
 from typing import Any, Callable
+
+
+def get_type_checking_imports(module) -> list[tuple[str, list[str]]]:
+    """Extract TYPE_CHECKING imports from a module's source code."""
+    src = inspect.getsource(module)
+    tree = ast.parse(src)
+    imports = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING":
+            for child in node.body:
+                if isinstance(child, ast.ImportFrom):
+                    names = [a.name for a in child.names]
+                    imports.append((child.module, names))
+    return imports
 
 
 class ClassInspector:
@@ -25,6 +40,30 @@ class ClassInspector:
         """
         from atheriz.utils import get_class_hooks
         return get_class_hooks(self.cls)
+
+    def get_all_public_methods(self) -> list[tuple[str, Any, str | None, bool]]:
+        """
+        Get all public non-dunder methods for stub generation.
+
+        Returns:
+            List of tuples: (method_name, signature, docstring, is_empty)
+        """
+        import inspect
+        from atheriz.utils import is_empty_method, _build_signature_from_code
+
+        methods = []
+        for name, method in inspect.getmembers(self.cls, predicate=inspect.isfunction):
+            if name.startswith("_"):
+                continue
+            sig = None
+            try:
+                sig = inspect.signature(method, eval_str=False)
+            except Exception:
+                sig = _build_signature_from_code(method)
+            doc = inspect.getdoc(method)
+            is_empty = is_empty_method(method)
+            methods.append((name, sig, doc, is_empty))
+        return methods
 
 
 class TemplateGenerator:
@@ -45,11 +84,65 @@ class TemplateGenerator:
         self.add_flags: bool = False
         self.add_db_ops: bool = False
         self.add_access_lock: bool = False
+        self.type_checking_imports: list[tuple[str, list[str]]] = []
+
+    def add_type_checking_imports(self, imports: list[tuple[str, list[str]]]):
+        """
+        Add TYPE_CHECKING imports to the template, merging with any existing entries.
+
+        Args:
+            imports: List of (module_path, [name, ...]) tuples,
+                     e.g. [("atheriz.objects.base_obj", ["Object"])]
+        """
+        for module, names in imports:
+            existing = [i for i, (m, _) in enumerate(self.type_checking_imports) if m == module]
+            if existing:
+                idx = existing[0]
+                merged = sorted(set(self.type_checking_imports[idx][1]) | set(names))
+                self.type_checking_imports[idx] = (module, merged)
+            else:
+                self.type_checking_imports.append((module, list(names)))
 
 
     def add_methods(self, methods: list[tuple[str, Any, str | None, bool]]):
         """Add methods to generate stubs for."""
         self.methods = methods
+        self._collect_typing_imports()
+
+    def _collect_typing_imports(self):
+        """Scan method annotations for names from the typing module and add them to type_checking_imports."""
+        import re
+        typing_names = {
+            "Callable", "Optional", "Union", "Literal", "ClassVar",
+            "Final", "Protocol", "Iterator", "Generator", "Awaitable",
+            "Iterable", "Sequence", "Mapping", "Any", "TypeVar", "Generic",
+            "Self",
+        }
+        found = set()
+        for name, sig, doc, is_empty in self.methods:
+            if sig is None:
+                continue
+            for param in sig.parameters.values():
+                ann = self._format_annotation(param.annotation)
+                if ann:
+                    for token in re.findall(r'\b([A-Z]\w*)\b', ann):
+                        if token in typing_names:
+                            found.add(token)
+            ret = self._format_annotation(sig.return_annotation)
+            if ret:
+                for token in re.findall(r'\b([A-Z]\w*)\b', ret):
+                    if token in typing_names:
+                        found.add(token)
+        if found:
+            typing_entry = ("typing", sorted(found))
+            existing = [mod for mod, _ in self.type_checking_imports if mod == "typing"]
+            if existing:
+                self.type_checking_imports = [
+                    (mod, names) if mod != "typing" else (mod, sorted(set(names) | found))
+                    for mod, names in self.type_checking_imports
+                ]
+            else:
+                self.type_checking_imports.append(typing_entry)
 
     def _format_annotation(self, annotation: Any) -> str:
         """Return a string representation of a type annotation, or '' if absent."""
@@ -134,15 +227,27 @@ class TemplateGenerator:
             import_list.extend(self.extra_imports)
             
         lines = [
+            "from __future__ import annotations",
+            "",
             f"from {self.base_import} import {', '.join(import_list)}",
         ]
-        
+
         if self.add_flags:
             lines.append("from .flags import Flags")
         if self.add_db_ops:
             lines.append("from .db_ops import DbOps")
         if self.add_access_lock:
             lines.append("from .access import AccessLock")
+
+        if self.type_checking_imports:
+            lines.extend([
+                "",
+                "from typing import TYPE_CHECKING",
+                "",
+                "if TYPE_CHECKING:",
+            ])
+            for module, names in self.type_checking_imports:
+                lines.append(f"    from {module} import {', '.join(names)}")
 
         lines.extend([
             "",
@@ -473,11 +578,9 @@ def create_game_folder(folder_name: str) -> None:
     for filename, base_import, base_class in TEMPLATE_CONFIGS:
         print(f"  Creating {filename}...")
 
-        # Import the base class
         module = __import__(base_import, fromlist=[base_class])
         cls = getattr(module, base_class)
 
-        # Inspect and generate
         inspector = ClassInspector(cls)
         methods = inspector.get_override_methods()
 
@@ -489,9 +592,12 @@ def create_game_folder(folder_name: str) -> None:
         
         if base_class == "Script":
             generator.extra_imports = ["before", "after", "replace"]
+
+        tc_imports = get_type_checking_imports(module)
+        if tc_imports:
+            generator.add_type_checking_imports(tc_imports)
             
         generator.add_methods(methods)
-
 
         content = generator.generate()
         (folder_path / filename).write_text(content)
@@ -514,8 +620,13 @@ def create_game_folder(folder_name: str) -> None:
 
     print("  Creating door.py...")
     import atheriz.objects.base_door
-    door_src = Path(atheriz.objects.base_door.__file__)
-    (folder_path / "door.py").write_text(door_src.read_text())
+    from atheriz.objects.base_door import Door as BaseDoor
+    door_inspector = ClassInspector(BaseDoor)
+    door_methods = door_inspector.get_all_public_methods()
+    door_gen = TemplateGenerator("Door", "atheriz.objects.base_door", "Door")
+    door_gen.add_methods(door_methods)
+    door_gen.add_type_checking_imports(get_type_checking_imports(atheriz.objects.base_door))
+    (folder_path / "door.py").write_text(door_gen.generate())
 
     # Create commands directory
     print("  Creating commands directory...")
