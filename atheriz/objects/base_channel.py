@@ -43,9 +43,7 @@ class BaseChannelCommand(Command):
 
     def setup_parser(self):
         self.parser.add_argument("message", type=str, nargs="?", help="Message to send")
-        self.parser.add_argument(
-            "-u", "--unsubscribe", action="store_true", help="Unsubscribe from channel"
-        )
+        self.parser.add_argument("-u", "--unsubscribe", action="store_true", help="Unsubscribe from channel")
         # self.parser.add_argument("-s","--subscribe", action="store_true", help="Subscribe to channel")
         self.parser.add_argument("-r", "--replay", action="store_true", help="View channel history")
 
@@ -112,14 +110,56 @@ class Channel(Flags, DbOps, AccessLock):
         c.at_create()
         return c
 
+    def add_tag(self, tag: str | list[str] | set[str]) -> None:
+        """Add one or more tags to this object.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            self.tags.update(tags)
+            self.is_modified = True
+
+    def remove_tag(self, tag: str | list[str] | set[str]) -> None:
+        """Remove one or more tags from this object. Missing tags are silently ignored.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            self.tags.difference_update(tags)
+            self.is_modified = True
+
+    def has_tag(self, tag: str | list[str] | set[str], all: bool = False) -> bool:
+        """Check whether this object carries the given tags.
+
+        By default, when multiple tags are supplied the check is an ANY match — returns
+        ``True`` if at least one of the given tags is present.
+        If `all` is set to True, returns ``True`` only if ALL given tags are present.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+            all (bool, optional): If True, require all tags to be present. Defaults to False.
+
+        Returns:
+            bool: True if the tag conditions are met on this object.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            if all:
+                return tags.issubset(self.tags)
+            return bool(tags & self.tags)
+
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:
         """
         Delete this channel from the database entirely.
-        
+
         Args:
             caller (Object | None, optional): The object executing the deletion. Defaults to None.
             unused (bool, optional): Unused parameter for API compatibility. Defaults to True.
-            
+
         Returns:
             bool: True if the channel was successfully deleted, False if aborted.
         """
@@ -136,10 +176,10 @@ class Channel(Flags, DbOps, AccessLock):
     def at_delete(self, caller: Object | None = None) -> bool:
         """
         Called before the channel is deleted.
-        
+
         Args:
             caller (Object | None, optional): The object executing the command. Defaults to None.
-            
+
         Returns:
             bool: True to proceed with deletion, False to stop.
         """
@@ -154,7 +194,7 @@ class Channel(Flags, DbOps, AccessLock):
     def add_listener(self, listener: Object) -> None:
         """
         Connects an object to this channel to receive broadcasts.
-        
+
         Args:
             listener (Object): The object to subscribe to this channel.
         """
@@ -164,7 +204,7 @@ class Channel(Flags, DbOps, AccessLock):
     def remove_listener(self, listener: Object) -> None:
         """
         Disconnects an object from this channel.
-        
+
         Args:
             listener (Object): The object to unsubscribe.
         """
@@ -174,7 +214,7 @@ class Channel(Flags, DbOps, AccessLock):
     def get_command(self) -> Command | None:
         """
         Generates and retrieves the Command class instance used to converse on this channel.
-        
+
         Returns:
             Command | None: The specialized hook command for this channel.
         """
@@ -242,9 +282,12 @@ class Channel(Flags, DbOps, AccessLock):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (i for i, c in enumerate(mro)
-             if c.__module__ == 'atheriz.objects.base_channel' and c.__qualname__ == 'Channel'),
-            len(mro)
+            (
+                i
+                for i, c in enumerate(mro)
+                if c.__module__ == "atheriz.objects.base_channel" and c.__qualname__ == "Channel"
+            ),
+            len(mro),
         )
         ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):

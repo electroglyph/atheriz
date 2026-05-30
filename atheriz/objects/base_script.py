@@ -105,6 +105,48 @@ class Script(Flags, DbOps):
         add_object(obj)
         return obj
 
+    def add_tag(self, tag: str | list[str] | set[str]) -> None:
+        """Add one or more tags to this object.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            self.tags.update(tags)
+            self.is_modified = True
+
+    def remove_tag(self, tag: str | list[str] | set[str]) -> None:
+        """Remove one or more tags from this object. Missing tags are silently ignored.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            self.tags.difference_update(tags)
+            self.is_modified = True
+
+    def has_tag(self, tag: str | list[str] | set[str], all: bool = False) -> bool:
+        """Check whether this object carries the given tags.
+
+        By default, when multiple tags are supplied the check is an ANY match — returns
+        ``True`` if at least one of the given tags is present.
+        If `all` is set to True, returns ``True`` only if ALL given tags are present.
+
+        Args:
+            tag (str | list[str] | set[str]): A single tag string, or a list/set of tag strings.
+            all (bool, optional): If True, require all tags to be present. Defaults to False.
+
+        Returns:
+            bool: True if the tag conditions are met on this object.
+        """
+        tags = {tag} if isinstance(tag, str) else set(tag)
+        with self.lock:
+            if all:
+                return tags.issubset(self.tags)
+            return bool(tags & self.tags)
+
     def delete(self, caller: Object | None = None, recursive: bool = True) -> bool:
         """
         Delete this script entirely from the database and remove any active hooks.
@@ -146,13 +188,16 @@ class Script(Flags, DbOps):
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
-            (i for i, c in enumerate(mro)
-             if c.__module__ == 'atheriz.objects.base_script' and c.__qualname__ == 'Script'),
-            len(mro)
+            (
+                i
+                for i, c in enumerate(mro)
+                if c.__module__ == "atheriz.objects.base_script" and c.__qualname__ == "Script"
+            ),
+            len(mro),
         )
-        ancestors = mro[current_idx + 1:]
+        ancestors = mro[current_idx + 1 :]
         for cls in reversed(ancestors):
-            if '__setstate__' in cls.__dict__:
+            if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
@@ -160,9 +205,9 @@ class Script(Flags, DbOps):
     def at_install(self) -> None:
         """
         Called when the script is assigned to and installed on an object.
-        
-        This occurs immediately when the script is attached, and upon every subsequent 
-        server reboot. You can use this for initialization code, or alternatively hook 
+
+        This occurs immediately when the script is attached, and upon every subsequent
+        server reboot. You can use this for initialization code, or alternatively hook
         `at_init` on the child. `at_init` will only run on object instantiation (server boot/creation).
         """
         pass
@@ -170,10 +215,10 @@ class Script(Flags, DbOps):
     def install_hooks(self, child: Object | Node) -> None:
         """
         Attaches all properly-decorated `at_*` hook methods in this script to a child object.
-        
-        Every hook in this class must be prefixed with `at_` to mirror the child object's method, 
+
+        Every hook in this class must be prefixed with `at_` to mirror the child object's method,
         and decorated with `@before`, `@after`, or `@replace`.
-        
+
         Args:
             child (Object | Node): The target object experiencing the method injection.
         """
@@ -189,9 +234,9 @@ class Script(Flags, DbOps):
     def remove_hooks(self, child: Object | Node | None = None) -> None:
         """
         Detaches all hook methods in this Script from the currently-assigned child object.
-        
+
         Args:
-            child (Object | Node | None, optional): An explicitly provided object to detach from. 
+            child (Object | Node | None, optional): An explicitly provided object to detach from.
             Defaults to the currently active child payload.
         """
         child = self.child if child is None else child

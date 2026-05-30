@@ -50,7 +50,7 @@ Locating objects depends on search requirements.
 
 ### 2.1.6 Tags
 
-Every `Object` starts with an empty `tags` attribute (a `set[str]`) initialised in `Flags.__init__`. Tags are free-form strings you can use to categorise objects without adding custom boolean flags.
+Every taggable entity (`Object`, `Account`, `Channel`, `Node`, and `Script`) starts with an empty `tags` attribute (a `set[str]`). Tags are free-form strings you can use to categorise entities without adding custom boolean flags.
 
 #### Adding and removing tags
 
