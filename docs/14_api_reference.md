@@ -1490,8 +1490,8 @@ Returns:
 
 Called when the script is assigned to and installed on an object.
 
-This occurs immediately when the script is attached, and upon every subsequent 
-server reboot. You can use this for initialization code, or alternatively hook 
+This occurs immediately when the script is attached, and upon every subsequent
+server reboot. You can use this for initialization code, or alternatively hook
 `at_init` on the child. `at_init` will only run on object instantiation (server boot/creation).
 
 
@@ -1500,7 +1500,7 @@ server reboot. You can use this for initialization code, or alternatively hook
 
 Attaches all properly-decorated `at_*` hook methods in this script to a child object.
 
-Every hook in this class must be prefixed with `at_` to mirror the child object's method, 
+Every hook in this class must be prefixed with `at_` to mirror the child object's method,
 and decorated with `@before`, `@after`, or `@replace`.
 
 Args:
@@ -1513,7 +1513,7 @@ Args:
 Detaches all hook methods in this Script from the currently-assigned child object.
 
 Args:
-    child (Object | Node | None, optional): An explicitly provided object to detach from. 
+    child (Object | Node | None, optional): An explicitly provided object to detach from.
     Defaults to the currently active child payload.
 
 
@@ -1765,6 +1765,22 @@ Args:
 
 Returns:
     list[Any]: The list of objects that match the search criteria.
+
+
+
+### `def get_by_tag(tag, all)`
+
+Search for objects by tag.
+
+By default, matches objects that have ANY of the given tags.
+If `all` is True, returns only objects that have ALL of the given tags.
+
+Args:
+    tag (str | list[str] | set[str]): A single tag or list/set of tags to search for.
+    all (bool, optional): If True, require all tags to be present. Defaults to False.
+
+Returns:
+    list[Any]: The list of objects that match the tag criteria.
 
 
 
