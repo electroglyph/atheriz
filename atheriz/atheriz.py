@@ -265,12 +265,15 @@ def start_server():
         try:
             with open(pid_file, "r") as f:
                 old_pid = int(f.read().strip())
-            os.kill(old_pid, 0)
-            print(f"Server is already running with PID: {old_pid}")
-            return
-        except (ValueError, ProcessLookupError, FileNotFoundError, OSError):
-            print("Removing stale PID file.")
-            pid_file.unlink(missing_ok=True)
+            import psutil
+            if psutil.pid_exists(old_pid):
+                print(f"Server is already running with PID: {old_pid}")
+                return
+        except Exception:
+            pass
+        
+        print("Removing stale PID file.")
+        pid_file.unlink(missing_ok=True)
 
     try:
         do_startup()
@@ -629,12 +632,14 @@ def main():
 
         if old_pid:
             print(f"Waiting for server (PID {old_pid}) to stop...", end="", flush=True)
+            import psutil
             for _ in range(50):
                 try:
-                    os.kill(old_pid, 0)
+                    if not psutil.pid_exists(old_pid):
+                        break
                     time.sleep(0.1)
                     print(".", end="", flush=True)
-                except (ProcessLookupError, OSError):
+                except Exception:
                     break
             print(" Done.")
 
@@ -698,11 +703,13 @@ def spawn_daemon(args):
         try:
             with open(pid_file, "r") as f:
                 old_pid = int(f.read().strip())
-            os.kill(old_pid, 0)
-            print(f"Server is already running with PID: {old_pid}")
-            return
-        except (ValueError, ProcessLookupError, FileNotFoundError, OSError):
-            pid_file.unlink(missing_ok=True)
+            import psutil
+            if psutil.pid_exists(old_pid):
+                print(f"Server is already running with PID: {old_pid}")
+                return
+        except Exception:
+            pass
+        pid_file.unlink(missing_ok=True)
 
     cmd = [sys.executable, "-m", "atheriz.atheriz", "start", "--foreground"]
     if args.port:
@@ -803,27 +810,55 @@ def do_reload_command(args):
 
 def do_reset_command(args):
     """Delete all game data and start fresh."""
+    setup_game_folder(required=True)
     import os
 
     save_path = Path(settings.SAVE_PATH)
     pid_file = save_path / "server.pid"
 
+    is_running = False
     if pid_file.exists():
         try:
             with open(pid_file, "r") as f:
                 pid = int(f.read().strip())
-            os.kill(pid, 0)
-            print("Error: Server is running. Please stop the server before resetting.")
-            return
-        except (ValueError, ProcessLookupError, FileNotFoundError, OSError):
+            import psutil
+            if psutil.pid_exists(pid):
+                is_running = True
+        except Exception:
             pass
 
     if not args.force:
         print("WARNING: This will delete ALL game data. This action cannot be undone.")
+        if is_running:
+            print("The server is currently running and will be stopped.")
         response = input("Are you sure you want to continue? [y/N] ")
         if response.lower() != "y":
             print("Aborted.")
             return
+
+    try:
+        from atheriz.database_setup import get_database
+        get_database().close()
+    except Exception:
+        pass
+
+    if is_running:
+        print("Stopping server...")
+        stop_server()
+        print(f"Waiting for server (PID {pid}) to stop...", end="", flush=True)
+        import time
+        import psutil
+        for _ in range(50):
+            try:
+                if not psutil.pid_exists(pid):
+                    break
+                time.sleep(0.1)
+                print(".", end="", flush=True)
+            except Exception:
+                break
+        print(" Done.")
+        # Brief pause to ensure OS file locks are fully released
+        time.sleep(0.5)
 
     print("Deleting game data...")
     if save_path.exists():
