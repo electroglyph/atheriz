@@ -9,7 +9,8 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import Node
     from atheriz.objects.base_obj import Object
     
-_IGNORE_KEYS = ["save", "quit", "wander"]
+_IGNORE_KEYS = ["save", "quit", "wander", "exit", "logout", "disconnect"]
+_NO_ALIAS_COMMANDS = ["n", "s", "e", "w", "u", "d"]
 
 def inputfunc(name: str | None = None) -> Callable:
     """
@@ -137,6 +138,9 @@ class InputFuncs:
                                     break
 
                     if not cmd and settings.AUTO_COMMAND_ALIASING:
+                        if text[:1] in _NO_ALIAS_COMMANDS:
+                            connection.session.puppet.msg("You can't do that.")
+                            return
                         keys = get_loggedin_cmdset().get_keys()
                         for key in keys:
                             if key in _IGNORE_KEYS:
