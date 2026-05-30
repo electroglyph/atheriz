@@ -9,6 +9,7 @@ from atheriz.globals.get import get_node_handler
 from atheriz.globals.get import get_map_handler
 from atheriz.objects.base_lock import AccessLock
 from atheriz.logger import logger
+import atheriz.settings as settings
 from threading import RLock
 
 
@@ -248,15 +249,25 @@ class Door(AccessLock):
             return True
 
     def map_close(self):
-        if self.symbol_coord:
+        if settings.MAP_ENABLED and self.symbol_coord:
             mh = get_map_handler()
             mi = mh.get_mapinfo(self.from_coord.area, self.from_coord.z)
             if mi:
-                mi.update_grid(self.symbol_coord, self.closed_symbol)
+                with mi.lock:
+                    mi.post_grid[self.symbol_coord] = self.closed_symbol
+                    if mi.pre_grid:
+                        mi.pre_grid[self.symbol_coord] = self.closed_symbol
+                        mi.map_changed = True
+                mi.render(True)
 
     def map_open(self):
-        if self.symbol_coord:
+        if settings.MAP_ENABLED and self.symbol_coord:
             mh = get_map_handler()
             mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
             if mi:
-                mi.update_grid(self.symbol_coord, self.open_symbol)
+                with mi.lock:
+                    mi.post_grid[self.symbol_coord] = self.open_symbol
+                    if mi.pre_grid:
+                        mi.pre_grid[self.symbol_coord] = self.open_symbol
+                        mi.map_changed = True
+                mi.render(True)
