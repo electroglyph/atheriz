@@ -54,6 +54,8 @@ class NodeLink:
         """
         self.name = name
         self.aliases = aliases if aliases else []
+        if coord is not None and not isinstance(coord, Coord):
+            coord = Coord(*coord)
         self.coord = coord
 
     def __eq__(self, other):
@@ -129,6 +131,8 @@ class Node(Flags, AccessLock):
         self.open_attenuation = settings.DEFAULT_OPEN_SOUND_ATTENUATION
         self.enclosed_attenuation = settings.DEFAULT_ENCLOSED_SOUND_ATTENUATION
         self.ambient_sound_level = settings.DEFAULT_AMBIENT_SOUND_LEVEL
+        if coord is not None and not isinstance(coord, Coord):
+            coord = Coord(*coord)
         self.coord = coord
         self.desc = desc
         self._tick_seconds = tick_seconds
