@@ -316,15 +316,12 @@ Keyword Args:
 
 
 
-#### `def msg_contents(self, text, exclude, from_obj, mapping, raise_funcparse_errors, **kwargs)`
+#### `def msg_contents(self, text, exclude, from_obj, mapping, raise_funcparse_errors, msg_type, **kwargs)`
 
 Emits a message to all objects inside this object.
 
 Args:
-    text (str or tuple): Message to send. If a tuple, this should be
-        on the valid OOB outmessage form `(message, {kwargs})`,
-        where kwargs are optional data passed to the `text`
-        outputfunc. The message will be parsed for `{key}` formatting and
+    text (str, optional): Message to send. The message will be parsed for `{key}` formatting and
         `$You/$you()/$You()`, `$obj(name)`, `$conj(verb)` and `$pron(pronoun, option)`
         inline function callables.
         The `name` is taken from the `mapping` kwarg {"name": object, ...}`.
@@ -343,6 +340,7 @@ Args:
     raise_funcparse_errors (bool, optional): If set, a failing `$func()` will
         lead to an outright error. If unset (default), the failing `$func()`
         will instead appear in output unparsed.
+    msg_type (str, optional): The type of message.
 
     **kwargs: Keyword arguments will be passed on to `obj.msg()` for all
         messaged objects.
@@ -517,7 +515,7 @@ Args:
 
 
 
-#### `def at_msg_receive(self, text, from_obj, **kwargs)`
+#### `def at_msg_receive(self, text, from_obj, msg_type, **kwargs)`
 
 Called when this object is about to receive an arbitrary string message.
 Returning False aborts the message delivery.
@@ -525,6 +523,7 @@ Returning False aborts the message delivery.
 Args:
     text (str | None, optional): The message content. Defaults to None.
     from_obj (Object | None, optional): The sender of the message. Defaults to None.
+    msg_type (str | None, optional): The type of message. Defaults to None.
     **kwargs: Extra arguments.
 
 Returns:
@@ -532,13 +531,14 @@ Returns:
 
 
 
-#### `def at_msg_send(self, text, to_obj, **kwargs)`
+#### `def at_msg_send(self, text, to_obj, msg_type, **kwargs)`
 
 Called when this object sends an arbitrary string message to another object.
 
 Args:
     text (str | None, optional): The message content. Defaults to None.
     to_obj (Object | None, optional): The intended receiver. Defaults to None.
+    msg_type (str | None, optional): The type of message. Defaults to None.
     **kwargs: Extra arguments.
 
 
@@ -713,7 +713,7 @@ Args:
 
 
 
-#### `def at_say(self, message, msg_self, msg_location, receivers, msg_receivers, **kwargs)`
+#### `def at_say(self, message, msg_self, msg_location, receivers, msg_receivers, msg_type, **kwargs)`
 
 Display the actual say (or whisper) of self.
 
@@ -732,6 +732,7 @@ Args:
         message (by default only used by whispers).
     msg_receivers(str): Specific message to pass to the receiver(s). This will parsed
         with the {receiver} placeholder replaced with the given receiver.
+    msg_type (str | None, optional): The type of message. Defaults to None.
 Keyword Args:
     whisper (bool): If this is a whisper rather than a say. Kwargs
         can be used by other verbal commands in a similar way.
@@ -1134,17 +1135,17 @@ Args:
 
 
 
-#### `def msg_contents(self, text, exclude, from_obj, mapping, raise_funcparse_errors, **kwargs)`
+#### `def msg_contents(self, text, exclude, from_obj, mapping, raise_funcparse_errors, msg_type, **kwargs)`
 
 send a message to all objects in this node
 
 Args:
-    text (str | tuple, optional): message to send. Defaults to None.
+    text (str, optional): message to send. Defaults to None.
     exclude (list, optional): objects to exclude from message. Defaults to None.
     from_obj (Object, optional): object sending message. Defaults to None.
     mapping (dict, optional): mapping for funcparse. Defaults to None.
     raise_funcparse_errors (bool, optional): raise funcparse errors. Defaults to False.
-    internal (bool, optional): internal message, bypass lock if True. Defaults to False.
+    msg_type (str | None, optional): The type of message. Defaults to None.
     **kwargs: additional keyword arguments to pass to msg
 
 
@@ -1575,13 +1576,14 @@ Args:
 
 
 
-#### `def execute(self, caller, args_string)`
+#### `def execute(self, caller, args_string, cmdstring)`
 
 Parses arguments and runs the command.
 
 Args:
     caller: The object/player calling the command.
     args_string: The string containing the arguments (command name stripped).
+    cmdstring: The string of the alias actually invoked.
 
 Returns:
     tuple[Callable[[Object | Connection, Any], None], Object | Connection, Any]: the run function, caller, and the parsed arguments
@@ -2635,7 +2637,7 @@ Default value: `True`
 
 ### `TELNET_PORT`
 
-Default value: `4000`
+Default value: `4444`
 
 
 ### `TELNET_INTERFACE`
@@ -2660,7 +2662,7 @@ Default value: `True`
 
 ### `WEBSERVER_PORT`
 
-Default value: `8000`
+Default value: `9999`
 
 
 ### `WEBSERVER_INTERFACE`
@@ -2770,7 +2772,7 @@ Default value: `False`
 
 ### `DEFAULT_HOME`
 
-Default value: `('limbo', 4, 4, 4)`
+Default value: `Coord('limbo', 4, 4, 4)`
 
 
 ### `MAP_ENABLED`
