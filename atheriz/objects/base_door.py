@@ -251,7 +251,7 @@ class Door(AccessLock):
     def map_close(self):
         if settings.MAP_ENABLED and self.symbol_coord:
             mh = get_map_handler()
-            mi = mh.get_mapinfo(self.from_coord.area, self.from_coord.z)
+            mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
             if mi:
                 with mi.lock:
                     mi.post_grid[self.symbol_coord] = self.closed_symbol
