@@ -1,4 +1,5 @@
 from atheriz.commands.base_cmd import Command
+from atheriz import settings
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -36,7 +37,7 @@ class UnquellCommand(Command):
 
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
-        return caller.is_builder
+        return caller.privilege_level >= settings.Privilege.Builder
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
