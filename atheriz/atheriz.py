@@ -152,10 +152,11 @@ def setup_game_folder(required=True):
                 print(f"  - Injected {cls_name} from {local_mod}.py")
             else:
                 print(f"  - Warning: {cls_name} not found in {local_mod}.py")
-        except ImportError:
-            # It's okay if some custom files don't exist or aren't importable
-            print(f"  - Note: Could not import {local_mod}.py (skipping injection)")
+        except ImportError as e:
+            logger.warning(f"Could not import {local_mod}.py (skipping injection): {e}")
+            print(f"  - Note: Could not import {local_mod}.py (skipping injection): {e}")
         except Exception as e:
+            logger.exception(f"Error injecting {cls_name} from {local_mod}.py")
             print(f"  - Error injecting {cls_name}: {e}")
 
     # check if the game folder has a web/ directory to override templates and static files
