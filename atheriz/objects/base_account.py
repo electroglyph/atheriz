@@ -38,8 +38,7 @@ class Account(Flags, DbOps):
             raise ValueError("Name and password must not be empty.")
         existing = filter_by(lambda x: x.is_account and x.name == name)
         if existing:
-            logger.error(f"Account with this name ({name}) already exists.")
-            return None
+            raise ValueError(f"Account with this name ({name}) already exists.")
         account = cls()
         account.id = get_unique_id()
         account.name = name

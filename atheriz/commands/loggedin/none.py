@@ -23,9 +23,13 @@ class NoneCommand(Command):
             caller.msg("Command not found.")
             return
         args.none = " ".join(args.none)
-        commands = [
-            cmd for cmd in caller.internal_cmdset.commands.keys() if cmd not in _IGNORED_COMMANDS
-        ]
+        internal = getattr(caller, "internal_cmdset", None)
+        if internal is not None:
+            commands = [
+                cmd for cmd in internal.commands.keys() if cmd not in _IGNORED_COMMANDS
+            ]
+        else:
+            commands = []
         commands2 = [
             cmd for cmd in get_loggedin_cmdset().commands.keys() if cmd not in _IGNORED_COMMANDS
         ]

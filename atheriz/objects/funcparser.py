@@ -49,8 +49,13 @@ The `FuncParser` also accepts a direct dict mapping of `{'name': callable, ...}`
 import dataclasses
 import inspect
 import random
+import traceback
 from .verb_conjugation.conjugate import verb_actor_stance_components
 from .verb_conjugation.pronouns import pronoun_to_viewpoints
+from .funcparser_helpers import (
+    safe_convert_to_types, make_iter, callables_from_module,
+    variable_from_module, pad, crop, justify, int2str,
+)
 import atheriz.settings as settings
 
 # setup
@@ -140,6 +145,7 @@ class FuncParser:
                 into `.parse` as `**reserved_kwargs` instead.
 
         """
+        self.max_nesting = max_nesting
         if isinstance(callables, dict):
             loaded_callables = {**callables}
         else:
@@ -190,7 +196,10 @@ class FuncParser:
             try:
                 mapping = inspect.getfullargspec(clble)
             except TypeError:
-                logger.log_trace(f"Could not run getfullargspec on {funcname}: {clble}")
+                logger.warning(
+                    f"Could not run getfullargspec on {funcname}: {clble}",
+                    exc_info=True,
+                )
             else:
                 assert mapping.varargs, f"Parse-func callable '{funcname}' does not support *args."
                 assert mapping.varkw, f"Parse-func callable '{funcname}' does not support **kwargs."
@@ -255,7 +264,7 @@ class FuncParser:
                 raise
             return str(parsedfunc)
         except Exception:
-            logger.log_trace()
+            logger.error(traceback.format_exc())
             if raise_errors:
                 raise
             return str(parsedfunc)
@@ -661,13 +670,15 @@ def funcparser_callable_eval(*args, **kwargs):
 
 
 def funcparser_callable_toint(*args, **kwargs):
-    """Usage: $toint(43.0) -> 43"""
-    inp = funcparser_callable_eval(*args, **kwargs)
+    """Usage: $toint(43.0) -> 43, or non-numeric -> unchanged string."""
+    try:
+        inp = funcparser_callable_eval(*args, **kwargs)
+    except ParsingError:
+        # safe_convert_to_types could not parse the input; return it as-is
+        return args[0] if args else ""
     try:
         return int(inp)
-    except TypeError:
-        return inp
-    except ValueError:
+    except (TypeError, ValueError):
         return inp
 
 

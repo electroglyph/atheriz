@@ -45,8 +45,9 @@ class SpamCommand(Command):
             password = f"password{i}"
             char_name = f"char{i}"
 
-            account = Account.create(account_name, password)
-            if not account:
+            try:
+                account = Account.create(account_name, password)
+            except ValueError:
                 caller.msg(f"Account '{account_name}' already exists, skipping...")
                 continue
 
