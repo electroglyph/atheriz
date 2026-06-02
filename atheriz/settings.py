@@ -78,6 +78,8 @@ MAX_OBJECTS_PER_LEGEND = 30
 AUTOSAVE_PLAYERS_ON_DISCONNECT = True
 AUTOSAVE_ON_SHUTDOWN = True
 AUTOSAVE_ON_RELOAD = True
+# interval in minutes (float). 0 = disabled.
+AUTOSAVE_MINUTES = 0
 # if true, will match command to beginning of available commands
 # for instance, player enters "exa" and "examine" is found, it will run examine
 # uses str.startswith() to find matching commands

@@ -1,6 +1,7 @@
 from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
 from atheriz.globals.objects import save_objects, load_objects
+from atheriz.globals.autosave import start_autosave, stop_autosave
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
 from atheriz.logger import logger
@@ -24,6 +25,7 @@ def do_startup():
     server_events.at_server_start()
     if settings.TIME_SYSTEM_ENABLED:
         get_game_time().start()
+    start_autosave()
 
 
 def do_shutdown():
@@ -40,6 +42,7 @@ def do_shutdown():
         save_objects()
         get_map_handler().save()
         get_node_handler().save()
+    stop_autosave()
     get_async_ticker().stop()
     get_async_threadpool().stop(False)
     msg_all("Server is shutting down NOW!")
@@ -66,6 +69,7 @@ def do_reload():
         save_objects()
         get_map_handler().save()
         get_node_handler().save()
+    start_autosave()
     channel: Channel | None = get_server_channel()
     if channel:
         channel.msg("Server reloaded")
