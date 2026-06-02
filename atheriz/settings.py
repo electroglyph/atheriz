@@ -184,3 +184,12 @@ REPLACE_LEVELS = (
     (40, 20.0),
     (50, 10.0),
 )
+
+# --- `py` admin command sandbox ---
+# maximum lines of combined output (captured stdout + result) sent to the caller
+PY_MAX_OUTPUT_LINES = 200
+# maximum bytes of combined output sent to the caller
+PY_MAX_OUTPUT_BYTES = 50_000
+# xterm256 foreground color used to colorize the `py` command's output
+# 15 is standard bright white
+PY_OUTPUT_FG = 15

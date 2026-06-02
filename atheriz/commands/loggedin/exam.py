@@ -164,7 +164,7 @@ class ExamineCommand(Command):
     """
 
     key = "examine"
-    aliases = ["exam", "ex"]
+    aliases = ["exam", "ex", "exa"]
     desc = "Examine an object to see its attributes."
     category = "Building"
 
