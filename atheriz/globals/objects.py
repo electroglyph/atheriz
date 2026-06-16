@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.globals.get import set_id
 from threading import RLock
 from atheriz.database_setup import get_database

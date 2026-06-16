@@ -1,3 +1,4 @@
+from __future__ import annotations
 import time
 from atheriz.objects.base_account import Account
 from typing import TYPE_CHECKING

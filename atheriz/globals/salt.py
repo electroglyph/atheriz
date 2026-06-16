@@ -1,3 +1,4 @@
+from __future__ import annotations
 import secrets
 from atheriz import settings
 from pathlib import Path

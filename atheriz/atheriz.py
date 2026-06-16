@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.globals.objects import filter_by
 from atheriz.logger import logger
 import argparse

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import TYPE_CHECKING
 from atheriz.globals.get import get_node_handler
 import heapq

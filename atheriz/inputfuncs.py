@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
 from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
 from atheriz.logger import logger

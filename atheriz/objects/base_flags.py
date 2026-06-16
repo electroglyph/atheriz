@@ -1,3 +1,4 @@
+from __future__ import annotations
 class Flags:
     def __init__(self):
         # skip thread-safety patch

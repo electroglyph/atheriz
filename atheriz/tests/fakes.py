@@ -1,3 +1,4 @@
+from __future__ import annotations
 """Shared test fakes and helpers used across the atheriz test suite.
 
 Importable as `atheriz.tests.fakes`. Centralizes the stand-in classes that

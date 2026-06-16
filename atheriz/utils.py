@@ -1,3 +1,4 @@
+from __future__ import annotations
 from random import uniform
 import re
 from random import randint

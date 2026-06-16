@@ -1,3 +1,4 @@
+from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 import atheriz.settings as settings
 from threading import RLock

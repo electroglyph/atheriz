@@ -120,12 +120,15 @@ class NodeHandler:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.from_coord.area, door.from_coord.z)
+        mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
         if mi:
-            if door.closed:
-                mi.update_grid(door.symbol_coord, door.closed_symbol)
-            else:
-                mi.update_grid(door.symbol_coord, door.open_symbol)
+            symbol = door.closed_symbol if door.closed else door.open_symbol
+            with mi.lock:
+                mi.post_grid[door.symbol_coord] = symbol
+                if mi.pre_grid:
+                    mi.pre_grid[door.symbol_coord] = symbol
+                    mi.map_changed = True
+            mi.render(True)
 
     def remove_door(self, door: Door):
         with self.lock3:
@@ -146,7 +149,7 @@ class NodeHandler:
                 for k in rem_keys:
                     del d[k]
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.from_coord.area, door.from_coord.z)
+        mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
         if mi:
             mi.update_grid(door.symbol_coord, " ")
             mi.render(True)
