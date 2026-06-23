@@ -233,6 +233,16 @@ class ExamineCommand(Command):
         ignore = ["access", "lock"]
 
         attrs = vars(target)
+        prop_names = set()
+        for c in type(target).mro():
+            for name, obj in c.__dict__.items():
+                if isinstance(obj, property) and name not in attrs:
+                    prop_names.add(name)
+                    try:
+                        attrs[name] = getattr(target, name)
+                    except Exception:
+                        attrs[name] = "<error>"
+
         sorted_keys = sorted(attrs.keys())
 
         for key in sorted_keys:
@@ -241,10 +251,11 @@ class ExamineCommand(Command):
             val = attrs[key]
             val_output = _format_value(val, hint_name=key)
             type_name = type(val).__name__
+            marker = " [property]" if key in prop_names else ""
 
             if isinstance(val_output, list):
-                caller.msg(f"  {key}: {val_output[0]} ({type_name})")
+                caller.msg(f"  {key}: {val_output[0]} ({type_name}{marker})")
                 for line in val_output[1:]:
                     caller.msg(f"    {line}")
             else:
-                caller.msg(f"  {key}: {val_output} ({type_name})")
+                caller.msg(f"  {key}: {val_output} ({type_name}{marker})")
