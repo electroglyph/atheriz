@@ -21,6 +21,12 @@ class MockCaller:
 
 
 class MockMapInfo:
+    def __init__(self):
+        self.lock = MagicMock()
+        self.post_grid = {}
+        self.pre_grid = None
+        self.map_changed = False
+
     def update_grid(self, coord, symbol):
         pass
 

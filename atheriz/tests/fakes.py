@@ -5,7 +5,6 @@ Importable as `atheriz.tests.fakes`. Centralizes the stand-in classes that
 used to be duplicated in test_channel.py, test_build_command.py,
 test_menu.py, test_search.py, etc.
 """
-from __future__ import annotations
 
 import asyncio
 from unittest.mock import MagicMock

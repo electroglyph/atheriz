@@ -287,7 +287,7 @@ class Node(Flags, AccessLock):
         doors = ndh.get_doors(self.coord)
         if doors:
             for door in doors.values():
-                if door.open:
+                if not door.closed:
                     open = True
                     break
         else:
