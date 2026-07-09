@@ -21,6 +21,6 @@ class SayCommand(Command):
             caller.msg(self.print_help())
             return
         if args.text:
-            caller.at_say(" ".join(args.text))
+            caller.at_say(" ".join(args.text), msg_self=True)
         else:
             caller.msg(self.print_help())
