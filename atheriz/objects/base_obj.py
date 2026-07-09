@@ -1085,6 +1085,33 @@ class Object(Flags, DbOps, AccessLock):
                 if mi:
                     mi.render(True)
 
+    @hookable
+    def at_puppet(self, caller: "Object") -> None:
+        """Called on this object after a builder assumes control via the ``puppet`` command.
+
+        Default is a no-op. Games override this (or attach hooks) to lazily set up
+        character-specific subsystems (handlers, stats, etc.) on objects that were
+        not originally player characters. The framework-level PC transformation
+        (is_pc, privilege_level, session wiring) is already done by the command.
+
+        Args:
+            caller (Object): The object that initiated the puppet command (the previous puppet).
+        """
+        pass
+
+    @hookable
+    def at_unpuppet(self, caller: "Object") -> None:
+        """Called on this object before it is released by the ``unpuppet`` command.
+
+        Default is a no-op. Games override this (or attach hooks) to tear down
+        anything set up in ``at_puppet``. State restoration (is_pc, privilege_level)
+        and disconnect happen after this returns.
+
+        Args:
+            caller (Object): The object being returned to.
+        """
+        pass
+
     def announce_move_from(self, destination: Node, from_exit: str | None, **kwargs):
         """
         Announces that this object has arrived in a target room.

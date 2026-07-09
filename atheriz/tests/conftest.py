@@ -9,8 +9,6 @@ import warnings
 
 import pytest
 
-# ponytail: free-threaded CPython bug — BaseEventLoop.__del__ fails with
-# fd=-1 during GC of a leaked event loop. Not our code, suppress it.
 warnings.filterwarnings(
     "ignore",
     message=r".*deallocator.*BaseEventLoop.__del__.*",
