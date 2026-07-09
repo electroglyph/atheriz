@@ -912,17 +912,17 @@ def do_test_command(args):
     from pathlib import Path
     from atheriz.utils import is_in_game_folder
 
-    # 1. Setup game folder (injections)
-    in_game_folder = setup_game_folder(required=False)
-
     pytest_args = list(args.pytest_args or [])
-    
-    run_core = False
-    if pytest_args and pytest_args[0] == "core":
-        run_core = True
+
+    explicit_core = bool(pytest_args and pytest_args[0] == "core")
+    if explicit_core:
         pytest_args.pop(0)
-    elif not in_game_folder:
-        run_core = True
+
+    run_core = explicit_core or not is_in_game_folder()
+
+    # atheriz core must test atheriz: NEVER inject the game folder
+    if not run_core:
+        setup_game_folder(required=False)
 
     if run_core:
         # For core tests, we MUST point to the core tests directory
@@ -933,7 +933,7 @@ def do_test_command(args):
     else:
         print("Running game tests...")
 
-    # 2. Run pytest
+    # Run pytest
     final_args = ["-W", "ignore::pytest.PytestAssertRewriteWarning"] + pytest_args
     sys.exit(pytest.main(final_args))
 
