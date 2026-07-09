@@ -33,27 +33,28 @@ class NodeHandler:
         """Load node data from the database."""
         try:
             db = get_database()
-            cursor = db.connection.cursor()
-            cursor.execute("SELECT name, data FROM areas")
-            for name, blob in cursor:
-                try:
-                    self.areas[name] = dill.loads(blob)
-                except Exception as e:
-                    logger.error(f"Error loading area {name}: {e}")
+            with db.lock:
+                cursor = db.connection.cursor()
+                cursor.execute("SELECT name, data FROM areas")
+                for name, blob in cursor:
+                    try:
+                        self.areas[name] = dill.loads(blob)
+                    except Exception as e:
+                        logger.error(f"Error loading area {name}: {e}")
 
-            cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
-            for area, x, y, z, blob in cursor:
-                try:
-                    self.transitions[Coord(area, x, y, z)] = dill.loads(blob)
-                except Exception as e:
-                    logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
+                cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
+                for area, x, y, z, blob in cursor:
+                    try:
+                        self.transitions[Coord(area, x, y, z)] = dill.loads(blob)
+                    except Exception as e:
+                        logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
 
-            cursor.execute("SELECT area, x, y, z, data FROM doors")
-            for area, x, y, z, blob in cursor:
-                try:
-                    self.doors[Coord(area, x, y, z)] = dill.loads(blob)
-                except Exception as e:
-                    logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
+                cursor.execute("SELECT area, x, y, z, data FROM doors")
+                for area, x, y, z, blob in cursor:
+                    try:
+                        self.doors[Coord(area, x, y, z)] = dill.loads(blob)
+                    except Exception as e:
+                        logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
 
             for area in self.areas.values():
                 for grid in area.grids.values():
@@ -66,7 +67,6 @@ class NodeHandler:
 
     def save(self):
         db = get_database()
-        cursor = db.connection.cursor()
 
         with self.lock:
             areas_snapshot = list(self.areas.values())
@@ -76,6 +76,7 @@ class NodeHandler:
             doors_snapshot = list(self.doors.items())
 
         with db.lock:
+            cursor = db.connection.cursor()
             cursor.execute("BEGIN TRANSACTION")
             try:
                 for area in areas_snapshot:

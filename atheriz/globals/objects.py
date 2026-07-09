@@ -129,11 +129,11 @@ def load_objects():
 def save_objects(force: bool = False):
     """Save modified objects to the database."""
     db = get_database()
-    cursor = db.connection.cursor()
     with _ALL_OBJECTS_LOCK:
         snapshot = list(o for o in _ALL_OBJECTS.values() if not getattr(o, "is_temporary", False))
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
+        cursor = db.connection.cursor()
         cursor.execute("BEGIN TRANSACTION")
         try:
             for obj in to_save:
@@ -154,8 +154,8 @@ def delete_objects(ops: list[tuple[str, tuple]]):
     if not ops:
         return
     db = get_database()
-    cursor = db.connection.cursor()
     with db.lock:
+        cursor = db.connection.cursor()
         cursor.execute("BEGIN TRANSACTION")
         try:
             for op in ops:

@@ -2,7 +2,7 @@ from __future__ import annotations
 import sqlite3
 import os
 from . import settings
-from threading import Lock
+from threading import Lock, RLock
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ _DATABASE: Database | None = None
 
 class Database:
     def __init__(self, connection: Connection):
-        self.lock = Lock()
+        self.lock = RLock()
         self.connection = connection
 
     def close(self):
@@ -47,17 +47,18 @@ def do_setup():
     """
     Creates a sqlite db at save folder/database.sqlite3 (check settings).
     """
-    conn = get_database().connection
-    cursor = conn.cursor()
-    cursor.execute("CREATE TABLE IF NOT EXISTS objects (id INTEGER PRIMARY KEY, data BLOB)")
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS mapdata (area TEXT, z INTEGER, data BLOB, PRIMARY KEY (area, z))"
-    )
-    cursor.execute("CREATE TABLE IF NOT EXISTS areas (name TEXT PRIMARY KEY, data BLOB)")
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS transitions (to_area TEXT, to_x INTEGER, to_y INTEGER, to_z INTEGER, data BLOB, PRIMARY KEY (to_area, to_x, to_y, to_z))"
-    )
-    cursor.execute(
-        "CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))"
-    )
-    conn.commit()
+    conn = get_database()
+    with conn.lock:
+        cursor = conn.connection.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS objects (id INTEGER PRIMARY KEY, data BLOB)")
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS mapdata (area TEXT, z INTEGER, data BLOB, PRIMARY KEY (area, z))"
+        )
+        cursor.execute("CREATE TABLE IF NOT EXISTS areas (name TEXT PRIMARY KEY, data BLOB)")
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS transitions (to_area TEXT, to_x INTEGER, to_y INTEGER, to_z INTEGER, data BLOB, PRIMARY KEY (to_area, to_x, to_y, to_z))"
+        )
+        cursor.execute(
+            "CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))"
+        )
+        conn.connection.commit()

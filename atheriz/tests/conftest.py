@@ -5,12 +5,31 @@ import shutil
 import tempfile
 import threading
 from pathlib import Path
+import warnings
 
 import pytest
+
+# ponytail: free-threaded CPython bug — BaseEventLoop.__del__ fails with
+# fd=-1 during GC of a leaked event loop. Not our code, suppress it.
+warnings.filterwarnings(
+    "ignore",
+    message=r".*deallocator.*BaseEventLoop.__del__.*",
+    category=pytest.PytestUnraisableExceptionWarning,
+)
 
 from atheriz import settings, database_setup
 from atheriz.globals import objects as obj_singleton
 from atheriz.globals import get as get_singleton
+
+
+def _clear_ticker():
+    """Stop and drop the global AsyncTicker so background at_tick coros from a
+    prior test can't fire across the test boundary (free-threading safe)."""
+    try:
+        get_singleton.get_async_ticker().clear()
+    except Exception:
+        pass
+    get_singleton._ASYNC_TICKER = None
 
 
 @pytest.fixture(autouse=True)
@@ -42,9 +61,14 @@ def global_test_env():
     get_singleton._UNLOGGEDIN_CMDSET = None
     get_singleton._CONNECTION_MANAGER = None
 
+    # Stop any background ticker left running by a previous test, then drop the
+    # singleton, so its at_tick coros can't fire across the test boundary.
+    _clear_ticker()
+
     yield temp_dir
 
-    # Teardown: Clean up
+    # Teardown: stop the ticker BEFORE closing the DB so no at_tick runs mid-close.
+    _clear_ticker()
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
     database_setup._DATABASE = None

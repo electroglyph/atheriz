@@ -455,25 +455,26 @@ class MapHandler:
         
         try:
             db = get_database()
-            cursor = db.connection.cursor()
-            cursor.execute("SELECT area, z, data FROM mapdata")
-            for area, z, blob in cursor:
-                try:
-                    mi = dill.loads(blob)
-                    self.data[(area, z)] = mi
-                except Exception as e:
-                    logger.error(f"Error loading map chunk {area}:{z}: {e}")
+            with db.lock:
+                cursor = db.connection.cursor()
+                cursor.execute("SELECT area, z, data FROM mapdata")
+                for area, z, blob in cursor:
+                    try:
+                        mi = dill.loads(blob)
+                        self.data[(area, z)] = mi
+                    except Exception as e:
+                        logger.error(f"Error loading map chunk {area}:{z}: {e}")
         except Exception as e:
             logger.error(f"Error loading map data from DB: {e}")
 
     def save(self):
         db = get_database()
-        cursor = db.connection.cursor()
         
         with self.lock:
             snapshot = list(self.data.items())
         
         with db.lock:
+            cursor = db.connection.cursor()
             cursor.execute("BEGIN TRANSACTION")
             try:
                 for (area, z), mi in snapshot:
