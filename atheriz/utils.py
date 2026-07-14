@@ -60,7 +60,8 @@ def ensure_thread_safe(obj):
             orig_set(self, name, value)
         else:
             with orig_get(self, "lock"):
-                orig_set(self, "is_modified", True)
+                if name != "is_modified":
+                    orig_set(self, "is_modified", True)
                 orig_set(self, name, value)
 
     cls.__getattribute__ = __getattribute__

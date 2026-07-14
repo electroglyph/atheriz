@@ -7,8 +7,12 @@ class DbOps:
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
-            blob = dill.dumps(self)
             object.__setattr__(self, "is_modified", False)
+            try:
+                blob = dill.dumps(self)
+            except Exception:
+                object.__setattr__(self, "is_modified", True)
+                raise
             params = (self.id, blob)
         return sql, params
 
