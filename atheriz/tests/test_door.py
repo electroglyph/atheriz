@@ -109,6 +109,21 @@ def test_door_command_parser_setup():
     assert parsed.south is False
 
 
+def test_door_parser_has_up_down():
+    cmd = DoorCommand()
+    parsed = cmd.parser.parse_args(["--up"])
+    assert parsed.up is True
+    assert parsed.down is False
+
+    parsed = cmd.parser.parse_args(["--down"])
+    assert parsed.down is True
+    assert parsed.up is False
+
+    parsed = cmd.parser.parse_args(["-r", "-u"])
+    assert parsed.remove is True
+    assert parsed.up is True
+
+
 # ==================== Error Handling Tests ====================
 
 
@@ -449,6 +464,95 @@ def test_remove_door_west(setup_area):
     doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     if doors:
         assert "west" not in doors
+
+
+def test_create_door_up_auto(setup_area):
+    """door -u -a should create a door going up."""
+    nh, area, grid, start_node = setup_area
+    cmd = DoorCommand()
+    caller = MockCaller(location=start_node)
+    args = make_args(up=True, auto=True)
+    cmd.run(caller, args)
+
+    dest_node = nh.get_node(Coord("TestArea", 0, 0, 2))
+    assert dest_node is not None
+
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
+    assert "up" in doors_from
+
+    doors_to = nh.get_doors(Coord("TestArea", 0, 0, 2))
+    assert "down" in doors_to
+
+    assert doors_from["up"] is doors_to["down"]
+
+    door = doors_from["up"]
+    assert door.from_coord == Coord("TestArea", 0, 0, 0)
+    assert door.to_coord == Coord("TestArea", 0, 0, 2)
+    assert door.from_exit == "up"
+    assert door.to_exit == "down"
+    assert door.closed is True
+
+    here_links = start_node.get_links()
+    up_links = [l for l in here_links if l.name == "up"]
+    assert len(up_links) == 1
+    assert up_links[0].coord == Coord("TestArea", 0, 0, 2)
+
+    dest_links = dest_node.get_links()
+    down_links = [l for l in dest_links if l.name == "down"]
+    assert len(down_links) == 1
+    assert down_links[0].coord == Coord("TestArea", 0, 0, 0)
+
+
+def test_create_door_down_auto(setup_area):
+    """door -d -a should create a door going down."""
+    nh, area, grid, start_node = setup_area
+    cmd = DoorCommand()
+    caller = MockCaller(location=start_node)
+    args = make_args(down=True, auto=True)
+    cmd.run(caller, args)
+
+    dest_node = nh.get_node(Coord("TestArea", 0, 0, -2))
+    assert dest_node is not None
+
+    doors_from = nh.get_doors(Coord("TestArea", 0, 0, 0))
+    assert "down" in doors_from
+
+    doors_to = nh.get_doors(Coord("TestArea", 0, 0, -2))
+    assert "up" in doors_to
+
+    assert doors_from["down"] is doors_to["up"]
+
+    door = doors_from["down"]
+    assert door.from_coord == Coord("TestArea", 0, 0, 0)
+    assert door.to_coord == Coord("TestArea", 0, 0, -2)
+    assert door.from_exit == "down"
+    assert door.to_exit == "up"
+
+    here_links = start_node.get_links()
+    down_links = [l for l in here_links if l.name == "down"]
+    assert len(down_links) == 1
+    assert down_links[0].coord == Coord("TestArea", 0, 0, -2)
+
+    dest_links = dest_node.get_links()
+    up_links = [l for l in dest_links if l.name == "up"]
+    assert len(up_links) == 1
+    assert up_links[0].coord == Coord("TestArea", 0, 0, 0)
+
+
+def test_remove_door_up(setup_area):
+    """door -r -u should remove an existing up door."""
+    nh, area, grid, start_node = setup_area
+    cmd = DoorCommand()
+    caller = MockCaller(location=start_node)
+    cmd.run(caller, make_args(up=True, auto=True))
+
+    caller.messages.clear()
+    cmd.run(caller, make_args(remove=True, up=True))
+
+    assert any("Removed" in m for m in caller.messages)
+    doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
+    if doors:
+        assert "up" not in doors
 
 
 def test_remove_no_doors_here(setup_area):

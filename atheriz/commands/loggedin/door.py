@@ -26,6 +26,8 @@ class DoorCommand(Command):
         self.parser.add_argument("-s", "--south", action="store_true", help="South")
         self.parser.add_argument("-e", "--east", action="store_true", help="East")
         self.parser.add_argument("-w", "--west", action="store_true", help="West")
+        self.parser.add_argument("-u", "--up", action="store_true", help="Up")
+        self.parser.add_argument("-d", "--down", action="store_true", help="Down")
         self.parser.add_argument("-r", "--remove", action="store_true", help="Remove door")
         self.parser.add_argument(
             "-a",
@@ -37,11 +39,11 @@ class DoorCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
-        if not args.remove and not any([args.north, args.south, args.east, args.west]):
+        if not args.remove and not any([args.north, args.south, args.east, args.west, args.up, args.down]):
             caller.msg("You must specify a direction when creating a door.")
             caller.msg(self.print_help())
             return
-        if args.remove and not any([args.north, args.south, args.east, args.west]):
+        if args.remove and not any([args.north, args.south, args.east, args.west, args.up, args.down]):
             caller.msg("You must specify a direction when removing a door.")
             caller.msg(self.print_help())
             return
@@ -359,6 +361,132 @@ class DoorCommand(Command):
                     (door_coord.x, door_coord.y),
                     settings.EW_CLOSED_DOOR,
                     settings.EW_OPEN_DOOR2,
+                )
+                nh.add_door(door)
+                caller.msg(f"Created door at {door_coord}.")
+                return
+            if args.up:
+                to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z + 2)
+                door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z + 1)
+                to_node = nh.get_node(to_coord)
+                if not to_node:
+                    if args.auto:
+                        to_node = Node(to_coord)
+                        nh.add_node(to_node)
+                    else:
+                        caller.msg(
+                            f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
+                        )
+                        return
+                door_node = nh.get_node(door_coord)
+                if door_node:
+                    nh.remove_node(door_coord)
+                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                to_links = to_node.get_links()
+                need_dest_link = True
+                for l in to_links:
+                    if l.name == "down":
+                        if l.coord != loc.coord:
+                            to_node.remove_link(l.name)
+                            caller.msg(
+                                f"Removed link '{l.name}' from node at {to_coord} for linking to the wrong coord."
+                            )
+                        else:
+                            need_dest_link = False
+                if need_dest_link:
+                    link = NodeLink("down", loc.coord, ["d"])
+                    to_node.add_link(link)
+                    caller.msg(
+                        f"Created link '{link.name}' from node at {to_coord} linking to {loc.coord}."
+                    )
+                here_links = loc.get_links()
+                need_here_link = True
+                for l in here_links:
+                    if l.name == "up":
+                        if l.coord != to_coord:
+                            loc.remove_link(l.name)
+                            caller.msg(
+                                f"Removed link '{l.name}' from node at {loc.coord} for linking to the wrong coord."
+                            )
+                        else:
+                            need_here_link = False
+                if need_here_link:
+                    link = NodeLink("up", to_coord, ["u"])
+                    loc.add_link(link)
+                    caller.msg(
+                        f"Created link '{link.name}' from node at {loc.coord} linking to {to_coord}."
+                    )
+                door = Door.create(
+                    loc.coord,
+                    "up",
+                    to_coord,
+                    "down",
+                    (door_coord.x, door_coord.y),
+                    settings.UD_CLOSED_DOOR,
+                    settings.UD_OPEN_DOOR,
+                )
+                nh.add_door(door)
+                caller.msg(f"Created door at {door_coord}.")
+                return
+            if args.down:
+                to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z - 2)
+                door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z - 1)
+                to_node = nh.get_node(to_coord)
+                if not to_node:
+                    if args.auto:
+                        to_node = Node(to_coord)
+                        nh.add_node(to_node)
+                    else:
+                        caller.msg(
+                            f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
+                        )
+                        return
+                door_node = nh.get_node(door_coord)
+                if door_node:
+                    nh.remove_node(door_coord)
+                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                to_links = to_node.get_links()
+                need_dest_link = True
+                for l in to_links:
+                    if l.name == "up":
+                        if l.coord != loc.coord:
+                            to_node.remove_link(l.name)
+                            caller.msg(
+                                f"Removed link '{l.name}' from node at {to_coord} for linking to the wrong coord."
+                            )
+                        else:
+                            need_dest_link = False
+                if need_dest_link:
+                    link = NodeLink("up", loc.coord, ["u"])
+                    to_node.add_link(link)
+                    caller.msg(
+                        f"Created link '{link.name}' from node at {to_coord} linking to {loc.coord}."
+                    )
+                here_links = loc.get_links()
+                need_here_link = True
+                for l in here_links:
+                    if l.name == "down":
+                        if l.coord != to_coord:
+                            loc.remove_link(l.name)
+                            caller.msg(
+                                f"Removed link '{l.name}' from node at {loc.coord} for linking to the wrong coord."
+                            )
+                        else:
+                            need_here_link = False
+                if need_here_link:
+                    link = NodeLink("down", to_coord, ["d"])
+                    loc.add_link(link)
+                    caller.msg(
+                        f"Created link '{link.name}' from node at {loc.coord} linking to {to_coord}."
+                    )
+                door = Door.create(
+                    loc.coord,
+                    "down",
+                    to_coord,
+                    "up",
+                    (door_coord.x, door_coord.y),
+                    settings.UD_CLOSED_DOOR,
+                    settings.UD_OPEN_DOOR,
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
