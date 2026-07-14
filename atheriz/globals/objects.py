@@ -118,7 +118,7 @@ def load_objects():
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS.clear()
         _ALL_OBJECTS.update(objects)
-    set_id(max_id)
+        set_id(max_id)
 
     with _ALL_OBJECTS_LOCK:
         for obj in _ALL_OBJECTS.values():
