@@ -49,15 +49,11 @@ class ConnectCommand(Command):
                 caller.msg("Too many failed login attempts. Please try again later.")
                 caller.close()
                 with TEMP_BANNED_LOCK:
-                    TEMP_BANNED_IPS[host] = (
-                        time.time() + settings.LOGIN_ATTEMPT_COOLDOWN
-                    )
+                    TEMP_BANNED_IPS[host] = time.time() + settings.LOGIN_ATTEMPT_COOLDOWN
             return
 
         if account.is_banned:
-            caller.msg(
-                f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}"
-            )
+            caller.msg(f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}")
             caller.close()
             return
         caller.session.account = account
@@ -69,7 +65,8 @@ class ConnectCommand(Command):
             text = "Please select a character to play: \r\n"
             chars: list[Object] = get(account.characters)
             for x, c in enumerate(chars):
-                text += f"{x}. {c.name}\r\n"
+                tag = " [banned]" if getattr(c, "is_banned", False) else ""
+                text += f"{x}. {c.name}{tag}\r\n"
             caller.msg(text)
             choice = await caller.session.prompt("Enter your choice:")
             try:
@@ -79,6 +76,13 @@ class ConnectCommand(Command):
                 continue
             if choice >= len(chars) or choice < 0:
                 caller.msg("Invalid choice.")
+                continue
+            if getattr(chars[choice], "is_banned", False):
+                msg = "That character is banned."
+                reason = getattr(chars[choice], "ban_reason", None)
+                if reason:
+                    msg += f" Reason: {reason}"
+                caller.msg(msg)
                 continue
             if not account.at_pre_puppet(chars[choice]):
                 caller.msg("This character is not available.")

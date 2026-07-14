@@ -25,7 +25,6 @@ class Account(Flags, DbOps):
         self.name = ""
         self.password = ""
         self.characters = []
-        self.is_banned = False
         self.ban_reason = ""
         self.is_account = True
         if settings.THREADSAFE_GETTERS_SETTERS:

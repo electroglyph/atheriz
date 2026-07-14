@@ -41,6 +41,8 @@ from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand
 from atheriz.commands.loggedin.group import GroupCommand
 from atheriz.commands.loggedin.socials import CmdSocials
 from atheriz.commands.loggedin.puppet import PuppetCommand, UnpuppetCommand
+from atheriz.commands.loggedin.ban import BanCommand, UnbanCommand
+
 
 class LoggedinCmdSet(CmdSet):
     def __init__(self):
@@ -90,3 +92,5 @@ class LoggedinCmdSet(CmdSet):
         self.add(CmdSocials())
         self.add(PuppetCommand())
         self.add(UnpuppetCommand())
+        self.add(BanCommand())
+        self.add(UnbanCommand())
