@@ -5,6 +5,7 @@ from atheriz.globals.salt import get_salt
 from atheriz.globals.get import get_unique_id
 from atheriz.logger import logger
 import hashlib
+import hmac
 import atheriz.settings as settings
 from threading import RLock
 from atheriz.objects.base_flags import Flags
@@ -127,15 +128,20 @@ class Account(Flags, DbOps):
     @staticmethod
     def hash_password(password: str) -> str:
         """
-        Hash the given plaintext password using the system salt.
+        Hash the given plaintext password using PBKDF2-HMAC-SHA256 with the system salt.
 
         Args:
             password (str): The plaintext password to hash.
 
         Returns:
-            str: The SHA-256 hashed password string.
+            str: The hex-encoded PBKDF2 hash.
         """
-        return hashlib.sha256(f"{password}{get_salt()}".encode()).hexdigest()
+        return hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode(),
+            get_salt().encode(),
+            600_000,
+        ).hex()
 
     def check_password(self, password: str) -> bool:
         """
@@ -147,7 +153,7 @@ class Account(Flags, DbOps):
         Returns:
             bool: True if the passwords match, False otherwise.
         """
-        return self.hash_password(password) == self.password
+        return hmac.compare_digest(self.hash_password(password), self.password)
 
     def set_password(self, password: str) -> None:
         """
