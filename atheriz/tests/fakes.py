@@ -39,8 +39,7 @@ class FakeConnection(BaseConnection):
             import asyncio as _asyncio
             self.loop = _asyncio.get_running_loop()
         except RuntimeError:
-            import asyncio as _asyncio
-            self.loop = _asyncio.new_event_loop()
+            self.loop = None
         import threading as _threading
         self.thread_id = _threading.get_ident()
         import threading as _threading

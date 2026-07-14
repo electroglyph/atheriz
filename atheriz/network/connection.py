@@ -19,7 +19,10 @@ class BaseConnection:
         from atheriz.objects.session import Session
         self.session_id = session_id
         self.session = Session(connection=self)
-        self.loop = asyncio.get_running_loop()
+        try:
+            self.loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.loop = None
         self.thread_id = threading.get_ident()
         self.lock = threading.RLock()
         self.failed_login_attempts = 0

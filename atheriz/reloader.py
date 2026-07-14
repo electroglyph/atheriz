@@ -292,25 +292,32 @@ def reload_game_logic() -> str:
                     saved_listeners = getattr(obj, "listeners", None)
                     saved_command = getattr(obj, "command", None)
 
-                    obj.__class__ = new_class
-
+                    lock = getattr(obj, "lock", None)
+                    if lock:
+                        lock.acquire()
                     try:
-                        obj.__init__()
-                    except TypeError:
-                        pass
+                        obj.__class__ = new_class
 
-                    if hasattr(obj, "__setstate__"):
-                        obj.__setstate__(state)
-                    else:
-                        obj.__dict__.update(state)
+                        try:
+                            obj.__init__()
+                        except TypeError:
+                            pass
 
-                    # restore transient state
-                    if saved_session:
-                        obj.session = saved_session
-                    if saved_listeners is not None:
-                        obj.listeners = saved_listeners
-                    if saved_command is not None:
-                        obj.command = saved_command
+                        if hasattr(obj, "__setstate__"):
+                            obj.__setstate__(state)
+                        else:
+                            obj.__dict__.update(state)
+
+                        # restore transient state
+                        if saved_session:
+                            obj.session = saved_session
+                        if saved_listeners is not None:
+                            obj.listeners = saved_listeners
+                        if saved_command is not None:
+                            obj.command = saved_command
+                    finally:
+                        if lock:
+                            lock.release()
 
                     objects_patched += 1
                     patched_objects[id(obj)] = obj

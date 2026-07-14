@@ -46,7 +46,7 @@ class TestInit:
 
     def test_initializes_loop(self, global_test_env):
         c = ConcreteConn()
-        assert c.loop is not None
+        assert c.loop is None  # no running loop outside async context
 
     def test_records_thread_id(self, global_test_env):
         c = ConcreteConn()
