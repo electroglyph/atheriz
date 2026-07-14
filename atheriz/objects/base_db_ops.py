@@ -7,8 +7,9 @@ class DbOps:
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
+            blob = dill.dumps(self)
             object.__setattr__(self, "is_modified", False)
-            params = (self.id, dill.dumps(self))
+            params = (self.id, blob)
         return sql, params
 
     def get_del_ops(self) -> tuple[str, tuple]:
