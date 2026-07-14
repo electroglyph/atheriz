@@ -32,7 +32,9 @@ def _resolve_target(caller: "Object", name: str) -> "Object | None":
         caller.msg(f"No player character found named '{name}'.")
         return None
     if len(matches) > 1:
-        caller.msg(f"Multiple matches for '{name}'.")
+        caller.msg(f"Multiple matches for '{name}':")
+        for m in matches:
+            caller.msg(f"  #{m.id} {m.name}")
         return None
     return matches[0]
 

@@ -133,6 +133,20 @@ def test_ban_no_match():
     assert "No player character" in _last_msg(caller)
 
 
+def test_ban_multiple_matches_lists_ids():
+    caller = _make_caller()
+    a = _make_pc("Dup")
+    b = _make_pc("Dup")
+    cmd = BanCommand()
+    cmd.run(caller, cmd.parser.parse_args(["Dup"]))
+    assert a.is_banned is False
+    assert b.is_banned is False
+    sent = [strip_ansi(c[0][0]) for c in caller.msg.call_args_list]
+    assert any("Multiple matches" in m for m in sent)
+    assert any(f"#{a.id} Dup" in m for m in sent)
+    assert any(f"#{b.id} Dup" in m for m in sent)
+
+
 # --- account ban ------------------------------------------------------------
 
 
