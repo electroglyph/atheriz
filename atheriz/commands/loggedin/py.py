@@ -3,10 +3,11 @@ import ast
 import contextlib
 import io
 import pprint
+import threading
 import time as _time_mod
 
 from atheriz import settings
-from atheriz.commands.base_cmd import Command
+from atheriz.commands.base_cmd import Command, CommandError
 from atheriz.globals.objects import get
 from atheriz.logger import logger
 from atheriz.utils import wrap_xterm256
@@ -14,6 +15,37 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+
+
+def safe_getattr(obj, name, *args):
+    """getattr wrapper that blocks dunder attribute access."""
+    if isinstance(name, str) and name.startswith("__") and name.endswith("__"):
+        raise AttributeError(f"Access to dunder attribute {name!r} is blocked")
+    return getattr(obj, name, *args)
+
+
+def safe_hasattr(obj, name):
+    """hasattr wrapper that blocks dunder attribute access."""
+    if isinstance(name, str) and name.startswith("__") and name.endswith("__"):
+        raise AttributeError(f"Access to dunder attribute {name!r} is blocked")
+    return hasattr(obj, name)
+
+
+def safe_chr(codepoint):
+    """chr wrapper that blocks control characters."""
+    if not isinstance(codepoint, int):
+        raise TypeError(f"chr() requires an int, got {type(codepoint).__name__}")
+    if codepoint < 0 or codepoint > 0x10FFFF:
+        raise ValueError(f"chr() arg not in range(0x110000)")
+    # Block null bytes and C0/C1 control characters (except common whitespace)
+    if codepoint == 0:
+        raise ValueError("chr(0) (null byte) is blocked")
+    if codepoint < 32 and codepoint not in (9, 10, 13):  # tab, LF, CR
+        raise ValueError(f"chr({codepoint}) control character is blocked")
+    if 0x80 <= codepoint <= 0x9F:
+        raise ValueError(f"chr({codepoint}) C1 control character is blocked")
+    return chr(codepoint)
+
 
 _SAFE_BUILTINS = {
     "True": True,
@@ -24,20 +56,20 @@ _SAFE_BUILTINS = {
     "any": any,
     "bin": bin,
     "bool": bool,
-    "chr": chr,
+    "chr": safe_chr,
     "dict": dict,
     "divmod": divmod,
     "enumerate": enumerate,
     "filter": filter,
     "float": float,
-    "format": format,
     "frozenset": frozenset,
+    "getattr": safe_getattr,
+    "hasattr": safe_hasattr,
     "hash": hash,
     "hex": hex,
     "id": id,
     "int": int,
     "isinstance": isinstance,
-    "issubclass": issubclass,
     "iter": iter,
     "len": len,
     "list": list,
@@ -45,7 +77,6 @@ _SAFE_BUILTINS = {
     "max": max,
     "min": min,
     "next": next,
-    "object": object,
     "oct": oct,
     "ord": ord,
     "pow": pow,
@@ -60,13 +91,7 @@ _SAFE_BUILTINS = {
     "str": str,
     "sum": sum,
     "tuple": tuple,
-    "type": type,
-    "vars": vars,
     "zip": zip,
-    "getattr": getattr,
-    "hasattr": hasattr,
-    "setattr": setattr,
-    "delattr": delattr,
 }
 
 
@@ -119,8 +144,7 @@ class PyCommand(Command):
     extra_desc = (
         "Runs Python with a sandboxed builtins list. Exposed globals: caller/me,\n"
         "here, search, get, settings, logger, time, pprint. The name 'self' is\n"
-        "remapped to 'caller'. Note: this runs on the game thread; do not depend\n"
-        "on caller being quiescent."
+        "remapped to 'caller'."
     )
     use_parser = False
 
@@ -152,37 +176,49 @@ class PyCommand(Command):
         }
 
         stdout_buf = io.StringIO()
-        result = None
-        with caller.lock:
+        result = [None]
+        error = [None]
+
+        def _exec_code():
             try:
                 with contextlib.redirect_stdout(stdout_buf):
                     tree = _rewrite_self_to_caller(ast.parse(code, mode="exec"))
                     if len(tree.body) == 1 and isinstance(tree.body[0], ast.Expr):
-                        result = eval(
+                        result[0] = eval(
                             compile(ast.Expression(tree.body[0].value), "<py>", "eval"),
                             py_globals,
                         )
                     else:
                         exec(compile(tree, "<py>", "exec"), py_globals)
                         if tree.body and isinstance(tree.body[-1], ast.Expr):
-                            result = eval(
+                            result[0] = eval(
                                 compile(ast.Expression(tree.body[-1].value), "<py>", "eval"),
                                 py_globals,
                             )
             except SyntaxError as e:
-                caller.msg(_colorize(f"Error: SyntaxError: {e}"))
-                return
+                error[0] = ("SyntaxError", str(e))
             except Exception as e:
-                caller.msg(_colorize(f"Error: {type(e).__name__}: {e}"))
-                return
+                error[0] = (type(e).__name__, str(e))
+
+        thread = threading.Thread(target=_exec_code, daemon=True)
+        thread.start()
+        thread.join(timeout=5)
+        if thread.is_alive():
+            caller.msg(_colorize("Error: Code execution timed out (5s limit)"))
+            return
+
+        if error[0]:
+            err_type, err_msg = error[0]
+            caller.msg(_colorize(f"Error: {err_type}: {err_msg}"))
+            return
 
         out_parts: list[str] = []
         captured = _truncate(stdout_buf.getvalue())
         if captured:
             out_parts.append(captured)
-        if result is not None:
-            result_str = _truncate(repr(result))
-            out_parts.append(f"-- {type(result).__name__} --\n{result_str}")
+        if result[0] is not None:
+            result_str = _truncate(repr(result[0]))
+            out_parts.append(f"-- {type(result[0]).__name__} --\n{result_str}")
         if out_parts:
             caller.msg(_colorize("\n".join(out_parts)))
         elif not captured:

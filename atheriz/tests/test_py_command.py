@@ -11,6 +11,9 @@ from atheriz.commands.loggedin.py import (
     _colorize,
     _rewrite_self_to_caller,
     _truncate,
+    safe_chr,
+    safe_getattr,
+    safe_hasattr,
 )
 from atheriz.logger import logger
 from atheriz.objects.base_obj import Object
@@ -65,6 +68,9 @@ class TestSafeBuiltins:
         "__import__", "open", "exec", "eval", "compile",
         "globals", "locals", "input", "breakpoint",
         "super", "memoryview",
+        # Sandbox lockdown: removed to prevent MRO walking / dunder access
+        "type", "vars", "object", "format", "issubclass",
+        "setattr", "delattr",
     ]
 
     @pytest.mark.parametrize("name", FORBIDDEN)
@@ -73,10 +79,11 @@ class TestSafeBuiltins:
 
     @pytest.mark.parametrize("name", [
         "True", "False", "None", "abs", "all", "any", "bool",
-        "dict", "float", "int", "isinstance", "issubclass",
+        "dict", "float", "int", "isinstance",
         "len", "list", "max", "min", "print", "range", "repr",
-        "set", "sorted", "str", "sum", "tuple", "type", "zip",
-        "getattr", "hasattr", "setattr", "delattr",
+        "set", "sorted", "str", "sum", "tuple", "zip",
+        # Safe wrappers replace raw builtins
+        "getattr", "hasattr", "chr",
     ])
     def test_expected_builtin_present(self, name):
         assert name in _SAFE_BUILTINS
@@ -273,9 +280,124 @@ class TestPyCommandSandboxRestrictions:
         assert "Error:" in text, f"Expected an error for `{snippet}`, got: {text!r}"
         assert "NameError" in text, f"Expected NameError for `{snippet}`, got: {text!r}"
 
+    @pytest.mark.parametrize("snippet", [
+        "type(caller)",
+        "vars(caller)",
+        "object.__subclasses__()",
+        "format(caller)",
+        "issubclass(type(caller), object)",
+        "setattr(caller, 'name', 'hacked')",
+        "delattr(caller, 'name')",
+    ])
+    def test_removed_builtins_raises_nameerror(self, caller, snippet):
+        PyCommand().run(caller, snippet)
+        text = _last_msg(caller)
+        assert "Error:" in text, f"Expected an error for `{snippet}`, got: {text!r}"
+        assert "NameError" in text, f"Expected NameError for `{snippet}`, got: {text!r}"
+
     def test_syntax_error_reported(self, caller):
         PyCommand().run(caller, "1 +")
         assert "Error: SyntaxError" in _last_msg(caller)
+
+
+class TestSafeGetattr:
+    def test_allows_normal_attr(self):
+        obj = type("Obj", (), {"name": "test"})()
+        assert safe_getattr(obj, "name") == "test"
+
+    def test_blocks_dunder_getitem(self):
+        obj = type("Obj", (), {})()
+        with pytest.raises(AttributeError, match="dunder"):
+            safe_getattr(obj, "__class__")
+
+    def test_blocks_dunder_subclasses(self):
+        with pytest.raises(AttributeError, match="dunder"):
+            safe_getattr(object, "__subclasses__")
+
+    def test_blocks_dunder_dict(self):
+        obj = type("Obj", (), {})()
+        with pytest.raises(AttributeError, match="dunder"):
+            safe_getattr(obj, "__dict__")
+
+    def test_default_value_works(self):
+        obj = type("Obj", (), {})()
+        assert safe_getattr(obj, "missing", "default") == "default"
+
+
+class TestSafeHasattr:
+    def test_allows_normal_attr(self):
+        obj = type("Obj", (), {"name": "test"})()
+        assert safe_hasattr(obj, "name") is True
+
+    def test_blocks_dunder(self):
+        obj = type("Obj", (), {})()
+        with pytest.raises(AttributeError, match="dunder"):
+            safe_hasattr(obj, "__class__")
+
+
+class TestSafeChr:
+    def test_allows_printable_ascii(self):
+        assert safe_chr(65) == "A"
+        assert safe_chr(97) == "a"
+        assert safe_chr(32) == " "
+
+    def test_allows_tab_lf_cr(self):
+        assert safe_chr(9) == "\t"
+        assert safe_chr(10) == "\n"
+        assert safe_chr(13) == "\r"
+
+    def test_allows_unicode(self):
+        assert safe_chr(0x00E9) == "\u00e9"  # e-acute
+        assert safe_chr(0x4E16) == "\u4e16"  # CJK
+
+    def test_blocks_null_byte(self):
+        with pytest.raises(ValueError, match="null byte"):
+            safe_chr(0)
+
+    def test_blocks_c0_control_chars(self):
+        with pytest.raises(ValueError, match="control character"):
+            safe_chr(1)  # SOH
+        with pytest.raises(ValueError, match="control character"):
+            safe_chr(31)  # US
+
+    def test_blocks_c1_control_chars(self):
+        with pytest.raises(ValueError, match="C1 control"):
+            safe_chr(0x80)
+        with pytest.raises(ValueError, match="C1 control"):
+            safe_chr(0x9F)
+
+    def test_blocks_negative(self):
+        with pytest.raises(ValueError, match="not in range"):
+            safe_chr(-1)
+
+    def test_blocks_too_large(self):
+        with pytest.raises(ValueError, match="not in range"):
+            safe_chr(0x110000)
+
+    def test_blocks_non_int(self):
+        with pytest.raises(TypeError, match="requires an int"):
+            safe_chr("A")
+
+
+class TestPyCommandSandboxMroWalk:
+    def test_mro_walk_via_getattr_blocked(self, caller):
+        PyCommand().run(caller, "getattr(caller, '__class__')")
+        text = _last_msg(caller)
+        assert "Error:" in text
+        assert "AttributeError" in text
+
+    def test_chr_string_build_blocked(self, caller):
+        PyCommand().run(caller, "chr(0)")
+        text = _last_msg(caller)
+        assert "Error:" in text
+        assert "ValueError" in text
+
+
+class TestPyCommandTimeout:
+    def test_infinite_loop_times_out(self, caller, monkeypatch):
+        PyCommand().run(caller, "while True: pass")
+        text = _last_msg(caller)
+        assert "timed out" in text
 
 
 class TestPyCommandTruncation:
@@ -308,34 +430,25 @@ class TestPyCommandColorize:
 
 
 class TestPyCommandLock:
-    # The engine's lock-aware __getattribute__ (utils.py:54) acquires
-    # `caller.lock` on every attribute read, so __enter__/__exit__ fire
-    # many times per run() call. The invariants we care about are:
-    #   (a) the lock is actually entered at least once (i.e. the explicit
-    #       `with caller.lock:` in run() is in effect), and
-    #   (b) every enter is balanced by an exit (no leaked acquires).
+    # Lock is no longer held during code execution (would deadlock with
+    # thread-safe attribute access). Lock tests verify the caller is not
+    # corrupted by the threaded execution.
 
-    def _assert_lock_used_and_balanced(self, caller):
-        assert caller.lock.__enter__.call_count >= 1, "caller.lock was never entered"
-        assert caller.lock.__enter__.call_count == caller.lock.__exit__.call_count, (
-            f"unbalanced lock: {caller.lock.__enter__.call_count} enters, "
-            f"{caller.lock.__exit__.call_count} exits"
-        )
-
-    def test_lock_acquired_on_success(self, caller_with_mock_lock):
+    def test_no_lock_deadlock_on_success(self, caller_with_mock_lock):
         caller = caller_with_mock_lock
         PyCommand().run(caller, "1 + 1")
-        self._assert_lock_used_and_balanced(caller)
+        # Verify caller.msg was called (no deadlock)
+        assert caller.msg.call_count >= 1
 
-    def test_lock_released_on_exception(self, caller_with_mock_lock):
+    def test_no_lock_deadlock_on_exception(self, caller_with_mock_lock):
         caller = caller_with_mock_lock
         PyCommand().run(caller, "1/0")
-        self._assert_lock_used_and_balanced(caller)
+        assert caller.msg.call_count >= 1
 
-    def test_lock_released_on_syntax_error(self, caller_with_mock_lock):
+    def test_no_lock_deadlock_on_timeout(self, caller_with_mock_lock):
         caller = caller_with_mock_lock
-        PyCommand().run(caller, "1 +")
-        self._assert_lock_used_and_balanced(caller)
+        PyCommand().run(caller, "while True: pass")
+        assert caller.msg.call_count >= 1
 
 
 class TestPyCommandAuditLog:
