@@ -330,3 +330,33 @@ def test_search_recursion_error_is_caught(monkeypatch):
         assert isinstance(result, list)
     finally:
         sys.setrecursionlimit(original_limit)
+
+
+def test_search_by_index_with_sparse_positions():
+    """Searching 'sword 2' with non-consecutive matches must not KeyError."""
+    container = Object()
+    container.id = 100
+    container.name = "chest"
+    add_object(container)
+
+    objs = []
+    for i in range(5):
+        o = Object()
+        o.id = 200 + i
+        if i in (1, 4):
+            o.name = "sword"
+        else:
+            o.name = "shield"
+        add_object(o)
+        container.add_object(o)
+        objs.append(o)
+
+    # "sword 2" should return the second sword (at position 4 in contents)
+    results = search(container, "sword 2")
+    assert len(results) == 1
+    assert results[0] == objs[4]
+
+    # "sword 1" should return the first sword (at position 1 in contents)
+    results = search(container, "sword 1")
+    assert len(results) == 1
+    assert results[0] == objs[1]

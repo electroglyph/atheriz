@@ -173,7 +173,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
             optional.append(split[x])
         else:
             required.append(split[x])
-    matches = {}
+    matches = []
     for x in range(len(objs)):
         found = False
         for s in required:
@@ -186,23 +186,23 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
             if count == 1 and index == 0:
                 return [objs[x]]
             else:
-                matches[x] = objs[x]
+                matches.append(objs[x])
                 if len(matches) == count and index == 0:
-                    return [v for v in matches.values()]
+                    return matches
         for s in optional:
             if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
                 if count == 1 and index == 0:
                     return [objs[x]]
                 else:
-                    matches[x] = objs[x]
+                    matches.append(objs[x])
                     if len(matches) == count and index == 0:
-                        return [v for v in matches.values()]
+                        return matches
     if count == 0:  # 0 means all
-        return [v for v in matches.values()]
+        return matches
     if index == 0 and len(matches) > count:  # we have more matches than requested
-        return [matches[x] for x in range(count)]
+        return matches[:count]
     if index != 0 and index <= len(matches):  # specific match index was requested
         return [matches[index - 1]]
     elif index != 0 and index > len(matches):  # match not found
         return []
-    return [v for v in matches.values()]  # count >= matches
+    return matches  # count >= matches
