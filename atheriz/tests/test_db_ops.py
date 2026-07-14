@@ -203,3 +203,18 @@ class TestDbOpsIntegration:
         _sql, params = obj.get_save_ops()
         loaded = dill.loads(params[1])
         assert loaded.field1 == "b"
+
+    def test_is_modified_stays_true_on_serialization_failure(self, monkeypatch, global_test_env):
+        obj = _DbHolder()
+        import _thread
+        obj.lock = _thread.RLock()
+        obj.id = 1
+        obj.is_modified = True
+
+        def boom(*a, **kw):
+            raise RuntimeError("serialize fail")
+
+        monkeypatch.setattr(dill, "dumps", boom)
+        with pytest.raises(RuntimeError):
+            obj.get_save_ops()
+        assert obj.is_modified is True
