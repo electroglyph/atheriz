@@ -422,3 +422,9 @@ def test_node_remove_link_same_area_no_transition():
     # Remove link should work without error
     node.remove_link("north")
     assert len(node.links) == 0
+
+
+def test_get_display_name_no_looker():
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    result = node.get_display_name(looker=None)
+    assert result == ""

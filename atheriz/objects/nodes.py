@@ -818,7 +818,7 @@ class Node(Flags, AccessLock):
             str: The builder string identifying the coord, or an empty string.
         """
         with self.lock:
-            if looker.is_builder:
+            if looker is not None and looker.is_builder:
                 return wrap_truecolor(
                     f"({self.coord.area},{self.coord.x},{self.coord.y},{self.coord.z})\n",
                     fg=170,
