@@ -12,6 +12,8 @@ TELNET_ENABLED = True
 TELNET_PORT = 4444
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 TELNET_INTERFACE = "0.0.0.0"
+# timeout in seconds
+TELNET_CONNECTION_TIMEOUT = 300
 NETWORK_PROTOCOLS = [
     "atheriz.network.websocket.WebSocketProtocol",
     "atheriz.network.telnet.TelnetProtocol",

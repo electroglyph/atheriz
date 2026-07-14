@@ -125,7 +125,7 @@ class TelnetProtocol(BaseProtocol):
                 port=port, 
                 host=interface, 
                 shell=shell,
-                timeout=0
+                timeout=getattr(settings, "TELNET_CONNECTION_TIMEOUT", 300)
             )
             
         @app.on_event("shutdown")
