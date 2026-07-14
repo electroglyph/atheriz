@@ -46,6 +46,8 @@ class PutCommand(Command):
             for obj in list(caller.contents):
                 if obj.id == dest[0].id:
                     continue  # don't put container in itself
+                if not obj.at_pre_put(caller, dest[0]):
+                    continue
                 obj.move_to(dest[0])
                 if loc:
                     loc.msg_contents(
@@ -54,6 +56,7 @@ class PutCommand(Command):
                         exclude=caller,
                     )
                 caller.msg(f"You put {obj.name} in {dest[0].name}.")
+                obj.at_put(caller, dest[0])
             return
 
         found_obj = caller.search(obj_name)
@@ -62,6 +65,9 @@ class PutCommand(Command):
             return
 
         for obj in found_obj:
+            if not obj.at_pre_put(caller, dest[0]):
+                caller.msg(f"You can't put {obj.name} in {dest[0].name}.")
+                continue
             obj.move_to(dest[0])
             if loc:
                 loc.msg_contents(
@@ -70,3 +76,4 @@ class PutCommand(Command):
                     exclude=caller,
                 )
             caller.msg(f"You put {obj.name} in {dest[0].name}.")
+            obj.at_put(caller, dest[0])

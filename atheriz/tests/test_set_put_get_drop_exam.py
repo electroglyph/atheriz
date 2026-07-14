@@ -195,6 +195,77 @@ class TestPutCommand:
         # Apple should now be in bag
         assert apple in bag.contents
 
+    def test_at_pre_put_blocks_put(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        bag = Object.create(None, "Bag")
+        bag.is_container = True
+        bag.access = MagicMock(return_value=True)
+        apple = Object.create(None, "Apple")
+        apple.move_to(c)
+        apple.at_pre_put = MagicMock(return_value=False)
+        c.search = MagicMock(side_effect=[[bag], [apple]])
+        args = MagicMock(object="apple", destination=["bag"])
+        PutCommand().run(c, args)
+        assert apple not in bag.contents
+        apple.at_pre_put.assert_called_once_with(c, bag)
+
+    def test_at_put_called_on_success(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        bag = Object.create(None, "Bag")
+        bag.is_container = True
+        bag.access = MagicMock(return_value=True)
+        apple = Object.create(None, "Apple")
+        apple.move_to(c)
+        apple.at_put = MagicMock()
+        c.search = MagicMock(side_effect=[[bag], [apple]])
+        args = MagicMock(object="apple", destination=["bag"])
+        PutCommand().run(c, args)
+        assert apple in bag.contents
+        apple.at_put.assert_called_once_with(c, bag)
+
+    def test_at_pre_put_blocks_all(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        bag = Object.create(None, "Bag")
+        bag.is_container = True
+        bag.access = MagicMock(return_value=True)
+        bag.id = 999
+        a = Object.create(None, "A")
+        b = Object.create(None, "B")
+        a.move_to(c)
+        b.move_to(c)
+        a.at_pre_put = MagicMock(return_value=False)
+        b.at_pre_put = MagicMock(return_value=True)
+        room.msg_contents = MagicMock()
+        c.search = MagicMock(return_value=[bag])
+        # put all in bag
+        args = MagicMock(object="all", destination=["bag"])
+        PutCommand().run(c, args)
+        assert a not in bag.contents
+        assert b in bag.contents
+
+    def test_at_put_called_for_all(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        bag = Object.create(None, "Bag")
+        bag.is_container = True
+        bag.access = MagicMock(return_value=True)
+        bag.id = 999
+        a = Object.create(None, "A")
+        a.move_to(c)
+        a.at_put = MagicMock()
+        room.msg_contents = MagicMock()
+        c.search = MagicMock(return_value=[bag])
+        args = MagicMock(object="all", destination=["bag"])
+        PutCommand().run(c, args)
+        a.at_put.assert_called_once_with(c, bag)
+
 
 # ---------------------------------------------------------------------------
 # GetCommand

@@ -1312,6 +1312,33 @@ class Object(Flags, DbOps, AccessLock):
         pass
 
     @hookable
+    def at_pre_put(self, putter: Object, destination: Object, **kwargs) -> bool:
+        """
+        Called before another object attempts to put this object into a container.
+
+        Args:
+            putter (Object): The object performing the put.
+            destination (Object): The container this object will be placed in.
+            **kwargs: Extra arguments.
+
+        Returns:
+            bool: True if the put is permitted, False otherwise.
+        """
+        return True
+
+    @hookable
+    def at_put(self, putter: Object, destination: Object, **kwargs) -> None:
+        """
+        Called after this object is successfully placed into a container.
+
+        Args:
+            putter (Object): The object that performed the put.
+            destination (Object): The container this object was placed in.
+            **kwargs: Extra arguments.
+        """
+        pass
+
+    @hookable
     def at_pre_say(self, message: str, **kwargs) -> str:
         """
         Called before this object broadcasts a speech message into the room.
