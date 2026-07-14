@@ -141,6 +141,21 @@ class TestAutosaveTick:
             msg = call.args[0]
             assert "Autosave completed" not in msg or "failed" in msg.lower()
 
+    def test_autosave_continues_after_subsystem_failure(self, reset_autosave_started, monkeypatch):
+        monkeypatch.setattr(settings, "TIME_SYSTEM_ENABLED", True)
+        mock_map = MagicMock()
+        mock_node = MagicMock()
+        mock_time = MagicMock()
+        with patch("atheriz.globals.autosave.save_objects", side_effect=RuntimeError("boom")), \
+             patch("atheriz.globals.autosave.get_map_handler", return_value=mock_map), \
+             patch("atheriz.globals.autosave.get_node_handler", return_value=mock_node), \
+             patch("atheriz.globals.autosave.get_server_channel", return_value=None), \
+             patch("atheriz.globals.get.get_game_time", return_value=mock_time):
+            autosave_mod.autosave_tick()
+        mock_map.save.assert_called_once()
+        mock_node.save.assert_called_once()
+        mock_time.save.assert_called_once()
+
 
 class TestStartAutosave:
     def test_disabled_when_minutes_zero(self, reset_autosave_started, monkeypatch):

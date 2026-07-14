@@ -17,24 +17,33 @@ def _interval_seconds() -> float:
 
 
 def autosave_tick() -> None:
-    try:
-        save_objects()
-        get_map_handler().save()
-        get_node_handler().save()
-        if settings.TIME_SYSTEM_ENABLED:
+    failures = []
+    for name, fn in [
+        ("objects", save_objects),
+        ("map", lambda: get_map_handler().save()),
+        ("node", lambda: get_node_handler().save()),
+    ]:
+        try:
+            fn()
+        except Exception:
+            failures.append(name)
+            logger.error(f"Autosave failed for {name}:\n{traceback.format_exc()}")
+    if settings.TIME_SYSTEM_ENABLED:
+        try:
             from atheriz.globals.get import get_game_time
-
             get_game_time().save()
+        except Exception:
+            failures.append("time")
+            logger.error(f"Autosave failed for time:\n{traceback.format_exc()}")
+    if failures:
+        channel = get_server_channel()
+        if channel:
+            channel.msg(f"Autosave failed for: {', '.join(failures)}")
+    else:
         logger.info("Autosave completed.")
         channel = get_server_channel()
         if channel:
             channel.msg("Autosave completed.")
-    except Exception:
-        tb = traceback.format_exc()
-        logger.error(f"Autosave failed:\n{tb}")
-        channel = get_server_channel()
-        if channel:
-            channel.msg(f"Autosave failed:\n{tb}")
 
 
 def start_autosave() -> None:
