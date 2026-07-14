@@ -101,3 +101,97 @@ class TestBaseProtocol:
         from atheriz.network.protocol import BaseProtocol
         with pytest.raises(NotImplementedError):
             BaseProtocol.setup(MagicMock())
+
+
+class TestWebSocketMessageSize:
+    def test_rejects_oversized_message(self, global_test_env):
+        captured_fn = {}
+
+        def fake_ws(path):
+            def decorator(fn):
+                captured_fn[path] = fn
+                return fn
+            return decorator
+
+        app = MagicMock()
+        app.websocket.side_effect = fake_ws
+        with patch("atheriz.settings.WEBSOCKET_ENABLED", True):
+            WebSocketProtocol.setup(app)
+
+        endpoint = captured_fn["/ws"]
+        ws = MagicMock()
+        ws.client.host = "127.0.0.1"
+
+        async def noop(*a, **kw):
+            return None
+
+        ws.accept.side_effect = noop
+        ws.close.side_effect = noop
+
+        async def oversized():
+            return "x" * 100_000
+
+        ws.receive_text.side_effect = oversized
+
+        with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
+             patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}):
+            async def run():
+                await endpoint(ws)
+
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(run())
+            finally:
+                loop.close()
+
+        ws.close.assert_called_once()
+        assert ws.close.call_args[1]["code"] == 1009
+
+    def test_accepts_normal_message(self, global_test_env):
+        captured_fn = {}
+
+        def fake_ws(path):
+            def decorator(fn):
+                captured_fn[path] = fn
+                return fn
+            return decorator
+
+        app = MagicMock()
+        app.websocket.side_effect = fake_ws
+        with patch("atheriz.settings.WEBSOCKET_ENABLED", True):
+            WebSocketProtocol.setup(app)
+
+        endpoint = captured_fn["/ws"]
+        ws = MagicMock()
+        ws.client.host = "127.0.0.1"
+
+        async def noop(*a, **kw):
+            return None
+
+        ws.accept.side_effect = noop
+        call_count = 0
+
+        async def fake_receive():
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                return "hello"
+            from fastapi import WebSocketDisconnect
+            raise WebSocketDisconnect()
+
+        ws.receive_text.side_effect = fake_receive
+
+        with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
+             patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}), \
+             patch("atheriz.network.websocket.connection_manager") as mock_cm:
+            async def run():
+                await endpoint(ws)
+
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(run())
+            finally:
+                loop.close()
+
+            mock_cm.handle_command.assert_called_once()
+            ws.close.assert_not_called()

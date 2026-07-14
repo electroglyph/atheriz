@@ -7,6 +7,7 @@ SECRET_PATH = "secret"
 SERVERNAME = "AtheriZ"
 SERVER_HOSTNAME = "localhost"
 WEBSOCKET_ENABLED = True
+WEBSOCKET_MAX_MESSAGE_SIZE = 65536
 TELNET_ENABLED = True
 TELNET_PORT = 4444
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
