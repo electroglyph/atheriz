@@ -1015,6 +1015,8 @@ class NodeArea:
         for n in nodes:
             nx, ny, nz = n.coord.x, n.coord.y, n.coord.z
             dx, dy, dz = nx - cx, ny - cy, nz - cz
+            if dx == 0 and dy == 0 and dz == 0:
+                continue
             g = gcd(gcd(abs(dx), abs(dy)), abs(dz))
             direction = (dx // g, dy // g, dz // g)
             dist_sq = dx * dx + dy * dy + dz * dz

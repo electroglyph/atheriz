@@ -114,3 +114,18 @@ def test_get_nodes_in_sphere_no_grids():
     area = NodeArea(name="EmptyTest")
     result = area.get_nodes_in_sphere((0, 0, 0), 10)
     assert result == []
+
+
+def test_get_rays_in_sphere_center_no_crash():
+    area = NodeArea(name="CenterRayTest")
+    grid = NodeGrid(z=0)
+    grid.nodes[(0, 0)] = Node(coord=Coord("CenterRayTest", 0, 0, 0))
+    grid.nodes[(1, 0)] = Node(coord=Coord("CenterRayTest", 1, 0, 0))
+    grid.nodes[(0, 1)] = Node(coord=Coord("CenterRayTest", 0, 1, 0))
+    area.add_grid(grid)
+
+    rays = area.get_rays_in_sphere((0, 0, 0), 2, ignore_center=False)
+    flat = [n for ray in rays for n in ray]
+    coords = {n.coord for n in flat}
+    assert Coord("CenterRayTest", 1, 0, 0) in coords
+    assert Coord("CenterRayTest", 0, 1, 0) in coords
