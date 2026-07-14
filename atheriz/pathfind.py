@@ -85,7 +85,8 @@ def astar(
     end_node = PathNode(None, end)
     end_node.g = end_node.h = end_node.f = 0
     open_list = []
-    closed_list = []
+    closed_set = set()
+    open_by_pos = {}
     iterations = 0
     grid = start.grid
     if not grid:
@@ -96,11 +97,11 @@ def astar(
     current_node = start_node
     while True:
         iterations += 1
-        closed_list.append(current_node)
+        closed_set.add(current_node.position.coord)
         if current_node.position == end_node.position:
-            return True, get_path(current_node), [c.position for c in closed_list]
+            return True, get_path(current_node), list(closed_set)
         if iterations > max_iterations:
-            return False, get_path(current_node), [c.position for c in closed_list]
+            return False, get_path(current_node), list(closed_set)
         children = []
         nodes = (
             get_link_nodes(current_node.position)
@@ -111,7 +112,7 @@ def astar(
             node = PathNode(current_node, n)
             children.append(node)
         for child in children:
-            if child in closed_list:
+            if child.position.coord in closed_set:
                 continue
             child.g = current_node.g + 1
             child.h = (
@@ -122,13 +123,21 @@ def astar(
             if child.position.coord.area != end_node.position.coord.area:  # coord = Coord
                 child.h += 50
             child.f = child.g + child.h
-            if child in open_list:
-                idx = open_list.index(child)
-                if child.g < open_list[idx].g:
-                    open_list[idx] = child
+            existing = open_by_pos.get(child.position.coord)
+            if existing:
+                if child.g < existing.g:
+                    existing.g = child.g
+                    existing.f = child.f
+                    existing.parent = child.parent
                     heapq.heapify(open_list)
             else:
                 heapq.heappush(open_list, child)
+                open_by_pos[child.position.coord] = child
         if len(open_list) == 0:
-            return False, get_path(current_node), [c.position for c in closed_list]
+            return False, get_path(current_node), list(closed_set)
         current_node = heapq.heappop(open_list)
+        while current_node.position.coord not in open_by_pos:
+            if not open_list:
+                return False, get_path(current_node), list(closed_set)
+            current_node = heapq.heappop(open_list)
+        del open_by_pos[current_node.position.coord]

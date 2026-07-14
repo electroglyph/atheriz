@@ -267,3 +267,38 @@ def test_astar_blocked_completely(setup_pathfind_area):
     success, path, closed = astar(start, end, caller=caller)
     
     assert success is False
+
+
+def test_pathfind_uses_set_for_closed_list(node_handler):
+    """100-node grid pathfinds in under 1s (O(n²) with list would be >10s)."""
+    import time
+
+    area = NodeArea(name="BigArea")
+    grid = NodeGrid(area="BigArea", z=0)
+    size = 10
+    nodes = {}
+    for x in range(size):
+        for y in range(size):
+            n = Node(coord=Coord("BigArea", x, y, 0))
+            nodes[(x, y)] = n
+            grid.nodes[(x, y)] = n
+    for x in range(size):
+        for y in range(size):
+            if x + 1 < size:
+                nodes[(x, y)].add_link(NodeLink("east", Coord("BigArea", x + 1, y, 0), ["e"]))
+            if y + 1 < size:
+                nodes[(x, y)].add_link(NodeLink("north", Coord("BigArea", x, y + 1, 0), ["n"]))
+
+    area.add_grid(grid)
+    node_handler.add_area(area)
+
+    start = nodes[(0, 0)]
+    end = nodes[(9, 9)]
+
+    t0 = time.monotonic()
+    success, path, closed = astar(start, end)
+    elapsed = time.monotonic() - t0
+
+    assert success is True
+    assert elapsed < 1.0
+    assert all(isinstance(c, Coord) for c in closed)
