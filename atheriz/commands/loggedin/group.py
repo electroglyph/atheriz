@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.objects import get
 from typing import TYPE_CHECKING

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.objects.contents import group_by_name
 from typing import TYPE_CHECKING

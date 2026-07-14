@@ -1,3 +1,4 @@
+from __future__ import annotations
 from random import choice
 from atheriz.objects.nodes import Node, NodeLink, NodeGrid, NodeArea
 from atheriz.globals.get import get_node_handler, get_map_handler, get_async_threadpool

@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.get import get_game_time
 from typing import TYPE_CHECKING

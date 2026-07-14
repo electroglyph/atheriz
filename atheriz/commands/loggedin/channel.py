@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.globals.objects import filter_by, get
 from atheriz.commands.base_cmd import Command
 from atheriz.utils import wrap_xterm256

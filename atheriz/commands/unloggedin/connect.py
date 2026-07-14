@@ -1,3 +1,4 @@
+from __future__ import annotations
 import time
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING

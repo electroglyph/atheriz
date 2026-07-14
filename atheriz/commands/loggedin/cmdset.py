@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.look import LookCommand
 from atheriz.commands.loggedin.none import NoneCommand

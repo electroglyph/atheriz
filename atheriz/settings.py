@@ -50,6 +50,8 @@ GUEST_ENABLED = True
 FUNCPARSER_START_CHAR = "$"
 FUNCPARSER_ESCAPE_CHAR = "\\"
 FUNCPARSER_MAX_NESTING = 20
+# max recursion depth when searching nested containers; guards against stack overflow
+MAX_SEARCH_DEPTH = 100
 CLIENT_DEFAULT_WIDTH = 78
 CLIENT_DEFAULT_HEIGHT = 45
 # print exceptions in-game

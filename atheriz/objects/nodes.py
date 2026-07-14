@@ -461,17 +461,19 @@ class Node(Flags, AccessLock):
     def __str__(self):
         return f"Node: {self.coord}"
 
-    def search(self, query: str) -> list[Any]:
+    def search(self, query: str, recursive: bool = False) -> list[Any]:
         """
         Searches the contents of this node using the given query string.
 
         Args:
             query (str): The search phrase.
+            recursive (bool): If True (default), descend into nested containers.
+                If False, search only this node's direct contents.
 
         Returns:
             list[Any]: A list of objects matching the search query.
         """
-        return search(self, query)
+        return search(self, query, recursive=recursive)
 
     def get_links(self) -> list[NodeLink]:
         """

@@ -516,18 +516,20 @@ class Object(Flags, DbOps, AccessLock):
                 self.internal_cmdset.remove(cmd)
                 channel.remove_listener(self)
 
-    def search(self, query: str) -> list[Object]:
+    def search(self, query: str, recursive: bool = True) -> list[Object]:
         """
         Search for an object by name or alias inside the contents of this object,
         and within the room this object is standing in.
 
         Args:
             query (str): The search string to evaluate.
+            recursive (bool): If True (default), descend into nested containers.
+                If False, search only this object's direct contents.
 
         Returns:
             list[Object]: A list of objects matching the query.
         """
-        return search(self, query)
+        return search(self, query, recursive=recursive)
 
     @hookable
     def at_legend_update(

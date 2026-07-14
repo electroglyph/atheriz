@@ -1,6 +1,8 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable, Any
 
+from atheriz.settings import MAX_SEARCH_DEPTH
+
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
@@ -63,7 +65,37 @@ def filter_contents(obj: Object | Node, l: Callable[[Any], bool]) -> list[Any]:
     return [o for o in obj.contents if l(o)]
 
 
-def search(obj: Object | Node, query: str) -> list[Any]:
+def _gather_contents(obj: Object | Node, visited: set[int] | None = None, depth: int = 0) -> list[Any]:
+    """Recursively gather obj's contents, descending into children with ``is_container``.
+
+    Args:
+        obj (Object | Node): The root object to gather from.
+        visited (set[int] | None): Accumulating set of already-seen object ids.
+        depth (int): Current recursion depth; capped at MAX_SEARCH_DEPTH.
+
+    Returns:
+        list[Any]: Flat list of nested contents, top-level first. May be partial if the
+            depth limit or a RecursionError halted descent.
+    """
+    if visited is None:
+        visited = set()
+    if depth >= MAX_SEARCH_DEPTH:
+        return []
+    result = []
+    for o in obj.contents:
+        if o.id in visited:
+            continue
+        visited.add(o.id)
+        result.append(o)
+        if getattr(o, "is_container", False):
+            try:
+                result.extend(_gather_contents(o, visited, depth + 1))
+            except RecursionError:
+                break
+    return result
+
+
+def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
     """
     search for matching objects
     example queries:
@@ -76,16 +108,21 @@ def search(obj: Object | Node, query: str) -> list[Any]:
 
     Args:
         query (str): search query
+        recursive (bool): If True (default), descend into nested containers
+            (children with ``is_container``). If False, search only ``obj``'s
+            direct contents.
     """
     query = query.lower()
     if query == "me" or query == obj.name.lower():
         return [obj]
+    # ponytail: computed once so the #id branch and the match loop share one candidate list
+    objs = _gather_contents(obj) if recursive else obj.contents
     if query.startswith("#"):
         try:
             id = int(query[1:])
         except ValueError:
             return []
-        for o in obj.contents:
+        for o in objs:
             if o.id == id:
                 return [o]
         return []
@@ -137,7 +174,6 @@ def search(obj: Object | Node, query: str) -> list[Any]:
         else:
             required.append(split[x])
     matches = {}
-    objs = obj.contents
     for x in range(len(objs)):
         found = False
         for s in required:

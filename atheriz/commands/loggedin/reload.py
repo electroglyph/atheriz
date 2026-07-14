@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.reloader import reload_game_logic
 from atheriz.logger import logger

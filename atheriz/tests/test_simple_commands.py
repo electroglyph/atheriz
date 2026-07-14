@@ -88,7 +88,7 @@ class TestSayCommand:
         args = MagicMock(text=["hello", "world"])
         c.at_say = MagicMock()
         SayCommand().run(c, args)
-        c.at_say.assert_called_once_with("hello world")
+        c.at_say.assert_called_once_with("hello world", msg_self=True)
 
     def test_empty_text_shows_help(self):
         c = _make_caller()

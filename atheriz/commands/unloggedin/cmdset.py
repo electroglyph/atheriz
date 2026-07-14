@@ -1,3 +1,4 @@
+from __future__ import annotations
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.unloggedin.connect import ConnectCommand
 from atheriz.commands.unloggedin.guest import GuestCommand
