@@ -762,6 +762,62 @@ class TestSaveLoad:
             assert gt.ticks == 0
             assert gt.alarms == {}
 
+    def test_save_atomic_no_tmp_left_behind(self):
+        """Atomic save should not leave a .tmp file after completion."""
+        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
+            gt = _make_gt(42)
+            gt.save()
+            time_path = TEST_SAVE_DIR / "time"
+            tmp_path = Path(str(time_path) + ".tmp")
+            assert time_path.exists()
+            assert not tmp_path.exists()
+
+    def test_save_atomic_file_contains_valid_json(self):
+        """Saved file must be valid JSON."""
+        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
+            gt = _make_gt(100)
+            gt.alarms = {("8", "0"): [(5, False, None)]}
+            gt.save()
+            time_path = TEST_SAVE_DIR / "time"
+            data = json.loads(time_path.read_text())
+            assert data["ticks"] == 100
+            assert "('8', '0')" in data["alarms"]
+
+    def test_load_corrupt_json_resets_to_defaults(self):
+        """Corrupt JSON in the time file should reset to defaults, not crash."""
+        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
+            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+            time_path = TEST_SAVE_DIR / "time"
+            time_path.write_text("not valid json {{{")
+            with patch.object(GameTime, "load"):
+                gt = GameTime()
+            gt.load()
+            assert gt.ticks == 0
+            assert gt.alarms == {}
+
+    def test_load_empty_file_resets_to_defaults(self):
+        """Empty file should reset to defaults."""
+        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
+            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+            time_path = TEST_SAVE_DIR / "time"
+            time_path.write_text("")
+            with patch.object(GameTime, "load"):
+                gt = GameTime()
+            gt.load()
+            assert gt.ticks == 0
+            assert gt.alarms == {}
+
+    def test_load_missing_ticks_key_defaults_to_zero(self):
+        """JSON missing 'ticks' key should default to 0."""
+        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
+            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+            time_path = TEST_SAVE_DIR / "time"
+            time_path.write_text(json.dumps({"alarms": {}}))
+            with patch.object(GameTime, "load"):
+                gt = GameTime()
+            gt.load()
+            assert gt.ticks == 0
+
 
 # ========================== Edge cases ======================================
 

@@ -7,6 +7,8 @@ from atheriz.globals.get import get_async_ticker, get_async_threadpool
 from atheriz.globals.objects import get, filter_by
 import json
 import ast
+import os
+from atheriz.logger import logger
 from atheriz.objects.base_obj import Object
 
 
@@ -15,8 +17,10 @@ class GameTime:
         path = Path(settings.SAVE_PATH) / "time"
         path.parent.mkdir(parents=True, exist_ok=True)
         alarms_data = {str(k): v for k, v in self.alarms.items()}
-        with open(path, "w") as f:
+        tmp = str(path) + ".tmp"
+        with open(tmp, "w") as f:
             json.dump({"ticks": self.ticks, "alarms": alarms_data}, f)
+        os.replace(tmp, path)
 
     def load(self) -> None:
         path = Path(settings.SAVE_PATH) / "time"
@@ -24,18 +28,24 @@ class GameTime:
             self.ticks = 0
             self.alarms: dict[tuple[str, str], list[tuple[int, bool, Any]]] = {}
             return
-        with open(path, "r") as f:
-            data = json.load(f)
-            self.ticks = data["ticks"]
+        try:
+            with open(path, "r") as f:
+                data = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning(f"Corrupt time file, resetting to defaults: {e}")
+            self.ticks = 0
             self.alarms = {}
-            for k, v in data["alarms"].items():
-                try:
-                    key = ast.literal_eval(k)
-                    if isinstance(key, tuple) and len(key) == 2:
-                        self.alarms[key] = v
-                except (ValueError, SyntaxError):
-                    print(f"Error parsing alarm key: {k}")
-                    pass
+            return
+        self.ticks = data.get("ticks", 0)
+        self.alarms = {}
+        for k, v in data.get("alarms", {}).items():
+            try:
+                key = ast.literal_eval(k)
+                if isinstance(key, tuple) and len(key) == 2:
+                    self.alarms[key] = v
+            except (ValueError, SyntaxError):
+                logger.warning(f"Error parsing alarm key: {k}")
+                pass
 
     def __init__(self) -> None:
         self.lock = RLock()
