@@ -65,6 +65,8 @@ def do_reload():
         import atheriz.server_events as server_events
     server_events.at_server_reload()
     get_async_ticker().clear()
+    if settings.TIME_SYSTEM_ENABLED:
+        get_game_time().start()
     if settings.AUTOSAVE_ON_RELOAD:
         save_objects()
         get_map_handler().save()

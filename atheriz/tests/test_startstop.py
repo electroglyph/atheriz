@@ -438,6 +438,23 @@ class TestDoReload:
             ss.do_reload()
         mock_start.assert_called_once()
 
+    def test_reload_re_registers_time_ticker(self, reset_singletons):
+        mock_gt = MagicMock()
+        ticker = MagicMock()
+        with patch.object(ss, "get_server_channel", return_value=None), \
+             patch.object(ss, "save_objects"), \
+             patch.object(ss, "start_autosave"), \
+             patch("atheriz.server_events"), \
+             patch.object(ss, "get_async_ticker", return_value=ticker), \
+             patch.object(ss, "get_map_handler", return_value=MagicMock()), \
+             patch.object(ss, "get_node_handler", return_value=MagicMock()), \
+             patch.object(ss, "get_game_time", return_value=mock_gt), \
+             patch.object(ss.settings, "TIME_SYSTEM_ENABLED", True), \
+             patch.object(ss.settings, "AUTOSAVE_ON_RELOAD", False):
+            ss.do_reload()
+        ticker.clear.assert_called_once()
+        mock_gt.start.assert_called_once()
+
 
 class TestLifecycleOrder:
     def test_shutdown_runs_at_server_stop_before_db_close(self, reset_singletons):
