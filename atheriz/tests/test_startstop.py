@@ -246,8 +246,8 @@ class TestDoShutdown:
         mock_stop_auto.assert_called_once()
         ticker.stop.assert_called_once()
         threadpool.stop.assert_called_once()
-        # INTENT: threadpool.stop is called with False (no wait)
-        threadpool.stop.assert_called_with(False)
+        # INTENT: threadpool.stop waits for threads to drain with 10s timeout
+        threadpool.stop.assert_called_with(True, 10)
 
     def test_msg_all_broadcasts_to_all(self, reset_singletons):
         with patch.object(ss, "get_server_channel", return_value=None), \
@@ -479,3 +479,27 @@ class TestLifecycleOrder:
         assert "server_stop" in order
         assert "db_close" in order
         assert order.index("server_stop") < order.index("db_close")
+
+    def test_shutdown_saves_before_stopping_threads(self, reset_singletons):
+        # INTENT: all saves must happen after threadpool is stopped so no
+        # async task can mutate objects between save and db.close
+        order = []
+        threadpool = MagicMock()
+        threadpool.stop.side_effect = lambda *a, **kw: order.append("tp_stop")
+        with patch.object(ss, "get_server_channel", return_value=None), \
+             patch.object(ss, "save_objects", side_effect=lambda: order.append("save_obj")), \
+             patch.object(ss, "stop_autosave"), \
+             patch("atheriz.server_events"), \
+             patch.object(ss, "get_map_handler", return_value=MagicMock()), \
+             patch.object(ss, "get_node_handler", return_value=MagicMock()), \
+             patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
+             patch.object(ss, "get_async_threadpool", return_value=threadpool), \
+             patch.object(ss, "get_game_time", return_value=MagicMock()), \
+             patch.object(ss, "get_database", return_value=MagicMock()), \
+             patch.object(ss, "msg_all"), \
+             patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
+             patch.object(ss.settings, "AUTOSAVE_ON_SHUTDOWN", True):
+            ss.do_shutdown()
+        assert "tp_stop" in order
+        assert "save_obj" in order
+        assert order.index("tp_stop") < order.index("save_obj")

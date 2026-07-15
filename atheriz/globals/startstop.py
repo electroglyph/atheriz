@@ -38,13 +38,13 @@ def do_shutdown():
     except ImportError:
         import atheriz.server_events as server_events
     server_events.at_server_stop()
+    stop_autosave()
+    get_async_ticker().stop()
+    get_async_threadpool().stop(True, 10)
     if settings.AUTOSAVE_ON_SHUTDOWN:
         save_objects()
         get_map_handler().save()
         get_node_handler().save()
-    stop_autosave()
-    get_async_ticker().stop()
-    get_async_threadpool().stop(False)
     msg_all("Server is shutting down NOW!")
     logger.info("Shutdown sequence completed.")
     if settings.TIME_SYSTEM_ENABLED:

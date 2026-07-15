@@ -130,6 +130,23 @@ class TestAsyncThreadPool:
         assert result_data["test_async"] == 456
         atp.stop()
 
+    def test_stop_timeout_on_stuck_worker(self):
+        """stop(wait=True, timeout=N) should return within ~N seconds even if a worker is stuck."""
+        atp = AsyncThreadPool(max_threads=2)
+        blocker = threading.Event()
+
+        def stuck_task():
+            blocker.wait(timeout=30)  # blocks until we release it
+
+        atp.add_task(stuck_task)
+
+        start = time.time()
+        atp.stop(wait=True, timeout=1)
+        elapsed = time.time() - start
+
+        assert elapsed < 3, f"stop() took {elapsed:.1f}s, expected <3s with timeout=1"
+        blocker.set()  # release the stuck thread so it can exit cleanly
+
 
 class TestAsyncTicker:
     def test_ticker(self):

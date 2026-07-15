@@ -85,16 +85,22 @@ class AsyncThreadPool:
                             pass
                     logger.error(f"{tb}")
 
-    def stop(self, wait=True):
+    def stop(self, wait=True, timeout=10):
         """
         Stop AsyncThreadPool. AsyncTicker should be stopped first.
         Args:
             wait (bool, optional): wait for async tasks to finish. Defaults to True.
+            timeout (float, optional): seconds to wait for worker threads. Defaults to 10.
         """
         print("at AsyncThreadPool.stop() ...")
         self.threads[0].stop(wait)
         for _ in range(self.max_threads):
             self.task_queue.put(None)
+        if wait:
+            for t in self.threads[1:]:
+                t.join(timeout=timeout)
+                if t.is_alive():
+                    logger.warning(f"Thread {t.name} did not stop within {timeout}s")
 
     def add_task(self, func, *args, **kwargs):
         """
