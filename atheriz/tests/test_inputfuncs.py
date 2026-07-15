@@ -88,8 +88,50 @@ class TestTermSize:
         # Width not updated
         assert conn.session.term_width == 80
 
+    def test_rejects_non_int_types(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.term_width = 80
+        conn.session.term_height = 45
+        inp.term_size(conn, ["hello", [1, 2, 3]], {})
+        assert conn.session.term_width == 80
+        assert conn.session.term_height == 45
 
-class TestMapSize:
+    def test_rejects_zero(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.term_width = 80
+        conn.session.term_height = 45
+        inp.term_size(conn, [0, 0], {})
+        assert conn.session.term_width == 80
+        assert conn.session.term_height == 45
+
+    def test_rejects_negative(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.term_width = 80
+        conn.session.term_height = 45
+        inp.term_size(conn, [-1, 80], {})
+        assert conn.session.term_width == 80
+        assert conn.session.term_height == 45
+
+    def test_rejects_over_1000(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.term_width = 80
+        conn.session.term_height = 45
+        inp.term_size(conn, [1001, 50], {})
+        assert conn.session.term_width == 80
+        assert conn.session.term_height == 45
+
+    def test_accepts_valid(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.term_width = 0
+        conn.session.term_height = 0
+        inp.term_size(conn, [24, 80], {})
+        assert conn.session.term_width == 24
+        assert conn.session.term_height == 80
     def test_sets_session_dims(self, global_test_env):
         inp = InputFuncs()
         conn = MagicMock()
@@ -106,6 +148,51 @@ class TestMapSize:
         inp.map_size(conn, [], {})
         # Width not updated
         assert conn.session.map_width == 5
+
+    def test_rejects_non_int_types(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.map_width = 5
+        conn.session.map_height = 5
+        inp.map_size(conn, ["bad", None], {})
+        assert conn.session.map_width == 5
+        assert conn.session.map_height == 5
+
+    def test_rejects_zero(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.map_width = 5
+        conn.session.map_height = 5
+        inp.map_size(conn, [0, 0], {})
+        assert conn.session.map_width == 5
+        assert conn.session.map_height == 5
+
+    def test_rejects_negative(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.map_width = 5
+        conn.session.map_height = 5
+        inp.map_size(conn, [-1, 20], {})
+        assert conn.session.map_width == 5
+        assert conn.session.map_height == 5
+
+    def test_rejects_over_1000(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.map_width = 5
+        conn.session.map_height = 5
+        inp.map_size(conn, [50, 1001], {})
+        assert conn.session.map_width == 5
+        assert conn.session.map_height == 5
+
+    def test_accepts_valid(self, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        conn.session.map_width = 0
+        conn.session.map_height = 0
+        inp.map_size(conn, [30, 20], {})
+        assert conn.session.map_width == 30
+        assert conn.session.map_height == 20
 
 
 class TestScreenreader:

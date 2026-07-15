@@ -201,8 +201,13 @@ class InputFuncs:
             kwargs (dict): Extra Keyword arguments.
         """
         if len(args) >= 2:
-            connection.session.term_width = args[0]
-            connection.session.term_height = args[1]
+            w, h = args[0], args[1]
+            if not (isinstance(w, int) and isinstance(h, int)):
+                return
+            if not (0 < w <= 1000 and 0 < h <= 1000):
+                return
+            connection.session.term_width = w
+            connection.session.term_height = h
             # connection.send_text(f"Terminal size set to {args[0]}x{args[1]}\r\n")
 
     @inputfunc()
@@ -216,8 +221,13 @@ class InputFuncs:
             kwargs (dict): Extra Keyword arguments.
         """
         if len(args) >= 2:
-            connection.session.map_width = args[0]
-            connection.session.map_height = args[1]
+            w, h = args[0], args[1]
+            if not (isinstance(w, int) and isinstance(h, int)):
+                return
+            if not (0 < w <= 1000 and 0 < h <= 1000):
+                return
+            connection.session.map_width = w
+            connection.session.map_height = h
 
     @inputfunc()
     def screenreader(self, connection: Connection, args: list, kwargs: dict) -> None:
