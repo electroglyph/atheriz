@@ -11,6 +11,14 @@ from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 import atheriz.settings as settings
 import time
 
+
+def _clamp_naws(rows: int, cols: int) -> tuple[int, int]:
+    """Clamp terminal dimensions to reasonable bounds."""
+    return (
+        max(settings.TELNET_NAWS_MIN_ROWS, min(rows, settings.TELNET_NAWS_MAX_ROWS)),
+        max(settings.TELNET_NAWS_MIN_COLS, min(cols, settings.TELNET_NAWS_MAX_COLS)),
+    )
+
 class TelnetConnection(BaseConnection):
     """
     Telnet-specific implementation of the BaseConnection.
@@ -90,6 +98,7 @@ class TelnetProtocol(BaseProtocol):
                 
                 def on_naws(rows, cols):
                     if connection.session:
+                        rows, cols = _clamp_naws(rows, cols)
                         connection.session.term_width = cols
                         connection.session.term_height = rows
                         # try:

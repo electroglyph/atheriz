@@ -5,7 +5,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from atheriz.network.telnet import TelnetConnection, TelnetProtocol
+from atheriz.network.telnet import TelnetConnection, TelnetProtocol, _clamp_naws
+import atheriz.settings as settings
 
 
 def _make_writer(host="1.2.3.4"):
@@ -98,3 +99,31 @@ class TestTelnetProtocolSetup:
         events = [c.args[0] for c in app.on_event.call_args_list]
         assert "startup" in events
         assert "shutdown" in events
+
+
+class TestClampNaws:
+    def test_normal_values_pass_through(self):
+        assert _clamp_naws(24, 80) == (24, 80)
+
+    def test_clamps_respect_settings(self):
+        """Changing settings values changes clamping behavior."""
+        original_min_cols = settings.TELNET_NAWS_MIN_COLS
+        original_max_cols = settings.TELNET_NAWS_MAX_COLS
+        original_min_rows = settings.TELNET_NAWS_MIN_ROWS
+        original_max_rows = settings.TELNET_NAWS_MAX_ROWS
+        try:
+            settings.TELNET_NAWS_MIN_COLS = 40
+            settings.TELNET_NAWS_MAX_COLS = 200
+            settings.TELNET_NAWS_MIN_ROWS = 10
+            settings.TELNET_NAWS_MAX_ROWS = 50
+
+            assert _clamp_naws(24, 80) == (24, 80)
+            assert _clamp_naws(1, 10) == (10, 40)
+            assert _clamp_naws(999, 999) == (50, 200)
+            assert _clamp_naws(10, 40) == (10, 40)
+            assert _clamp_naws(50, 200) == (50, 200)
+        finally:
+            settings.TELNET_NAWS_MIN_COLS = original_min_cols
+            settings.TELNET_NAWS_MAX_COLS = original_max_cols
+            settings.TELNET_NAWS_MIN_ROWS = original_min_rows
+            settings.TELNET_NAWS_MAX_ROWS = original_max_rows
