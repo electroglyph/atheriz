@@ -23,9 +23,9 @@ def reset_salt():
     return salt_module
 
 def test_salt_not_created_in_non_game_folder(temp_cwd, reset_salt):
-    """Verify salt.txt is not created in a non-game folder."""
-    salt = reset_salt.get_salt()
-    assert salt is not None
+    """Verify get_salt raises in a non-game folder instead of silently using a throwaway salt."""
+    with pytest.raises(RuntimeError, match="Cannot determine salt"):
+        reset_salt.get_salt()
     assert not (temp_cwd / "secret").exists(), "Secret folder should NOT be created in non-game folder"
 
 def test_salt_created_in_game_folder(temp_cwd, reset_salt):
