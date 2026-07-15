@@ -3,6 +3,32 @@ from typing import TYPE_CHECKING, Callable, Any
 
 from atheriz.settings import MAX_SEARCH_DEPTH
 
+_SINGULAR_WORDS = frozenset({
+    # -ss words
+    "glass", "grass", "brass", "class", "mass", "bass", "pass", "lass", "crass",
+    # -us words
+    "bus", "gas", "plus", "pus", "thus", "virus", "campus", "bonus", "census",
+    "octopus", "walrus", "compass", "cactus", "genus", "genius", "ignoramus",
+    "apparatus", "corpus", "hippopotamus", "platypus", "rhinoceros", "syllabus",
+    "abacus", "focus", "lotus", "fungus", "nucleus", "radius", "stimulus",
+    "torso", "fiasco", "grotto", "gusto", "taco", "photo", "piano", "solo",
+    "soprano", "alto", "pro", "zero", "hero", "ego", "cargo",
+    # -is words
+    "axis", "oasis", "iris", "basis", "crisis", "analysis", "thesis", "synopsis",
+    "ellipsis", "hypothesis", "parenthesis", "synthesis", "diagnosis", "prognosis",
+    # -os words
+    "chaos", "cosmos", "kudos", "pathos", "ethos",
+    # -as words
+    "atlas", "alias", "canvas", "cannabis", "ibis", "karas", "asbestos",
+    # -ns/-rs/-other
+    "lens", "biceps", "triceps", "series", "species", "news",
+    "measles", "mumps", "rabies", "diabetes",
+    "economics", "politics", "physics", "mathematics", "athletics", "gymnastics",
+    "barracks", "chassis", "precis",
+    # -es singular
+    "series", "species",
+})
+
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
@@ -150,7 +176,9 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
     for x in range(start, end, 1):
         # try to detect sane plurals, doesn't include stuff like ellipses -> ellipsis, or criteria -> criterion, or geese -> goose, etc.
         # if you wanna match on those, add em to yer aliases
-        if len(split[x]) > 3 and split[x].endswith("ies"):  # cities -> city
+        if split[x] in _SINGULAR_WORDS:
+            required.append(split[x])
+        elif len(split[x]) > 3 and split[x].endswith("ies"):  # cities -> city
             if count == 1:
                 count = 0  # 0 is placeholder value for 'all'
             required.append(split[x][:-3] + "y")

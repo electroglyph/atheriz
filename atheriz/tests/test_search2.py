@@ -360,3 +360,51 @@ def test_search_by_index_with_sparse_positions():
     results = search(container, "sword 1")
     assert len(results) == 1
     assert results[0] == objs[1]
+
+
+def test_singular_words_not_treated_as_plurals():
+    """Words like 'bus', 'glass' should not have their 's' stripped."""
+    container = Object()
+    container.id = 500
+    container.name = "station"
+    add_object(container)
+
+    bus = Object()
+    bus.id = 501
+    bus.name = "bus"
+    add_object(bus)
+    container.add_object(bus)
+
+    glass = Object()
+    glass.id = 502
+    glass.name = "glass"
+    add_object(glass)
+    container.add_object(glass)
+
+    photo1 = Object()
+    photo1.id = 503
+    photo1.name = "photo"
+    add_object(photo1)
+    container.add_object(photo1)
+
+    photo2 = Object()
+    photo2.id = 504
+    photo2.name = "photo"
+    add_object(photo2)
+    container.add_object(photo2)
+
+    # "bus" should match the bus, not strip 's' and look for "bu"
+    results = search(container, "bus")
+    assert len(results) == 1
+    assert results[0] == bus
+
+    # "glass" should match the glass, not strip 's' and look for "glas"
+    results = search(container, "glass")
+    assert len(results) == 1
+    assert results[0] == glass
+
+    # "photos" should still be treated as plural, returning all photos
+    results = search(container, "photos")
+    assert len(results) == 2
+    assert photo1 in results
+    assert photo2 in results
