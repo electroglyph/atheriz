@@ -92,7 +92,8 @@ def test_database_close_no_toctou():
         try:
             for _ in range(50):
                 db = database_setup.get_database()
-                db.connection.execute("SELECT 1")
+                with db.lock:
+                    db.connection.execute("SELECT 1")
         except Exception as e:
             errors.append(e)
 
