@@ -471,7 +471,7 @@ class MapHandler:
         db = get_database()
         
         with self.lock:
-            snapshot = list(self.data.items())
+            snapshot = [(k, copy.deepcopy(v)) for k, v in self.data.items()]
         
         with db.lock:
             cursor = db.connection.cursor()

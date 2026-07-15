@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import _thread
+import threading
 from unittest.mock import MagicMock, patch
 
 import pytest
+import dill
 
 import atheriz.settings as settings
 from atheriz.globals.map import LegendEntry, MapHandler, MapInfo
@@ -762,3 +764,46 @@ class TestMapHandlerRemoveListener:
         listener = make_object("a")
         listener.location = loc
         handler.remove_listener(listener)  # no mapinfo at that location
+
+
+def test_map_save_snapshot_independence():
+    """5.5: save() shallow-copies map data refs — mutations during save leak into saved data."""
+    from atheriz.database_setup import get_database
+
+    handler = MapHandler()
+    mi = MapInfo(name="SnapTest")
+    mi.pre_grid[(0, 0)] = "#"
+    handler.set_mapinfo("SnapTest", 0, mi)
+
+    real_dumps = dill.dumps
+    serialize_event = threading.Event()
+    modify_event = threading.Event()
+
+    def slow_dumps(obj, *args, **kwargs):
+        if isinstance(obj, MapInfo) and obj.name == "SnapTest":
+            serialize_event.set()
+            modify_event.wait(timeout=5)
+        return real_dumps(obj, *args, **kwargs)
+
+    def mutate_mapinfo():
+        serialize_event.wait(timeout=5)
+        mi.pre_grid[(1, 1)] = "."
+        modify_event.set()
+
+    with patch("atheriz.globals.map.dill.dumps", side_effect=slow_dumps):
+        t = threading.Thread(target=mutate_mapinfo)
+        t.start()
+        handler.save()
+        t.join(timeout=5)
+
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT data FROM mapdata WHERE area = ?", ("SnapTest",))
+        row = cursor.fetchone()
+        assert row is not None, "map data was never saved"
+        deserialized = dill.loads(row[0])
+
+    assert len(deserialized.pre_grid) == 1, (
+        "saved map should reflect pre-mutation state — deep copy snapshot is independent"
+    )
