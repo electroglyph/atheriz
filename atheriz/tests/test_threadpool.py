@@ -230,7 +230,32 @@ class TestAsyncTicker:
             c1_after, c2_after = counter1, counter2
             
         atp.stop()
-        
+
         assert c1_after <= c1 + 1
         assert c2_after <= c2 + 1
+
+
+class TestAsyncThread:
+    def test_stop_uses_event_not_bool(self):
+        """Verify AsyncThread uses threading.Event for wait signaling."""
+        from atheriz.globals.asyncthreadpool import AsyncThread
+        atp = AsyncThreadPool(max_threads=2)
+        t = atp.threads[0]
+        assert isinstance(t._wait_event, threading.Event)
+
+    def test_stop_wait_true_blocks(self):
+        """stop(wait=True) should set the event so run() waits for pending tasks."""
+        from atheriz.globals.asyncthreadpool import AsyncThread
+        atp = AsyncThreadPool(max_threads=2)
+        t = atp.threads[0]
+        t.stop(wait=True)
+        assert t._wait_event.is_set()
+
+    def test_stop_wait_false_does_not_set(self):
+        """stop(wait=False) should not set the wait event."""
+        from atheriz.globals.asyncthreadpool import AsyncThread
+        atp = AsyncThreadPool(max_threads=2)
+        t = atp.threads[0]
+        t.stop(wait=False)
+        assert not t._wait_event.is_set()
 

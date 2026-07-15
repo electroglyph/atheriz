@@ -1,7 +1,7 @@
 import asyncio
 from asyncio import AbstractEventLoop
 import os
-from threading import Thread, RLock
+from threading import Thread, RLock, Event
 from typing import Optional
 import traceback
 import queue
@@ -16,23 +16,21 @@ class AsyncThread(Thread):
         self.stop_event = asyncio.Event()
         super().__init__(None, daemon=True)
         self.name = f"AsyncThread{num}"
-        self.wait = False
+        self._wait_event = Event()
 
     def run(self):
         self.loop.run_until_complete(self.stop_event.wait())
-        # print(f"thread is stopping: {self.name}")
-        if self.wait:
+        if self._wait_event.is_set():
             pending = asyncio.all_tasks(self.loop)
             if pending:
                 self.loop.run_until_complete(asyncio.gather(*pending))
-        # self.loop.stop()
-        # self.loop.close()
 
     async def do_stop(self):
-        self.stop_event.set()  # gotta set this event from inside this thread
+        self.stop_event.set()
 
-    def stop(self, wait):  # True = wait for shit to finish
-        self.wait = wait
+    def stop(self, wait):
+        if wait:
+            self._wait_event.set()
         asyncio.run_coroutine_threadsafe(self.do_stop(), self.loop)
 
 
