@@ -629,3 +629,33 @@ def test_2x2_room_grid_ensure_links(env):
     r2_links = {l.name: l.coord for l in room2.get_links()}
     assert "west" in r2_links
     assert "south" in r2_links
+
+
+def test_build_multi_direction_does_not_teleport(env):
+    """Building in multiple directions should NOT move the caller through each node."""
+    nh, mh, area, grid, start_node, caller = env
+    cmd = BuildCommand()
+    cmd.run(caller, make_args(n=True, e=True, s=True, room=True))
+
+    north_node = nh.get_node(Coord("TestArea", 0, 1, 0))
+    east_node = nh.get_node(Coord("TestArea", 1, 0, 0))
+    south_node = nh.get_node(Coord("TestArea", 0, -1, 0))
+    assert north_node is not None
+    assert east_node is not None
+    assert south_node is not None
+
+    # Caller should NOT have moved — multi-direction build stays in place
+    assert caller.location == start_node
+    assert len(caller._moved_to) == 0
+
+
+def test_build_single_direction_moves_caller(env):
+    """Building in a single direction should move the caller to the new node."""
+    nh, mh, area, grid, start_node, caller = env
+    cmd = BuildCommand()
+    cmd.run(caller, make_args(n=True, room=True))
+
+    new_node = nh.get_node(Coord("TestArea", 0, 1, 0))
+    assert new_node is not None
+    assert caller.location == new_node
+    assert len(caller._moved_to) == 1

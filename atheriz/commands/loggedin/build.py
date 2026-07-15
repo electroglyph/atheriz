@@ -286,6 +286,8 @@ class BuildCommand(Command):
             elif args.path:
                 mi.update_grid((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
                 mi.place_walls((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
+
+        if len(targets) == 1:
             caller.move_to(new_node)
 
     def _get_alias(self, name):
