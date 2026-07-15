@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
 from atheriz.globals.node import NodeHandler
-from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand, FollowScript
+from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand, FollowScript, UnfollowCommand
 
 def setup_test_nodes():
     handler = NodeHandler()
@@ -137,3 +137,47 @@ def test_cant_follow_self_or_nonexistent():
     follower.msg.assert_called_with("You can't follow yourself!")
     assert follower.following is None
     assert len(follower.followers) == 0
+
+
+def test_unfollow_command():
+    node1, _ = setup_test_nodes()
+
+    leader = Object.create(None, "Leader", is_pc=True)
+    leader.location = node1
+    node1.add_object(leader)
+
+    follower = Object.create(None, "Follower", is_pc=True)
+    follower.location = node1
+    node1.add_object(follower)
+
+    follower.msg = MagicMock()
+    leader.msg = MagicMock()
+
+    # Set up follow relationship
+    cmd = FollowCommand()
+    cmd.run(follower, MagicMock(target="Leader"))
+    assert follower.following == leader.id
+    assert follower.id in leader.followers
+
+    # Unfollow
+    unfollow = UnfollowCommand()
+    unfollow.run(follower, None)
+
+    assert follower.following is None
+    assert follower.id not in leader.followers
+    follower.msg.assert_called_with("You stop following.")
+
+
+def test_unfollow_not_following():
+    node1, _ = setup_test_nodes()
+
+    follower = Object.create(None, "Follower", is_pc=True)
+    follower.location = node1
+    node1.add_object(follower)
+
+    follower.msg = MagicMock()
+
+    unfollow = UnfollowCommand()
+    unfollow.run(follower, None)
+
+    follower.msg.assert_called_with("You aren't following anyone.")

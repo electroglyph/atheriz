@@ -127,3 +127,24 @@ class NoFollowCommand(Command):
                     script.delete()
         else:
             caller.msg("You will now allow others to follow you.")
+
+
+class UnfollowCommand(Command):
+    key = "unfollow"
+    desc = "Stop following whoever you are following."
+    category = "General"
+    use_parser = False
+
+    # pyrefly: ignore
+    def run(self, caller: Object, args):
+        if caller.following is None:
+            caller.msg("You aren't following anyone.")
+            return
+        leader = get(caller.following)
+        if leader:
+            with leader[0].lock:
+                leader[0].followers.discard(caller.id)
+            if caller.access(leader[0], "view"):
+                leader[0].msg(f"{caller.get_display_name(leader[0])} is no longer following you.")
+        caller.following = None
+        caller.msg("You stop following.")
