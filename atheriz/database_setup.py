@@ -18,9 +18,9 @@ class Database:
         self.connection = connection
 
     def close(self):
-        with self.lock:
-            self.connection.close()
         with _INIT_LOCK:
+            with self.lock:
+                self.connection.close()
             global _DATABASE
             _DATABASE = None
 

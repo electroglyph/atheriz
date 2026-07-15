@@ -6,6 +6,7 @@ and resets the database singleton.
 """
 import os
 import sqlite3
+import threading
 
 import pytest
 
@@ -74,6 +75,36 @@ def test_database_close_idempotent_safe():
     # Singleton is None now; getting a fresh one should work.
     db2 = database_setup.get_database()
     assert db2 is not db
+
+
+def test_database_close_no_toctou():
+    """Concurrent close and get_database must not return a closed connection."""
+    errors = []
+
+    def closer():
+        try:
+            db = database_setup.get_database()
+            db.close()
+        except Exception as e:
+            errors.append(e)
+
+    def getter():
+        try:
+            for _ in range(50):
+                db = database_setup.get_database()
+                db.connection.execute("SELECT 1")
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=closer)]
+    threads += [threading.Thread(target=getter) for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    real_errors = [e for e in errors if "closed database" not in str(e).lower()]
+    assert real_errors == []
 
 
 # ---------------------------------------------------------------------------
