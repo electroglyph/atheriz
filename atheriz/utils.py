@@ -192,6 +192,19 @@ def strip_ansi(input: str) -> str:
     return _COLOR_REGEX.sub("", input)
 
 
+_TERMINAL_ESCAPE = re.compile(
+    r"\x1b\[[0-9;]*[A-Za-z]"   # CSI sequences (cursor, erase, SGR, etc.)
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC sequences
+    r"|\x1b[^[A-Za-z0-9]"      # other simple escapes
+    r"|\x00"                    # null bytes
+)
+
+
+def strip_terminal_escapes(input: str) -> str:
+    """Strip all terminal escape sequences and null bytes from input."""
+    return _TERMINAL_ESCAPE.sub("", input)
+
+
 def dice_roll(rolls: int, faces: int):
     result = 0
     for _ in range(rolls):

@@ -297,3 +297,60 @@ class TestThreadSafety:
         # All IDs unique
         assert len(ids) == len(set(ids))
         assert len(ids) == 200
+
+
+class TestDispatchStripsEscapes:
+    def test_strips_when_enabled(self, manager):
+        conn = FakeConnection()
+        received = []
+        manager.register_handler("text", lambda c, a, k: received.extend(a))
+
+        with patch.object(mgr_module, "settings") as mock_settings:
+            mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
+            manager.dispatch(conn, "text", ["look\x1b[31m around\x1b[0m"], {})
+
+        assert received == ["look around"]
+
+    def test_preserves_when_disabled(self, manager):
+        conn = FakeConnection()
+        received = []
+        manager.register_handler("text", lambda c, a, k: received.extend(a))
+
+        with patch.object(mgr_module, "settings") as mock_settings:
+            mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = False
+            manager.dispatch(conn, "text", ["look\x1b[31m around\x1b[0m"], {})
+
+        assert received == ["look\x1b[31m around\x1b[0m"]
+
+    def test_strips_csi_cursor_sequences(self, manager):
+        conn = FakeConnection()
+        received = []
+        manager.register_handler("text", lambda c, a, k: received.extend(a))
+
+        with patch.object(mgr_module, "settings") as mock_settings:
+            mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
+            manager.dispatch(conn, "text", ["\x1b[2Jlook"], {})
+
+        assert received == ["look"]
+
+    def test_strips_null_bytes(self, manager):
+        conn = FakeConnection()
+        received = []
+        manager.register_handler("text", lambda c, a, k: received.extend(a))
+
+        with patch.object(mgr_module, "settings") as mock_settings:
+            mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
+            manager.dispatch(conn, "text", ["look\x00around"], {})
+
+        assert received == ["lookaround"]
+
+    def test_leaves_non_string_args_alone(self, manager):
+        conn = FakeConnection()
+        received = []
+        manager.register_handler("cmd", lambda c, a, k: received.extend(a))
+
+        with patch.object(mgr_module, "settings") as mock_settings:
+            mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
+            manager.dispatch(conn, "cmd", [42, "text\x1b[1m", True], {})
+
+        assert received == [42, "text", True]

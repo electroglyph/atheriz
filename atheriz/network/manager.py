@@ -3,6 +3,8 @@ import json
 from typing import Callable, TYPE_CHECKING
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+import atheriz.settings as settings
+from atheriz.utils import strip_terminal_escapes
 
 if TYPE_CHECKING:
     from .connection import BaseConnection
@@ -101,6 +103,8 @@ class ConnectionManager:
 
     def dispatch(self, connection: "BaseConnection", cmd: str, args: list, kwargs: dict):
         """Routes a verified, structured command to the proper handler."""
+        if settings.STRIP_INPUT_ESCAPE_SEQUENCES:
+            args = [strip_terminal_escapes(a) if isinstance(a, str) else a for a in args]
         handler = self._message_handlers.get(cmd)
         if handler:
             handler(connection, args, kwargs)

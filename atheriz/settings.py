@@ -14,6 +14,7 @@ TELNET_PORT = 4444
 TELNET_INTERFACE = "0.0.0.0"
 # timeout in seconds
 TELNET_CONNECTION_TIMEOUT = 300
+STRIP_INPUT_ESCAPE_SEQUENCES = False
 NETWORK_PROTOCOLS = [
     "atheriz.network.websocket.WebSocketProtocol",
     "atheriz.network.telnet.TelnetProtocol",
