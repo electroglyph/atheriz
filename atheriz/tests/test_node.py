@@ -1,4 +1,5 @@
 import pytest
+import dill
 from atheriz.utils import Coord
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink, Transition
 from atheriz.globals.node import NodeHandler
@@ -468,3 +469,54 @@ def test_get_display_name_no_looker():
     node = Node(coord=Coord("TestArea", 0, 0, 0))
     result = node.get_display_name(looker=None)
     assert result == ""
+
+
+def test_node_save_snapshot_independence():
+    """5.4: save() shallow-copies area refs — mutations during save leak into saved data."""
+    import threading
+    from unittest.mock import patch
+    from atheriz.database_setup import get_database
+
+    handler = NodeHandler()
+    area = NodeArea(name="SnapTest")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("SnapTest", 0, 0, 0), desc="original")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+
+    saved_blobs = {}
+    real_dumps = dill.dumps
+    serialize_event = threading.Event()
+    modify_event = threading.Event()
+
+    def slow_dumps(obj, *args, **kwargs):
+        if isinstance(obj, NodeArea) and obj.name == "SnapTest":
+            serialize_event.set()
+            modify_event.wait(timeout=5)
+        return real_dumps(obj, *args, **kwargs)
+
+    def mutate_area():
+        serialize_event.wait(timeout=5)
+        new_node = Node(coord=Coord("SnapTest", 1, 0, 0), desc="injected")
+        grid.nodes[(1, 0)] = new_node
+        modify_event.set()
+
+    with patch("atheriz.globals.node.dill.dumps", side_effect=slow_dumps):
+        t = threading.Thread(target=mutate_area)
+        t.start()
+        handler.save()
+        t.join(timeout=5)
+
+    # read back what was actually persisted
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT data FROM areas WHERE name = ?", ("SnapTest",))
+        row = cursor.fetchone()
+        assert row is not None, "area was never saved"
+        deserialized = dill.loads(row[0])
+
+    assert len(deserialized.grids[0].nodes) == 1, (
+        "saved area should reflect pre-mutation state — deep copy snapshot is independent"
+    )

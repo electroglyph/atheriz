@@ -3,6 +3,7 @@ from atheriz.globals.get import get_map_handler
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
+import copy
 import dill
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
 from atheriz.utils import Coord
@@ -69,7 +70,7 @@ class NodeHandler:
         db = get_database()
 
         with self.lock:
-            areas_snapshot = list(self.areas.values())
+            areas_snapshot = [copy.deepcopy(a) for a in self.areas.values()]
         with self.lock2:
             transitions_snapshot = list(self.transitions.values())
         with self.lock3:
