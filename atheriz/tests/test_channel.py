@@ -23,6 +23,13 @@ class MockArgs:
         self.message = kwargs.get("message", None)
 
 
+@pytest.fixture(autouse=True)
+def _clear_channel_cache():
+    GlobalChannelCommand._channel_cache.clear()
+    yield
+    GlobalChannelCommand._channel_cache.clear()
+
+
 @pytest.fixture
 def caller():
     c = Object()
@@ -98,6 +105,21 @@ def test_channel_target_and_message(caller, channel):
             mock_msg.assert_called_with("hello", caller)
 
     assert cmd.channel == channel
+
+
+def test_channel_lookup_cached(caller, channel):
+    """Repeated channel lookups should use cache, not scan all objects every time."""
+    cmd = GlobalChannelCommand()
+
+    args = MockArgs(channel="public", message="hi")
+
+    with patch("atheriz.commands.loggedin.channel.filter_by") as mock_filter:
+        mock_filter.return_value = [channel]
+        cmd.run(caller, args)
+        cmd.run(caller, args)
+        cmd.run(caller, args)
+        # filter_by should only be called once, subsequent calls use cache
+        assert mock_filter.call_count == 1
 
 
 def test_local_channel_command_help(caller, channel):

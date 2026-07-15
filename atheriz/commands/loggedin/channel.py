@@ -13,6 +13,7 @@ class ChannelCommand(Command):
     key = "channel"
     desc = "Use and subscribe to channels."
     category: str = "Communication"
+    _channel_cache: dict[str, Channel] = {}
 
     def __init__(self):
         super().__init__()
@@ -69,11 +70,16 @@ class ChannelCommand(Command):
                 caller.msg("No channels found.")
             return
         if args.channel:
-            channel = filter_by(lambda x: x.is_channel and x.name.lower() == args.channel.lower())
-            if not channel:
-                caller.msg(f"Channel {args.channel} not found.")
-                return
-            self.channel = channel[0]
+            name = args.channel.lower()
+            channel = self._channel_cache.get(name)
+            if channel is None:
+                result = filter_by(lambda x: x.is_channel and x.name.lower() == name)
+                if not result:
+                    caller.msg(f"Channel {args.channel} not found.")
+                    return
+                channel = result[0]
+                self._channel_cache[name] = channel
+            self.channel = channel
         else:
             caller.msg(f"{self.parser.format_help()}")
             return
