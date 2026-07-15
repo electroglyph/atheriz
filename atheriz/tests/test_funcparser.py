@@ -3,7 +3,7 @@
 Tests focus on INTENT, not just behavior. We verify:
 - Safety properties: malformed input doesn't crash, failures degrade gracefully
 - Priority: kwargs are merged in correct order (defaults < string < reserved)
-- Escape semantics: $$ → $, \$func → literal $func
+- Escape semantics: $$ → $, \\$func → literal $func
 - Strip vs escape: which is which
 - Nested function calls execute inside-out
 - Unknown callables don't crash
@@ -429,7 +429,7 @@ class TestParseEscape:
         assert result == "$5"
 
     def test_backslash_dollar_escape(self, global_test_env):
-        # INTENT: \$func escapes the function — it should NOT execute
+        # INTENT: \\$func escapes the function — it should NOT execute
         fn = make_func("foo", return_value="X")
         parser = FuncParser({"foo": fn})
         result = parser.parse("\\$foo()")
