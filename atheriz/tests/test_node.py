@@ -285,6 +285,36 @@ def test_nodehandler_find_transitions():
     assert len(results) == 1
 
 
+def test_find_transitions_multi_criteria():
+    handler = NodeHandler()
+
+    t1 = Transition(from_coord=Coord("A", 0, 0, 1), to_coord=Coord("B", 0, 0, 2), from_link="north")
+    t2 = Transition(from_coord=Coord("A", 0, 0, 1), to_coord=Coord("C", 0, 0, 3), from_link="east")
+    t3 = Transition(from_coord=Coord("D", 0, 0, 2), to_coord=Coord("E", 0, 0, 2), from_link="south")
+
+    handler.add_transition(t1)
+    handler.add_transition(t2)
+    handler.add_transition(t3)
+
+    # from_z=1 AND to_z=2 — only t1 matches both
+    results = handler.find_transitions(from_z=1, to_z=2)
+    assert len(results) == 1
+    assert results[0] is t1
+
+    # from_z=1 alone — t1 and t2 both match
+    results = handler.find_transitions(from_z=1)
+    assert len(results) == 2
+
+    # to_z=2 alone — t1 and t3 both match
+    results = handler.find_transitions(to_z=2)
+    assert len(results) == 2
+
+    # from_area + to_area combined
+    results = handler.find_transitions(from_area="A", to_area="B")
+    assert len(results) == 1
+    assert results[0] is t1
+
+
 def test_nodehandler_add_door():
     handler = NodeHandler()
     door = Door(

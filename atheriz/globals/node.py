@@ -249,21 +249,12 @@ class NodeHandler:
                 matches = 0
                 if from_z and t.from_coord.z == from_z:
                     matches += 1
-                    if matches == required_matches:
-                        result.append(t)
-                        continue
                 if to_z and t.to_coord.z == to_z:
                     matches += 1
-                    if matches == required_matches:
-                        result.append(t)
-                        continue
                 if from_area and t.from_coord.area == from_area:
                     matches += 1
-                    if matches == required_matches:
-                        result.append(t)
-                        continue
                 if to_area and t.to_coord.area == to_area:
                     matches += 1
-                    if matches == required_matches:
-                        result.append(t)
+                if matches == required_matches:
+                    result.append(t)
         return result
