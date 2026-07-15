@@ -105,5 +105,4 @@ class ConnectionManager:
         if handler:
             handler(connection, args, kwargs)
         else:
-            # print(f"[Network] Unknown command: {cmd}")
-            pass
+            logger.debug(f"Unknown command: {cmd}")

@@ -252,6 +252,13 @@ class TestDispatch:
         c = FakeConnection()
         manager.dispatch(c, "unknown", [], {})  # should not raise
 
+    @patch("atheriz.network.manager.logger")
+    def test_unknown_cmd_logged(self, mock_logger, manager):
+        c = FakeConnection()
+        manager.dispatch(c, "foobar", [], {})
+        mock_logger.debug.assert_called_once()
+        assert "foobar" in mock_logger.debug.call_args[0][0]
+
 
 class TestThreadSafety:
     def test_concurrent_register(self, manager):
