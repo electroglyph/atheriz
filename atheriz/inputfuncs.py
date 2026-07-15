@@ -204,7 +204,7 @@ class InputFuncs:
             w, h = args[0], args[1]
             if not (isinstance(w, int) and isinstance(h, int)):
                 return
-            if not (0 < w <= 1000 and 0 < h <= 1000):
+            if not (0 < w <= settings.TERM_SIZE_MAX_WIDTH and 0 < h <= settings.TERM_SIZE_MAX_HEIGHT):
                 return
             connection.session.term_width = w
             connection.session.term_height = h
@@ -224,7 +224,7 @@ class InputFuncs:
             w, h = args[0], args[1]
             if not (isinstance(w, int) and isinstance(h, int)):
                 return
-            if not (0 < w <= 1000 and 0 < h <= 1000):
+            if not (0 < w <= settings.MAP_SIZE_MAX_WIDTH and 0 < h <= settings.MAP_SIZE_MAX_HEIGHT):
                 return
             connection.session.map_width = w
             connection.session.map_height = h

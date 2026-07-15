@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from atheriz.inputfuncs import InputFuncs, inputfunc
+import atheriz.settings as settings
 
 
 class TestInputfuncDecorator:
@@ -115,12 +116,12 @@ class TestTermSize:
         assert conn.session.term_width == 80
         assert conn.session.term_height == 45
 
-    def test_rejects_over_1000(self, global_test_env):
+    def test_rejects_over_max(self, global_test_env):
         inp = InputFuncs()
         conn = MagicMock()
         conn.session.term_width = 80
         conn.session.term_height = 45
-        inp.term_size(conn, [1001, 50], {})
+        inp.term_size(conn, [settings.TERM_SIZE_MAX_WIDTH + 1, 50], {})
         assert conn.session.term_width == 80
         assert conn.session.term_height == 45
 
@@ -176,12 +177,12 @@ class TestTermSize:
         assert conn.session.map_width == 5
         assert conn.session.map_height == 5
 
-    def test_rejects_over_1000(self, global_test_env):
+    def test_rejects_over_max(self, global_test_env):
         inp = InputFuncs()
         conn = MagicMock()
         conn.session.map_width = 5
         conn.session.map_height = 5
-        inp.map_size(conn, [50, 1001], {})
+        inp.map_size(conn, [50, settings.MAP_SIZE_MAX_HEIGHT + 1], {})
         assert conn.session.map_width == 5
         assert conn.session.map_height == 5
 
