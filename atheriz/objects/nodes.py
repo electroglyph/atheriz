@@ -443,7 +443,7 @@ class Node(Flags, AccessLock):
             noun (str): The keyword to remove.
         """
         with self.lock:
-            del self.nouns[noun]
+            self.nouns.pop(noun, None)
 
     def get_noun(self, noun: str) -> str | None:
         """
@@ -1092,9 +1092,9 @@ class NodeArea:
 
     def remove_grid(self, z: int):
         with self.lock:
-            m = self.grids[z]
-            m.clear()
-            del self.grids[z]
+            m = self.grids.pop(z, None)
+            if m is not None:
+                m.clear()
             self.is_modified = True
 
     def clear(self):

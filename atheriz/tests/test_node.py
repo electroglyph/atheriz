@@ -61,6 +61,11 @@ def test_node_nouns():
     assert node.get_noun("fountain") is None
 
 
+def test_remove_noun_nonexistent_no_crash():
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    node.remove_noun("nonexistent")
+
+
 def test_node_equality():
     node1 = Node(coord=Coord("TestArea", 0, 0, 0))
     node2 = Node(coord=Coord("TestArea", 0, 0, 0))
@@ -133,6 +138,11 @@ def test_nodearea_remove_grid():
     area.remove_grid(0)
 
     assert len(area) == 0
+
+
+def test_remove_grid_nonexistent_no_crash():
+    area = NodeArea(name="TestArea")
+    area.remove_grid(999)
 
 
 def test_nodearea_clear():
