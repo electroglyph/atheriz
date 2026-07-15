@@ -57,7 +57,8 @@ class BaseConnection:
                     args = [v]
 
         if cmd == "text" and args:
-            args[0] = f"{args[0]}\r\n"
+            if not args[0].endswith(("\r\n", "\n")):
+                args[0] += "\r\n"
             if self.session.screenreader:
                 args[0] = strip_ansi(args[0])
         self.send_command(cmd, *args, **kwargs)

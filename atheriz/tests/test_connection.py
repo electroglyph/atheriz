@@ -183,3 +183,14 @@ class TestIntegration:
         # Each had a newline added
         for cmd, args, kwargs in c.sent:
             assert args[0].endswith("\r\n")
+
+    def test_msg_no_double_newline(self, global_test_env):
+        c = ConcreteConn()
+        c.msg("hello\r\n")
+        assert c.sent[0][1][0] == "hello\r\n"
+
+        c.msg("hello\n")
+        assert c.sent[1][1][0] == "hello\n"
+
+        c.msg("hello")
+        assert c.sent[2][1][0] == "hello\r\n"
