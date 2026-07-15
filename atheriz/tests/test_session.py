@@ -120,6 +120,20 @@ class TestAtDisconnect:
         s.at_disconnect()
         assert puppet.seconds_played > first
 
+    def test_at_disconnect_cancels_pending_input_future(self, global_test_env):
+        conn = MagicMock()
+        s = Session(connection=conn)
+
+        async def run():
+            task = asyncio.create_task(s.prompt("> "))
+            await asyncio.sleep(0)
+            assert s.input_future is not None
+            assert not s.input_future.done()
+            s.at_disconnect()
+            assert s.input_future.cancelled()
+
+        asyncio.run(run())
+
 
 class TestMsg:
     def test_msg_proxies_to_connection(self, global_test_env):

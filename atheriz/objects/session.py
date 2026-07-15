@@ -34,6 +34,8 @@ class Session:
         self.conn_time = time.time()
 
     def at_disconnect(self):
+        if self.input_future and not self.input_future.done():
+            self.input_future.cancel()
         # ponytail: unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while self.puppet_stack:
