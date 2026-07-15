@@ -295,6 +295,18 @@ class TestGetCommand:
         GetCommand().run(c, args)
         c.msg.assert_called_with("You can't get something from here!")
 
+    def test_get_all_blocked_by_location_access(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        apple = Object.create(None, "Apple")
+        apple.move_to(room, force=True)
+        room.access = MagicMock(return_value=False)
+        args = MagicMock(object="all", source=[])
+        GetCommand().run(c, args)
+        c.msg.assert_called_with("You can't get something from here!")
+        assert apple in room.contents
+
     def test_get_specific(self):
         c = _make_caller()
         room = _make_room()

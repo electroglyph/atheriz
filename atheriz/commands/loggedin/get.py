@@ -41,6 +41,9 @@ class GetCommand(Command):
                     return
                 source = container[0]
             else:
+                if not loc.access(caller, "get"):
+                    caller.msg("You can't get something from here!")
+                    return
                 source = loc
 
             for obj in list(source.contents):
