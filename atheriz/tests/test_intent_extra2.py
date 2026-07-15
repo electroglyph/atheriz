@@ -167,6 +167,9 @@ class TestChannelMoreBranches:
     """INTENT: covers the subscribe/replay/send 'no permission' branches
     and 'channel not found' for the -c switch."""
 
+    def setup_method(self):
+        ChannelCommand._channel_cache.clear()
+
     def test_channel_not_found(self):
         c = _make_caller()
         with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[]):
@@ -200,7 +203,7 @@ class TestChannelMoreBranches:
                             subscribe=True, replay=False, message=None)
             cmd = ChannelCommand()
             cmd.channel = chan
-            ChannelCommand().run(c, args)
+            cmd.run(c, args)
         c.msg.assert_called_with("You do not have permission to view this channel.")
 
     def test_replay_no_view_permission(self):
@@ -213,7 +216,7 @@ class TestChannelMoreBranches:
                             subscribe=False, replay=True, message=None)
             cmd = ChannelCommand()
             cmd.channel = chan
-            ChannelCommand().run(c, args)
+            cmd.run(c, args)
         c.msg.assert_called_with("You do not have permission to view this channel.")
 
     def test_send_no_send_permission(self):
@@ -227,7 +230,7 @@ class TestChannelMoreBranches:
                             subscribe=False, replay=False, message="hello")
             cmd = ChannelCommand()
             cmd.channel = chan
-            ChannelCommand().run(c, args)
+            cmd.run(c, args)
         c.msg.assert_called_with("You do not have permission to send to this channel.")
 
     def test_unsubscribe_calls_unsubscribe(self):
@@ -240,7 +243,7 @@ class TestChannelMoreBranches:
                             subscribe=False, replay=False, message=None)
             cmd = ChannelCommand()
             cmd.channel = chan
-            ChannelCommand().run(c, args)
+            cmd.run(c, args)
         c.unsubscribe.assert_called_once_with(chan)
 
 
