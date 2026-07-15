@@ -254,17 +254,6 @@ class InputFuncs:
             args (list): Unused.
             kwargs (dict): Unused.
         """
-        try:
-            import connection_screen
-            import importlib
-            # Reload to ensure we get changes if it was modified
-            importlib.reload(connection_screen)
-            if hasattr(connection_screen, "render"):
-                welcome = connection_screen.render(connection.session)
-            else:
-                 welcome = render(connection.session)    
-        except ImportError:
-            welcome = render(connection.session)
-            
+        welcome = render(connection.session)
         connection.msg(welcome)
         connection.msg(prompt=">")

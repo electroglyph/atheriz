@@ -308,6 +308,14 @@ class TestClientReady:
         prompt_call = [c for c in all_msgs if "prompt" in c.kwargs]
         assert len(prompt_call) >= 1
 
+    @patch("importlib.reload")
+    def test_connection_screen_not_reloaded_on_connect(self, mock_reload, global_test_env):
+        inp = InputFuncs()
+        conn = MagicMock()
+        inp.client_ready(conn, [], {})
+        inp.client_ready(conn, [], {})
+        mock_reload.assert_not_called()
+
 
 class TestSubclassing:
     def test_subclass_can_add_handlers(self, global_test_env):
