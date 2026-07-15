@@ -11,22 +11,18 @@ _SINGULAR_WORDS = frozenset({
     "octopus", "walrus", "compass", "cactus", "genus", "genius", "ignoramus",
     "apparatus", "corpus", "hippopotamus", "platypus", "rhinoceros", "syllabus",
     "abacus", "focus", "lotus", "fungus", "nucleus", "radius", "stimulus",
-    "torso", "fiasco", "grotto", "gusto", "taco", "photo", "piano", "solo",
-    "soprano", "alto", "pro", "zero", "hero", "ego", "cargo",
     # -is words
     "axis", "oasis", "iris", "basis", "crisis", "analysis", "thesis", "synopsis",
     "ellipsis", "hypothesis", "parenthesis", "synthesis", "diagnosis", "prognosis",
     # -os words
     "chaos", "cosmos", "kudos", "pathos", "ethos",
     # -as words
-    "atlas", "alias", "canvas", "cannabis", "ibis", "karas", "asbestos",
+    "atlas", "alias", "canvas", "cannabis", "ibis", "asbestos",
     # -ns/-rs/-other
     "lens", "biceps", "triceps", "series", "species", "news",
     "measles", "mumps", "rabies", "diabetes",
     "economics", "politics", "physics", "mathematics", "athletics", "gymnastics",
     "barracks", "chassis", "precis",
-    # -es singular
-    "series", "species",
 })
 
 if TYPE_CHECKING:
