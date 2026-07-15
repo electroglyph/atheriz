@@ -1,5 +1,6 @@
 import sys
 import importlib
+import inspect
 import os
 from pathlib import Path
 from typing import Any
@@ -204,6 +205,58 @@ def _reload_game_folder_modules():
     return reloaded, errors
 
 
+def _apply_patch(obj, new_class):
+    """Patch a single live object to use new_class, preserving state.
+
+    Skips __init__ when the old and new class have the same __init__ signature
+    to avoid firing side effects during hot-reload.
+    """
+    state = None
+    if hasattr(obj, "__getstate__"):
+        state = obj.__getstate__()
+    else:
+        state = obj.__dict__.copy()
+
+    saved_session = getattr(obj, "session", None)
+    saved_listeners = getattr(obj, "listeners", None)
+    saved_command = getattr(obj, "command", None)
+
+    lock = getattr(obj, "lock", None)
+    if lock:
+        lock.acquire()
+    try:
+        old_class = obj.__class__
+        obj.__class__ = new_class
+
+        old_init = getattr(old_class, "__init__", None)
+        new_init = getattr(new_class, "__init__", None)
+        init_changed = (
+            old_init is None
+            or new_init is None
+            or inspect.signature(old_init) != inspect.signature(new_init)
+        )
+        if init_changed:
+            try:
+                obj.__init__()
+            except TypeError:
+                pass
+
+        if hasattr(obj, "__setstate__"):
+            obj.__setstate__(state)
+        else:
+            obj.__dict__.update(state)
+
+        if saved_session:
+            obj.session = saved_session
+        if saved_listeners is not None:
+            obj.listeners = saved_listeners
+        if saved_command is not None:
+            obj.command = saved_command
+    finally:
+        if lock:
+            lock.release()
+
+
 def reload_game_logic() -> str:
     """
     Reloads all atheriz modules (except core server logic) and patches existing objects.
@@ -280,45 +333,7 @@ def reload_game_logic() -> str:
 
                 # check if it's actually different (it should be if module was reloaded)
                 if obj.__class__ is not new_class:
-                    state = None
-                    if hasattr(obj, "__getstate__"):
-                        state = obj.__getstate__()
-                    else:
-                        state = obj.__dict__.copy()
-
-                    # capture transient state that might be lost during init/setstate
-                    # session is the most critical one for logged-in players
-                    saved_session = getattr(obj, "session", None)
-                    saved_listeners = getattr(obj, "listeners", None)
-                    saved_command = getattr(obj, "command", None)
-
-                    lock = getattr(obj, "lock", None)
-                    if lock:
-                        lock.acquire()
-                    try:
-                        obj.__class__ = new_class
-
-                        try:
-                            obj.__init__()
-                        except TypeError:
-                            pass
-
-                        if hasattr(obj, "__setstate__"):
-                            obj.__setstate__(state)
-                        else:
-                            obj.__dict__.update(state)
-
-                        # restore transient state
-                        if saved_session:
-                            obj.session = saved_session
-                        if saved_listeners is not None:
-                            obj.listeners = saved_listeners
-                        if saved_command is not None:
-                            obj.command = saved_command
-                    finally:
-                        if lock:
-                            lock.release()
-
+                    _apply_patch(obj, new_class)
                     objects_patched += 1
                     patched_objects[id(obj)] = obj
         except Exception as e:

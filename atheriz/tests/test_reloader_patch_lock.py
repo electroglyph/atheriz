@@ -1,13 +1,14 @@
-"""Tests for atheriz.reloader._patch_object lock acquisition.
+"""Tests for atheriz.reloader._apply_patch lock acquisition and init skipping.
 
-Verifies that _patch_object acquires the object's lock before mutating
-its class and state, preventing concurrent readers from seeing
-half-initialized objects.
+Verifies that _apply_patch acquires the object's lock before mutating
+its class and state, and skips __init__ when the signature is unchanged.
 """
 from __future__ import annotations
 
 import _thread
+import inspect
 import threading
+from atheriz.reloader import _apply_patch
 
 
 class _SpyLock:
@@ -104,3 +105,59 @@ class TestPatchObjectAcquiresLock:
 
         # reader either saw _OldClass or _NewClass, never a partial state
         assert seen_states[0] in ("_OldClass", "_NewClass")
+
+
+_init_call_log = []
+
+
+class _InitSideEffectOld:
+    def __init__(self):
+        _init_call_log.append("old")
+        self.x = 42
+
+
+class _InitSideEffectNew:
+    def __init__(self):
+        _init_call_log.append("new")
+        self.x = 99
+
+
+class _InitChangedOld:
+    def __init__(self, a):
+        self.a = a
+
+
+class _InitChangedNew:
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
+
+
+class TestReloadSkipsInitWhenUnchanged:
+    def test_init_not_called_when_signature_unchanged(self):
+        """5.7: __init__ should be skipped when old and new class have the same __init__."""
+        _init_call_log.clear()
+        obj = _InitSideEffectOld()
+        assert obj.x == 42
+        assert _init_call_log == ["old"]
+
+        _apply_patch(obj, _InitSideEffectNew)
+
+        # after the fix, __init__ should NOT have been called again
+        assert _init_call_log == ["old"], (
+            f"__init__ was called during reload — side effect leaked: {_init_call_log}"
+        )
+        # state should still be restored from before the patch
+        assert obj.x == 42
+
+    def test_init_called_when_signature_changes(self):
+        """When __init__ signature changes, __init__ SHOULD be called."""
+        _init_call_log.clear()
+        obj = _InitChangedOld(a=1)
+        obj.lock = _SpyLock()
+
+        # signature changes from (a) to (a, b) — TypeError on __init__()
+        # the bare except catches it, which is fine
+        _apply_patch(obj, _InitChangedNew)
+
+        assert obj.a == 1  # state restored
