@@ -61,102 +61,93 @@ def get_unique_id() -> int:
 
 def get_game_time() -> GameTime:
     global _GAME_TIME
-    if _GAME_TIME is None:
-        with _SINGLETON_LOCK:
-            if _GAME_TIME is None:
-                from atheriz.globals.time import GameTime
+    with _SINGLETON_LOCK:
+        if _GAME_TIME is None:
+            from atheriz.globals.time import GameTime
 
-                _GAME_TIME = GameTime()
+            _GAME_TIME = GameTime()
     return _GAME_TIME
 
 
 def get_connection_manager() -> ConnectionManager:
     global _CONNECTION_MANAGER
-    if _CONNECTION_MANAGER is None:
-        with _SINGLETON_LOCK:
-            if _CONNECTION_MANAGER is None:
-                from atheriz.network import connection_manager
+    with _SINGLETON_LOCK:
+        if _CONNECTION_MANAGER is None:
+            from atheriz.network import connection_manager
 
-                _CONNECTION_MANAGER = connection_manager
+            _CONNECTION_MANAGER = connection_manager
     return _CONNECTION_MANAGER
 
 
 def get_async_ticker() -> AsyncTicker:
     global _ASYNC_TICKER
-    if _ASYNC_TICKER is None:
-        with _SINGLETON_LOCK:
-            if _ASYNC_TICKER is None:
-                from atheriz.globals.asyncthreadpool import AsyncTicker
+    with _SINGLETON_LOCK:
+        if _ASYNC_TICKER is None:
+            from atheriz.globals.asyncthreadpool import AsyncTicker
 
-                _ASYNC_TICKER = AsyncTicker()
+            _ASYNC_TICKER = AsyncTicker()
     return _ASYNC_TICKER
 
 
 def get_server_channel() -> Channel | None:
     global _SERVER_CHANNEL
-    if _SERVER_CHANNEL is None:
-        with _SINGLETON_LOCK:
-            if _SERVER_CHANNEL is None:
-                from atheriz.globals.objects import filter_by
+    with _SINGLETON_LOCK:
+        if _SERVER_CHANNEL is None:
+            from atheriz.globals.objects import filter_by
 
-                c = filter_by(lambda x: x.is_channel and x.name.lower() == "server")
-                if c:
-                    _SERVER_CHANNEL = c[0]
-                else:
-                    logger.error("Server channel not found.")
+            c = filter_by(lambda x: x.is_channel and x.name.lower() == "server")
+            if c:
+                _SERVER_CHANNEL = c[0]
+            else:
+                logger.error("Server channel not found.")
     return _SERVER_CHANNEL
 
 
 def get_map_handler() -> MapHandler:
     global _MAP_HANDLER
-    if _MAP_HANDLER is None:
-        with _SINGLETON_LOCK:
-            if _MAP_HANDLER is None:
-                from atheriz.globals.map import MapHandler
+    with _SINGLETON_LOCK:
+        if _MAP_HANDLER is None:
+            from atheriz.globals.map import MapHandler
 
-                _MAP_HANDLER = MapHandler()
+            _MAP_HANDLER = MapHandler()
     return _MAP_HANDLER
 
 
 def get_loggedin_cmdset() -> LoggedinCmdSet:
     global _LOGGEDIN_CMDSET
-    if _LOGGEDIN_CMDSET is None:
-        with _SINGLETON_LOCK:
-            if _LOGGEDIN_CMDSET is None:
-                from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
+    with _SINGLETON_LOCK:
+        if _LOGGEDIN_CMDSET is None:
+            from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
 
-                _LOGGEDIN_CMDSET = LoggedinCmdSet()
+            _LOGGEDIN_CMDSET = LoggedinCmdSet()
     return _LOGGEDIN_CMDSET
 
 
 def get_async_threadpool() -> AsyncThreadPool:
     global _ASYNC_THREAD_POOL
-    if _ASYNC_THREAD_POOL is None:
-        with _SINGLETON_LOCK:
-            if _ASYNC_THREAD_POOL is None:
-                from atheriz.globals.asyncthreadpool import AsyncThreadPool
+    with _SINGLETON_LOCK:
+        if _ASYNC_THREAD_POOL is None:
+            from atheriz.globals.asyncthreadpool import AsyncThreadPool
 
-                _ASYNC_THREAD_POOL = AsyncThreadPool(THREADPOOL_LIMIT)
+            _ASYNC_THREAD_POOL = AsyncThreadPool(THREADPOOL_LIMIT)
     return _ASYNC_THREAD_POOL
 
 
 def get_unloggedin_cmdset() -> UnloggedinCmdSet:
     global _UNLOGGEDIN_CMDSET
-    if _UNLOGGEDIN_CMDSET is None:
-        with _SINGLETON_LOCK:
-            if _UNLOGGEDIN_CMDSET is None:
-                from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
+    with _SINGLETON_LOCK:
+        if _UNLOGGEDIN_CMDSET is None:
+            from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
 
-                _UNLOGGEDIN_CMDSET = UnloggedinCmdSet()
+            _UNLOGGEDIN_CMDSET = UnloggedinCmdSet()
     return _UNLOGGEDIN_CMDSET
 
 
 def get_node_handler() -> NodeHandler:
     global _NODE_HANDLER
-    if _NODE_HANDLER is None:
-        with _SINGLETON_LOCK:
-            if _NODE_HANDLER is None:
-                from atheriz.globals.node import NodeHandler
+    with _SINGLETON_LOCK:
+        if _NODE_HANDLER is None:
+            from atheriz.globals.node import NodeHandler
 
-                _NODE_HANDLER = NodeHandler()
+            _NODE_HANDLER = NodeHandler()
     return _NODE_HANDLER
