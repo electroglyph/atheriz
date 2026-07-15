@@ -320,7 +320,7 @@ class TestSpamCommand:
         SpamCommand().run(c, args)
         c.msg.assert_called_with("Maximum count is 1000.")
 
-    def test_creates_accounts(self, tmp_path):
+    def test_creates_accounts(self, tmp_path, fixed_salt):
         # INTENT: count=2 creates 2 accounts and writes spam_accounts.txt
         c = _make_caller(superuser=True)
         c.location = MagicMock()

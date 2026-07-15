@@ -150,7 +150,7 @@ def test_ban_multiple_matches_lists_ids():
 # --- account ban ------------------------------------------------------------
 
 
-def test_ban_account_propagates_to_all_characters():
+def test_ban_account_propagates_to_all_characters(fixed_salt):
     caller = _make_caller()
     acct = Account.create("acct1", "pass12345")
     char_a = _make_pc("Alice")
@@ -169,7 +169,7 @@ def test_ban_account_propagates_to_all_characters():
     assert char_b.ban_reason == "toxic"
 
 
-def test_ban_account_offline_target_resolves():
+def test_ban_account_offline_target_resolves(fixed_salt):
     caller = _make_caller()
     acct = Account.create("acct2", "pass12345")
     char = _make_pc("Offline")
@@ -239,7 +239,7 @@ def test_unban_character_clears_flag():
     assert "ban_reason" not in vars(target)
 
 
-def test_unban_account_clears_all():
+def test_unban_account_clears_all(fixed_salt):
     caller = _make_caller()
     acct = Account.create("acct3", "pass12345")
     char_a = _make_pc("A")

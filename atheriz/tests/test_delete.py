@@ -142,7 +142,7 @@ def test_node_delete_registry(caller, room):
     
     assert get_node_handler().get_node(coord) is None
 
-def test_account_delete(caller):
+def test_account_delete(caller, fixed_salt):
     from atheriz.database_setup import get_database
     db = get_database()
     
