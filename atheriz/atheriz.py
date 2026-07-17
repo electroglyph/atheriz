@@ -497,7 +497,13 @@ def stop_server(port: int | None = None):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="AtheriZ - Text-based multiplayer game server"
+        description="AtheriZ - Text-based multiplayer game server",
+        epilog=(
+            "Environment variables (used by 'reset' and 'new'):\n"
+            "  ATHERIZ_SUPERUSER_USERNAME  Superuser username (otherwise prompted).\n"
+            "  ATHERIZ_SUPERUSER_PASSWORD  Superuser password (otherwise prompted)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -553,7 +559,15 @@ def main():
     )
 
     reset_parser = subparsers.add_parser(
-        "reset", help="Delete all game data and start fresh"
+        "reset",
+        help="Delete all game data and start fresh",
+        description=(
+            "Delete all game data and start fresh.\n\n"
+            "Environment variables:\n"
+            "  ATHERIZ_SUPERUSER_USERNAME  Superuser username (otherwise prompted).\n"
+            "  ATHERIZ_SUPERUSER_PASSWORD  Superuser password (otherwise prompted)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     reset_parser.add_argument(
         "-f", "--force", action="store_true", help="Skip confirmation prompt"
@@ -567,7 +581,15 @@ def main():
     create_parser.add_argument("password", help="Password for the account")
 
     new_parser = subparsers.add_parser(
-        "new", help="Create a new game folder with template classes"
+        "new",
+        help="Create a new game folder with template classes",
+        description=(
+            "Create a new game folder with template classes, then start the server.\n\n"
+            "Environment variables:\n"
+            "  ATHERIZ_SUPERUSER_USERNAME  Superuser username (otherwise prompted).\n"
+            "  ATHERIZ_SUPERUSER_PASSWORD  Superuser password (otherwise prompted)."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     new_parser.add_argument("foldername", help="Name of the folder to create")
     new_parser.add_argument(
