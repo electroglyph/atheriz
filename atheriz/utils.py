@@ -21,7 +21,11 @@ _COLOR_REGEX = re.compile(_ANSI_COLOR)
 def is_in_game_folder() -> bool:
     """Check if the current directory is a game folder."""
     cwd = Path.cwd()
-    return (cwd / "settings.py").exists() and (cwd / "save").is_dir() and (cwd / "__init__.py").exists()
+    return (
+        (cwd / "settings.py").exists()
+        and (cwd / "__init__.py").exists()
+        and not (cwd / "atheriz.py").exists()
+    )
 
 
 def msg_all(msg: str) -> None:
