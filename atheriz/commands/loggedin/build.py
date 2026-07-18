@@ -130,6 +130,86 @@ class BuildCommand(Command):
         if not args.room and not args.road and not args.path:
             args.room = True
 
+        def get_room_dirs(mi: MapInfo, coord: tuple[int, int]) -> tuple[bool, bool, bool, bool]:
+            n, s, e, w = False, False, False, False
+            if mi.pre_grid.get((coord[0], coord[1] + 1)) == settings.ROOM_PLACEHOLDER:
+                n = True
+            if mi.pre_grid.get((coord[0], coord[1] - 1)) == settings.ROOM_PLACEHOLDER:
+                s = True
+            if mi.pre_grid.get((coord[0] + 1, coord[1])) == settings.ROOM_PLACEHOLDER:
+                e = True
+            if mi.pre_grid.get((coord[0] - 1, coord[1])) == settings.ROOM_PLACEHOLDER:
+                w = True
+            return n, s, e, w
+
+        def ensure_links(
+            node: Node,
+            n: bool = False,
+            s: bool = False,
+            e: bool = False,
+            w: bool = False,
+        ):
+
+            if n:
+                if not node.has_link_name("north"):
+                    link = NodeLink(
+                        "north",
+                        Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z),
+                        ["n"],
+                    )
+                    node.add_link(link)
+                to_coord = Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z)
+                to_node = nh.get_node(to_coord)
+                if to_node:
+                    if not to_node.has_link_name("south"):
+                        link = NodeLink("south", node.coord, ["s"])
+                        to_node.add_link(link)
+
+            if s:
+                if not node.has_link_name("south"):
+                    link = NodeLink(
+                        "south",
+                        Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z),
+                        ["s"],
+                    )
+                    node.add_link(link)
+                to_coord = Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z)
+                to_node = nh.get_node(to_coord)
+                if to_node:
+                    if not to_node.has_link_name("north"):
+                        link = NodeLink("north", node.coord, ["n"])
+                        to_node.add_link(link)
+
+            if e:
+                if not node.has_link_name("east"):
+                    link = NodeLink(
+                        "east",
+                        Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z),
+                        ["e"],
+                    )
+                    node.add_link(link)
+                to_coord = Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z)
+                to_node = nh.get_node(to_coord)
+                if to_node:
+                    if not to_node.has_link_name("west"):
+                        link = NodeLink("west", node.coord, ["w"])
+                        to_node.add_link(link)
+
+            if w:
+                if not node.has_link_name("west"):
+                    link = NodeLink(
+                        "west",
+                        Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z),
+                        ["w"],
+                    )
+                    node.add_link(link)
+                to_coord = Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z)
+                to_node = nh.get_node(to_coord)
+                if to_node:
+                    if not to_node.has_link_name("east"):
+                        link = NodeLink("east", node.coord, ["e"])
+                        to_node.add_link(link)
+
         for d_key in targets:
             d_data = DIRECTIONS[d_key]
             dx, dy, dz, link_name, back_link_name = d_data
@@ -174,118 +254,39 @@ class BuildCommand(Command):
 
             mi = mh.get_mapinfo(new_coord.area, new_coord.z)
             if not mi:
-                mi = MapInfo()
+                mi = MapInfo(name=new_coord.area)
                 mh.set_mapinfo(new_coord.area, new_coord.z, mi)
 
-            def get_room_dirs(mi: MapInfo, coord: tuple[int, int]) -> tuple[bool, bool, bool, bool]:
-                n, s, e, w = False, False, False, False
-                if mi.pre_grid.get((coord[0], coord[1] + 1)) == settings.ROOM_PLACEHOLDER:
-                    n = True
-                if mi.pre_grid.get((coord[0], coord[1] - 1)) == settings.ROOM_PLACEHOLDER:
-                    s = True
-                if mi.pre_grid.get((coord[0] + 1, coord[1])) == settings.ROOM_PLACEHOLDER:
-                    e = True
-                if mi.pre_grid.get((coord[0] - 1, coord[1])) == settings.ROOM_PLACEHOLDER:
-                    w = True
-                return n, s, e, w
-
-            def ensure_links(
-                node: Node,
-                n: bool = False,
-                s: bool = False,
-                e: bool = False,
-                w: bool = False,
-            ):
-
-                if n:
-                    if not node.has_link_name("north"):
-                        link = NodeLink(
-                            "north",
-                            Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z),
-                            ["n"],
-                        )
-                        node.add_link(link)
-                    to_coord = Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z)
-                    to_node = nh.get_node(to_coord)
-                    if to_node:
-                        if not to_node.has_link_name("south"):
-                            link = NodeLink("south", node.coord, ["s"])
-                            to_node.add_link(link)
-
-                if s:
-                    if not node.has_link_name("south"):
-                        link = NodeLink(
-                            "south",
-                            Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z),
-                            ["s"],
-                        )
-                        node.add_link(link)
-                    to_coord = Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z)
-                    to_node = nh.get_node(to_coord)
-                    if to_node:
-                        if not to_node.has_link_name("north"):
-                            link = NodeLink("north", node.coord, ["n"])
-                            to_node.add_link(link)
-
-                if e:
-                    if not node.has_link_name("east"):
-                        link = NodeLink(
-                            "east",
-                            Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z),
-                            ["e"],
-                        )
-                        node.add_link(link)
-                    to_coord = Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z)
-                    to_node = nh.get_node(to_coord)
-                    if to_node:
-                        if not to_node.has_link_name("west"):
-                            link = NodeLink("west", node.coord, ["w"])
-                            to_node.add_link(link)
-
-                if w:
-                    if not node.has_link_name("west"):
-                        link = NodeLink(
-                            "west",
-                            Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z),
-                            ["w"],
-                        )
-                        node.add_link(link)
-                    to_coord = Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z)
-                    to_node = nh.get_node(to_coord)
-                    if to_node:
-                        if not to_node.has_link_name("east"):
-                            link = NodeLink("east", node.coord, ["e"])
-                            to_node.add_link(link)
-
-            # place map tile(s)
-            if args.room:
-                char = ""
-                if args.single:
-                    char = settings.SINGLE_WALL_PLACEHOLDER
-                elif args.double:
-                    char = settings.DOUBLE_WALL_PLACEHOLDER
-                elif args.round:
-                    char = settings.ROUNDED_WALL_PLACEHOLDER
-                elif args.none:
-                    pass
-                else:
-                    if settings.DEFAULT_ROOM_OUTLINE == "single":
+            with mi.batch_update():
+                # place map tile(s) for this target
+                if args.room:
+                    char = ""
+                    if args.single:
                         char = settings.SINGLE_WALL_PLACEHOLDER
-                    elif settings.DEFAULT_ROOM_OUTLINE == "double":
+                    elif args.double:
                         char = settings.DOUBLE_WALL_PLACEHOLDER
-                    elif settings.DEFAULT_ROOM_OUTLINE == "rounded":
+                    elif args.round:
                         char = settings.ROUNDED_WALL_PLACEHOLDER
-                if char:
-                    mi.update_grid((new_coord.x, new_coord.y), settings.ROOM_PLACEHOLDER)
-                    mi.place_walls((new_coord.x, new_coord.y), char)
-                    n, s, e, w = get_room_dirs(mi, (new_coord.x, new_coord.y))
-                    ensure_links(new_node, n, s, e, w)
+                    elif args.none:
+                        pass
+                    else:
+                        if settings.DEFAULT_ROOM_OUTLINE == "single":
+                            char = settings.SINGLE_WALL_PLACEHOLDER
+                        elif settings.DEFAULT_ROOM_OUTLINE == "double":
+                            char = settings.DOUBLE_WALL_PLACEHOLDER
+                        elif settings.DEFAULT_ROOM_OUTLINE == "rounded":
+                            char = settings.ROUNDED_WALL_PLACEHOLDER
+                    if char:
+                        mi.update_grid((new_coord.x, new_coord.y), settings.ROOM_PLACEHOLDER)
+                        mi.place_walls((new_coord.x, new_coord.y), char)
+                        n, s, e, w = get_room_dirs(mi, (new_coord.x, new_coord.y))
+                        ensure_links(new_node, n, s, e, w)
 
-            elif args.road:
-                mi.update_grid((new_coord.x, new_coord.y), settings.ROAD_PLACEHOLDER)
-            elif args.path:
-                mi.update_grid((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
-                mi.place_walls((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
+                elif args.road:
+                    mi.update_grid((new_coord.x, new_coord.y), settings.ROAD_PLACEHOLDER)
+                elif args.path:
+                    mi.update_grid((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
+                    mi.place_walls((new_coord.x, new_coord.y), settings.PATH_PLACEHOLDER)
 
         if len(targets) == 1:
             caller.move_to(new_node)

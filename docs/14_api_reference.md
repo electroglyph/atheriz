@@ -197,13 +197,15 @@ Unsubscribe from a channel.
 
 
 
-#### `def search(self, query)`
+#### `def search(self, query, recursive)`
 
 Search for an object by name or alias inside the contents of this object,
 and within the room this object is standing in.
 
 Args:
     query (str): The search string to evaluate.
+    recursive (bool): If True (default), descend into nested containers.
+        If False, search only this object's direct contents.
 
 Returns:
     list[Object]: A list of objects matching the query.
@@ -493,6 +495,33 @@ Args:
 
 
 
+#### `def at_puppet(self, caller)`
+
+Called on this object after a builder assumes control via the ``puppet`` command.
+
+Default is a no-op. Games override this (or attach hooks) to lazily set up
+character-specific subsystems (handlers, stats, etc.) on objects that were
+not originally player characters. The framework-level PC transformation
+(is_pc, privilege_level, session wiring) is already done by the command.
+
+Args:
+    caller (Object): The object that initiated the puppet command (the previous puppet).
+
+
+
+#### `def at_unpuppet(self, caller)`
+
+Called on this object before it is released by the ``unpuppet`` command.
+
+Default is a no-op. Games override this (or attach hooks) to tear down
+anything set up in ``at_puppet``. State restoration (is_pc, privilege_level)
+and disconnect happen after this returns.
+
+Args:
+    caller (Object): The object being returned to.
+
+
+
 #### `def announce_move_from(self, destination, from_exit, **kwargs)`
 
 Announces that this object has arrived in a target room.
@@ -623,6 +652,31 @@ Called after this object is successfully dropped out of an inventory.
 
 Args:
     dropper (Object): The actor that dropped this object.
+    **kwargs: Extra arguments.
+
+
+
+#### `def at_pre_put(self, putter, destination, **kwargs)`
+
+Called before another object attempts to put this object into a container.
+
+Args:
+    putter (Object): The object performing the put.
+    destination (Object): The container this object will be placed in.
+    **kwargs: Extra arguments.
+
+Returns:
+    bool: True if the put is permitted, False otherwise.
+
+
+
+#### `def at_put(self, putter, destination, **kwargs)`
+
+Called after this object is successfully placed into a container.
+
+Args:
+    putter (Object): The object that performed the put.
+    destination (Object): The container this object was placed in.
     **kwargs: Extra arguments.
 
 
@@ -1006,12 +1060,14 @@ Returns:
 
 
 
-#### `def search(self, query)`
+#### `def search(self, query, recursive)`
 
 Searches the contents of this node using the given query string.
 
 Args:
     query (str): The search phrase.
+    recursive (bool): If True (default), descend into nested containers.
+        If False, search only this node's direct contents.
 
 Returns:
     list[Any]: A list of objects matching the search query.
@@ -1321,13 +1377,13 @@ Args:
 
 #### `def hash_password(password)`
 
-Hash the given plaintext password using the system salt.
+Hash the given plaintext password using PBKDF2-HMAC-SHA256 with the system salt.
 
 Args:
     password (str): The plaintext password to hash.
 
 Returns:
-    str: The SHA-256 hashed password string.
+    str: The hex-encoded PBKDF2 hash.
 
 
 
@@ -1831,6 +1887,141 @@ Args:
 
 ## 14.10 `atheriz.globals.map`
 
+### Class: `LegendEntry`
+
+this is for adding information about environment symbols on the map.
+symbols will be placed on the map in first render pass
+
+### Class: `MapInfo`
+
+#### `def place_walls(self, coord, char)`
+
+places walls around a coordinate
+
+
+
+#### `def render_grid(grid)`
+
+renders the grid into a string
+Returns: tuple of (rendered_string, min_x, max_y)
+
+
+
+#### `def get_dirs(grid, coord, chars)`
+
+returns a tuple of booleans representing the directions of the walls around a coordinate
+
+
+
+#### `def _resolve_char(n, s, e, w, style)`
+
+Returns the box-drawing character for the given neighbor directions and wall style.
+Used by pre_render for single-pass placeholder resolution.
+
+
+
+#### `def pre_render(self)`
+
+Resolves all placeholder characters to their final box-drawing glyphs
+in a single pass over the grid, then stores the result in post_grid.
+
+
+
+#### `def update_grid(self, coord, new_symbol)`
+
+
+
+#### `def batch_update(self)`
+
+Context manager that defers map renders until the outermost block exits.
+Multiple grid changes inside a single batch only trigger one final render.
+
+
+#### `def render(self, force)`
+
+Renders the map and pushes updates to subscribed listeners.
+Listeners with `map_enabled=False` are silently skipped.
+Use `force=True` to bypass the change-detection throttle for a listener.
+
+
+#### `def add_legend_entry(self, entry)`
+
+
+
+#### `def remove_legend_entry(self, entry)`
+
+
+
+#### `def add_listener(self, listener)`
+
+
+
+#### `def remove_listener(self, listener)`
+
+
+
+#### `def add_mapable(self, mapable)`
+
+
+
+#### `def remove_mapable(self, mapable)`
+
+
+
+#### `def add_mapable_list(self, mapables)`
+
+
+
+### Class: `MapHandler`
+
+#### `def save(self)`
+
+
+
+#### `def set_mapinfo(self, area, z, mapinfo)`
+
+
+
+#### `def get_mapinfo(self, area, z)`
+
+
+
+#### `def add_mapable(self, mapable)`
+
+helper to add mapable to their current location's mapinfo
+
+
+
+#### `def add_listener(self, listener)`
+
+helper to add character as a listener to their current location's mapinfo
+
+
+
+#### `def remove_listener(self, listener)`
+
+helper to remove listener from their current location's mapinfo
+
+
+
+#### `def move_listener(self, listener, to_coord, from_coord)`
+
+Moves a listener from one map area/z to another.
+Renders the old map without the listener (`force=False`) and the new map
+with the listener (`force=True`).
+
+
+#### `def move_mapable(self, mapable, to_coord, from_coord)`
+
+Moves a mapable from one map area/z to another.
+Renders the old map without the mapable (`force=False`) and the new map
+with the mapable (`force=True`).
+
+
+#### `def remove_mapable(self, mapable, from_area, from_z)`
+
+Removes a mapable from the given map area/z and renders the affected map once.
+
 ## 14.11 `atheriz.globals.time`
 
 ## 14.12 `atheriz.utils`
@@ -1901,6 +2092,12 @@ Returns:
 
 
 ### `def strip_ansi(input)`
+
+
+
+### `def strip_terminal_escapes(input)`
+
+Strip all terminal escape sequences and null bytes from input.
 
 
 
@@ -2128,7 +2325,7 @@ Examples:
 
 ### `def funcparser_callable_toint(*args, **kwargs)`
 
-Usage: $toint(43.0) -> 43
+Usage: $toint(43.0) -> 43, or non-numeric -> unchanged string.
 
 
 
@@ -2646,6 +2843,11 @@ Default value: `'localhost'`
 Default value: `True`
 
 
+### `WEBSOCKET_MAX_MESSAGE_SIZE`
+
+Default value: `65536`
+
+
 ### `TELNET_ENABLED`
 
 Default value: `True`
@@ -2659,6 +2861,56 @@ Default value: `4444`
 ### `TELNET_INTERFACE`
 
 Default value: `'0.0.0.0'`
+
+
+### `TELNET_CONNECTION_TIMEOUT`
+
+Default value: `300`
+
+
+### `TELNET_NAWS_MIN_COLS`
+
+Default value: `20`
+
+
+### `TELNET_NAWS_MAX_COLS`
+
+Default value: `1000`
+
+
+### `TELNET_NAWS_MIN_ROWS`
+
+Default value: `5`
+
+
+### `TELNET_NAWS_MAX_ROWS`
+
+Default value: `200`
+
+
+### `STRIP_INPUT_ESCAPE_SEQUENCES`
+
+Default value: `False`
+
+
+### `TERM_SIZE_MAX_WIDTH`
+
+Default value: `1000`
+
+
+### `TERM_SIZE_MAX_HEIGHT`
+
+Default value: `1000`
+
+
+### `MAP_SIZE_MAX_WIDTH`
+
+Default value: `1000`
+
+
+### `MAP_SIZE_MAX_HEIGHT`
+
+Default value: `1000`
 
 
 ### `NETWORK_PROTOCOLS`
@@ -2734,6 +2986,11 @@ Default value: `'\\'`
 ### `FUNCPARSER_MAX_NESTING`
 
 Default value: `20`
+
+
+### `MAX_SEARCH_DEPTH`
+
+Default value: `100`
 
 
 ### `CLIENT_DEFAULT_WIDTH`
@@ -2826,6 +3083,11 @@ Default value: `True`
 Default value: `True`
 
 
+### `AUTOSAVE_MINUTES`
+
+Default value: `0`
+
+
 ### `AUTO_COMMAND_ALIASING`
 
 Default value: `True`
@@ -2904,6 +3166,16 @@ Default value: `'\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┙\x1b[0m'`
 ### `EW_OPEN_DOOR2`
 
 Default value: `'\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m┕\x1b[0m'`
+
+
+### `UD_CLOSED_DOOR`
+
+Default value: `'\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m╳\x1b[0m'`
+
+
+### `UD_OPEN_DOOR`
+
+Default value: `'\x1b[1m\x1b[38;2;166;97;0m\x1b[48;2;0;0;0m▽\x1b[0m'`
 
 
 ### `TIME_SYSTEM_ENABLED`
@@ -3014,6 +3286,21 @@ Default value: `((20, ' nearly inaudible'), (40, ' faint'), (60, ''), (80, ' lou
 ### `REPLACE_LEVELS`
 
 Default value: `((1, 95.0), (10, 80.0), (20, 60.0), (30, 40.0), (40, 20.0), (50, 10.0))`
+
+
+### `PY_MAX_OUTPUT_LINES`
+
+Default value: `200`
+
+
+### `PY_MAX_OUTPUT_BYTES`
+
+Default value: `50000`
+
+
+### `PY_OUTPUT_FG`
+
+Default value: `15`
 
 
 [Previous: 13 The Menu Engine](./13_menu_engine.md) | [Table of Contents](./table_of_contents.md) | [Next: 15 Sound Propagation](./15_sound_propagation.md)

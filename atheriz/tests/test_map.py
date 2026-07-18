@@ -572,6 +572,135 @@ class TestMapableAddRemove:
         assert mi.objects[2] is b
 
 
+
+
+class TestMapInfoBatchUpdate:
+    def test_batch_update_defers_render(self, global_test_env):
+        mi = MapInfo()
+        with patch.object(mi, "render") as mock_render:
+            with mi.batch_update():
+                mi.update_grid((0, 0), "#")
+                mi.update_grid((1, 0), "#")
+                mi.update_grid((2, 0), "#")
+            mock_render.assert_called_once_with(True)
+
+    def test_batch_update_no_render_when_no_changes(self, global_test_env):
+        mi = MapInfo()
+        mi.map_changed = False
+        with patch.object(mi, "render") as mock_render:
+            with mi.batch_update():
+                pass
+            mock_render.assert_not_called()
+
+    def test_nested_batch_update(self, global_test_env):
+        mi = MapInfo()
+        with patch.object(mi, "render") as mock_render:
+            with mi.batch_update():
+                with mi.batch_update():
+                    mi.update_grid((0, 0), "#")
+                mock_render.assert_not_called()
+            mock_render.assert_called_once_with(True)
+
+
+class TestMapInfoRenderFiltering:
+    def test_render_skips_disabled_listeners(self, global_test_env):
+        mi = MapInfo()
+        mi.pre_grid[(0, 0)] = "X"
+        mi.pre_render()
+
+        enabled = MagicMock()
+        enabled.id = 1
+        enabled.last_map_time = 0
+        enabled.map_enabled = True
+        enabled.at_pre_map_render.side_effect = lambda g: g
+
+        disabled = MagicMock()
+        disabled.id = 2
+        disabled.last_map_time = 0
+        disabled.map_enabled = False
+        disabled.at_pre_map_render.side_effect = lambda g: g
+
+        mi.add_listener(enabled)
+        mi.add_listener(disabled)
+        mi.render(force=True)
+
+        enabled.at_map_update.assert_called_once()
+        disabled.at_map_update.assert_not_called()
+
+
+class TestMapHandlerMoveListener:
+    def test_cross_area_move_uses_non_forced_render(self, mock_db, global_test_env):
+        handler = MapHandler()
+        loc_a = MagicMock()
+        loc_a.coord.area = "a"
+        loc_a.coord.z = 0
+        loc_b = MagicMock()
+        loc_b.coord.area = "b"
+        loc_b.coord.z = 0
+
+        mi_a = MapInfo(name="a")
+        mi_b = MapInfo(name="b")
+        handler.set_mapinfo("a", 0, mi_a)
+        handler.set_mapinfo("b", 0, mi_b)
+
+        listener = MagicMock()
+        listener.id = 1
+        listener.location = loc_a
+        handler.add_listener(listener)
+
+        with patch.object(mi_a, "render") as mock_a, patch.object(mi_b, "render") as mock_b:
+            handler.move_listener(listener, loc_b.coord, loc_a.coord)
+
+        mock_a.assert_called_once_with(False)
+        mock_b.assert_called_once_with(True)
+
+
+class TestMapHandlerMoveMapable:
+    def test_cross_area_move_uses_non_forced_render(self, mock_db, global_test_env):
+        handler = MapHandler()
+        loc_a = MagicMock()
+        loc_a.coord.area = "a"
+        loc_a.coord.z = 0
+        loc_b = MagicMock()
+        loc_b.coord.area = "b"
+        loc_b.coord.z = 0
+
+        mi_a = MapInfo(name="a")
+        mi_b = MapInfo(name="b")
+        handler.set_mapinfo("a", 0, mi_a)
+        handler.set_mapinfo("b", 0, mi_b)
+
+        obj = MagicMock()
+        obj.id = 1
+        obj.location = loc_a
+        handler.add_mapable(obj)
+
+        with patch.object(mi_a, "render") as mock_a, patch.object(mi_b, "render") as mock_b:
+            handler.move_mapable(obj, loc_b.coord, loc_a.coord)
+
+        mock_a.assert_called_once_with(False)
+        mock_b.assert_called_once_with(True)
+
+
+class TestMapHandlerRemoveMapable:
+    def test_remove_mapable_does_not_double_render_legend(self, mock_db, global_test_env):
+        handler = MapHandler()
+        loc = MagicMock()
+        loc.coord.area = "a"
+        loc.coord.z = 0
+        mi = MapInfo(name="a")
+        handler.set_mapinfo("a", 0, mi)
+
+        obj = MagicMock()
+        obj.id = 1
+        obj.location = loc
+        handler.add_mapable(obj)
+
+        with patch.object(mi, "render_legend") as mock_rl:
+            handler.remove_mapable(obj, "a", 0)
+        # remove_mapable on MapInfo already calls render_legend; handler must not repeat it
+        mock_rl.assert_called_once()
+
 # --- MapHandler ---
 
 @pytest.fixture

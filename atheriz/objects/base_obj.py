@@ -1083,7 +1083,7 @@ class Object(Flags, DbOps, AccessLock):
             if settings.MAP_ENABLED and self.map_enabled:
                 self.msg(map_enable="")
                 mh = get_map_handler()
-                mi: MapInfo | None = mh.get_mapinfo(self.location.coord.area, self.location.coord.z)
+                mi = mh.get_mapinfo(self.location.coord.area, self.location.coord.z)
                 if mi:
                     mi.render(True)
 

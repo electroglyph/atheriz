@@ -50,7 +50,7 @@ def astar(
         A tuple containing:
             - A boolean indicating whether a path was found.
             - A list of nodes representing the path.
-            - A list of nodes representing the dead ends
+            - A list of node coordinates representing the closed set
     """
     nh = get_node_handler()
 

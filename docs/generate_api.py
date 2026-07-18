@@ -112,6 +112,25 @@ def generate_markdown():
                         if method_doc:
                             output.append(f"{method_doc}\n")
                         output.append("\n")
+        elif module_name == "atheriz.globals.map":
+            # Document public classes and their methods for the map module
+            for cls_name in ["LegendEntry", "MapInfo", "MapHandler"]:
+                if cls_name in classes:
+                    cls_node = classes[cls_name]
+                    output.append(f"### Class: `{cls_name}`\n")
+                    cls_doc = ast.get_docstring(cls_node)
+                    if cls_doc:
+                        output.append(f"{cls_doc}\n")
+                    methods = [node for node in cls_node.body if isinstance(node, ast.FunctionDef)]
+                    for method in methods:
+                        if method.name.startswith("__"):
+                            continue
+                        sig = format_args(method.args)
+                        output.append(f"#### `def {method.name}{sig}`\n")
+                        method_doc = ast.get_docstring(method)
+                        if method_doc:
+                            output.append(f"{method_doc}\n")
+                        output.append("\n")
         else:
             # Document public functions
             for func in functions:

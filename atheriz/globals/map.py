@@ -1,5 +1,6 @@
 from __future__ import annotations
 from threading import RLock
+from contextlib import contextmanager
 from atheriz.globals.node import Node
 from atheriz.logger import logger
 import atheriz.settings as settings
@@ -81,6 +82,7 @@ class MapInfo:
         self.objects: dict[int, Object] = {}
         self.listeners: dict[int, Object] = {}
         self.lock = RLock()
+        self._batch_update = 0
     
     def __getstate__(self):
         with self.lock:
@@ -88,6 +90,7 @@ class MapInfo:
             state.pop("lock", None)
             state.pop("objects", None)
             state.pop("listeners", None)
+            state.pop("_batch_update", None)
             return state
     
     def __setstate__(self, state):
@@ -95,6 +98,7 @@ class MapInfo:
         self.lock = RLock()
         self.objects: dict[int, Object] = {}
         self.listeners: dict[int, Object] = {}
+        self._batch_update = 0
 
     def __eq__(self, other):
         if not isinstance(other, MapInfo):
@@ -164,124 +168,6 @@ class MapInfo:
         if grid.get((cx - 1, cy), None) in chars:
             w = True
         return n, s, e, w
-
-    @staticmethod
-    def render_char(
-        grid: dict[tuple[int, int], str],
-        original_grid: dict[tuple[int, int], str],
-        char: str,
-        style: str = "single",
-    ) -> dict[tuple[int, int], str]:
-        """
-        renders specified char into appropriate road/wall/path type based on its neighbors
-        """
-        if not grid:
-            return {}
-        to_place = {}
-        for k, v in grid.items():
-            if v == char:
-                n, s, e, w = MapInfo.get_dirs(original_grid, k, settings.ALL_SYMBOLS)
-                if style == "single":
-                    if n and s and e and w:
-                        to_place[k] = "┼"
-                    elif n and s and e:
-                        to_place[k] = "├"
-                    elif n and s and w:
-                        to_place[k] = "┤"
-                    elif n and e and w:
-                        to_place[k] = "┴"
-                    elif s and e and w:
-                        to_place[k] = "┬"
-                    elif n and e:
-                        to_place[k] = "└"
-                    elif n and w:
-                        to_place[k] = "┘"
-                    elif s and e:
-                        to_place[k] = "┌"
-                    elif s and w:
-                        to_place[k] = "┐"
-                    elif n and s:
-                        to_place[k] = "│"
-                    elif e and w:
-                        to_place[k] = "─"
-                    elif n:
-                        to_place[k] = "│"
-                    elif s:
-                        to_place[k] = "│"
-                    elif e:
-                        to_place[k] = "─"
-                    elif w:
-                        to_place[k] = "─"
-                    else:
-                        to_place[k] = "─"
-                elif style == "double":
-                    if n and s and e and w:
-                        to_place[k] = "╬"
-                    elif n and s and e:
-                        to_place[k] = "╠"
-                    elif n and s and w:
-                        to_place[k] = "╣"
-                    elif n and e and w:
-                        to_place[k] = "╩"
-                    elif s and e and w:
-                        to_place[k] = "╦"
-                    elif n and e:
-                        to_place[k] = "╚"
-                    elif n and w:
-                        to_place[k] = "╝"
-                    elif s and e:
-                        to_place[k] = "╔"
-                    elif s and w:
-                        to_place[k] = "╗"
-                    elif n and s:
-                        to_place[k] = "║"
-                    elif e and w:
-                        to_place[k] = "═"
-                    elif n:
-                        to_place[k] = "║"
-                    elif s:
-                        to_place[k] = "║"
-                    elif e:
-                        to_place[k] = "═"
-                    elif w:
-                        to_place[k] = "═"
-                    else:
-                        to_place[k] = "═"
-                elif style == "rounded":
-                    if n and s and e and w:
-                        to_place[k] = "┼"
-                    elif n and s and e:
-                        to_place[k] = "├"
-                    elif n and s and w:
-                        to_place[k] = "┤"
-                    elif n and e and w:
-                        to_place[k] = "┴"
-                    elif s and e and w:
-                        to_place[k] = "┬"
-                    elif n and e:
-                        to_place[k] = "╰"
-                    elif n and w:
-                        to_place[k] = "╯"
-                    elif s and e:
-                        to_place[k] = "╭"
-                    elif s and w:
-                        to_place[k] = "╮"
-                    elif n and s:
-                        to_place[k] = "│"
-                    elif e and w:
-                        to_place[k] = "─"
-                    elif n:
-                        to_place[k] = "│"
-                    elif s:
-                        to_place[k] = "│"
-                    elif e:
-                        to_place[k] = "─"
-                    elif w:
-                        to_place[k] = "─"
-                    else:
-                        to_place[k] = "─"
-        grid.update(to_place)
-        return grid
 
     @staticmethod
     def _resolve_char(n: bool, s: bool, e: bool, w: bool, style: str) -> str:
@@ -357,7 +243,21 @@ class MapInfo:
         with self.lock:
             self.pre_grid[coord] = new_symbol
             self.map_changed = True
-        self.render(True)
+        if self._batch_update == 0:
+            self.render(True)
+
+    @contextmanager
+    def batch_update(self):
+        with self.lock:
+            self._batch_update += 1
+        try:
+            yield
+        finally:
+            with self.lock:
+                self._batch_update -= 1
+                should_render = self._batch_update == 0 and self.map_changed
+            if should_render:
+                self.render(True)
 
     def render_legend(self):
         with self.lock:
@@ -402,6 +302,8 @@ class MapInfo:
 
         fps_limit = 1 / settings.MAP_FPS_LIMIT
         for l in listeners:
+            if not getattr(l, "map_enabled", True):
+                continue
             last_map_time = l.last_map_time
             if last_map_time and not force and (t - last_map_time) <= fps_limit:
                 continue
@@ -422,28 +324,32 @@ class MapInfo:
             self.legend_entries.remove(entry)
         self.render_legend()
 
-    def add_listener(self, listener: Object):
+    def add_listener(self, listener: Object, notify: bool = False):
         with self.lock:
             self.listeners[listener.id] = listener
+        if notify:
+            self.render(True)
 
     def remove_listener(self, listener: Object):
         with self.lock:
             self.listeners.pop(listener.id, None)
 
-    def add_mapable(self, mapable: Object):
+    def add_mapable(self, mapable: Object, notify: bool = True):
         with self.lock:
             self.objects[mapable.id] = mapable
-        self.render_legend()
+        if notify:
+            self.render_legend()
 
     def remove_mapable(self, mapable: Object):
         with self.lock:
             self.objects.pop(mapable.id, None)
         self.render_legend()
 
-    def add_mapable_list(self, mapables: list[Object]):
+    def add_mapable_list(self, mapables: list[Object], notify: bool = True):
         with self.lock:
             self.objects.update({m.id: m for m in mapables})
-        self.render_legend()
+        if notify:
+            self.render_legend()
 
 
 from atheriz.database_setup import get_database
@@ -495,7 +401,7 @@ class MapHandler:
         with self.lock:
             return self.data.get((area, z))
 
-    def add_mapable(self, mapable: Object):
+    def add_mapable(self, mapable: Object, notify: bool = False):
         """
         helper to add mapable to their current location's mapinfo
         """
@@ -504,15 +410,13 @@ class MapHandler:
             with self.lock:
                 mi = self.data.get((loc.coord.area, loc.coord.z))
             if mi:
-                mi.add_mapable(mapable)
-                mi.render()
+                mi.add_mapable(mapable, notify=notify)
             else:
                 mi = MapInfo(name=loc.coord.area)
-                mi.add_mapable(mapable)
+                mi.add_mapable(mapable, notify=notify)
                 self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
-                mi.render()
 
-    def add_listener(self, listener: Object):
+    def add_listener(self, listener: Object, notify: bool = False):
         """
         helper to add character as a listener to their current location's mapinfo
         """
@@ -521,10 +425,10 @@ class MapHandler:
             with self.lock:
                 mi = self.data.get((loc.coord.area, loc.coord.z))
             if mi:
-                mi.add_listener(listener)
+                mi.add_listener(listener, notify=notify)
             else:
                 mi = MapInfo(name=loc.coord.area)
-                mi.add_listener(listener)
+                mi.add_listener(listener, notify=notify)
                 self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
 
     def remove_listener(self, listener: Object):
@@ -552,12 +456,14 @@ class MapHandler:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
-            to_map = MapInfo()
+            to_map = MapInfo(name=to_coord.area)
             self.set_mapinfo(to_coord.area, to_coord.z, to_map)
         if from_map:
             from_map.remove_listener(listener)
+            from_map.render(False)
         if to_map:
             to_map.add_listener(listener)
+            to_map.render(True)
 
     def move_mapable(
         self,
@@ -572,7 +478,7 @@ class MapHandler:
                 current_map.add_mapable(mapable)
                 current_map.render(True)
             else:
-                current_map = MapInfo()
+                current_map = MapInfo(name=to_coord.area)
                 self.set_mapinfo(to_coord.area, to_coord.z, current_map)
                 current_map.add_mapable(mapable)
                 current_map.render(True)
@@ -583,11 +489,11 @@ class MapHandler:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
-            to_map = MapInfo()
+            to_map = MapInfo(name=to_coord.area)
             self.set_mapinfo(to_coord.area, to_coord.z, to_map)
         if from_map:
             from_map.remove_mapable(mapable)
-            from_map.render(True)
+            from_map.render(False)
         if to_map:
             to_map.add_mapable(mapable)
             to_map.render(True)
@@ -597,4 +503,3 @@ class MapHandler:
             from_map = self.data.get((from_area, from_z))
         if from_map:
             from_map.remove_mapable(mapable)
-            from_map.render_legend()
