@@ -229,3 +229,6 @@ terminoid/
 example_game/save/time
 grotto/
 save/
+*.md
+!README.md
+!readme.md

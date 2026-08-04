@@ -41,8 +41,6 @@ classifiers = [
   "Development Status :: 5 - Production/Stable",
   "Environment :: Console",
   "Environment :: Web Environment",
-  "Framework :: Django",
-  "Framework :: Twisted",
   "Intended Audience :: Developers",
   "Intended Audience :: Education",
   "Operating System :: MacOS",
@@ -55,7 +53,6 @@ classifiers = [
   "Topic :: Games/Entertainment :: Role-Playing",
   "Topic :: Games/Entertainment :: Simulation",
   "Topic :: Software Development :: Libraries :: Application Frameworks",
-  "Topic :: Internet :: WWW/HTTP :: WSGI :: Server",
 ]
 dependencies = [
   "starlette>=1.1.0",

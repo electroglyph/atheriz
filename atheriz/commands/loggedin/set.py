@@ -8,6 +8,16 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.objects.nodes import Node
 
+PROTECTED_ATTRIBUTES = frozenset(
+    {
+        "lock",
+        "privilege_level",
+        "quelled",
+        "is_banned",
+        "ban_reason",
+    }
+)
+
 
 class SetCommand(Command):
     key = "set"
@@ -76,6 +86,10 @@ class SetCommand(Command):
         if not hasattr(target, attr):
             caller.msg(f"Warning: '{attr}' is a new attribute on {target.name}.")
 
+        if attr in PROTECTED_ATTRIBUTES:
+            caller.msg(f"'{attr}' is protected and cannot be set.")
+            return
+
         setattr(target, attr, value)
         caller.msg(f"Set {target.name}.{attr} = {repr(value)}")
 
@@ -135,6 +149,10 @@ class UnsetCommand(Command):
                 target = matches[0]
 
         attr = args.attribute
+
+        if attr in PROTECTED_ATTRIBUTES:
+            caller.msg(f"'{attr}' is protected and cannot be removed.")
+            return
 
         if not hasattr(target, attr):
             caller.msg(f"{target.name} has no attribute '{attr}'.")
