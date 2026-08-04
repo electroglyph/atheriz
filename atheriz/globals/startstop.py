@@ -64,6 +64,9 @@ def do_reload():
     except ImportError:
         import atheriz.server_events as server_events
     server_events.at_server_reload()
+    if settings.TIME_SYSTEM_ENABLED:
+        get_game_time().stop()
+    stop_autosave()
     get_async_ticker().clear()
     if settings.TIME_SYSTEM_ENABLED:
         get_game_time().start()

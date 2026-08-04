@@ -33,11 +33,12 @@ class TestReloadKeepsGameClock:
 
 
 class TestReloadKeepsAutosave:
-    def test_reload_re_registers_autosave(self, global_test_env):
+    def test_reload_re_registers_autosave(self, global_test_env, monkeypatch):
         """INTENT: after a hot-reload the autosave coroutine must still be
         registered on the ticker."""
         from atheriz.globals import autosave
 
+        monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", 5)
         start_autosave()
         interval = float(settings.AUTOSAVE_MINUTES) * 60.0
         ticker = get_async_ticker()

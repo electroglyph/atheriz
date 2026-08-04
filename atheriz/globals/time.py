@@ -117,6 +117,7 @@ class GameTime:
         t = get_async_ticker()
         t.remove_coro(self.on_tick, settings.TIME_UPDATE_SECONDS)
         self.save()
+        self.started = False
 
     def start(self) -> None:
         if not self.started:
