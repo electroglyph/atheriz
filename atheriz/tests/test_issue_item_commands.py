@@ -86,6 +86,50 @@ class TestGetCommand:
         assert sword.location == target
         assert sword not in caller.contents
 
+    def test_builder_can_get_from_another_player(self, global_test_env):
+        """INTENT: builders (and above) may take items from another player's
+        inventory; only guests/normal players are blocked."""
+        node, caller, target, bystander = _setup_room()
+        caller.privilege_level = settings.Privilege.Builder
+        sword = Object.create(None, "sword", is_item=True)
+        sword.move_to(target)
+
+        cmd = GetCommand()
+        args = cmd.parser.parse_args(["sword", "from", "target"])
+        cmd.run(caller, args)
+
+        assert sword in caller.contents
+
+    def test_builder_get_all_from_another_player(self, global_test_env):
+        """INTENT: `get all from <player>` is also allowed for builders."""
+        node, caller, target, bystander = _setup_room()
+        caller.privilege_level = settings.Privilege.Builder
+        sword = Object.create(None, "sword", is_item=True)
+        sword.move_to(target)
+        shield = Object.create(None, "shield", is_item=True)
+        shield.move_to(target)
+
+        cmd = GetCommand()
+        args = cmd.parser.parse_args(["all", "from", "target"])
+        cmd.run(caller, args)
+
+        assert sword in caller.contents
+        assert shield in caller.contents
+
+    def test_cannot_get_all_from_another_player(self, global_test_env):
+        """INTENT: `get all from <player>` must not loot a player's inventory
+        for non-builders either."""
+        node, caller, target, bystander = _setup_room()
+        sword = Object.create(None, "sword", is_item=True)
+        sword.move_to(target)
+
+        cmd = GetCommand()
+        args = cmd.parser.parse_args(["all", "from", "target"])
+        cmd.run(caller, args)
+
+        assert sword.location == target
+        assert sword not in caller.contents
+
 
 class TestDropCommand:
     def test_drop_does_not_crash(self, global_test_env):

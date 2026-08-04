@@ -159,12 +159,12 @@ class Object(Flags, DbOps, AccessLock):
             obj.is_mapable = True
             obj.is_container = True
             obj.add_lock("view", lambda x: not obj.is_pc or (obj.is_pc and obj.is_connected))
-            obj.add_lock("get", lambda x: False)
+            obj.add_lock("get", lambda x: x.is_builder)
         obj.is_item = is_item
         obj.is_npc = is_npc
         if is_npc:
             obj.can_hear = True
-            obj.add_lock("get", lambda x: False)
+            obj.add_lock("get", lambda x: x.is_builder)
         obj.is_tickable = is_tickable
         obj.name = name
         obj.desc = desc

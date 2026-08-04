@@ -40,6 +40,9 @@ class GetCommand(Command):
                     caller.msg(f"'{source_name}' not found.")
                     return
                 source = container[0]
+                if not source.access(caller, "get"):
+                    caller.msg("You can't take anything from there.")
+                    return
             else:
                 if not loc.access(caller, "get"):
                     caller.msg("You can't get something from here!")
@@ -68,9 +71,13 @@ class GetCommand(Command):
             if not container:
                 caller.msg(f"'{source_name}' not found.")
                 return
-            found = container[0].search(obj_name)
+            source = container[0]
+            if not source.access(caller, "get"):
+                caller.msg("You can't take anything from there.")
+                return
+            found = source.search(obj_name)
             if not found:
-                caller.msg(f"'{obj_name}' not found in {container[0].name}.")
+                caller.msg(f"'{obj_name}' not found in {source.name}.")
                 return
         else:
             if not loc.access(caller, "get"):
