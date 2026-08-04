@@ -232,7 +232,7 @@ class ExamineCommand(Command):
 
         ignore = ["access", "lock"]
 
-        attrs = vars(target)
+        attrs = dict(vars(target))
         prop_names = set()
         for c in type(target).mro():
             for name, obj in c.__dict__.items():
