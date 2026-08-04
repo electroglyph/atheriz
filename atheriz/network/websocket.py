@@ -18,6 +18,23 @@ class WebSocketConnection(BaseConnection):
         super().__init__(session_id)
         self.websocket = websocket
         self.client_host = websocket.client.host if websocket.client else "?"
+        self._pending_tasks = set()
+        self._pending_tasks_lock = threading.Lock()
+
+    def _track_task(self, task):
+        with self._pending_tasks_lock:
+            self._pending_tasks.add(task)
+        task.add_done_callback(self._task_done)
+
+    def _task_done(self, task):
+        with self._pending_tasks_lock:
+            self._pending_tasks.discard(task)
+        try:
+            task.result()
+        except asyncio.CancelledError:
+            pass
+        except Exception as e:
+            logger.debug(f"[WebSocket] Async task failed: {e}")
 
     def send_command(self, cmd: str, *args, **kwargs):
         if args is None:
@@ -27,11 +44,12 @@ class WebSocketConnection(BaseConnection):
         data = json.dumps([cmd, args, kwargs])
         try:
             if threading.get_ident() == self.thread_id:
-                self.loop.create_task(self.websocket.send_text(data))
+                task = self.loop.create_task(self.websocket.send_text(data))
             else:
-                asyncio.run_coroutine_threadsafe(
+                task = asyncio.run_coroutine_threadsafe(
                     self.websocket.send_text(data), self.loop
                 )
+            self._track_task(task)
         except Exception as e:
             logger.debug(f"[WebSocket] Error sending command: {e}")
 
@@ -44,9 +62,10 @@ class WebSocketConnection(BaseConnection):
     def close(self):
         try:
             if threading.get_ident() == self.thread_id:
-                self.loop.create_task(self._close_websocket())
+                task = self.loop.create_task(self._close_websocket())
             else:
-                asyncio.run_coroutine_threadsafe(self._close_websocket(), self.loop)
+                task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self.loop)
+            self._track_task(task)
         except Exception as e:
             logger.debug(f"[WebSocket] Error closing connection: {e}")
 
