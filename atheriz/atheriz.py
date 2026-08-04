@@ -11,6 +11,7 @@ from fastapi import FastAPI, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from starlette.concurrency import run_in_threadpool
 from atheriz import settings
 from atheriz.network import connection_manager
 from atheriz.objects.base_account import Account
@@ -244,6 +245,55 @@ async def shutdown_endpoint(request: Request):
     return {"status": "ok", "message": "Shutdown tasks completed."}
 
 
+@app.post("/_internal/create_account")
+async def create_account_endpoint(request: Request):
+    token = request.headers.get("X-Admin-Token")
+
+    secret_path = Path(settings.SECRET_PATH)
+    token_file = secret_path / "admin.token"
+
+    if not token_file.exists():
+        return {"status": "error", "message": "Token file not found."}
+
+    with open(token_file, "r") as f:
+        expected_token = f.read().strip()
+
+    if request.client.host not in ["127.0.0.1", "::1"]:
+        return {"status": "error", "message": "Remote account creation not allowed."}
+
+    if token != expected_token:
+        return {"status": "error", "message": "Invalid token."}
+
+    try:
+        body = await request.json()
+    except Exception:
+        return {"status": "error", "message": "Invalid JSON body."}
+
+    account_name = body.get("account_name")
+    char_name = body.get("char_name")
+    password = body.get("password")
+    if not account_name or not char_name or not password:
+        return {
+            "status": "error",
+            "message": "account_name, char_name and password are required.",
+        }
+
+    import io
+    import contextlib
+
+    buf = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(buf):
+            await run_in_threadpool(
+                at_char_create, account_name, char_name, password
+            )
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+    message = buf.getvalue().strip() or "Account created."
+    return {"status": "ok", "message": message}
+
+
 def setup_static_files():
     """Mount the static files directory (uses game folder's web/static if available)."""
     if static_dir.exists():
@@ -401,6 +451,47 @@ def request_internal_shutdown(port: int | None = None) -> bool:
         "Could not contact server for graceful shutdown (server might be hung or stopped)."
     )
     return False
+
+
+def request_create_account(
+    account_name: str, char_name: str, password: str, port: int | None = None
+) -> tuple[str, str]:
+    """Ask a running server to create an account/character via the internal API.
+
+    Returns (status, message) where status is "ok", "error" (the server
+    responded but refused the request), or "unavailable" (no server could be
+    reached or no token file exists).
+    """
+    import urllib.request
+    import json
+
+    port = port or settings.WEBSERVER_PORT
+    secret_path = Path(settings.SECRET_PATH)
+    token_file = secret_path / "admin.token"
+
+    if not token_file.exists():
+        return "unavailable", "No admin.token found. Is the server running?"
+
+    try:
+        with open(token_file, "r") as f:
+            token = f.read().strip()
+    except Exception:
+        return "unavailable", "Could not read admin.token."
+
+    url = f"http://localhost:{port}/_internal/create_account"
+    data = json.dumps(
+        {"account_name": account_name, "char_name": char_name, "password": password}
+    ).encode()
+    req = urllib.request.Request(url, method="POST", data=data)
+    req.add_header("X-Admin-Token", token)
+    req.add_header("Content-Type", "application/json")
+
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            result = json.loads(response.read().decode())
+            return result.get("status", "error"), result.get("message", "")
+    except Exception:
+        return "unavailable", "Server did not respond to account creation request."
 
 
 def stop_server(port: int | None = None):
@@ -579,6 +670,12 @@ def main():
     create_parser.add_argument("accountname", help="Name of the account")
     create_parser.add_argument("charactername", help="Name of the character")
     create_parser.add_argument("password", help="Password for the account")
+    create_parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help=f"Override the webserver port of the running server (default: {settings.WEBSERVER_PORT})",
+    )
 
     new_parser = subparsers.add_parser(
         "new",
@@ -784,6 +881,26 @@ def spawn_daemon(args):
 def create_game_data(args):
     """Create a new account and character."""
     setup_game_folder()
+
+    # If a server is already running, delegate account creation to it via the
+    # internal API. This keeps the CLI process from loading the world in a
+    # second process, which would contend with the running server for exclusive
+    # resources (e.g. the game folder's Qdrant shards). Only fall back to the
+    # offline path when no server can be reached.
+    status, message = request_create_account(
+        args.accountname,
+        args.charactername,
+        args.password,
+        args.port,
+    )
+    if status == "ok":
+        print(message)
+        return
+    if status == "error":
+        print(message)
+        return
+
+    print("No running server detected; creating directly against the database.")
     print("Loading existing data...")
     save_path = Path(settings.SAVE_PATH)
     if not save_path.exists():

@@ -1,14 +1,18 @@
 """Tests for atheriz.atheriz — ServerState, get_file_version, do_test_command."""
 from __future__ import annotations
 
+import asyncio
 import os
 import sys
 import tempfile
+import urllib.request
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+import atheriz
 from atheriz.atheriz import ServerState, get_file_version, server_state
 
 
@@ -159,12 +163,187 @@ class TestCreateGameData:
         args.charactername = "Bob"
         args.password = "secret"
         with patch("atheriz.atheriz.setup_game_folder"), \
+             patch("atheriz.atheriz.request_create_account",
+                   return_value=("unavailable", "No admin.token found. Is the server running?")), \
              patch("atheriz.atheriz.load_objects"), \
              patch("atheriz.atheriz.at_char_create") as mock_char, \
              patch("atheriz.atheriz.Path") as mock_path:
             mock_path.return_value.exists.return_value = True
             create_game_data(args)
         mock_char.assert_called_once_with("alice", "Bob", "secret")
+
+    def test_delegates_to_running_server_when_available(self, global_test_env):
+        from atheriz.atheriz import create_game_data
+        args = MagicMock()
+        args.accountname = "alice"
+        args.charactername = "Bob"
+        args.password = "secret"
+        args.port = None
+        with patch("atheriz.atheriz.setup_game_folder"), \
+             patch("atheriz.atheriz.request_create_account",
+                   return_value=("ok", "Success! Account and character created.")) as mock_req, \
+             patch("atheriz.atheriz.load_objects") as mock_load, \
+             patch("atheriz.atheriz.at_char_create") as mock_char:
+            create_game_data(args)
+        mock_req.assert_called_once_with("alice", "Bob", "secret", None)
+        mock_load.assert_not_called()
+        mock_char.assert_not_called()
+
+    def test_prints_error_when_server_refuses(self, global_test_env, capsys):
+        from atheriz.atheriz import create_game_data
+        args = MagicMock()
+        args.accountname = "alice"
+        args.charactername = "Bob"
+        args.password = "secret"
+        with patch("atheriz.atheriz.setup_game_folder"), \
+             patch("atheriz.atheriz.request_create_account",
+                   return_value=("error", "Account already exists.")), \
+             patch("atheriz.atheriz.load_objects") as mock_load, \
+             patch("atheriz.atheriz.at_char_create") as mock_char:
+            create_game_data(args)
+        mock_load.assert_not_called()
+        mock_char.assert_not_called()
+        assert "Account already exists." in capsys.readouterr().out
+
+    def test_falls_back_to_offline_create_when_unavailable(self, global_test_env):
+        from atheriz.atheriz import create_game_data
+        args = MagicMock()
+        args.accountname = "alice"
+        args.charactername = "Bob"
+        args.password = "secret"
+        with patch("atheriz.atheriz.setup_game_folder"), \
+             patch("atheriz.atheriz.request_create_account",
+                   return_value=("unavailable", "Server did not respond.")), \
+             patch("atheriz.atheriz.load_objects"), \
+             patch("atheriz.atheriz.at_char_create") as mock_char, \
+             patch("atheriz.atheriz.Path") as mock_path:
+            mock_path.return_value.exists.return_value = True
+            create_game_data(args)
+        mock_char.assert_called_once_with("alice", "Bob", "secret")
+
+
+class TestRequestCreateAccount:
+    def test_unavailable_without_token_file(self, global_test_env, tmp_path):
+        from atheriz.atheriz import request_create_account
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            status, _ = request_create_account("alice", "Bob", "secret", port=8000)
+        assert status == "unavailable"
+
+    def test_posts_json_and_parses_response(self, global_test_env, tmp_path):
+        import urllib.request
+        from atheriz.atheriz import request_create_account
+        (tmp_path / "admin.token").write_text("secret-token")
+        mock_response = MagicMock()
+        mock_response.status = 200
+        mock_response.read.return_value = (
+            b'{"status": "ok", "message": "Success! Account and character created."}'
+        )
+        mock_response.__enter__.return_value = mock_response
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
+             patch.object(atheriz.settings, "WEBSERVER_PORT", 8123), \
+             patch("urllib.request.urlopen", return_value=mock_response) as mock_urlopen:
+            status, msg = request_create_account("alice", "Bob", "secret")
+        assert status == "ok"
+        assert msg == "Success! Account and character created."
+        req = mock_urlopen.call_args.args[0]
+        assert req.full_url == "http://localhost:8123/_internal/create_account"
+        assert req.headers.get("X-admin-token") == "secret-token"
+        assert req.headers.get("Content-type") == "application/json"
+        import json as json_mod
+        assert json_mod.loads(req.data) == {
+            "account_name": "alice",
+            "char_name": "Bob",
+            "password": "secret",
+        }
+
+    def test_returns_unavailable_when_server_unreachable(self, global_test_env, tmp_path):
+        from atheriz.atheriz import request_create_account
+        (tmp_path / "admin.token").write_text("secret-token")
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
+             patch("urllib.request.urlopen",
+                   side_effect=urllib.request.URLError("connection refused")):
+            status, _ = request_create_account("alice", "Bob", "secret", port=8000)
+        assert status == "unavailable"
+
+
+class _FakeRequest:
+    def __init__(self, token=None, host="127.0.0.1", body=None, bad_json=False):
+        self.headers = {} if token is None else {"X-Admin-Token": token}
+        self.client = SimpleNamespace(host=host)
+        self._body = body
+        self._bad_json = bad_json
+
+    async def json(self):
+        if self._bad_json:
+            raise ValueError("bad json")
+        return self._body
+
+
+class TestCreateAccountEndpoint:
+    def test_rejects_missing_token_file(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            result = asyncio.run(create_account_endpoint(_FakeRequest(token="x")))
+        assert result["status"] == "error"
+        assert result["message"] == "Token file not found."
+
+    def test_rejects_invalid_token(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            result = asyncio.run(create_account_endpoint(_FakeRequest(token="wrong")))
+        assert result["status"] == "error"
+        assert result["message"] == "Invalid token."
+
+    def test_rejects_remote_host(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            result = asyncio.run(
+                create_account_endpoint(_FakeRequest(token="real-token", host="8.8.8.8"))
+            )
+        assert result["status"] == "error"
+        assert result["message"] == "Remote account creation not allowed."
+
+    def test_creates_account_via_at_char_create(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        fake_thread = AsyncMock(side_effect=lambda fn, *args: fn(*args))
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
+             patch("atheriz.atheriz.run_in_threadpool", fake_thread), \
+             patch("atheriz.atheriz.at_char_create") as mock_char:
+            result = asyncio.run(
+                create_account_endpoint(
+                    _FakeRequest(
+                        token="real-token",
+                        body={"account_name": "alice", "char_name": "Bob", "password": "secret"},
+                    )
+                )
+            )
+        assert result["status"] == "ok"
+        mock_char.assert_called_once_with("alice", "Bob", "secret")
+
+    def test_rejects_missing_body_fields(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            result = asyncio.run(
+                create_account_endpoint(
+                    _FakeRequest(token="real-token", body={"account_name": "alice"})
+                )
+            )
+        assert result["status"] == "error"
+
+    def test_rejects_invalid_json_body(self, global_test_env, tmp_path):
+        from atheriz.atheriz import create_account_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)):
+            result = asyncio.run(
+                create_account_endpoint(
+                    _FakeRequest(token="real-token", body=None, bad_json=True)
+                )
+            )
+        assert result["status"] == "error"
 
 
 class TestSpawnDaemon:
