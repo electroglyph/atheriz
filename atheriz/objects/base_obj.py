@@ -46,8 +46,9 @@ _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 def hookable(func):
     @functools.wraps(func)
     def wrapper(self: "Object", *args, **kwargs):
-        h_dict = getattr(self, "hooks", {})
-        hooks = h_dict.get(func.__name__, set())
+        with self.lock:
+            h_dict = getattr(self, "hooks", {})
+            hooks = {hook for hook in h_dict.get(func.__name__, set())}
 
         replace_hooks = [h for h in hooks if getattr(h, "is_replace", False)]
         if replace_hooks:
