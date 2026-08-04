@@ -1118,7 +1118,7 @@ class Object(Flags, DbOps, AccessLock):
                 mh.add_listener(self)
                 if self.is_mapable:
                     mh.add_mapable(self)
-            self.move_to(self.location)
+            self.move_to(self.location, announce=False)
             if settings.MAP_ENABLED and self.map_enabled:
                 self.msg(map_enable="")
                 mh = get_map_handler()
