@@ -167,7 +167,7 @@ class PyCommand(Command):
 
     # pyrefly: ignore
     def access(self, caller: Object) -> bool:
-        return caller.is_superuser
+        return caller.is_builder
 
     # pyrefly: ignore
     def run(self, caller: Object, args: str):

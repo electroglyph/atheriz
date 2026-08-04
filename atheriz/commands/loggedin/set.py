@@ -90,7 +90,11 @@ class SetCommand(Command):
             caller.msg(f"'{attr}' is protected and cannot be set.")
             return
 
-        setattr(target, attr, value)
+        try:
+            setattr(target, attr, value)
+        except AttributeError:
+            caller.msg(f"'{attr}' is a read-only attribute and cannot be set.")
+            return
         caller.msg(f"Set {target.name}.{attr} = {repr(value)}")
 
 
@@ -158,5 +162,9 @@ class UnsetCommand(Command):
             caller.msg(f"{target.name} has no attribute '{attr}'.")
             return
 
-        delattr(target, attr)
+        try:
+            delattr(target, attr)
+        except AttributeError:
+            caller.msg(f"'{attr}' is a read-only attribute and cannot be removed.")
+            return
         caller.msg(f"Deleted {target.name}.{attr}")

@@ -183,6 +183,10 @@ class TestPyCommandAccess:
     def test_superuser_allowed(self, caller):
         assert PyCommand().access(caller) is True
 
+    def test_builder_allowed(self, caller):
+        caller.privilege_level = settings.Privilege.Builder
+        assert PyCommand().access(caller) is True
+
     def test_player_denied(self, caller):
         caller.privilege_level = settings.Privilege.Player
         assert PyCommand().access(caller) is False
