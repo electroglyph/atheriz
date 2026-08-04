@@ -64,6 +64,9 @@ class ConnectCommand(Command):
         while caller.session.puppet is None:
             text = "Please select a character to play: \r\n"
             chars: list[Object] = get(account.characters)
+            if not chars:
+                caller.msg("This account has no characters to play.")
+                return
             for x, c in enumerate(chars):
                 tag = " [banned]" if getattr(c, "is_banned", False) else ""
                 text += f"{x}. {c.name}{tag}\r\n"
