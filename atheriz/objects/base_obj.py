@@ -920,9 +920,11 @@ class Object(Flags, DbOps, AccessLock):
                 object.__setattr__(self, "last_touched_by", destination.id)
                 object.__setattr__(self, "is_modified", True)
             self.at_post_move(destination, to_exit, **kwargs)
+            return True
 
         if not destination.is_node:
-            do_item_move()
+            if not do_item_move():
+                return False
             return True
 
         # from_exit is NodeLink | None
@@ -937,6 +939,14 @@ class Object(Flags, DbOps, AccessLock):
                 ordered = sort_locks(loc, destination)
                 with ordered[0].lock:
                     with ordered[1].lock:
+                        if loc.is_node:
+                            if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
+                                return False
+                            loc.at_object_leave(destination, to_exit, **kwargs)
+                        if destination.is_node:
+                            if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                                return False
+                            destination.at_object_receive(loc, to_exit, **kwargs)
                         loc._contents.discard(self.id)
                         destination._contents.add(self.id)
                         object.__setattr__(loc, "is_modified", True)
@@ -948,6 +958,10 @@ class Object(Flags, DbOps, AccessLock):
                     self.announce_move_from(destination, from_exit, **kwargs)
             else:
                 with destination.lock:
+                    if destination.is_node:
+                        if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                            return False
+                        destination.at_object_receive(loc, to_exit, **kwargs)
                     destination._contents.add(self.id)
                     object.__setattr__(destination, "is_modified", True)
                     destination.add_exits(self, internal=True)
@@ -963,8 +977,10 @@ class Object(Flags, DbOps, AccessLock):
                     # mapables appear on the map
                     mh.move_mapable(self, destination.coord, old_coord)
             self.at_post_move(destination, to_exit, **kwargs)
+            return True
 
-        do_move()
+        if not do_move():
+            return False
         if self.is_pc:
             msg = self.at_look(destination)
             if msg:
