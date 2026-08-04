@@ -1,10 +1,12 @@
 from __future__ import annotations
 import asyncio
 import threading
+import time
 import traceback
 from collections import deque
 from typing import TYPE_CHECKING
 import json
+import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import strip_ansi
 
@@ -34,16 +36,35 @@ class BaseConnection:
         # threadpool, preserving input ordering per connection.
         self._input_queue = deque()
         self._input_running = False
+        self._last_input_busy = 0.0
 
     def enqueue_input(self, handler, args: list, kwargs: dict):
         """Queue one input handler for serialized execution on the game
-        threadpool. Called from the protocol event loop; returns immediately."""
+        threadpool. Called from the protocol event loop; returns immediately.
+
+        When this connection already has CONNECTION_INPUT_QUEUE_LIMIT pending
+        messages, the newest message is dropped and the client gets a
+        throttled busy reply (#32)."""
         from atheriz.globals.get import get_async_threadpool
+        busy = False
         with self.lock:
-            self._input_queue.append((handler, args, kwargs))
-            if self._input_running:
-                return
-            self._input_running = True
+            if len(self._input_queue) >= settings.CONNECTION_INPUT_QUEUE_LIMIT:
+                now = time.monotonic()
+                if now - self._last_input_busy < 1.0:
+                    return
+                self._last_input_busy = now
+                busy = True
+                start = False
+            else:
+                self._input_queue.append((handler, args, kwargs))
+                start = not self._input_running
+                if start:
+                    self._input_running = True
+        if busy:
+            self.msg("Server busy; input dropped.")
+            return
+        if not start:
+            return
         if not get_async_threadpool().add_task(self._drain_input):
             # queue full (#32): drop pending input for this connection
             with self.lock:

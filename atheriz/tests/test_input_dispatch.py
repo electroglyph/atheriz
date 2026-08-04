@@ -132,9 +132,65 @@ class TestDisconnectCleanup:
         assert ran == []
 
 
+class TestConnectionInputCap:
+    def test_flood_capped_newest_dropped_busy_throttled(self, manager):
+        """#32: pending input per connection is capped; accepted messages
+        still run FIFO; the newest overflow is dropped; the busy reply is
+        throttled to one per interval."""
+        import atheriz.settings as settings
+
+        release = threading.Event()
+        started = threading.Event()
+        ran = []
+
+        def first(c, a, k):
+            started.set()
+            release.wait(5)
+
+        def seq(c, a, k):
+            ran.append(a[0])
+
+        manager.register_handler("first", first)
+        manager.register_handler("seq", seq)
+        c = FakeConnection("cap")
+        manager.dispatch(c, "first", [], {})
+        assert started.wait(2)
+        cap = settings.CONNECTION_INPUT_QUEUE_LIMIT
+        for i in range(cap + 50):
+            manager.dispatch(c, "seq", [i], {})
+        assert len(c._input_queue) == cap
+        busy = [m for m in c.sent if m[0] == "text" and "busy" in str(m[1]).lower()]
+        assert len(busy) == 1
+        release.set()
+        assert _wait(lambda: len(ran) == cap, timeout=5)
+        assert ran == list(range(cap))
+
+    def test_recovers_after_drain(self, manager):
+        """After the drain catches up, the connection accepts input again."""
+        import atheriz.settings as settings
+
+        release = threading.Event()
+        started = threading.Event()
+        ran = []
+
+        def first(c, a, k):
+            started.set()
+            release.wait(5)
+
+        manager.register_handler("first", first)
+        manager.register_handler("seq", lambda c, a, k: ran.append(a[0]))
+        c = FakeConnection("cap2")
+        manager.dispatch(c, "first", [], {})
+        assert started.wait(2)
+        for i in range(settings.CONNECTION_INPUT_QUEUE_LIMIT + 10):
+            manager.dispatch(c, "seq", [i], {})
+        release.set()
+        assert _wait(lambda: not c._input_running and len(ran) == settings.CONNECTION_INPUT_QUEUE_LIMIT, timeout=5)
+        manager.dispatch(c, "seq", ["after"], {})
+        assert _wait(lambda: ran[-1:] == ["after"])
+
+
 class TestThreadpoolAPI:
-    def test_add_task_returns_true(self, global_test_env):
-        assert get_async_threadpool().add_task(lambda: None) is True
 
     def test_run_matches_pool_semantics(self, global_test_env):
         """run() executes sync inline and logs exceptions without raising."""

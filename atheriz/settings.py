@@ -33,6 +33,10 @@ WEBSERVER_PORT = 9999
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 WEBSERVER_INTERFACE = "0.0.0.0"
 THREADPOOL_LIMIT = os.cpu_count()
+# maximum pending threadpool tasks; add_task returns False when full (#32)
+THREADPOOL_QUEUE_LIMIT = 10000
+# maximum pending input messages per connection; newest input is dropped beyond this (#32)
+CONNECTION_INPUT_QUEUE_LIMIT = 100
 MAX_CHARACTERS = 5
 DEFAULT_TICK_SECONDS = 1.0
 # sound related settings

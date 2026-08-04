@@ -2,6 +2,7 @@ import asyncio
 from asyncio import AbstractEventLoop
 import os
 from threading import Thread, RLock, Event
+import time
 from typing import Optional
 import traceback
 import queue
@@ -44,7 +45,8 @@ class AsyncThreadPool:
         self.threads.append(AsyncThread(self.loop, 0))
         self.threads[0].start()  # first thread is for async
         self.timeout = default_timeout
-        self.task_queue = queue.Queue()
+        self.task_queue = queue.Queue(maxsize=settings.THREADPOOL_QUEUE_LIMIT)
+        self._last_full_log = 0.0
         for _ in range(max_threads - 1):  # rest of the threads for sync
             t = Thread(daemon=True, target=self._work_loop)
             t.start()
@@ -98,7 +100,17 @@ class AsyncThreadPool:
         print("at AsyncThreadPool.stop() ...")
         self.threads[0].stop(wait)
         for _ in range(self.max_threads):
-            self.task_queue.put(None)
+            while True:
+                try:
+                    self.task_queue.put_nowait(None)
+                    break
+                except queue.Full:
+                    # queue flooded (#32): discard the oldest pending task to
+                    # make room for the sentinel; shutdown must never block
+                    try:
+                        self.task_queue.get_nowait()
+                    except queue.Empty:
+                        break
         if wait:
             for t in self.threads[1:]:
                 t.join(timeout=timeout)
@@ -112,9 +124,20 @@ class AsyncThreadPool:
             func (callable): coroutine or function to execute
             args: func args
             kwargs: func kwargs
-        Returns True when the task was accepted (#32 will return False when full).
+        Returns True when the task was accepted, False when the queue is
+        full (newest task rejected; admission never blocks the caller, #32).
         """
-        self.task_queue.put((func, args, kwargs))
+        try:
+            self.task_queue.put_nowait((func, args, kwargs))
+        except queue.Full:
+            now = time.monotonic()
+            if now - self._last_full_log > 10:
+                # throttled so a task flood doesn't cause a logging flood
+                self._last_full_log = now
+                logger.warning(
+                    f"[AsyncThreadPool] task queue full ({self.task_queue.maxsize}); dropping task"
+                )
+            return False
         return True
         
     def delay(self, delay: float, func, *args, **kwargs):

@@ -49,6 +49,7 @@ class FakeConnection(BaseConnection):
         from collections import deque
         self._input_queue = deque()
         self._input_running = False
+        self._last_input_busy = 0.0
         self.sent: list[tuple] = []
         self.closed = False
 
