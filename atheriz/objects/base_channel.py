@@ -190,13 +190,17 @@ class Channel(Flags, DbOps, AccessLock):
 
     def msg(self, message: str, sender: Object | None = None) -> None:
         """Send a message to the channel."""
+        # Read sender attributes BEFORE taking the channel lock: the thread-safe
+        # getters acquire the sender's own lock, so reading them under the
+        # channel lock would invert the ordering against subscribe()/unsubscribe()
+        # (object lock -> channel lock) and deadlock.
+        timestamp = int(datetime.now().timestamp())
+        sender_name = sender.name if sender else ""
         with self.lock:
-            timestamp = int(datetime.now().timestamp())
             if sender:
-                self.history.append((timestamp, sender.name, message))
+                self.history.append((timestamp, sender_name, message))
             else:
                 self.history.append((timestamp, "", message))
-            sender_name = sender.name if sender else ""
             listeners = list(self.listeners.values())
         for listener in listeners:
             listener.msg(self.format_message(timestamp, sender_name, message))
