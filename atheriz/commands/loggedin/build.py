@@ -82,7 +82,8 @@ class BuildCommand(Command):
 
         # If no arguments provided (no directions, no mode, no desc, no outline), show help
         has_args = (
-            args.n
+            args.x
+            or args.n
             or args.e
             or args.s
             or args.w
@@ -93,6 +94,7 @@ class BuildCommand(Command):
             or args.room
             or args.single
             or args.double
+            or args.round
             or args.none
             or args.desc is not None
         )
