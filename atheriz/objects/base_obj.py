@@ -179,6 +179,18 @@ class Object(Flags, DbOps, AccessLock):
         obj.at_create()
         # prevent you from accidentally deleting yourself (atari teenage riot!)
         obj.add_lock("delete", lambda caller: caller.id != obj.id)
+        # puppeting is allowed for NPCs (any builder), for a character the
+        # caller's account owns, or for superusers. Games override per-object.
+        obj.add_lock(
+            "puppet",
+            lambda caller: obj.is_npc
+            or caller.is_superuser
+            or (
+                caller.session is not None
+                and caller.session.account is not None
+                and obj.id in caller.session.account.characters
+            ),
+        )
         return obj
 
     def add_script(self, script: Script | int):
@@ -370,6 +382,12 @@ class Object(Flags, DbOps, AccessLock):
                     state["home"] = home.id
             # Store as plain int to avoid dill recursion on IntEnum metaclass
             state["privilege_level"] = int(state["privilege_level"])
+            # While an object is being puppeted its is_pc/privilege_level (and
+            # any other _puppet_restore keys) are mutated in memory; never let
+            # that state reach the database — always persist the originals.
+            if (restore := state.pop("_puppet_restore", None)):
+                for key, orig in restore.items():
+                    state[key] = orig
 
             return state
 

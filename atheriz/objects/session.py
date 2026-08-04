@@ -16,7 +16,8 @@ class Session:
         self.connection = connection
         self.last_puppet: Object | None = None
         self.puppet: Object | None = None
-        # ponytail: stack of (prev_puppet, target, target_orig_is_pc, target_orig_privilege).
+        # ponytail: stack of (prev_puppet, target). Each target carries its own
+        # `_puppet_restore` manifest (excluded from pickling by __getstate__).
         # Lives on the session (never pickled) so transient restore state stays off saved objects.
         self.puppet_stack: list = []
         self.term_width: int = settings.CLIENT_DEFAULT_WIDTH
@@ -39,9 +40,10 @@ class Session:
         # ponytail: unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while self.puppet_stack:
-            _prev, target, orig_is_pc, orig_priv = self.puppet_stack.pop()
-            target.is_pc = orig_is_pc
-            target.privilege_level = orig_priv
+            _prev, target = self.puppet_stack.pop()
+            if restore := getattr(target, "_puppet_restore", None):
+                target.__dict__.update(restore)
+                del target._puppet_restore
         if self.puppet:
             self.puppet.seconds_played += time.time() - self.conn_time
             self.puppet.at_disconnect()

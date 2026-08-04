@@ -87,12 +87,19 @@ class PuppetCommand(Command):
         if bad := _puppetable(target):
             caller.msg(bad)
             return
+        if not target.access(caller, "puppet"):
+            caller.msg(f"You cannot puppet {target.name}.")
+            return
         if target.session is not None and target.session is not session:
             caller.msg(f"{target.name} is already being puppeted.")
             return
 
         # state off pickled objects; chain-safe (A->B->C unwinds B then A).
-        session.puppet_stack.append((caller, target, target.is_pc, target.privilege_level))
+        # The target's pre-puppet state lives on the object itself as
+        # `_puppet_restore`, which __getstate__ persists instead of the mutated
+        # values, so a crash or mid-puppet autosave can never corrupt it.
+        session.puppet_stack.append((caller, target))
+        target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
 
         caller_priv = caller.privilege_level
         caller.at_disconnect()
@@ -132,11 +139,12 @@ class UnpuppetCommand(Command):
             caller.msg("You are not puppeting anything.")
             return
 
-        prev, target, orig_is_pc, orig_priv = session.puppet_stack.pop()
+        prev, target = session.puppet_stack.pop()
         target.at_unpuppet(caller=prev)
         # restore BEFORE at_disconnect so any autosave persists the original state
-        target.is_pc = orig_is_pc
-        target.privilege_level = orig_priv
+        if restore := getattr(target, "_puppet_restore", None):
+            target.__dict__.update(restore)
+            del target._puppet_restore
         target.at_disconnect()
 
         session.puppet = prev

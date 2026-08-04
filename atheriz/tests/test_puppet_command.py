@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import dill
+
 import pytest
 from unittest.mock import MagicMock
 
@@ -32,8 +34,10 @@ class FakeObj:
         self.is_account = False
         self.is_channel = False
         self.is_node = False
+        self.is_npc = False
         self.is_connected = False
         self.seconds_played = 0.0
+        self.locks = {}
         self.msgs = []
         self.puppet_calls = []
         self.unpuppet_calls = []
@@ -44,8 +48,20 @@ class FakeObj:
         self.unpuppet_is_pc_at_call = []
 
     @property
+    def is_superuser(self):
+        return self.privilege_level >= settings.Privilege.Admin
+
+    @property
     def is_builder(self):
         return self.privilege_level >= settings.Privilege.Builder
+
+    def add_lock(self, lock_name, callable_):
+        self.locks.setdefault(lock_name, []).append(callable_)
+
+    def access(self, accessing_obj, name):
+        if getattr(accessing_obj, "is_superuser", False):
+            return True
+        return all(lock(accessing_obj) for lock in self.locks.get(name, []))
 
     def msg(self, text=None, **kwargs):
         self.msgs.append(text)
@@ -80,6 +96,17 @@ def _args(target):
 def _puppet(target, monkeypatch):
     """Patch the #id lookup to return `target`, for command-logic tests."""
     monkeypatch.setattr(puppet_mod, "get", lambda ids: [target])
+
+
+def _session_with(caller):
+    session = Session()
+    caller.session = session
+    session.puppet = caller
+    return session
+
+
+def _restore(target):
+    return getattr(target, "_puppet_restore", None)
 
 
 # ---------------------------------------------------------------------------
@@ -227,11 +254,8 @@ class TestFindTarget:
 
 class TestPuppet:
     def test_makes_target_pc_and_raises_privilege(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -246,11 +270,8 @@ class TestPuppet:
         assert caller.disconnect_calls == 1
 
     def test_admin_privilege_copied(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("admin", privilege_level=settings.Privilege.Admin)
+        session = _session_with(caller := FakeObj("admin", privilege_level=settings.Privilege.Admin))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -258,11 +279,8 @@ class TestPuppet:
         assert target.privilege_level == settings.Privilege.Admin
 
     def test_at_puppet_fires_after_session_wiring(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -270,21 +288,91 @@ class TestPuppet:
         # contract for game-side handler hooks: session is already wired when at_puppet fires
         assert target.puppet_session_at_call[-1] is session
 
-    def test_stack_records_original_state(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+    def test_restore_manifest_records_original_state(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("npc", privilege_level=settings.Privilege.Helper, is_pc=False)
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
 
-        prev, t, orig_is_pc, orig_priv = session.puppet_stack[0]
-        assert prev is caller
-        assert t is target
-        assert orig_is_pc is False
-        assert orig_priv == settings.Privilege.Helper
+        assert session.puppet_stack == [(caller, target)]
+        assert _restore(target) == {"is_pc": False, "privilege_level": settings.Privilege.Helper}
+
+    def test_restore_manifest_records_pc_target(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("pc-alt", privilege_level=settings.Privilege.Player, is_pc=True)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert _restore(target) == {"is_pc": True, "privilege_level": settings.Privilege.Player}
+
+
+# ---------------------------------------------------------------------------
+# D2. Puppet access gate (target.access(caller, "puppet"))
+# ---------------------------------------------------------------------------
+
+
+class TestPuppetGate:
+    def test_denied_target_is_not_puppeted(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("goblin")
+        target.add_lock("puppet", lambda c: False)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert any(m and "cannot puppet" in m for m in caller.msgs)
+        assert target.is_pc is False
+        assert _restore(target) is None
+        assert session.puppet_stack == []
+        assert session.puppet is caller
+
+    def test_denial_skips_hooks_and_disconnect(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("goblin")
+        target.add_lock("puppet", lambda c: False)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert target.puppet_calls == []
+        assert target.post_puppet_calls == 0
+        assert caller.disconnect_calls == 0
+
+    def test_owner_lock_allows_puppet(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("alt")
+        target.add_lock("puppet", lambda c: c is caller)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert target.is_pc is True
+        assert session.puppet is target
+
+    def test_superuser_bypasses_puppet_lock(self, monkeypatch):
+        session = _session_with(caller := FakeObj("admin", privilege_level=settings.Privilege.Admin))
+        target = FakeObj("other")
+        target.add_lock("puppet", lambda c: False)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert target.is_pc is True
+        assert session.puppet is target
+
+    def test_npc_default_lock_allows_puppet(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("goblin", is_pc=False)
+        target.is_npc = True
+        target.add_lock("puppet", lambda c: target.is_npc)
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        assert target.is_pc is True
+        assert session.puppet is target
 
 
 # ---------------------------------------------------------------------------
@@ -294,11 +382,8 @@ class TestPuppet:
 
 class TestUnpuppet:
     def test_restores_pc_and_privilege_and_returns_to_previous(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -314,11 +399,8 @@ class TestUnpuppet:
         assert caller.post_puppet_calls == 1  # re-puppeted
 
     def test_restores_nonzero_original_privilege(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("npc", privilege_level=settings.Privilege.Helper)
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -329,11 +411,8 @@ class TestUnpuppet:
         assert target.is_pc is False
 
     def test_at_unpuppet_fires_before_restore(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -342,11 +421,20 @@ class TestUnpuppet:
         # contract for game-side teardown hooks: target is still a PC when at_unpuppet fires
         assert target.unpuppet_is_pc_at_call[-1] is True
 
+    def test_unpuppet_clears_restore_manifest(self, monkeypatch):
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
+        target = FakeObj("goblin")
+        _puppet(target, monkeypatch)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+        assert _restore(target) is not None
+
+        UnpuppetCommand().run(target, None)
+
+        assert _restore(target) is None
+
     def test_empty_stack_messages_and_no_mutation(self):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
-        caller.session = session
-        session.puppet = caller
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
 
         UnpuppetCommand().run(caller, None)
 
@@ -362,12 +450,9 @@ class TestUnpuppet:
 
 class TestChain:
     def test_lifo_unwind(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         a = FakeObj("a")
         b = FakeObj("b")
-        caller.session = session
-        session.puppet = caller
         registry = {a.id: a, b.id: b}
         monkeypatch.setattr(puppet_mod, "get", lambda ids: [registry[ids]] if ids in registry else [])
 
@@ -377,24 +462,24 @@ class TestChain:
         assert session.puppet is b
         assert a.is_pc is True and a.privilege_level == settings.Privilege.Builder
         assert b.is_pc is True and b.privilege_level == settings.Privilege.Builder
+        assert _restore(a) is not None and _restore(b) is not None
 
         # unpuppet b -> back to a (a still puppeted)
         UnpuppetCommand().run(b, None)
         assert session.puppet is a
         assert b.is_pc is False and b.privilege_level == settings.Privilege.Guest
         assert a.is_pc is True and a.privilege_level == settings.Privilege.Builder
+        assert _restore(b) is None and _restore(a) is not None
 
         # unpuppet a -> back to caller
         UnpuppetCommand().run(a, None)
         assert session.puppet is caller
         assert a.is_pc is False and a.privilege_level == settings.Privilege.Guest
+        assert _restore(a) is None
 
     def test_repuppet_same_target_after_unpuppet(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -402,10 +487,12 @@ class TestChain:
 
         # state is clean — puppeting the same target again works
         assert session.puppet_stack == []
+        assert _restore(target) is None
         PuppetCommand().run(caller, _args(f"#{target.id}"))
         assert target.is_pc is True
         assert session.puppet is target
         assert len(session.puppet_stack) == 1
+        assert _restore(target) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -415,10 +502,7 @@ class TestChain:
 
 class TestGuards:
     def test_cannot_puppet_self(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
-        caller.session = session
-        session.puppet = caller
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         _puppet(caller, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{caller.id}"))
@@ -427,12 +511,9 @@ class TestGuards:
         assert session.puppet_stack == []
 
     def test_cannot_puppet_node(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         node = FakeObj("room")
         node.is_node = True
-        caller.session = session
-        session.puppet = caller
         _puppet(node, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{node.id}"))
@@ -441,10 +522,7 @@ class TestGuards:
         assert node.is_pc is False
 
     def test_cannot_puppet_account_or_channel(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
-        caller.session = session
-        session.puppet = caller
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
 
         acc = FakeObj("acc")
         acc.is_account = True
@@ -459,13 +537,10 @@ class TestGuards:
             assert meta.is_pc is False
 
     def test_cannot_puppet_already_puppeted_elsewhere(self, monkeypatch):
-        session = Session()
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         other = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
         target = FakeObj("goblin")
         target.session = other  # puppeted by a different session
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -498,11 +573,8 @@ class TestGuards:
 
 class TestDisconnectUnwind:
     def test_mid_puppet_disconnect_restores_target(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         target = FakeObj("goblin")
-        caller.session = session
-        session.puppet = caller
         _puppet(target, monkeypatch)
 
         PuppetCommand().run(caller, _args(f"#{target.id}"))
@@ -514,14 +586,12 @@ class TestDisconnectUnwind:
         assert target.is_pc is False
         assert target.privilege_level == settings.Privilege.Guest
         assert session.puppet_stack == []
+        assert _restore(target) is None
 
     def test_chain_disconnect_restores_all_targets(self, monkeypatch):
-        session = Session()
-        caller = FakeObj("builder", privilege_level=settings.Privilege.Builder)
+        session = _session_with(caller := FakeObj("builder", privilege_level=settings.Privilege.Builder))
         a = FakeObj("a")
         b = FakeObj("b")
-        caller.session = session
-        session.puppet = caller
         registry = {a.id: a, b.id: b}
         monkeypatch.setattr(puppet_mod, "get", lambda ids: [registry[ids]] if ids in registry else [])
 
@@ -533,6 +603,7 @@ class TestDisconnectUnwind:
         assert a.is_pc is False and a.privilege_level == settings.Privilege.Guest
         assert b.is_pc is False and b.privilege_level == settings.Privilege.Guest
         assert session.puppet_stack == []
+        assert _restore(a) is None and _restore(b) is None
 
     def test_empty_stack_disconnect_is_noop(self):
         session = Session()
@@ -565,6 +636,7 @@ class TestIntegration:
         assert target.is_connected is True  # real at_post_puppet ran
         assert session.puppet is target
         assert target.session is session
+        assert _restore(target) is not None
 
         UnpuppetCommand().run(target, None)
 
@@ -574,3 +646,130 @@ class TestIntegration:
         assert session.puppet is caller
         assert caller.is_connected is True  # prev re-puppeted via real at_post_puppet
         assert session.puppet_stack == []
+        assert _restore(target) is None
+
+    def test_real_object_gate_denies_other_players_pc(self, monkeypatch, global_test_env, fixed_salt):
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+        from atheriz.objects.base_account import Account
+
+        victim = make_object("victim", is_pc=True, privilege_level=settings.Privilege.Player)
+        owner = Account.create("owner", "pw1")
+        owner.characters = [victim.id]
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        caller.session = session
+        session.puppet = caller
+
+        PuppetCommand().run(caller, _args(f"#{victim.id}"))
+
+        text = " ".join(str(c.args[0]) for c in session.connection.msg.call_args_list)
+        assert "cannot puppet" in text
+        assert victim.is_pc is True
+        assert victim.privilege_level == settings.Privilege.Player
+        assert session.puppet_stack == []
+
+    def test_real_object_gate_allows_owned_pc(self, monkeypatch, global_test_env, fixed_salt):
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+        from atheriz.objects.base_account import Account
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        account = Account.create("bob", "pw1")
+        account.characters = [caller.id]
+        session.account = account
+        session.puppet = caller
+        caller.session = session
+
+        alt = make_object("alt", is_pc=True, privilege_level=settings.Privilege.Player)
+        account.characters.append(alt.id)
+
+        PuppetCommand().run(caller, _args(f"#{alt.id}"))
+
+        assert alt.is_pc is True
+        assert alt.privilege_level == settings.Privilege.Builder
+        assert session.puppet is alt
+
+
+# ---------------------------------------------------------------------------
+# J. Persistence safety — puppeted state never reaches the database
+# ---------------------------------------------------------------------------
+
+
+class TestPersistenceSafety:
+    def test_getstate_persists_original_state_while_puppeted(self, monkeypatch, global_test_env):
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        caller.session = session
+        session.puppet = caller
+        target = make_object("goblin", is_npc=True, privilege_level=settings.Privilege.Guest)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        # in memory it acts as the puppeter...
+        assert target.is_pc is True
+        assert target.privilege_level == settings.Privilege.Builder
+
+        state = target.__getstate__()
+        assert state["is_pc"] is False
+        assert state["privilege_level"] == int(settings.Privilege.Guest)
+        assert "_puppet_restore" not in state
+
+    def test_puppet_restore_never_serialized(self, monkeypatch, global_test_env):
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        caller.session = session
+        session.puppet = caller
+        target = make_object("goblin", is_npc=True, privilege_level=settings.Privilege.Guest)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        blob = target.get_save_ops()[1][1]
+        loaded = dill.loads(blob)
+        assert loaded.is_pc is False
+        assert loaded.privilege_level == settings.Privilege.Guest
+        assert not hasattr(loaded, "_puppet_restore")
+
+    def test_crash_before_teardown_leaves_disk_clean(self, monkeypatch, global_test_env):
+        """Simulate the process dying mid-puppet: the object is serialized with
+        `_puppet_restore` still set and is never unpuppeted. The persisted state
+        must still be the original."""
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        caller.session = session
+        session.puppet = caller
+        target = make_object("goblin", is_npc=True, privilege_level=settings.Privilege.Guest)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        # (no unpuppet / no at_disconnect — process "dies" now)
+        assert _restore(target) is not None
+        blob = target.get_save_ops()[1][1]
+        loaded = dill.loads(blob)
+        assert loaded.is_pc is False
+        assert loaded.privilege_level == settings.Privilege.Guest
+
+    def test_persisted_restore_survives_full_save_load_cycle(self, monkeypatch, global_test_env):
+        monkeypatch.setattr(settings, "AUTOSAVE_PLAYERS_ON_DISCONNECT", False)
+
+        session = Session(connection=MagicMock())
+        caller = make_object("builder", is_pc=True, privilege_level=settings.Privilege.Builder)
+        caller.session = session
+        session.puppet = caller
+        target = make_object("goblin", is_npc=True, privilege_level=settings.Privilege.Guest)
+
+        PuppetCommand().run(caller, _args(f"#{target.id}"))
+
+        save_ops = target.get_save_ops()[1][1]
+
+        # unpuppet gracefully, then re-load what WOULD have been saved mid-puppet
+        UnpuppetCommand().run(target, None)
+        loaded = dill.loads(save_ops)
+        assert loaded.is_pc is False
+        assert loaded.privilege_level == settings.Privilege.Guest
