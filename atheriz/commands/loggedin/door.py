@@ -126,10 +126,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -189,10 +186,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -252,10 +246,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -315,10 +306,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -378,10 +366,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -441,10 +426,7 @@ class DoorCommand(Command):
                             f"There is no node at the destination coord {to_coord}, use -a to auto-create it."
                         )
                         return
-                door_node = nh.get_node(door_coord)
-                if door_node:
-                    nh.remove_node(door_coord)
-                    caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
+                self._replace_node_with_door(nh, door_coord, caller)
                 to_links = to_node.get_links()
                 need_dest_link = True
                 for l in to_links:
@@ -491,3 +473,16 @@ class DoorCommand(Command):
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
                 return
+
+    def _replace_node_with_door(self, nh, door_coord: Coord, caller: Object) -> None:
+        """Move anyone standing on the node being replaced by a door back to
+        the caller's location, then remove the node, so no one is stranded in a
+        node that is no longer part of the grid."""
+        node = nh.get_node(door_coord)
+        if not node:
+            return
+        fallback = caller.location
+        for obj in list(node.contents):
+            obj.move_to(fallback, force=True, announce=False)
+        nh.remove_node(door_coord)
+        caller.msg(f"Removed node at {door_coord} since a door is being placed there.")
