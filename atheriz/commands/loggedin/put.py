@@ -51,9 +51,10 @@ class PutCommand(Command):
                 obj.move_to(dest[0])
                 if loc:
                     loc.msg_contents(
-                        text=(f"{caller.name} put {obj.name} in {dest[0].name}.", {"type": "put"}),
+                        f"{caller.name} put {obj.name} in {dest[0].name}.",
                         from_obj=caller,
                         exclude=caller,
+                        msg_type="put",
                     )
                 caller.msg(f"You put {obj.name} in {dest[0].name}.")
                 obj.at_put(caller, dest[0])
@@ -71,9 +72,10 @@ class PutCommand(Command):
             obj.move_to(dest[0])
             if loc:
                 loc.msg_contents(
-                    text=(f"{caller.name} put {obj.name} in {dest[0].name}.", {"type": "put"}),
+                    f"{caller.name} put {obj.name} in {dest[0].name}.",
                     from_obj=caller,
                     exclude=caller,
+                    msg_type="put",
                 )
             caller.msg(f"You put {obj.name} in {dest[0].name}.")
             obj.at_put(caller, dest[0])

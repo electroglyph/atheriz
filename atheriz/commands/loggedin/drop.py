@@ -34,9 +34,10 @@ class DropCommand(Command):
                         continue
                     obj.move_to(loc)
                     loc.msg_contents(
-                        text=(f"{caller.name} dropped {obj.name}.", {"type": "drop"}),
+                        f"{caller.name} dropped {obj.name}.",
                         from_obj=caller,
                         exclude=caller,
+                        msg_type="drop",
                     )
                     caller.msg(f"You dropped: {obj.name}")
                     obj.at_drop(caller)
@@ -50,9 +51,10 @@ class DropCommand(Command):
                     continue
                 f.move_to(loc)
                 loc.msg_contents(
-                    text=(f"{caller.name} dropped {f.name}.", {"type": "drop"}),
+                    f"{caller.name} dropped {f.name}.",
                     from_obj=caller,
                     exclude=caller,
+                    msg_type="drop",
                 )
                 caller.msg(f"You dropped: {f.name}")
                 f.at_drop(caller)

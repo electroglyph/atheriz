@@ -63,9 +63,10 @@ class GiveCommand(Command):
                 caller.msg(f"You give {obj.name} to {target.name}.")
                 target.msg(f"{caller.name} gives you {obj.name}.")
                 loc.msg_contents(
-                    text=(f"{caller.name} gives {obj.name} to {target.name}.", {"type": "give"}),
+                    f"{caller.name} gives {obj.name} to {target.name}.",
                     from_obj=caller,
                     exclude=(caller, target),
+                    msg_type="give",
                 )
                 obj.at_give(caller, target)
             else:

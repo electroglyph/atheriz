@@ -51,9 +51,10 @@ class GetCommand(Command):
                     continue
                 obj.move_to(caller)
                 loc.msg_contents(
-                    text=(f"{caller.name} picked up {obj.name}.", {"type": "get"}),
+                    f"{caller.name} picked up {obj.name}.",
                     from_obj=caller,
                     exclude=caller,
+                    msg_type="get",
                 )
                 caller.msg(f"You picked up: {obj.name}")
                 obj.at_get(caller)
@@ -86,9 +87,10 @@ class GetCommand(Command):
                 continue
             f.move_to(caller)
             loc.msg_contents(
-                text=(f"{caller.name} picked up {f.name}.", {"type": "get"}),
+                f"{caller.name} picked up {f.name}.",
                 from_obj=caller,
                 exclude=caller,
+                msg_type="get",
             )
             caller.msg(f"You picked up: {f.name}")
             f.at_get(caller)
