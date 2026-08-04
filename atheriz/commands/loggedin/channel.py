@@ -69,34 +69,36 @@ class ChannelCommand(Command):
             else:
                 caller.msg("No channels found.")
             return
-        if args.channel:
-            name = args.channel.lower()
-            channel = self._channel_cache.get(name)
-            if channel is None:
-                result = filter_by(lambda x: x.is_channel and x.name.lower() == name)
-                if not result:
-                    caller.msg(f"Channel {args.channel} not found.")
-                    return
-                channel = result[0]
-                self._channel_cache[name] = channel
-            self.channel = channel
-        else:
+        if not args.channel:
             caller.msg(f"{self.parser.format_help()}")
             return
+        name = args.channel.lower()
+        channel = self._channel_cache.get(name)
+        if channel is not None and channel.is_deleted:
+            del self._channel_cache[name]
+            channel = None
+        if channel is None:
+            result = filter_by(lambda x: x.is_channel and x.name.lower() == name)
+            if not result:
+                caller.msg(f"Channel {args.channel} not found.")
+                return
+            channel = result[0]
+            self._channel_cache[name] = channel
         if args.unsubscribe:
-            caller.unsubscribe(self.channel)
+            caller.unsubscribe(channel)
         elif args.subscribe:
-            if not self.channel.access(caller, "view"):
+            if not channel.access(caller, "view"):
                 caller.msg("You do not have permission to view this channel.")
                 return
-            caller.subscribe(self.channel)
+            caller.subscribe(channel)
         elif args.replay:
-            if not self.channel.access(caller, "view"):
+            if not channel.access(caller, "view"):
                 caller.msg("You do not have permission to view this channel.")
                 return
-            caller.msg(self.channel.get_history())
+            caller.msg(channel.get_history())
         elif args.message:
-            if not self.channel.access(caller, "send"):
+            if not channel.access(caller, "send"):
                 caller.msg("You do not have permission to send to this channel.")
                 return
-            self.channel.msg(args.message, caller)
+            channel.msg(args.message, caller)
+        self.channel = channel
