@@ -905,12 +905,16 @@ class Object(Flags, DbOps, AccessLock):
         if not force and not self.at_pre_move(destination, to_exit, **kwargs):
             return False
         if destination is None:
-            if loc := self.location:
+            with self.lock:
+                loc = self.location
+            if loc:
                 loc.remove_object(self)
-                self.location = None
+                with self.lock:
+                    self.location = None
             self.at_post_move(destination, to_exit, **kwargs)
             return True
-        loc = self.location
+        with self.lock:
+            loc = self.location
 
         def sort_locks(a, b):
             """Helper to sort objects for locking order to avoid deadlocks."""
@@ -983,7 +987,8 @@ class Object(Flags, DbOps, AccessLock):
                         object.__setattr__(loc, "is_modified", True)
                         object.__setattr__(destination, "is_modified", True)
                         destination.add_exits(self, internal=True)
-                        self.location = destination
+                        with self.lock:
+                            self.location = destination
                 if announce:
                     self.announce_move_to(loc, to_exit, **kwargs)
                     self.announce_move_from(destination, from_exit, **kwargs)
@@ -996,7 +1001,8 @@ class Object(Flags, DbOps, AccessLock):
                     destination._contents.add(self.id)
                     object.__setattr__(destination, "is_modified", True)
                     destination.add_exits(self, internal=True)
-                    self.location = destination
+                    with self.lock:
+                        self.location = destination
                 if announce:
                     self.announce_move_from(destination, from_exit, **kwargs)
             if settings.MAP_ENABLED:
