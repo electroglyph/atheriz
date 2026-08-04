@@ -78,7 +78,7 @@ class GuestCommand(Command):
         character.gender = gender
         caller.session.puppet = character
         character.session = caller.session
-        caller.session.connect_time = time.time()
+        caller.session.conn_time = time.time()
 
         nh = get_node_handler()
         home = nh.get_node(settings.DEFAULT_HOME)

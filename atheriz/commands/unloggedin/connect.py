@@ -89,5 +89,5 @@ class ConnectCommand(Command):
                 continue
             caller.session.puppet = chars[choice]
             caller.session.puppet.session = caller.session
-            caller.session.connect_time = time.time()
+            caller.session.conn_time = time.time()
             caller.session.puppet.at_post_puppet()
