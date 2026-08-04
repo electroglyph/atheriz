@@ -395,6 +395,8 @@ class Node(Flags, AccessLock):
             return []
 
         def _self_delete():
+            if getattr(self, "_is_tickable", False):
+                get_async_ticker().remove_coro(self.at_tick, self._tick_seconds)
             get_node_handler().remove_node(self.coord)
             self.is_deleted = True
 

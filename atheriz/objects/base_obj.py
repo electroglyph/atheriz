@@ -271,6 +271,8 @@ class Object(Flags, DbOps, AccessLock):
             if obj.is_connected and obj.session and obj.session.connection:
                 obj.session.account.remove_character(obj)
                 obj.session.connection.close()
+            if getattr(obj, "_is_tickable", False):
+                get_async_ticker().remove_coro(obj.at_tick, obj._tick_seconds)
             obj.is_deleted = True
             if not obj.is_temporary:
                 ops.append(obj.get_del_ops())
