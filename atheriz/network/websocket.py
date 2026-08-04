@@ -86,4 +86,8 @@ class WebSocketProtocol(BaseProtocol):
                         break
                     connection_manager.handle_command(connection, raw_message)
             except WebSocketDisconnect:
+                pass
+            except Exception as e:
+                logger.warning(f"[WebSocket] Connection error: {e}")
+            finally:
                 connection_manager.disconnect(connection)
