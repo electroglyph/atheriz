@@ -140,6 +140,7 @@ def pad(text, width=None, align="c", fillchar=" "):
     """
     from atheriz.settings import CLIENT_DEFAULT_WIDTH
     width = width if width else CLIENT_DEFAULT_WIDTH
+    width = min(width, _MAX_TEXT_WIDTH)
     align = align if align in ("c", "l", "r") else "c"
     fillchar = fillchar[0] if fillchar else " "
     if align == "l":
@@ -176,6 +177,7 @@ def justify(text, width=None, align="l", indent=0, fillchar=" "):
     """
     from atheriz.settings import CLIENT_DEFAULT_WIDTH
     width = width if width is not None else CLIENT_DEFAULT_WIDTH
+    width = min(width, _MAX_TEXT_WIDTH)
     sp = fillchar
 
     if align == "a":
@@ -305,6 +307,25 @@ def int2str(number, adjective=False):
 # Atheriz-adapted: removed simple_eval dependency (not installed).
 # Uses literal_eval as the only "py" converter, with a fallback simple_arith
 # for basic arithmetic expressions (1+2, 3*4, etc.) on numbers.
+# Maximum exponent allowed for `**` in _safe_arith_eval. Bounds any single
+# power to ~base**10000 so expressions like `9**9**9` cannot build a ~370M
+# digit integer (CPU/memory DoS). `2**2**16` (exponent 65536) is rejected.
+_MAX_POW_EXPONENT = 10000
+
+# Maximum width a player can request for padding/justification ($space/$pad/
+# $just). Bounds string allocations from player text (memory DoS guard).
+# Matches the websocket per-message budget.
+_MAX_TEXT_WIDTH = 65536
+
+
+def _safe_pow(base, exponent):
+    if exponent > _MAX_POW_EXPONENT:
+        raise OverflowError(
+            f"exponent {exponent} exceeds safe limit {_MAX_POW_EXPONENT}"
+        )
+    return base ** exponent
+
+
 def _safe_arith_eval(inp):
     """
     Safely evaluate arithmetic expressions on numeric literals only.
@@ -318,7 +339,7 @@ def _safe_arith_eval(inp):
         ast.Div: lambda a, b: a / b,
         ast.FloorDiv: lambda a, b: a // b,
         ast.Mod: lambda a, b: a % b,
-        ast.Pow: lambda a, b: a ** b,
+        ast.Pow: _safe_pow,
     }
     allowed_unaryops = {ast.UAdd: lambda a: +a, ast.USub: lambda a: -a}
 

@@ -968,11 +968,12 @@ def funcparser_callable_space(*args, **kwarg):
     """
     if not args:
         return ""
+    from atheriz.objects.funcparser_helpers import _MAX_TEXT_WIDTH
     try:
         width = int(args[0])
     except ValueError:
         width = 1
-    return " " * width
+    return " " * min(width, _MAX_TEXT_WIDTH)
 
 
 def funcparser_callable_justify(*args, **kwargs):
