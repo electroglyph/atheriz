@@ -12,6 +12,7 @@ from atheriz.utils import (
     wrap_xterm256,
 )
 from atheriz.objects import funcparser
+from atheriz.objects.funcparser_helpers import _SafeFormatMap
 from atheriz.globals.objects import get
 from atheriz.objects.contents import search
 from atheriz.globals.get import get_node_handler, get_async_ticker, get_map_handler
@@ -701,10 +702,12 @@ class Node(Flags, AccessLock):
             )
             if outmessage:
                 outmessage = outmessage.format_map(
-                    {
-                        key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
-                        for key, obj in mapping.items()
-                    }
+                    _SafeFormatMap(
+                        {
+                            key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
+                            for key, obj in mapping.items()
+                        }
+                    )
                 )
             receiver.msg(text=outmessage, from_obj=from_obj, msg_type=msg_type, **kwargs)
 

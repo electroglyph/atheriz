@@ -26,6 +26,7 @@ from atheriz.utils import (
 from typing import TYPE_CHECKING, Self
 from atheriz.logger import logger
 from atheriz.objects import funcparser
+from atheriz.objects.funcparser_helpers import _SafeFormatMap
 import atheriz.settings as settings
 from threading import RLock
 from atheriz.objects.base_db_ops import DbOps
@@ -810,10 +811,12 @@ class Object(Flags, DbOps, AccessLock):
             if outmessage:
                 # director-stance replacements
                 outmessage = outmessage.format_map(
-                    {
-                        key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
-                        for key, obj in mapping.items()
-                    }
+                    _SafeFormatMap(
+                        {
+                            key: (obj.get_display_name(looker=receiver) if hasattr(obj, "get_display_name") else str(obj))
+                            for key, obj in mapping.items()
+                        }
+                    )
                 )
 
             receiver.msg(text=outmessage, from_obj=from_obj, msg_type=msg_type, **kwargs)

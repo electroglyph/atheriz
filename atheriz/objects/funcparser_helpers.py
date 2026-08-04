@@ -318,6 +318,14 @@ _MAX_POW_EXPONENT = 10000
 _MAX_TEXT_WIDTH = 65536
 
 
+class _SafeFormatMap(dict):
+    """dict whose `__missing__` returns the literal `{key}` instead of raising
+    `KeyError`, so `str.format_map` leaves unknown placeholders untouched."""
+
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
 def _safe_pow(base, exponent):
     if exponent > _MAX_POW_EXPONENT:
         raise OverflowError(
