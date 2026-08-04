@@ -196,8 +196,10 @@ class Channel(Flags, DbOps, AccessLock):
                 self.history.append((timestamp, sender.name, message))
             else:
                 self.history.append((timestamp, "", message))
-            for listener in self.listeners.values():
-                listener.msg(self.format_message(timestamp, sender.name if sender else "", message))
+            sender_name = sender.name if sender else ""
+            listeners = list(self.listeners.values())
+        for listener in listeners:
+            listener.msg(self.format_message(timestamp, sender_name, message))
 
     def format_message(self, timestamp: int, sender: str, message: str) -> str:
         """Format a message. Override in subclasses for custom formatting."""
