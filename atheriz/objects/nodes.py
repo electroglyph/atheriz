@@ -532,7 +532,10 @@ class Node(Flags, AccessLock):
         Args:
             script (int | Any): The ID of the Script, or the Script object itself.
         """
-        script = get(script)[0] if isinstance(script, int) else script
+        if isinstance(script, int):
+            if not (scripts := get(script)):
+                return
+            script = scripts[0]
         script.install_hooks(self)
         with self.lock:
             self.scripts.add(script.id)
@@ -545,7 +548,10 @@ class Node(Flags, AccessLock):
         Args:
             script (int | Any): The ID of the Script, or the Script object itself.
         """
-        script = get(script)[0] if isinstance(script, int) else script
+        if isinstance(script, int):
+            if not (scripts := get(script)):
+                return
+            script = scripts[0]
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)

@@ -201,7 +201,10 @@ class Object(Flags, DbOps, AccessLock):
         Args:
             script (Script | int): The Script object or global ID to attach.
         """
-        script = get(script)[0] if isinstance(script, int) else script
+        if isinstance(script, int):
+            if not (scripts := get(script)):
+                return
+            script = scripts[0]
         script.install_hooks(self)
         with self.lock:
             self.scripts.add(script.id)
@@ -213,7 +216,10 @@ class Object(Flags, DbOps, AccessLock):
         Args:
             script (Script | int): The Script object or global ID to remove.
         """
-        script = get(script)[0] if isinstance(script, int) else script
+        if isinstance(script, int):
+            if not (scripts := get(script)):
+                return
+            script = scripts[0]
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)
