@@ -52,6 +52,7 @@ class ConnectionManager:
             
             if conn_id:
                 del self._connections[conn_id]
+                connection.clear_pending_input()
                 if connection.session:
                     connection.session.at_disconnect()
                 logger.info(f"[Network] Connection closed: {conn_id} (total: {self.connection_count})")
@@ -102,11 +103,14 @@ class ConnectionManager:
             logger.error(f"[Network] Error handling message: {e}", exc_info=True)
 
     def dispatch(self, connection: "BaseConnection", cmd: str, args: list, kwargs: dict):
-        """Routes a verified, structured command to the proper handler."""
+        """Routes a verified, structured command to the proper handler.
+
+        Handlers run on the game threadpool via the connection's serialized
+        input queue; the protocol loop only parses, validates, and enqueues."""
         if settings.STRIP_INPUT_ESCAPE_SEQUENCES:
             args = [strip_terminal_escapes(a) if isinstance(a, str) else a for a in args]
         handler = self._message_handlers.get(cmd)
         if handler:
-            handler(connection, args, kwargs)
+            connection.enqueue_input(handler, args, kwargs)
         else:
             logger.debug(f"Unknown command: {cmd}")

@@ -7,6 +7,7 @@ test_menu.py, test_search.py, etc.
 """
 
 import asyncio
+import threading
 from unittest.mock import MagicMock
 from typing import Any, Callable
 
@@ -45,6 +46,9 @@ class FakeConnection(BaseConnection):
         import threading as _threading
         self.lock = _threading.RLock()
         self.failed_login_attempts = 0
+        from collections import deque
+        self._input_queue = deque()
+        self._input_running = False
         self.sent: list[tuple] = []
         self.closed = False
 
@@ -74,6 +78,7 @@ class FakeSession:
     ):
         self.account = account
         self.connection = None
+        self.lock = threading.RLock()
         self.puppet = puppet
         self.last_puppet = None
         self.term_width = term_width

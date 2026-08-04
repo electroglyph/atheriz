@@ -1,5 +1,6 @@
 from __future__ import annotations
 import time
+import threading
 from atheriz.objects.base_account import Account
 from typing import TYPE_CHECKING
 import asyncio
@@ -12,6 +13,11 @@ if TYPE_CHECKING:
 
 class Session:
     def __init__(self, account: Account | None = None, connection: Connection | None = None):
+        # Guards puppet / puppet_stack / input_future, which are written by
+        # game workers and read by the per-connection input drain (#31).
+        # Scalar fields (term/map dims, screenreader) are single atomic
+        # stores under the GIL and need no lock.
+        self.lock = threading.RLock()
         self.account = account
         self.connection = connection
         self.last_puppet: Object | None = None
@@ -35,18 +41,22 @@ class Session:
         self.conn_time = time.time()
 
     def at_disconnect(self):
-        if self.input_future and not self.input_future.done():
-            self.input_future.cancel()
+        with self.lock:
+            future = self.input_future
+            stack, self.puppet_stack = self.puppet_stack, []
+            puppet = self.puppet
+        if future and not future.done():
+            future.cancel()
         # ponytail: unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
-        while self.puppet_stack:
-            _prev, target = self.puppet_stack.pop()
+        while stack:
+            _prev, target = stack.pop()
             if restore := getattr(target, "_puppet_restore", None):
                 target.__dict__.update(restore)
                 del target._puppet_restore
-        if self.puppet:
-            self.puppet.seconds_played += time.time() - self.conn_time
-            self.puppet.at_disconnect()
+        if puppet:
+            puppet.seconds_played += time.time() - self.conn_time
+            puppet.at_disconnect()
         if self.account:
             self.account.at_disconnect()
 
@@ -58,5 +68,7 @@ class Session:
         Send a prompt to the user and await their response.
         """
         self.msg(text)
-        self.input_future = asyncio.Future()
-        return await self.input_future
+        with self.lock:
+            self.input_future = asyncio.Future()
+            future = self.input_future
+        return await future

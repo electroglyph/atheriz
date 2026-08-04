@@ -98,7 +98,10 @@ class PuppetCommand(Command):
         # The target's pre-puppet state lives on the object itself as
         # `_puppet_restore`, which __getstate__ persists instead of the mutated
         # values, so a crash or mid-puppet autosave can never corrupt it.
-        session.puppet_stack.append((caller, target))
+        # session.lock keeps stack/puppet mutations atomic vs the input drain
+        # and disconnect cleanup (#31).
+        with session.lock:
+            session.puppet_stack.append((caller, target))
         target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
 
         caller_priv = caller.privilege_level
@@ -107,7 +110,8 @@ class PuppetCommand(Command):
         target.is_pc = True
         target.privilege_level = caller_priv
 
-        session.puppet = target
+        with session.lock:
+            session.puppet = target
         target.session = session
         target.at_puppet(caller=caller)
         target.at_post_puppet()
@@ -135,11 +139,11 @@ class UnpuppetCommand(Command):
         if session is None:
             caller.msg("You have no active session.")
             return
-        if not session.puppet_stack:
-            caller.msg("You are not puppeting anything.")
-            return
-
-        prev, target = session.puppet_stack.pop()
+        with session.lock:
+            if not session.puppet_stack:
+                caller.msg("You are not puppeting anything.")
+                return
+            prev, target = session.puppet_stack.pop()
         target.at_unpuppet(caller=prev)
         # restore BEFORE at_disconnect so any autosave persists the original state
         if restore := getattr(target, "_puppet_restore", None):
@@ -147,6 +151,7 @@ class UnpuppetCommand(Command):
             del target._puppet_restore
         target.at_disconnect()
 
-        session.puppet = prev
+        with session.lock:
+            session.puppet = prev
         prev.session = session
         prev.at_post_puppet()

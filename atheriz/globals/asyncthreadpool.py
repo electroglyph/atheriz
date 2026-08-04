@@ -50,40 +50,43 @@ class AsyncThreadPool:
             t.start()
             self.threads.append(t)
 
-    def _work_loop(self):
-        async def do_async(func, *args, **kwargs):
+    @staticmethod
+    def _log_task_error(args):
+        tb = traceback.format_exc()
+        if settings.DEBUG:
             try:
-                await func(*args, **kwargs)
-            except Exception as e:
-                tb = traceback.format_exc()
-                if settings.DEBUG:
-                    try:
-                        caller = args[0]
-                        caller.msg(f"{tb}")
-                    except:
-                        pass
-                logger.error(f"{tb}")
+                caller = args[0]
+                caller.msg(f"{tb}")
+            except Exception:
+                pass
+        logger.error(f"{tb}")
 
+    async def _do_async(self, func, *args, **kwargs):
+        try:
+            await func(*args, **kwargs)
+        except Exception:
+            self._log_task_error(args)
+
+    def run(self, func, *args, **kwargs):
+        """Execute one task with pool semantics: coroutines go to the async
+        loop, sync functions run inline on the calling worker. Shared by
+        _work_loop and by in-worker dispatch (issue #31)."""
+        if hasattr(func, "__code__") and func.__code__.co_flags & 128 == 128:
+            asyncio.run_coroutine_threadsafe(self._do_async(func, *args, **kwargs), self.loop)
+        else:
+            try:
+                func(*args, **kwargs)
+            except Exception:
+                self._log_task_error(args)
+
+    def _work_loop(self):
         while True:
             task = self.task_queue.get()
             if task is None:  # kill signal
                 # print("worker thread stopping...")
                 break
             func, args, kwargs = task
-            if hasattr(func, "__code__") and func.__code__.co_flags & 128 == 128:
-                asyncio.run_coroutine_threadsafe(do_async(func, *args, **kwargs), self.loop)
-            else:
-                try:
-                    func(*args, **kwargs)
-                except Exception as e:
-                    tb = traceback.format_exc()
-                    if settings.DEBUG:
-                        try:
-                            caller = args[0]
-                            caller.msg(f"{tb}")
-                        except:
-                            pass
-                    logger.error(f"{tb}")
+            self.run(func, *args, **kwargs)
 
     def stop(self, wait=True, timeout=10):
         """
@@ -109,8 +112,10 @@ class AsyncThreadPool:
             func (callable): coroutine or function to execute
             args: func args
             kwargs: func kwargs
+        Returns True when the task was accepted (#32 will return False when full).
         """
         self.task_queue.put((func, args, kwargs))
+        return True
         
     def delay(self, delay: float, func, *args, **kwargs):
         """

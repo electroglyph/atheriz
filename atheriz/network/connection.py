@@ -1,8 +1,11 @@
 from __future__ import annotations
 import asyncio
 import threading
+import traceback
+from collections import deque
 from typing import TYPE_CHECKING
 import json
+from atheriz.logger import logger
 from atheriz.utils import strip_ansi
 
 if TYPE_CHECKING:
@@ -26,6 +29,45 @@ class BaseConnection:
         self.thread_id = threading.get_ident()
         self.lock = threading.RLock()
         self.failed_login_attempts = 0
+        # Per-connection input pipeline (issue #31): handlers queued by the
+        # protocol loop are run FIFO by a single drain task on the game
+        # threadpool, preserving input ordering per connection.
+        self._input_queue = deque()
+        self._input_running = False
+
+    def enqueue_input(self, handler, args: list, kwargs: dict):
+        """Queue one input handler for serialized execution on the game
+        threadpool. Called from the protocol event loop; returns immediately."""
+        from atheriz.globals.get import get_async_threadpool
+        with self.lock:
+            self._input_queue.append((handler, args, kwargs))
+            if self._input_running:
+                return
+            self._input_running = True
+        if not get_async_threadpool().add_task(self._drain_input):
+            # queue full (#32): drop pending input for this connection
+            with self.lock:
+                self._input_queue.clear()
+                self._input_running = False
+
+    def _drain_input(self):
+        """Worker-side: run queued input handlers FIFO until the queue empties."""
+        while True:
+            with self.lock:
+                if not self._input_queue:
+                    self._input_running = False
+                    return
+                handler, args, kwargs = self._input_queue.popleft()
+            try:
+                handler(self, args, kwargs)
+            except Exception:
+                name = getattr(handler, "__name__", handler)
+                logger.error(f"[Network] Input handler '{name}' failed: {traceback.format_exc()}")
+
+    def clear_pending_input(self):
+        """Drop queued-but-unrun input (used on disconnect)."""
+        with self.lock:
+            self._input_queue.clear()
 
     # pyrefly: ignore
     def send_command(self, cmd: str, *args, **kwargs):

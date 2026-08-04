@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import _thread
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +12,17 @@ import pytest
 import atheriz.network.manager as mgr_module
 from atheriz.network.manager import ConnectionManager
 from atheriz.tests.fakes import FakeConnection
+
+
+def _wait(cond, timeout=2.0) -> bool:
+    """Poll until cond() is true. Handlers run on the threadpool via the
+    connection input drain (#31), so dispatch is asynchronous in tests."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if cond():
+            return True
+        time.sleep(0.01)
+    return False
 
 
 @pytest.fixture
@@ -191,6 +203,7 @@ class TestHandleCommand:
         manager.register_handler("text", handler)
         c = FakeConnection()
         manager.handle_command(c, json.dumps(["text", ["hello"], {}]))
+        assert _wait(lambda: handler.called)
         handler.assert_called_once_with(c, ["hello"], {})
 
     def test_invalid_json_doesnt_raise(self, manager):
@@ -216,6 +229,7 @@ class TestHandleCommand:
         manager.register_handler("text", handler)
         c = FakeConnection()
         manager.handle_command(c, json.dumps(["text"]))
+        assert _wait(lambda: handler.called)
         handler.assert_called_once_with(c, [], {})
 
     def test_no_kwargs(self, manager):
@@ -223,6 +237,7 @@ class TestHandleCommand:
         manager.register_handler("text", handler)
         c = FakeConnection()
         manager.handle_command(c, json.dumps(["text", ["x"]]))
+        assert _wait(lambda: handler.called)
         handler.assert_called_once_with(c, ["x"], {})
 
     def test_unknown_cmd_silent(self, manager):
@@ -246,6 +261,7 @@ class TestDispatch:
         manager.register_handler("text", handler)
         c = FakeConnection()
         manager.dispatch(c, "text", ["a"], {"k": "v"})
+        assert _wait(lambda: handler.called)
         handler.assert_called_once_with(c, ["a"], {"k": "v"})
 
     def test_unknown_cmd_silent(self, manager):
@@ -309,7 +325,7 @@ class TestDispatchStripsEscapes:
             mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
             manager.dispatch(conn, "text", ["look\x1b[31m around\x1b[0m"], {})
 
-        assert received == ["look around"]
+        assert _wait(lambda: received == ["look around"])
 
     def test_preserves_when_disabled(self, manager):
         conn = FakeConnection()
@@ -320,7 +336,7 @@ class TestDispatchStripsEscapes:
             mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = False
             manager.dispatch(conn, "text", ["look\x1b[31m around\x1b[0m"], {})
 
-        assert received == ["look\x1b[31m around\x1b[0m"]
+        assert _wait(lambda: received == ["look\x1b[31m around\x1b[0m"])
 
     def test_strips_csi_cursor_sequences(self, manager):
         conn = FakeConnection()
@@ -331,7 +347,7 @@ class TestDispatchStripsEscapes:
             mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
             manager.dispatch(conn, "text", ["\x1b[2Jlook"], {})
 
-        assert received == ["look"]
+        assert _wait(lambda: received == ["look"])
 
     def test_strips_null_bytes(self, manager):
         conn = FakeConnection()
@@ -342,7 +358,7 @@ class TestDispatchStripsEscapes:
             mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
             manager.dispatch(conn, "text", ["look\x00around"], {})
 
-        assert received == ["lookaround"]
+        assert _wait(lambda: received == ["lookaround"])
 
     def test_leaves_non_string_args_alone(self, manager):
         conn = FakeConnection()
@@ -353,4 +369,4 @@ class TestDispatchStripsEscapes:
             mock_settings.STRIP_INPUT_ESCAPE_SEQUENCES = True
             manager.dispatch(conn, "cmd", [42, "text\x1b[1m", True], {})
 
-        assert received == [42, "text", True]
+        assert _wait(lambda: received == [42, "text", True])

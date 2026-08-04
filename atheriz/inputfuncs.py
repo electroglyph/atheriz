@@ -37,39 +37,33 @@ def inputfunc(name: str | None = None) -> Callable:
     return decorator
 
 
-def dispatch_loggedin(puppet: Object, text: str) -> None:
+def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
     """Resolve and dispatch a raw input line as a logged-in puppet.
 
     Mirrors the logged-in branch of the ``text`` input handler: command lookup
     (internal cmdset, global cmdset, short/auto aliases, location and inventory
-    external cmdsets), access control, and fire-and-forget dispatch onto the
-    async threadpool. Shared by the session text handler and
-    ``Object.execute_cmd``.
+    external cmdsets), access control, and dispatch. Shared by the session text
+    handler and ``Object.execute_cmd``.
+
+    With ``immediate=False`` (default) the accepted command is queued on the
+    async threadpool and None is returned. With ``immediate=True`` the resolved
+    ``(func, caller, eargs)`` job is returned instead, for a caller that is
+    already on a game worker and will execute it inline (#31: one queue
+    crossing per network message).
     """
     if not text:
-        return
+        return None
     parts = text.split(" ", 1)
     raw_cmd_key = parts[0].lower()
     cmd_args = parts[1] if len(parts) > 1 else ""
     matched_alias = raw_cmd_key
-
-    atp = get_async_threadpool()
 
     cmd = None
     if puppet.internal_cmdset:
         cmd = puppet.internal_cmdset.get(raw_cmd_key)
     if not cmd:
         cmd = get_loggedin_cmdset().get(raw_cmd_key)
-    if cmd:
-        if not cmd.access(puppet):
-            puppet.msg("You can't do that.")
-            return
-        func, caller, eargs = cmd.execute(puppet, cmd_args, cmdstring=matched_alias)
-        if func:
-            atp.add_task(func, caller, eargs)
-        else:
-            logger.warning(f"Command {raw_cmd_key} execute returned no func")
-    else:
+    if not cmd:
         # handle aliasing / short commands
         # this makes 'bleh work as `say bleh`
         cmd = get_loggedin_cmdset().get(text[:1])
@@ -80,23 +74,20 @@ def dispatch_loggedin(puppet: Object, text: str) -> None:
             # check for commands provided by objects in the player's location
             loc = puppet.location
             if loc:
-                objs = loc.contents
-                for obj in objs:
+                for obj in loc.contents:
                     if obj.external_cmdset and (cmd := obj.external_cmdset.get(raw_cmd_key)):
                         break
             if not cmd:
                 # check for commands provided by objects in the player's inventory
-                objs = puppet.contents
-                for obj in objs:
+                for obj in puppet.contents:
                     if obj.external_cmdset and (cmd := obj.external_cmdset.get(raw_cmd_key)):
                         break
 
         if not cmd and settings.AUTO_COMMAND_ALIASING:
             if text[:1] in _NO_ALIAS_COMMANDS:
                 puppet.msg("You can't do that.")
-                return
-            keys = get_loggedin_cmdset().get_keys()
-            for key in keys:
+                return None
+            for key in get_loggedin_cmdset().get_keys():
                 if key in _IGNORE_KEYS:
                     continue
                 if key.startswith(raw_cmd_key):
@@ -107,13 +98,51 @@ def dispatch_loggedin(puppet: Object, text: str) -> None:
             cmd = get_loggedin_cmdset().get("none")
             matched_alias = "none"
             cmd_args = raw_cmd_key
-        if cmd:
-            if not cmd.access(puppet):
-                puppet.msg("You can't do that.")
-                return
-            func, caller, eargs = cmd.execute(puppet, cmd_args, cmdstring=matched_alias)
-            if func:
-                atp.add_task(func, caller, eargs)
+    if not cmd:
+        return None
+    if not cmd.access(puppet):
+        puppet.msg("You can't do that.")
+        return None
+    func, caller, eargs = cmd.execute(puppet, cmd_args, cmdstring=matched_alias)
+    if not func:
+        logger.warning(f"Command {raw_cmd_key} execute returned no func")
+        return None
+    if immediate:
+        return (func, caller, eargs)
+    get_async_threadpool().add_task(func, caller, eargs)
+    return None
+
+
+def _resolve_unloggedin(connection: Connection, text: str):
+    """Resolve a raw input line against the unloggedin cmdset.
+
+    Returns the ``(func, caller, eargs)`` job, or None. Mirrors the
+    not-logged-in branch of the ``text`` input handler (aliases, auto-aliasing,
+    ``none`` fallback)."""
+    parts = text.split(" ", 1)
+    raw_cmd_key = parts[0].lower()
+    cmd_args = parts[1] if len(parts) > 1 else ""
+    matched_alias = raw_cmd_key
+
+    cmdset = get_unloggedin_cmdset()
+    cmd = cmdset.get(raw_cmd_key)
+    if not cmd:
+        if settings.AUTO_COMMAND_ALIASING:
+            for key in cmdset.get_keys():
+                if key in _IGNORE_KEYS:
+                    continue
+                if key.startswith(raw_cmd_key):
+                    cmd = cmdset.get(key)
+                    matched_alias = key
+                    break
+        if not cmd:
+            cmd = cmdset.get("none")
+            matched_alias = "none"
+            cmd_args = raw_cmd_key
+    if not cmd:
+        return None
+    func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
+    return (func, caller, eargs) if func else None
 
 
 class InputFuncs:
@@ -161,54 +190,40 @@ class InputFuncs:
         try:
             text = str(args[0]) if args else ""
             logger.debug(f"text handler received: {text!r}")
+            session = connection.session
+            atp = get_async_threadpool()
 
             # if we are waiting for input pass it to the future.
-            if connection.session.input_future:
-                if not connection.session.input_future.done():
-                    get_async_threadpool().loop.call_soon_threadsafe(
-                        connection.session.input_future.set_result, text
-                    )
-                    connection.session.input_future = None
-                    return
+            # check-and-clear must be atomic: the prompt owner (async loop)
+            # and disconnect cleanup (protocol thread) also touch input_future.
+            with session.lock:
+                future = session.input_future
+                if future and not future.done():
+                    session.input_future = None
+                else:
+                    future = None
+            if future:
+                atp.loop.call_soon_threadsafe(future.set_result, text)
+                return
 
             if not text:
                 return
 
-            parts = text.split(" ", 1)
-            raw_cmd_key = parts[0].lower()
-            cmd_args = parts[1] if len(parts) > 1 else ""
-            matched_alias = raw_cmd_key
+            # snapshot the puppet once: it may be swapped mid-dispatch by a
+            # puppet/unpuppet/login command on another worker
+            with session.lock:
+                puppet = session.puppet
 
-            atp = get_async_threadpool()
-
-            if connection.session.puppet:
+            if puppet:
                 # Player is logged in
-                dispatch_loggedin(connection.session.puppet, text)
+                job = dispatch_loggedin(puppet, text, immediate=True)
             else:
                 # Player is NOT logged in
-                cmd = get_unloggedin_cmdset().get(raw_cmd_key)
-                if cmd:
-                    func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
-                    if func:
-                        atp.add_task(func, caller, eargs)
-                else:
-                    if settings.AUTO_COMMAND_ALIASING:
-                        keys = get_unloggedin_cmdset().get_keys()
-                        for key in keys:
-                            if key in _IGNORE_KEYS:
-                                continue
-                            if key.startswith(raw_cmd_key):
-                                cmd = get_unloggedin_cmdset().get(key)
-                                matched_alias = key
-                                break
-                    if not cmd:
-                        cmd = get_unloggedin_cmdset().get("none")
-                        matched_alias = "none"
-                        cmd_args = raw_cmd_key
-                    if cmd:
-                        func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
-                        if func:
-                            atp.add_task(func, caller, eargs)
+                job = _resolve_unloggedin(connection, text)
+            if job:
+                # already on a game worker via the connection's input drain:
+                # execute inline instead of queueing a second task
+                atp.run(*job)
         except Exception:
             import traceback
             logger.error(f"Exception in text handler: {traceback.format_exc()}")
