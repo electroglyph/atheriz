@@ -140,9 +140,12 @@ class Script(Flags, DbOps):
             return state
 
     def __setstate__(self, state):
+        current_child = getattr(self, "child", None)
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
-        object.__setattr__(self, "child", None)
+        # Preserve the live link during in-place hot reload; fresh deserialized
+        # scripts still start without a child and are linked during resolution.
+        object.__setattr__(self, "child", current_child)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
@@ -206,4 +209,7 @@ class Script(Flags, DbOps):
             for name, func in at_funcs:
                 s = child.hooks.get(name, set())
                 s.discard(func)
+                s.difference_update(
+                    [hook for hook in s if getattr(hook, "__self__", None) is self]
+                )
                 child.hooks[name] = s
