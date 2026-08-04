@@ -123,7 +123,10 @@ class Account(Flags, DbOps):
             character (Object): The character to remove.
         """
         with self.lock:
-            self.characters.remove(character.id)
+            try:
+                self.characters.remove(character.id)
+            except ValueError:
+                pass
 
     @staticmethod
     def hash_password(password: str) -> str:

@@ -263,14 +263,14 @@ class TestAccountCharacterManagement:
         acc.remove_character(c)
         assert acc.characters == [7]  # one removed, one left
 
-    def test_remove_character_missing_raises(self, fixed_salt, global_test_env):
-        # INTENT: list.remove raises ValueError for missing id — we let that
-        # propagate rather than swallow it (caller bug to call remove when
-        # the character wasn't there)
+    def test_remove_character_missing_is_noop(self, fixed_salt, global_test_env):
+        # INTENT: removing a character that isn't in the list must be a no-op
+        # rather than raising ValueError (issue #37: Object.delete hits this for
+        # connected chars with a stale/missing entry, aborting deletion).
         acc = _make_account("tara", "pw")
         c = make_object("c1", is_pc=True); c.id = 99
-        with pytest.raises(ValueError):
-            acc.remove_character(c)
+        acc.remove_character(c)
+        assert c.id not in acc.characters
 
     def test_add_character_uses_lock(self, fixed_salt, global_test_env):
         # INTENT: the lock guards the characters list. Verifying the lock
