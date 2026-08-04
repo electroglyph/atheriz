@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import time
 import sys
 import tempfile
 import urllib.request
@@ -344,6 +345,80 @@ class TestCreateAccountEndpoint:
                 )
             )
         assert result["status"] == "error"
+
+
+BLOCK_SECONDS = 0.4
+PROBE_SECONDS = 0.05
+STALL_THRESHOLD = 0.3
+
+
+class TestInternalAdminEndpointsBlockLoop:
+    """INTENT: /_internal/hot_reload and /_internal/shutdown must NOT freeze the
+    event loop. These tests FAIL while the handlers run blocking work directly
+    (issue #36) and PASS once it's moved off-loop (run_in_threadpool /
+    BackgroundTasks)."""
+
+    @staticmethod
+    def _make_blocking():
+        def blocking(*_args, **_kwargs):
+            time.sleep(BLOCK_SECONDS)
+            return "reloaded"
+        return blocking
+
+    @staticmethod
+    def _assert_reload_loop_delay(loop_delay):
+        assert loop_delay < STALL_THRESHOLD, (
+            f"event loop stalled {loop_delay:.3f}s during the handler — the "
+            "handler is still doing blocking work on the loop (issue #36)"
+        )
+
+    @staticmethod
+    def _ordered_measure(endpoint) -> float:
+        async def probe():
+            t0 = time.monotonic()
+            await asyncio.sleep(PROBE_SECONDS)
+            return time.monotonic() - t0
+
+        async def run():
+            probe_task = asyncio.create_task(probe())
+            await asyncio.sleep(0)  # let probe enter its sleep first
+            handler_task = asyncio.create_task(endpoint())
+            delay = await probe_task
+            await handler_task
+            return delay
+
+        return asyncio.run(run())
+
+    def test_hot_reload_blocks_loop(self, global_test_env, tmp_path):
+        # INTENT: reload handler does blocking work on the loop; PASSES now,
+        # fails if fixed.
+        from atheriz.atheriz import hot_reload_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        blocking = self._make_blocking()
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
+             patch("atheriz.atheriz.do_reload", blocking), \
+             patch("atheriz.atheriz.reloader.reload_game_logic", blocking):
+            delay = self._ordered_measure(
+                lambda: hot_reload_endpoint(
+                    _FakeRequest(token="real-token", host="127.0.0.1")
+                )
+            )
+        self._assert_reload_loop_delay(delay)
+
+    def test_shutdown_blocks_loop(self, global_test_env, tmp_path):
+        # INTENT: shutdown handler does blocking work on the loop; PASSES now,
+        # fails if fixed.
+        from atheriz.atheriz import shutdown_endpoint
+        (tmp_path / "admin.token").write_text("real-token")
+        blocking = self._make_blocking()
+        with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
+             patch("atheriz.atheriz.do_shutdown", blocking):
+            delay = self._ordered_measure(
+                lambda: shutdown_endpoint(
+                    _FakeRequest(token="real-token", host="127.0.0.1")
+                )
+            )
+        self._assert_reload_loop_delay(delay)
 
 
 class TestSpawnDaemon:

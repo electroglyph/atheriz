@@ -22,7 +22,7 @@ class Session:
         self.connection = connection
         self.last_puppet: Object | None = None
         self.puppet: Object | None = None
-        # ponytail: stack of (prev_puppet, target). Each target carries its own
+        # stack of (prev_puppet, target). Each target carries its own
         # `_puppet_restore` manifest (excluded from pickling by __getstate__).
         # Lives on the session (never pickled) so transient restore state stays off saved objects.
         self.puppet_stack: list = []
@@ -47,7 +47,7 @@ class Session:
             puppet = self.puppet
         if future and not future.done():
             future.cancel()
-        # ponytail: unwind any in-progress puppet chain before autosave so a
+        # unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while stack:
             _prev, target = stack.pop()

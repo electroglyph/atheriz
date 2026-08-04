@@ -207,8 +207,8 @@ async def hot_reload_endpoint(request: Request):
     if token != expected_token:
         return {"status": "error", "message": "Invalid token."}
 
-    do_reload()
-    msg = reloader.reload_game_logic()
+    await run_in_threadpool(do_reload)
+    msg = await run_in_threadpool(reloader.reload_game_logic)
     return {"status": "ok", "message": msg}
 
 
@@ -233,7 +233,7 @@ async def shutdown_endpoint(request: Request):
 
     print("Internal shutdown request received. Running shutdown tasks...")
     try:
-        do_shutdown()
+        await run_in_threadpool(do_shutdown)
     except Exception as e:
         print(f"Error during internal shutdown: {e}")
         return {"status": "error", "message": str(e)}

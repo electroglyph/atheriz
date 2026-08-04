@@ -220,12 +220,6 @@ def _apply_patch(obj, new_class):
     Skips __init__ when the old and new class have the same __init__ signature
     to avoid firing side effects during hot-reload.
     """
-    state = None
-    if hasattr(obj, "__getstate__"):
-        state = obj.__getstate__()
-    else:
-        state = obj.__dict__.copy()
-
     saved_session = getattr(obj, "session", None)
     saved_listeners = getattr(obj, "listeners", None)
     saved_command = getattr(obj, "command", None)
@@ -234,6 +228,12 @@ def _apply_patch(obj, new_class):
     if lock:
         lock.acquire()
     try:
+        state = None
+        if hasattr(obj, "__getstate__"):
+            state = obj.__getstate__()
+        else:
+            state = obj.__dict__.copy()
+
         old_class = obj.__class__
         obj.__class__ = new_class
 

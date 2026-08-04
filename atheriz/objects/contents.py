@@ -137,7 +137,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
     query = query.lower()
     if query == "me" or query == obj.name.lower():
         return [obj]
-    # ponytail: computed once so the #id branch and the match loop share one candidate list
+    # computed once so the #id branch and the match loop share one candidate list
     objs = _gather_contents(obj) if recursive else obj.contents
     if query.startswith("#"):
         try:

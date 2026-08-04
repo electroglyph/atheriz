@@ -16,7 +16,7 @@ from atheriz.tests.fakes import make_object
 # ---------------------------------------------------------------------------
 
 
-# ponytail: lightweight stand-in covering exactly the surface the puppet command
+# lightweight stand-in covering exactly the surface the puppet command
 # touches. Isolates the command's stack/restore logic from framework heavy hooks
 # (at_post_puppet/at_disconnect are stubbed). Records call-time state so hook
 # ordering can be asserted.
