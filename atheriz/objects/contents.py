@@ -213,6 +213,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
                 matches.append(objs[x])
                 if len(matches) == count and index == 0:
                     return matches
+                continue
         for s in optional:
             if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
                 if count == 1 and index == 0:
@@ -221,6 +222,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
                     matches.append(objs[x])
                     if len(matches) == count and index == 0:
                         return matches
+                    break
     if count == 0:  # 0 means all
         return matches
     if index == 0 and len(matches) > count:  # we have more matches than requested
