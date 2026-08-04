@@ -108,6 +108,23 @@ def _rewrite_self_to_caller(tree: ast.AST) -> ast.AST:
     return _SelfToCaller().visit(tree)
 
 
+def _capture_last_expr(tree: ast.Module) -> ast.Module:
+    """Rewrite the trailing expression statement into `_result[0] = <expr>` so
+    its value is captured during the single exec instead of being re-evaluated
+    (which would run its side effects twice)."""
+    if tree.body and isinstance(tree.body[-1], ast.Expr):
+        expr = tree.body[-1].value
+        target = ast.Subscript(
+            value=ast.Name(id="_result", ctx=ast.Load()),
+            slice=ast.Constant(value=0),
+            ctx=ast.Store(),
+        )
+        assign = ast.Assign(targets=[target], value=expr)
+        tree.body[-1] = ast.copy_location(assign, expr)
+        ast.fix_missing_locations(tree)
+    return tree
+
+
 def _truncate(text: str) -> str:
     if not text:
         return ""
@@ -162,6 +179,10 @@ class PyCommand(Command):
         caller.msg(_colorize(f">>> {code}"))
         logger.info(f"py by {caller.name} ({caller.id}): {code!r}")
 
+        stdout_buf = io.StringIO()
+        result = [None]
+        error = [None]
+
         py_globals = {
             "__builtins__": _SAFE_BUILTINS,
             "caller": caller,
@@ -173,11 +194,8 @@ class PyCommand(Command):
             "logger": logger,
             "time": _time_mod,
             "pprint": pprint,
+            "_result": result,
         }
-
-        stdout_buf = io.StringIO()
-        result = [None]
-        error = [None]
 
         def _exec_code():
             try:
@@ -189,12 +207,8 @@ class PyCommand(Command):
                             py_globals,
                         )
                     else:
+                        tree = _capture_last_expr(tree)
                         exec(compile(tree, "<py>", "exec"), py_globals)
-                        if tree.body and isinstance(tree.body[-1], ast.Expr):
-                            result[0] = eval(
-                                compile(ast.Expression(tree.body[-1].value), "<py>", "eval"),
-                                py_globals,
-                            )
             except SyntaxError as e:
                 error[0] = ("SyntaxError", str(e))
             except Exception as e:
