@@ -267,6 +267,7 @@ class MapInfo:
             obj_entries = [
                 (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
                 for o in self.objects.values()
+                if o.location is not None
             ]
             static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
             listeners = list(self.listeners.values())
@@ -295,6 +296,7 @@ class MapInfo:
             obj_entries = [
                 (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
                 for o in self.objects.values()
+                if o.location is not None
             ]
             static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
             listeners = list(self.listeners.values())
