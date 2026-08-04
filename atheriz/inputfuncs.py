@@ -37,6 +37,85 @@ def inputfunc(name: str | None = None) -> Callable:
     return decorator
 
 
+def dispatch_loggedin(puppet: Object, text: str) -> None:
+    """Resolve and dispatch a raw input line as a logged-in puppet.
+
+    Mirrors the logged-in branch of the ``text`` input handler: command lookup
+    (internal cmdset, global cmdset, short/auto aliases, location and inventory
+    external cmdsets), access control, and fire-and-forget dispatch onto the
+    async threadpool. Shared by the session text handler and
+    ``Object.execute_cmd``.
+    """
+    if not text:
+        return
+    parts = text.split(" ", 1)
+    raw_cmd_key = parts[0].lower()
+    cmd_args = parts[1] if len(parts) > 1 else ""
+    matched_alias = raw_cmd_key
+
+    atp = get_async_threadpool()
+
+    cmd = None
+    if puppet.internal_cmdset:
+        cmd = puppet.internal_cmdset.get(raw_cmd_key)
+    if not cmd:
+        cmd = get_loggedin_cmdset().get(raw_cmd_key)
+    if cmd:
+        if not cmd.access(puppet):
+            puppet.msg("You can't do that.")
+            return
+        func, caller, eargs = cmd.execute(puppet, cmd_args, cmdstring=matched_alias)
+        if func:
+            atp.add_task(func, caller, eargs)
+        else:
+            logger.warning(f"Command {raw_cmd_key} execute returned no func")
+    else:
+        # handle aliasing / short commands
+        # this makes 'bleh work as `say bleh`
+        cmd = get_loggedin_cmdset().get(text[:1])
+        if cmd:
+            matched_alias = text[:1]
+            cmd_args = text[1:]
+        else:
+            # check for commands provided by objects in the player's location
+            loc = puppet.location
+            if loc:
+                objs = loc.contents
+                for obj in objs:
+                    if obj.external_cmdset and (cmd := obj.external_cmdset.get(raw_cmd_key)):
+                        break
+            if not cmd:
+                # check for commands provided by objects in the player's inventory
+                objs = puppet.contents
+                for obj in objs:
+                    if obj.external_cmdset and (cmd := obj.external_cmdset.get(raw_cmd_key)):
+                        break
+
+        if not cmd and settings.AUTO_COMMAND_ALIASING:
+            if text[:1] in _NO_ALIAS_COMMANDS:
+                puppet.msg("You can't do that.")
+                return
+            keys = get_loggedin_cmdset().get_keys()
+            for key in keys:
+                if key in _IGNORE_KEYS:
+                    continue
+                if key.startswith(raw_cmd_key):
+                    cmd = get_loggedin_cmdset().get(key)
+                    matched_alias = key
+                    break
+        if not cmd:
+            cmd = get_loggedin_cmdset().get("none")
+            matched_alias = "none"
+            cmd_args = raw_cmd_key
+        if cmd:
+            if not cmd.access(puppet):
+                puppet.msg("You can't do that.")
+                return
+            func, caller, eargs = cmd.execute(puppet, cmd_args, cmdstring=matched_alias)
+            if func:
+                atp.add_task(func, caller, eargs)
+
+
 class InputFuncs:
     """
     Handles parsed JSON-RPC input messages from the client.
@@ -104,63 +183,7 @@ class InputFuncs:
 
             if connection.session.puppet:
                 # Player is logged in
-                cmd = connection.session.puppet.internal_cmdset.get(raw_cmd_key)
-                if not cmd:
-                    cmd = get_loggedin_cmdset().get(raw_cmd_key)
-                if cmd:
-                    if not cmd.access(connection.session.puppet):
-                        connection.session.puppet.msg("You can't do that.")
-                        return
-                    func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args, cmdstring=matched_alias)
-                    if func:
-                        atp.add_task(func, caller, eargs)
-                    else:
-                        logger.warning(f"Command {raw_cmd_key} execute returned no func")
-                else:
-                    # handle aliasing / short commands
-                    # this makes 'bleh work as `say bleh`
-                    cmd = get_loggedin_cmdset().get(text[:1])
-                    if cmd:
-                        matched_alias = text[:1]
-                        cmd_args = text[1:]
-                    else:
-                        # check for commands provided by objects in the players location
-                        loc: Object | Node = connection.session.puppet.location
-                        if loc:
-                            objs = loc.contents
-                            for obj in objs:
-                                if cmd := obj.external_cmdset.get(raw_cmd_key):
-                                    break
-                        if not cmd:
-                            # check for commands provided by objects in the players inventory
-                            objs = connection.session.puppet.contents
-                            for obj in objs:
-                                if cmd := obj.external_cmdset.get(raw_cmd_key):
-                                    break
-
-                    if not cmd and settings.AUTO_COMMAND_ALIASING:
-                        if text[:1] in _NO_ALIAS_COMMANDS:
-                            connection.session.puppet.msg("You can't do that.")
-                            return
-                        keys = get_loggedin_cmdset().get_keys()
-                        for key in keys:
-                            if key in _IGNORE_KEYS:
-                                continue
-                            if key.startswith(raw_cmd_key):
-                                cmd = get_loggedin_cmdset().get(key)
-                                matched_alias = key
-                                break
-                    if not cmd:
-                        cmd = get_loggedin_cmdset().get("none")
-                        matched_alias = "none"
-                        cmd_args = raw_cmd_key
-                    if cmd:
-                        if not cmd.access(connection.session.puppet):
-                            connection.session.puppet.msg("You can't do that.")
-                            return
-                        func, caller, eargs = cmd.execute(connection.session.puppet, cmd_args, cmdstring=matched_alias)
-                        if func:
-                            atp.add_task(func, caller, eargs)
+                dispatch_loggedin(connection.session.puppet, text)
             else:
                 # Player is NOT logged in
                 cmd = get_unloggedin_cmdset().get(raw_cmd_key)

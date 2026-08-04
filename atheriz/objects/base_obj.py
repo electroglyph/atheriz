@@ -665,14 +665,21 @@ class Object(Flags, DbOps, AccessLock):
 
     def execute_cmd(self, raw_string, session=None, **kwargs):
         """
-        Mock compatibility method simulating executing a command directly as this object.
-        Currently unimplemented.
+        Execute a command as this object, exactly as if the string had been
+        typed into this object's own session. Uses the same command lookup,
+        aliasing, access control, and dispatch as the logged-in session text
+        handler; the command runs asynchronously on the global async threadpool.
 
         Args:
             raw_string (str): The raw string to execute.
-            session (Session, optional): The session executing the command.
+            session (Session, optional): Ignored for compatibility; this object's
+                own ``session`` is used for message routing.
         """
-        pass
+        if not raw_string:
+            return
+        from atheriz.inputfuncs import dispatch_loggedin
+
+        dispatch_loggedin(self, raw_string)
 
     def msg(self, *args, **kwargs):
         """
