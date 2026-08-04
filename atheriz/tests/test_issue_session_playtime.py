@@ -64,3 +64,25 @@ class TestSessionPlaytime:
         session.at_disconnect()
 
         assert char.seconds_played < 60 * 60
+
+    def test_disconnect_persists_final_session_playtime(self, global_test_env, fixed_salt):
+        """INTENT: the playtime persisted on disconnect must include the final
+        session. `Object.at_disconnect` runs `save_objects()` *before*
+        `Session.at_disconnect` adds `time.time() - conn_time` to
+        `seconds_played`, so the last session's playtime is never saved."""
+        char = Object.create(None, "hero", is_pc=True)
+        account = Account.create("bob", "pw1")
+        account.characters = [char.id]
+
+        session = _connect(account, char)
+        session.conn_time = time.time() - 5.0
+
+        saved_seconds = {}
+        with patch("atheriz.objects.base_obj.save_objects") as mock_save:
+            mock_save.side_effect = lambda: saved_seconds.update(value=char.seconds_played)
+            session.at_disconnect()
+
+        assert mock_save.called
+        assert saved_seconds["value"] >= 4.5, (
+            "save_objects ran before the final session's playtime was added"
+        )

@@ -43,8 +43,8 @@ class Session:
             target.is_pc = orig_is_pc
             target.privilege_level = orig_priv
         if self.puppet:
-            self.puppet.at_disconnect()
             self.puppet.seconds_played += time.time() - self.conn_time
+            self.puppet.at_disconnect()
         if self.account:
             self.account.at_disconnect()
 
