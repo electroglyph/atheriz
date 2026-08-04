@@ -14,6 +14,15 @@ _EXCLUDED_MODULES = {
     "atheriz.websocket",
     "atheriz.globals.get",
     "atheriz.globals.objects",
+    # `settings` holds live game-folder values injected by setup_game_folder();
+    # reloading it resets every value to source defaults.
+    "atheriz.settings",
+    # these hold live state registered with the running ticker/threadpool;
+    # reloading them resets module flags (_autosave_started) while the old
+    # coroutines keep running on the live ticker.
+    "atheriz.globals.asyncthreadpool",
+    "atheriz.globals.autosave",
+    "atheriz.globals.time",
 }
 
 
@@ -309,6 +318,11 @@ def reload_game_logic() -> str:
     game_reloaded, game_errors = _reload_game_folder_modules()
     reloaded_count += game_reloaded
     errors.extend(game_errors)
+
+    # `atheriz.settings` is excluded from reload, so re-inject the game
+    # folder's values here (in case settings.py changed on disk).
+    from atheriz.atheriz import setup_game_folder
+    setup_game_folder(required=False)
 
     # patch existing objects
     # we iterate over all live objects and try to find their new class definition
