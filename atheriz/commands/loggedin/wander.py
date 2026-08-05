@@ -70,6 +70,8 @@ class WanderCommand(Command):
             npc = Wanderer.create(caller=caller, name=name, is_npc=True, is_mapable=True, is_tickable=True)
             if npc:
                 random_node = grid.get_random_node()
+                if not random_node:
+                    continue
                 npc.move_to(random_node)
         end = time.time()
         caller.msg(f"Spawned {count} NPCs across area '{loc.coord.area}' in {(end - start) * 1000:.2f} milliseconds")

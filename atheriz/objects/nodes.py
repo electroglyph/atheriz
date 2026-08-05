@@ -900,6 +900,8 @@ class NodeGrid:
 
     def get_random_node(self):
         with self.lock:
+            if not self.nodes:
+                return None
             key = random.choice(list(self.nodes.keys()))
             return self.nodes[key]
 
