@@ -9,6 +9,7 @@ from atheriz.objects.base_obj import Object
 from atheriz.globals.objects import save_objects, load_objects, delete_objects, get
 from atheriz import settings, database_setup
 import dill
+from unittest.mock import patch
 
 
 
@@ -203,6 +204,31 @@ def test_node_handler_persistence(db_setup):
     assert Coord("TestArea", 1, 1, 0) in nh2.transitions
     assert Coord("TestArea", 5, 5, 0) in nh2.doors
     assert "exit" in nh2.doors[Coord("TestArea", 5, 5, 0)]
+
+def test_save_snapshots_are_deep_copies(db_setup):
+    from atheriz.globals.node import NodeHandler
+    from atheriz.objects.nodes import Transition
+    from atheriz.objects.base_door import Door
+
+    nh = NodeHandler()
+    t = Transition(Coord("OtherArea", 0, 0, 0), Coord("TestArea", 1, 1, 0))
+    nh.add_transition(t)
+    floor = Coord("TestArea", 5, 5, 0)
+    door = Door(floor, "exit", Coord("TestArea", 6, 5, 0), "entrance")
+    nh.add_door(door)
+
+    dumped = []
+    orig = dill.dumps
+    def spy(obj, *a, **k):
+        dumped.append(obj)
+        return orig(obj, *a, **k)
+    with patch("atheriz.globals.node.dill.dumps", spy):
+        nh.save()
+
+    # Live objects must not be serialized directly (they'd be torn by
+    # concurrent mutation while dill.dumps walks them outside the locks).
+    assert t not in dumped
+    assert door not in dumped
 
 def test_loaded_objects_threadsafe(db_setup):
     """

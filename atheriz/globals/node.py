@@ -72,9 +72,9 @@ class NodeHandler:
         with self.lock:
             areas_snapshot = [copy.deepcopy(a) for a in self.areas.values()]
         with self.lock2:
-            transitions_snapshot = list(self.transitions.values())
+            transitions_snapshot = [copy.deepcopy(t) for t in self.transitions.values()]
         with self.lock3:
-            doors_snapshot = list(self.doors.items())
+            doors_snapshot = [(k, copy.deepcopy(v)) for k, v in self.doors.items()]
 
         with db.lock:
             cursor = db.connection.cursor()
