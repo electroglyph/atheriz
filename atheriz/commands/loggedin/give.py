@@ -37,10 +37,17 @@ class GiveCommand(Command):
         if not targets:
             caller.msg(f"Could not find '{target_name}' here.")
             return
+        if len(targets) > 1:
+            caller.msg(f"Multiple matches found for '{target_name}'.")
+            return
         target = targets[0]
 
         if target.id == caller.id:
             caller.msg("You already have that!")
+            return
+
+        if not (target.is_pc or target.is_npc or target.is_container):
+            caller.msg("You can't give that to that.")
             return
 
         if obj_name == "all":

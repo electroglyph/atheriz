@@ -103,9 +103,10 @@ class CmdSocials(Command):
                 msg = templates
             caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller}, msg_type="emote")
         else:
-            target = caller.search(target_name)
-            if not target:
+            targets = caller.search(target_name)
+            if not targets:
                 return
+            target = targets[0]
             
             if isinstance(templates, tuple) and len(templates) > 1:
                 msg = templates[1]

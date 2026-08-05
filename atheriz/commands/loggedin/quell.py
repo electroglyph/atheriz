@@ -25,7 +25,8 @@ class QuellCommand(Command):
         if q:
             caller.msg(f"You are already quelled!")
         else:
-            caller.quelled = True
+            with caller.lock:
+                caller.quelled = True
             caller.msg(f"You are now quelled.")
 
 
@@ -47,5 +48,6 @@ class UnquellCommand(Command):
         if not q:
             caller.msg(f"You are not quelled!")
         else:
-            caller.quelled = False
+            with caller.lock:
+                caller.quelled = False
             caller.msg(f"You are now unquelled.")

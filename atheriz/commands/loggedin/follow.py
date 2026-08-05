@@ -27,12 +27,13 @@ class FollowScript(Script):
             self.delete()
             return
         with self.child.lock:
-            for id in self.child.followers:
-                follower = get(id)
-                if follower:
-                    success = follower[0].move_to(destination, to_exit)
-                    if not success:
-                        follower[0].msg(f"You can't follow {self.child.name} there!")
+            followers = list(self.child.followers)
+        for id in followers:
+            follower = get(id)
+            if follower:
+                success = follower[0].move_to(destination, to_exit)
+                if not success:
+                    follower[0].msg(f"You can't follow {self.child.name} there!")
 
 
 class FollowCommand(Command):

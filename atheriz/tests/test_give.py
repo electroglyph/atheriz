@@ -156,6 +156,37 @@ def test_give_target_not_found():
     giver.msg.assert_any_call("Could not find 'nonexistent' here.")
     assert item.location == giver
 
+def test_give_multiple_matches():
+    giver, receiver, node = setup_give_scenario()
+    item = Object.create(None, "apple", is_item=True)
+    item.move_to(giver)
+    # Second object named "receiver" in the room creates ambiguity.
+    twin = Object.create(None, "receiver", is_pc=True)
+    twin.location = node
+    node.add_object(twin)
+
+    cmd = GiveCommand()
+    args = cmd.parser.parse_args(["apple", "all", "receiver"])
+    cmd.run(giver, args)
+
+    giver.msg.assert_any_call("Multiple matches found for 'all receiver'.")
+    assert item.location == giver
+
+def test_give_invalid_recipient():
+    giver, receiver, node = setup_give_scenario()
+    item = Object.create(None, "apple", is_item=True)
+    item.move_to(giver)
+    rock = Object.create(None, "rock", is_item=True)
+    rock.location = node
+    node.add_object(rock)
+
+    cmd = GiveCommand()
+    args = cmd.parser.parse_args(["apple", "rock"])
+    cmd.run(giver, args)
+
+    giver.msg.assert_any_call("You can't give that to that.")
+    assert item.location == giver
+
 def test_give_with_to_preposition():
     giver, receiver, node = setup_give_scenario()
     item = Object.create(None, "apple", is_item=True)

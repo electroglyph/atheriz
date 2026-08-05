@@ -517,7 +517,7 @@ class TestCmdSocialsExtra:
         target.id = 99
         target.is_pc = True
         target.is_npc = False
-        c.search = MagicMock(return_value=target)
+        c.search = MagicMock(return_value=[target])
         c.location = MagicMock()
         c.location.msg_contents = MagicMock()
         args = Namespace(cmdstring="wave", target=["Bob"])

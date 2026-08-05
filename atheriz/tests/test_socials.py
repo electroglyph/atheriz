@@ -67,7 +67,7 @@ def test_targeted_social(test_env):
     room, alice, bob = test_env
     cmd = CmdSocials()
     
-    alice.search = MagicMock(return_value=bob)
+    alice.search = MagicMock(return_value=[bob])
     
     args = Namespace(cmdstring="hug", target=["Bob"])
     cmd.run(alice, args)
@@ -85,6 +85,24 @@ def test_targeted_social(test_env):
     if isinstance(bob_text, tuple): bob_text = bob_text[0]
     
     assert "Alice (offline) hugs you." in bob_text
+
+
+def test_targeted_social_multiple_matches(test_env):
+    """search returns a list; the first match is used as a single Object."""
+    room, alice, bob = test_env
+    cmd = CmdSocials()
+
+    alice.search = MagicMock(return_value=[bob, alice])
+
+    args = Namespace(cmdstring="hug", target=["Bob"])
+    cmd.run(alice, args)
+
+    assert alice.msg.called
+    alice_args, alice_kwargs = alice.msg.call_args
+    alice_text = alice_args[0] if alice_args else alice_kwargs.get('text', '')
+    if isinstance(alice_text, tuple): alice_text = alice_text[0]
+
+    assert "You hug Bob (offline)." in alice_text
 
 def test_missing_target_social(test_env):
     room, alice, bob = test_env
