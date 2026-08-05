@@ -27,6 +27,7 @@ class Account(Flags, DbOps):
         self.password = ""
         self.characters = []
         self.ban_reason = ""
+        self.logged_in = False
         self.is_account = True
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
@@ -103,7 +104,8 @@ class Account(Flags, DbOps):
         """
         Called when a session associated with this account disconnects.
         """
-        pass
+        with self.lock:
+            self.logged_in = False
 
     def add_character(self, character: Object) -> None:
         """
@@ -182,6 +184,7 @@ class Account(Flags, DbOps):
             if self.name == name and self.check_password(password):
                 self.logged_in = True
                 return True
+            self.logged_in = False
             return False
 
     def __getstate__(self):

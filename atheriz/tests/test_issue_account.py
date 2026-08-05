@@ -38,3 +38,12 @@ class TestAccountLogin:
 
         assert account.login("bob", "wrong") is False
         assert account.logged_in is False
+
+    def test_disconnect_clears_logged_in(self, global_test_env, fixed_salt):
+        """INTENT: disconnecting clears the stale logged_in flag so it isn't
+        persisted forever."""
+        account = Account.create("bob", "pw1")
+        assert account.login("bob", "pw1") is True
+        assert account.logged_in is True
+        account.at_disconnect()
+        assert account.logged_in is False
