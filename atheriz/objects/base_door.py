@@ -249,7 +249,7 @@ class Door(AccessLock):
             return True
 
     def map_close(self):
-        if settings.MAP_ENABLED and self.symbol_coord:
+        if settings.MAP_ENABLED and self.symbol_coord and self.to_coord:
             mh = get_map_handler()
             mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
             if mi:
@@ -261,7 +261,7 @@ class Door(AccessLock):
                 mi.render(True)
 
     def map_open(self):
-        if settings.MAP_ENABLED and self.symbol_coord:
+        if settings.MAP_ENABLED and self.symbol_coord and self.to_coord:
             mh = get_map_handler()
             mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
             if mi:
