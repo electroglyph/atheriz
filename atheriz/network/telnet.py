@@ -1,6 +1,7 @@
 from __future__ import annotations
 import asyncio
 import threading
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 import telnetlib3
 from .protocol import BaseProtocol
@@ -71,8 +72,8 @@ class TelnetProtocol(BaseProtocol):
         if not getattr(settings, "TELNET_ENABLED", False):
             return
 
-        @app.on_event("startup")
-        async def startup_event():
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
             async def shell(reader, writer):
                 host = "?"
                 try:
@@ -95,17 +96,13 @@ class TelnetProtocol(BaseProtocol):
 
                 # Initialize terminal size if possible
                 writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
-                
+
                 def on_naws(rows, cols):
                     if connection.session:
                         rows, cols = _clamp_naws(rows, cols)
                         connection.session.term_width = cols
                         connection.session.term_height = rows
-                        # try:
-                        #     connection.send_command("text", f"[DEBUG] Terminal size updated: {cols}x{rows}\r\n")
-                        # except Exception:
-                        #     pass
-                
+
                 # ask the client to report window size
                 writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
                 writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
@@ -131,15 +128,17 @@ class TelnetProtocol(BaseProtocol):
 
             logger.info(f"Starting Telnet Protocol on {interface}:{port}")
             cls._server_task = await telnetlib3.create_server(
-                port=port, 
-                host=interface, 
+                port=port,
+                host=interface,
                 shell=shell,
                 timeout=getattr(settings, "TELNET_CONNECTION_TIMEOUT", 300)
             )
-            
-        @app.on_event("shutdown")
-        async def shutdown_event():
-            if cls._server_task:
-                cls._server_task.close()
-                await cls._server_task.wait_closed()
-                logger.info("Telnet Protocol server stopped.")
+            try:
+                yield
+            finally:
+                if cls._server_task:
+                    cls._server_task.close()
+                    await cls._server_task.wait_closed()
+                    logger.info("Telnet Protocol server stopped.")
+
+        app.router.lifespan_context = lifespan

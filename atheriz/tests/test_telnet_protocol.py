@@ -87,18 +87,20 @@ class TestTelnetProtocolSetup:
         app = MagicMock()
         with patch("atheriz.settings.TELNET_ENABLED", False):
             TelnetProtocol.setup(app)
-        # No on_event was registered
-        app.on_event.assert_not_called()
+        # No lifespan was registered
+        app.router.lifespan_context.assert_not_called()
 
-    def test_setup_registers_startup_and_shutdown(self, global_test_env):
+    def test_setup_registers_lifespan(self, global_test_env):
+        class _Router:
+            def __init__(self):
+                self.lifespan_context = None
+
         app = MagicMock()
+        app.router = _Router()
         with patch("atheriz.settings.TELNET_ENABLED", True):
             TelnetProtocol.setup(app)
-        # on_event was called twice (startup and shutdown)
-        assert app.on_event.call_count == 2
-        events = [c.args[0] for c in app.on_event.call_args_list]
-        assert "startup" in events
-        assert "shutdown" in events
+        # A lifespan context manager was assigned to the app's router
+        assert callable(app.router.lifespan_context)
 
 
 class TestClampNaws:
