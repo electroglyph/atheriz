@@ -83,6 +83,29 @@ class TestSetupProtocols:
         # No websocket decorator call (we used a fake path)
         # The point is it didn't crash
 
+    def test_game_folder_protocol_setting_is_applied_before_setup(
+        self, global_test_env, monkeypatch
+    ):
+        from atheriz import atheriz
+
+        app_mock = MagicMock()
+
+        def inject_game_settings():
+            monkeypatch.setattr(atheriz.settings, "WEBSOCKET_ENABLED", False)
+            monkeypatch.setattr(
+                atheriz.settings,
+                "NETWORK_PROTOCOLS",
+                ["atheriz.network.websocket.WebSocketProtocol"],
+            )
+
+        with patch.object(atheriz, "app", app_mock), \
+             patch.object(atheriz, "setup_game_folder", side_effect=inject_game_settings), \
+             patch.object(atheriz, "do_startup", side_effect=KeyboardInterrupt):
+            with pytest.raises(KeyboardInterrupt):
+                atheriz.start_server()
+
+        app_mock.websocket.assert_not_called()
+
 
 class TestDoTestCommand:
     def test_runs_core_tests_when_in_core_repo(self, global_test_env):

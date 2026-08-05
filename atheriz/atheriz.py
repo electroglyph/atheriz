@@ -59,8 +59,6 @@ def setup_protocols():
             traceback.print_exc()
 
 
-setup_protocols()
-
 templates_dir = Path(__file__).parent / "web" / "templates"
 static_dir = Path(__file__).parent / "web" / "static"
 templates = Jinja2Templates(directory=str(templates_dir))
@@ -305,6 +303,7 @@ def setup_static_files():
 def start_server():
     """Start the atheriz server."""
     setup_game_folder()
+    setup_protocols()
     print(f"Starting {settings.SERVERNAME} server...")
 
     import os
