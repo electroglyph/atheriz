@@ -314,16 +314,16 @@ class TestNoneCommand:
     def test_no_args_msg(self):
         c = _make_caller()
         c.internal_cmdset = MagicMock()
-        c.internal_cmdset.commands = {"look": 1, "say": 2}
+        c.internal_cmdset.get_keys.return_value = ["look", "say"]
         NoneCommand().run(c, None)
         c.msg.assert_called_with("Command not found.")
 
     def test_suggests_closest_match(self):
         c = _make_caller()
         c.internal_cmdset = MagicMock()
-        c.internal_cmdset.commands = {"look": 1, "say": 2}
+        c.internal_cmdset.get_keys.return_value = ["look", "say"]
         with patch("atheriz.commands.loggedin.none.get_loggedin_cmdset") as mock_lcs:
-            mock_lcs.return_value.commands = {}
+            mock_lcs.return_value.get_keys.return_value = []
             args = MagicMock(none=["lrok"])  # typo of "look"
             NoneCommand().run(c, args)
         msg = c.msg.call_args.args[0]
@@ -333,9 +333,9 @@ class TestNoneCommand:
     def test_no_choices_no_suggestion(self):
         c = _make_caller()
         c.internal_cmdset = MagicMock()
-        c.internal_cmdset.commands = {}
+        c.internal_cmdset.get_keys.return_value = []
         with patch("atheriz.commands.loggedin.none.get_loggedin_cmdset") as mock_lcs:
-            mock_lcs.return_value.commands = {}
+            mock_lcs.return_value.get_keys.return_value = []
             args = MagicMock(none=["xyz"])
             NoneCommand().run(c, args)
         msg = c.msg.call_args.args[0]

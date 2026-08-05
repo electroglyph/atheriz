@@ -30,7 +30,7 @@ class HelpCommand(Command):
             table.align = "l"
             table.max_table_width = caller.session.term_width - 2
             commands = []
-            unique_cmds = set(cmdset.commands.values())
+            unique_cmds = set(cmdset.get_all())
 
             for cmd in unique_cmds:
                 if cmd.access(caller) and not cmd.hide:

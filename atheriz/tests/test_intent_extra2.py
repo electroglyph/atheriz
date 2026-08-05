@@ -257,9 +257,9 @@ class TestNoneCommandInternal:
     def test_uses_internal_cmdset_when_available(self):
         c = _make_caller()
         c.internal_cmdset = MagicMock()
-        c.internal_cmdset.commands = {"look": MagicMock(), "say": MagicMock()}
+        c.internal_cmdset.get_keys.return_value = ["look", "say"]
         with patch("atheriz.commands.loggedin.none.get_loggedin_cmdset") as mock_lcs:
-            mock_lcs.return_value.commands = {}
+            mock_lcs.return_value.get_keys.return_value = []
             args = Namespace(none=["loo"])  # typo of "look"
             NoneCommand().run(c, args)
         msg = c.msg.call_args.args[0]
@@ -267,12 +267,10 @@ class TestNoneCommandInternal:
 
     def test_falls_back_to_global_cmdset(self):
         c = _make_caller()
-        # NoneCommand always reads internal_cmdset.commands; the code does
-        # not guard against None — verify current behavior.
         c.internal_cmdset = MagicMock()
-        c.internal_cmdset.commands = {"smile": MagicMock()}
+        c.internal_cmdset.get_keys.return_value = ["smile"]
         with patch("atheriz.commands.loggedin.none.get_loggedin_cmdset") as mock_lcs:
-            mock_lcs.return_value.commands = {}
+            mock_lcs.return_value.get_keys.return_value = []
             args = Namespace(none=["smile"])
             NoneCommand().run(c, args)
         c.msg.assert_called_once()

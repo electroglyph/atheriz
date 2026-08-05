@@ -26,13 +26,11 @@ class NoneCommand(Command):
         args.none = " ".join(args.none)
         internal = getattr(caller, "internal_cmdset", None)
         if internal is not None:
-            commands = [
-                cmd for cmd in internal.commands.keys() if cmd not in _IGNORED_COMMANDS
-            ]
+            commands = [cmd for cmd in internal.get_keys() if cmd not in _IGNORED_COMMANDS]
         else:
             commands = []
         commands2 = [
-            cmd for cmd in get_loggedin_cmdset().commands.keys() if cmd not in _IGNORED_COMMANDS
+            cmd for cmd in get_loggedin_cmdset().get_keys() if cmd not in _IGNORED_COMMANDS
         ]
         choices = commands + commands2
         if choices:
