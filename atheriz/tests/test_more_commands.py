@@ -29,6 +29,16 @@ def _make_caller(name="Alice", msg=None):
     return c
 
 
+class _InlineThread:
+    def __init__(self, target, args=(), kwargs=None, **_thread_options):
+        self.target = target
+        self.args = args
+        self.kwargs = kwargs or {}
+
+    def start(self):
+        self.target(*self.args, **self.kwargs)
+
+
 def _make_room(coord=None, name="Room"):
     if coord is None:
         coord = Coord("test", 0, 0, 0)
@@ -270,7 +280,8 @@ class TestShutdownCommand:
         mock_response.read.return_value = json.dumps({"status": "ok", "message": "shutting down"}).encode()
 
         with patch.object(settings, "SECRET_PATH", str(tmp_path)), \
-             patch("atheriz.commands.loggedin.shutdown.urllib.request.urlopen", return_value=mock_response):
+             patch("atheriz.commands.loggedin.shutdown.urllib.request.urlopen", return_value=mock_response), \
+             patch("atheriz.commands.loggedin.shutdown.threading.Thread", side_effect=_InlineThread):
             ShutdownCommand().run(c, None)
         c.msg.assert_any_call("Server shutdown initiated successfully.")
 
@@ -280,9 +291,21 @@ class TestShutdownCommand:
         (tmp_path / "admin.token").write_text("tok")
         with patch.object(settings, "SECRET_PATH", str(tmp_path)), \
              patch("atheriz.commands.loggedin.shutdown.urllib.request.urlopen",
-                   side_effect=Exception("connect refused")):
+                   side_effect=Exception("connect refused")), \
+             patch("atheriz.commands.loggedin.shutdown.threading.Thread", side_effect=_InlineThread):
             ShutdownCommand().run(c, None)
         assert any("Shutdown error" in str(c) or "Error connecting" in str(c) for c in c.msg.call_args_list)
+
+    def test_shutdown_request_is_started_in_daemon_thread(self, global_test_env, tmp_path):
+        c = _make_caller()
+        c.privilege_level = settings.Privilege.Admin
+        (tmp_path / "admin.token").write_text("tok")
+        with patch.object(settings, "SECRET_PATH", str(tmp_path)), \
+             patch("atheriz.commands.loggedin.shutdown.threading.Thread") as thread_cls:
+            ShutdownCommand().run(c, None)
+        thread_cls.assert_called_once()
+        assert thread_cls.call_args.kwargs["daemon"] is True
+        thread_cls.return_value.start.assert_called_once()
 
 
 class TestNoneCommand:
