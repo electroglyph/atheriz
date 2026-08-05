@@ -1,3 +1,6 @@
-You can replace the CSS files for Evennia's webclient here.
+This directory contains the CSS for the Atheriz webclient.
 
-You can find the original files in `evennia/web/static/webclient/css/`
+- `xterm.css` - base terminal styling.
+
+You can replace or extend these files to customize the client's appearance.
+The server-to-client message protocol is documented in `docs/12_webclient.md`.

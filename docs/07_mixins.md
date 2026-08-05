@@ -6,7 +6,7 @@
 The `Flags` mixin provides uniform boolean properties allowing for immediate identification across game routines. Standard properties include:
 `is_pc`, `is_npc`, `is_item`, `is_mapable`, `is_container`, `is_script`, `is_tickable`, `is_account`, `is_channel`, `is_node`, `is_modified`, `is_deleted`, and `is_connected`.
 
-Reference `example_game/flags.py` for the standard implementation.
+Reference the `flags.py` in your game folder (generated from `atheriz/objects/base_flags.py`) for the standard implementation.
 
 ### 7.1.2 Adding Custom Flags
 To add new states (like custom flags), set the attribute directly in the `Flags` initializer:
@@ -27,7 +27,7 @@ Example restricting item retrieval exclusively to builders:
 ```python
 obj.add_lock("get", lambda target: getattr(target, 'is_builder', False))
 ```
-Review `example_game/access.py` to examine the standard mixin baseline.
+Review the `access.py` in your game folder (generated from `atheriz/objects/base_lock.py`) to examine the standard mixin baseline.
 *Note: Any object where `is_superuser` is `True` automatically bypasses all locks to return `True`, unless the lock name being evaluated is `"delete"`.*
 
 ### 7.2.2 Safe vs. Fast Access
@@ -39,7 +39,7 @@ Atheriz governs synchronization checking through the `SLOW_LOCKS` configuration 
 Because the `access` pointer changes dynamically depending on the `SLOW_LOCKS` configuration, it cannot be safely serialized. It is excluded entirely from standard `dill` database pickling protocols by being included in the class-level `_pickle_excludes` tuple. If your mixins add properties that shouldn't be saved, add them to `_pickle_excludes`.
 
 ## 7.3 The `DbOps` Mixin
-Modifying `example_game/db_ops.py` allows you to define custom SQL for deletion and save operations. 
+Modifying the `db_ops.py` in your game folder (generated from `atheriz/objects/base_db_ops.py`) allows you to define custom SQL for deletion and save operations. 
 - `get_save_ops()` produces a tuple defining internal `(sql, params)` target logic supporting standard `INSERT OR REPLACE` statements.
 - `get_del_ops()` governs standard deletion execution statements. By modifying DbOps mixin and creating your own `database_setup.py`, you can use whatever SQL backend with whatever table layout you want.
 

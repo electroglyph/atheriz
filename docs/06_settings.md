@@ -26,6 +26,16 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `SERVERNAME`: The display name of the game server.
 - `SERVER_HOSTNAME`: The root hostname or IP address of the server.
 - `WEBSOCKET_ENABLED`: If `True`, enables the WebSocket server functionality.
+- `WEBSOCKET_MAX_MESSAGE_SIZE`: The maximum size in bytes of a single incoming WebSocket message.
+- `TELNET_ENABLED`: If `True`, enables the telnet server.
+- `TELNET_PORT`: The port the telnet server listens on.
+- `TELNET_INTERFACE`: The network interface to bind the telnet server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
+- `TELNET_CONNECTION_TIMEOUT`: Seconds a telnet connection may sit idle before being disconnected.
+- `TELNET_NAWS_MIN_COLS` / `TELNET_NAWS_MAX_COLS` / `TELNET_NAWS_MIN_ROWS` / `TELNET_NAWS_MAX_ROWS`: Clamp the terminal size reported by telnet clients via NAWS.
+- `NETWORK_PROTOCOLS`: The list of protocol classes the server starts (websocket and telnet).
+- `STRIP_INPUT_ESCAPE_SEQUENCES`: If `True`, strips terminal escape sequences (CSI/OSC, null bytes) from player input before dispatch.
+- `TERM_SIZE_MAX_WIDTH` / `TERM_SIZE_MAX_HEIGHT`: Upper bounds for the reported terminal size.
+- `MAP_SIZE_MAX_WIDTH` / `MAP_SIZE_MAX_HEIGHT`: Upper bounds for the reported map-pane size.
 - `WEBSERVER_ENABLED`: If `True`, hosts a web server for HTTP traffic.
 - `WEBSERVER_PORT`: The integer port where the web server listens (e.g., `8000`).
 - `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
@@ -36,12 +46,17 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `DEFAULT_TICK_SECONDS`: How often the game loop ticks for objects with `is_tickable = True`.
 - `AUTO_COMMAND_ALIASING`: If `True`, automatically prefixes matches for player commands (e.g., typing `exa` correctly triggers `examine`).
 - `THREADPOOL_LIMIT`: Maximum number of threads to use in the threadpool (defaults to system CPU count).
+- `THREADPOOL_QUEUE_LIMIT`: Maximum number of pending tasks in the threadpool queue; when full, new tasks are rejected rather than queued.
+- `CONNECTION_INPUT_QUEUE_LIMIT`: Maximum number of pending input messages per connection; beyond this the newest input is dropped.
+- `MAX_SEARCH_DEPTH`: Maximum recursion depth when searching nested containers (guards against stack overflow).
 - `THREADSAFE_GETTERS_SETTERS`: If `True`, applies thread-safe property locks on attributes. Disabling this may cause race conditions.
 - `SLOW_LOCKS`: Set to `True` if you plan on changing object permission locks while they are in use. If you only set locks at object creation, you can set this to `False` for better performance.
-- `PERMISSION_HIERARCHY`: List of integers representing permission hierarchy levels (e.g., Guest, Player, Helper, Builder, Admin).
+- `Privilege`: An `IntEnum` of permission levels — `Guest`, `Player`, `Helper`, `Builder`, `Admin` — ordered from least to most privileged. Permission gates such as `is_builder` and `is_superuser` are derived from it.
 
 ### 6.2.3 Accounts & Security
 - `ACCOUNT_CREATION_ENABLED`: Allows new accounts to be created from the client.
+- `GUEST_ENABLED`: Allows guests to connect without an account.
+- `GUEST_CREATION_COOLDOWN`: Minimum seconds between successful guest character creations from one host.
 - `MAX_LOGIN_ATTEMPTS`: Maximum failed login attempts before a temporary ban.
 - `LOGIN_ATTEMPT_COOLDOWN`: Cooldown duration in seconds for a temporary ban.
 
@@ -56,6 +71,7 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `AUTOSAVE_PLAYERS_ON_DISCONNECT`: If `True`, saves player objects when they log out or disconnect.
 - `AUTOSAVE_ON_SHUTDOWN`: If `True`, saves the game state when the server smoothly shuts down.
 - `AUTOSAVE_ON_RELOAD`: If `True`, saves the game state before executing a hot reload.
+- `AUTOSAVE_MINUTES`: Interval in minutes between automatic saves of the whole game state (`0` disables the interval autosave).
 
 ### 6.2.6 Map & UI Settings
 - `MAP_ENABLED`: Toggles the visibility of the in-game map.
@@ -88,5 +104,10 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `FUNCPARSER_START_CHAR`: Defines the initialization character for invoking functions (default: `$`).
 - `FUNCPARSER_ESCAPE_CHAR`: Specifies the escape character mapping (default: `\`).
 - `FUNCPARSER_MAX_NESTING`: Determines the maximum level of allowed nested arguments dynamically.
+
+### 6.2.10 Sound Settings
+- `DEFAULT_OPEN_SOUND_ATTENUATION`: Decibels subtracted from a sound each time it passes through an open pathway (e.g., open doors, hallways). Default `10.0`.
+- `DEFAULT_ENCLOSED_SOUND_ATTENUATION`: Decibels subtracted from a sound each time it passes through a closed/enclosed pathway. Default `20.0`.
+- `DEFAULT_AMBIENT_SOUND_LEVEL`: Ambient noise floor in decibels; incoming sounds quieter than this are ignored. Default `5.0`.
 
 [Table of Contents](./table_of_contents.md) | [Next: 07 Mixins](./07_mixins.md)

@@ -1,4 +1,4 @@
-# 15. Sound Propagation
+# 15 Sound Propagation
 
 Atheriz features a robust acoustic system that handles how sounds are emitted, attenuated over distance, and intercepted by objects and rooms. This system allows for realistic audio propagation across the game map, taking into account open pathways and closed doors.
 

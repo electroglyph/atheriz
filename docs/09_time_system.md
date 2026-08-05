@@ -38,7 +38,7 @@ To create an NPC that executes an action every 5 seconds, simply enable `self.is
 ### 9.3.2 Alarms
 The `at_alarm(time, data)` hook schedules callbacks targeting specific synchronized in-game times globally tracked by `GameTime`.
 
-Using `GameTime.add_alarm(hour, minute, caller_obj, repeat=False, data=None)`, you can queue logic to fire precisely when the clock aligns with the assigned tuple. This is incredibly useful for scheduling routines like opening shops at 08:00 AM in-game, automatically locking access doors during midnight alignments, or spawning world events consistently during scheduled holidays.
+Using `GameTime.add_alarm(hour, minute, caller, repeat=False, data=None)`, you can queue logic to fire precisely when the clock aligns with the assigned tuple. This is incredibly useful for scheduling routines like opening shops at 08:00 AM in-game, automatically locking access doors during midnight alignments, or spawning world events consistently during scheduled holidays.
 
 Use `?"` symbols inside arguments to define recurring wildcard matches (assigning an hour string as `?` causes the logic to execute at that specific minute interval every sequential hour).
 

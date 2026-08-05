@@ -54,7 +54,7 @@ On Windows, replace `source .venv/bin/activate` with `.venv\Scripts\activate`.
 
 ### 1.2.3 Installing Atheriz
 
-I'll publish a wheel to pypi in a bit after I do a few more things.
+Atheriz is not yet published to PyPI, so install it directly from the repository:
 
 ```sh
 git clone https://github.com/electroglyph/atheriz.git
@@ -87,6 +87,7 @@ my_game/
 │   ├── loggedin.py
 │   └── unloggedin.py
 ├── db_ops.py
+├── door.py
 ├── flags.py
 ├── initial_setup.py
 ├── inputfuncs.py
@@ -95,7 +96,10 @@ my_game/
 ├── objects.py
 ├── script.py
 ├── server_events.py
-└── settings.py
+├── settings.py
+└── web/
+    ├── static/
+    └── templates/
 ```
 
 ### 1.3.2 Understanding the Generated Files
@@ -116,6 +120,8 @@ Each generated file corresponds to a base class in the Atheriz framework and ser
 | `flags.py` | `(Standalone mixin)` | Manages boolean flags for object classification. |
 | `access.py` | `(Standalone mixin)` | Handles the permission and lock system. |
 | `db_ops.py` | `(Standalone mixin)` | Manages custom database serialization. |
+| `door.py` | `atheriz.objects.base_door.Door` | Represents doors between adjacent nodes. |
+| `web/` | `(static assets)` | Webclient templates and static files served by the webserver. |
 
 ### 1.3.3 Starting the Server
 

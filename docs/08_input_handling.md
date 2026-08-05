@@ -8,7 +8,7 @@ Atheriz uses FastAPI to handle WebSocket connections.
 2. The client handshake finishes and typically sends a `client_ready` message.
 3. The server responds to `client_ready` by rendering the welcome screen and prompting for login.
 
-Reference `atheriz/websocket.py` for the core implementation of the `WebSocketManager` and `Connection` classes.
+Reference `atheriz/network/websocket.py` and `atheriz/network/connection.py` for the core implementation of the `WebSocketProtocol`/`Connection` classes.
 
 ### 8.1.2 Message Format
 Communications between the client UI and the game server use a structured JSON format. Every message sent to the server must be a list with three elements:

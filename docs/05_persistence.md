@@ -56,7 +56,7 @@ class MyObject(Object):
 Two passes are needed because when an object references another ID, that ID might not be loaded into memory yet. `resolve_relations()` fires iteratively post-load across all instantiated objects to rebind references to other objects. If a custom class doesn't need this functionality, it should still have an empty `resolve_relations` method.
 
 ### 5.2.5 The `DbOps` Mixin
-Modifying `example_game/db_ops.py` allows you to define custom SQL for deletion and save operations. 
+Modifying the `db_ops.py` in your game folder (generated from `atheriz/objects/base_db_ops.py`) allows you to define custom SQL for deletion and save operations. 
 - `get_save_ops()` produces a tuple defining internal `(sql, params)` target logic supporting standard `INSERT OR REPLACE` statements.
 - `get_del_ops()` governs standard deletion execution statements. By modifying DbOps mixin and creating your own `database_setup.py`, you can use whatever SQL backend with whatever table layout you want.
 
