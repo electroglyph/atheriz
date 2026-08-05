@@ -9,6 +9,7 @@ import pytest
 from atheriz import settings
 from atheriz.commands.unloggedin.connect import ConnectCommand
 from atheriz.commands.unloggedin.guest import GuestCommand
+from atheriz.globals.objects import GUEST_CREATION_COOLDOWNS
 from atheriz.commands.unloggedin.quit import QuitCommand
 from atheriz.commands.unloggedin.screenreader import ScreenReaderCommand
 from atheriz.globals.objects import add_object
@@ -180,3 +181,46 @@ class TestGuestCommand:
         finally:
             settings.GUEST_ENABLED = old_enabled
             settings.DEFAULT_HOME = old_home
+
+    def test_rate_limits_successful_creation_per_host(self, global_test_env):
+        old_enabled = settings.GUEST_ENABLED
+        old_cooldown = settings.GUEST_CREATION_COOLDOWN
+        settings.GUEST_ENABLED = True
+        settings.GUEST_CREATION_COOLDOWN = 60
+        GUEST_CREATION_COOLDOWNS.clear()
+        try:
+            caller = self._make_caller()
+            caller.client_host = "198.51.100.10"
+            caller.session.prompt = AsyncMock(side_effect=["Guest1", "M", "A wanderer"])
+            character = MagicMock()
+            with patch("atheriz.commands.unloggedin.guest.Object.create", return_value=character), \
+                 patch("atheriz.commands.unloggedin.guest.get_node_handler") as get_nh:
+                get_nh.return_value.get_node.return_value = None
+                asyncio.run(GuestCommand().run(caller, None))
+                caller.session.prompt.reset_mock()
+                asyncio.run(GuestCommand().run(caller, None))
+            caller.session.prompt.assert_not_awaited()
+            caller.msg.assert_called_with(
+                "Guest creation is temporarily rate-limited. Please try again later."
+            )
+        finally:
+            GUEST_CREATION_COOLDOWNS.clear()
+            settings.GUEST_ENABLED = old_enabled
+            settings.GUEST_CREATION_COOLDOWN = old_cooldown
+
+    def test_missing_gender_reports_error_without_creation(self, global_test_env):
+        old_enabled = settings.GUEST_ENABLED
+        settings.GUEST_ENABLED = True
+        try:
+            caller = self._make_caller()
+            caller.session.prompt = AsyncMock(return_value="Guest1")
+            engine = MagicMock()
+            engine.current_node = None
+            engine.context.state = {}
+            with patch("atheriz.commands.unloggedin.guest.MenuEngine", return_value=engine), \
+                 patch("atheriz.commands.unloggedin.guest.Object.create") as create:
+                asyncio.run(GuestCommand().run(caller, None))
+            caller.msg.assert_called_with("Gender selection is required.")
+            create.assert_not_called()
+        finally:
+            settings.GUEST_ENABLED = old_enabled

@@ -26,6 +26,8 @@ _IGNORE_FILES = [
 # not persisted
 TEMP_BANNED_IPS = {}
 TEMP_BANNED_LOCK = RLock()
+GUEST_CREATION_COOLDOWNS = {}
+GUEST_CREATION_COOLDOWN_LOCK = RLock()
 
 # key = id, value = object
 # only access via the lock

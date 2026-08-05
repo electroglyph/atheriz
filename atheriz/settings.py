@@ -84,6 +84,8 @@ SLOW_LOCKS = True
 MAX_LOGIN_ATTEMPTS = 3
 # Cooldown in seconds for temporary ban
 LOGIN_ATTEMPT_COOLDOWN = 100
+# Minimum time in seconds between successful guest character creations from one host
+GUEST_CREATION_COOLDOWN = 60
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False
 DEFAULT_HOME = Coord("limbo", 4, 4, 4)

@@ -4,6 +4,10 @@ from atheriz.commands.base_cmd import Command
 from atheriz.menu import Choice, MenuEngine
 from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
+from atheriz.globals.objects import (
+    GUEST_CREATION_COOLDOWNS,
+    GUEST_CREATION_COOLDOWN_LOCK,
+)
 from typing import TYPE_CHECKING
 import atheriz.settings as settings
 
@@ -41,6 +45,17 @@ class GuestCommand(Command):
         if not settings.GUEST_ENABLED:
             caller.msg("Guest accounts are not enabled.")
             return
+        cooldown = settings.GUEST_CREATION_COOLDOWN
+        host = getattr(caller, "client_host", None)
+        rate_key = host if isinstance(host, str) and host else id(caller)
+        if cooldown > 0:
+            now = time.monotonic()
+            with GUEST_CREATION_COOLDOWN_LOCK:
+                expires = GUEST_CREATION_COOLDOWNS.get(rate_key)
+                if expires and expires > now:
+                    caller.msg("Guest creation is temporarily rate-limited. Please try again later.")
+                    return
+                GUEST_CREATION_COOLDOWNS.pop(rate_key, None)
         name = await caller.session.prompt("Enter a name for your guest character:")
         name = name.strip()
         if not name:
@@ -66,6 +81,7 @@ class GuestCommand(Command):
                 caller.msg("Gender cannot be empty.")
                 return
         elif not gender:
+            caller.msg("Gender selection is required.")
             return
 
         desc = await caller.session.prompt(
@@ -73,7 +89,17 @@ class GuestCommand(Command):
         )
         desc = desc.strip()
 
-        character = Object.create(None, name, desc=desc, is_pc=True)
+        if cooldown > 0:
+            with GUEST_CREATION_COOLDOWN_LOCK:
+                now = time.monotonic()
+                expires = GUEST_CREATION_COOLDOWNS.get(rate_key)
+                if expires and expires > now:
+                    caller.msg("Guest creation is temporarily rate-limited. Please try again later.")
+                    return
+                character = Object.create(None, name, desc=desc, is_pc=True)
+                GUEST_CREATION_COOLDOWNS[rate_key] = now + cooldown
+        else:
+            character = Object.create(None, name, desc=desc, is_pc=True)
         character.is_temporary = True
         character.gender = gender
         caller.session.puppet = character
