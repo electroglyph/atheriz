@@ -23,6 +23,7 @@ class BaseChannelCommand(Command):
 
     def __init__(self):
         super().__init__()
+        self._channel: Channel | None = None
 
     @property
     def channel(self) -> Channel:
