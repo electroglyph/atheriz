@@ -3,28 +3,32 @@
 Welcome to the Atheriz documentation. Atheriz is a Python framework built for creating multiplayer text-based games.
 
 1. **[01 Getting Started](./01_getting_started.md)**  
-   *Overview, installation instructions, and how to initialize a new game folder.*
+    *Overview, installation instructions, and how to initialize a new game folder.*
 2. **[02 Core Concepts](./02_core_concepts.md)**  
-   *Fundamental entities: Objects, Nodes (Rooms), Accounts, and Channels.*
+    *Fundamental entities: Objects, Nodes (Rooms), Accounts, and Channels.*
 3. **[03 The Command System](./03_command_system.md)**  
-   *Writing commands, argument parsing, input permissions, and CmdSets.*
+    *Writing commands, argument parsing, input permissions, and CmdSets.*
 4. **[04 Scripts & the Hook System](./04_scripts_and_hooks.md)**  
-   *Attaching reusable logic scripts and utilizing hook decorators.*
+    *Attaching reusable logic scripts and utilizing hook decorators.*
 5. **[05 Persistence & Serialization](./05_persistence.md)**  
-   *SQLite database architecture, custom object pickling, and relation resolution.*
+    *SQLite database architecture, custom object pickling, and relation resolution.*
 6. **[06 Settings & Configuration](./06_settings.md)**  
-   *System configuration overrides and the Class Injection mechanism.*
+    *System configuration overrides and the Class Injection mechanism.*
 7. **[07 Mixins](./07_mixins.md)**  
-   *Utilizing Flags, modifying Access restrictions, and adding custom DbOps.*
+    *Utilizing Flags, modifying Access restrictions, and adding custom DbOps.*
 8. **[08 Input Handling](./08_input_handling.md)**  
-   *WebSocket connections, JSON message schemas, and creating custom input functions.*
+    *WebSocket connections, JSON message schemas, and creating custom input functions.*
 9. **[09 The Time System](./09_time_system.md)**  
-   *Managing the game clock, responding to solar/lunar events, and scheduling alarms.*
+    *Managing the game clock, responding to solar/lunar events, and scheduling alarms.*
 10. **[10 Utility Functions & Advanced Topics](./10_utilities_advanced.md)**  
     *Math/Map utilities, string formatters, FuncParser logic, and the hot-reloader.*
 11. **[11 The AsyncThreadPool](./11_async_threadpool.md)**  
     *Understanding concurrency, worker threads, and fire-and-forget execution.*
 12. **[12 The Webclient](./12_webclient.md)**  
     *Internal "colon" commands and the server-to-client WebSocket protocol.*
-13. **[13 API Reference](./13_api_reference.md)**  
+13. **[13 The Menu Engine](./13_menu_engine.md)**  
+    *Creating interactive text menus using MenuEngine, Nodes, Choices, and Context.*
+14. **[14 API Reference](./14_api_reference.md)**  
     *Auto-generated documentation outlining public classes, methods, and functions.*
+15. **[15 Sound Propagation](./15_sound_propagation.md)**  
+    *Acoustic system, BFS room traversal, loudness attenuation, and hooks for emitting and hearing sounds.*
