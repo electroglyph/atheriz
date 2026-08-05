@@ -958,7 +958,8 @@ class NodeArea:
         return len(self.grids)
 
     def __str__(self):
-        return f"Area {self.name}: ".join(f"Grid(z = {k}, len = {len(v)}) " for k, v in self.grids.items())
+        grids = ", ".join(f"Grid(z = {k}, len = {len(v)})" for k, v in self.grids.items())
+        return f"Area {self.name}: {grids}"
 
     def __eq__(self, other):
         if not isinstance(other, NodeArea):
