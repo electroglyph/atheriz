@@ -90,6 +90,19 @@ def test_group_leave(test_objects):
     assert follower.id not in channel.listeners
     assert follower.group_channel is None
 
+def test_group_leader_leave_promotes_remaining_member(test_objects):
+    leader, follower, _ = test_objects
+    cmd = GroupCommand()
+    cmd.run(leader, MockArgs("add", "Follower"))
+
+    channel = get(leader.group_channel)[0]
+    cmd.run(leader, MockArgs("leave"))
+
+    assert leader.group_channel is None
+    assert follower.group_channel == channel.id
+    assert follower.id in channel.listeners
+    assert channel.created_by == follower.id
+
 def test_group_list(test_objects):
     leader, follower, target = test_objects
     cmd = GroupCommand()

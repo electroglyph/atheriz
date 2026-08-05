@@ -86,13 +86,19 @@ class GroupCommand(Command):
                 return
             channel_list = get(caller.group_channel)
             if not channel_list:
+                caller.group_channel = None
                 caller.msg("Error: Group channel not found.")
                 return
             channel = channel_list[0]
+            was_leader = channel.created_by == caller.id
             channel.msg(f"{caller.get_display_name()} left the group.")
-            channel.remove_listener(caller)
+            with channel.lock:
+                channel.remove_listener(caller)
+                remaining = list(channel.listeners.values())
+                if was_leader and remaining:
+                    channel.created_by = remaining[0].id
             caller.group_channel = None
-            if len(channel.listeners) == 0:
+            if not remaining:
                 channel.delete()
             return
         if args[0].lower() == "add":
@@ -151,4 +157,3 @@ class GroupCommand(Command):
         channel = channel_list[0]
         channel.msg(message, caller)
         return
-

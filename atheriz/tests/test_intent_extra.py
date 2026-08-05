@@ -152,6 +152,7 @@ class TestGroupLeave:
         c.group_channel = 99
         with patch("atheriz.commands.loggedin.group.get", return_value=[]):
             GroupCommand().run(c, Namespace(args=["leave"]))
+        assert c.group_channel is None
         c.msg.assert_called_with("Error: Group channel not found.")
 
     def test_leave_success(self):
