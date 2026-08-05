@@ -2,7 +2,6 @@ from __future__ import annotations
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.look import LookCommand
 from atheriz.commands.loggedin.none import NoneCommand
-from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.commands.loggedin.maze import MazeCommand
 from atheriz.commands.loggedin.save import SaveCommand
 from atheriz.commands.loggedin.spam import SpamCommand
@@ -49,7 +48,6 @@ class LoggedinCmdSet(CmdSet):
         super().__init__()
         self.add(LookCommand())
         self.add(NoneCommand())
-        self.add(ExitCommand())
         self.add(MazeCommand())
         self.add(SaveCommand())
         self.add(SpamCommand())

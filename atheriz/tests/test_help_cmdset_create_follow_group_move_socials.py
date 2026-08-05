@@ -17,6 +17,7 @@ from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand
 from atheriz.commands.loggedin.group import GroupCommand
 from atheriz.commands.loggedin.help import HelpCommand
 from atheriz.commands.loggedin.move import MoveCommand
+from atheriz.commands.loggedin.quit import QuitCommand
 from atheriz.commands.loggedin.socials import CmdSocials, SOCIALS_DICT
 from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
 from atheriz.commands.unloggedin.help import HelpCommand as UnHelpCommand
@@ -142,6 +143,11 @@ class TestLoggedinCmdSet:
         cs = LoggedinCmdSet()
         for k in ("follow", "nofollow", "group"):
             assert k in cs.commands
+
+    def test_exit_key_resolves_to_quit(self):
+        cs = LoggedinCmdSet()
+        cmd = cs.get("exit")
+        assert isinstance(cmd, QuitCommand)
 
 
 # ---------------------------------------------------------------------------
