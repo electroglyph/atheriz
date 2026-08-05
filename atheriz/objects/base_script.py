@@ -86,7 +86,9 @@ class Script(Flags, DbOps):
         desc: str = "",
     ) -> Self:
         """
-        Create a new persistent Script in the database.
+        Create a new Script in memory. It is not written to the database here;
+        it is marked as modified and persisted at the next save checkpoint
+        unless `is_temporary` is set.
 
         Args:
             caller (Object | None): The object executing the creation.

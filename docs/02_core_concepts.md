@@ -9,7 +9,7 @@ IDs are guaranteed to be unique across all objects which use them.
 For exact attribute definitions, refer to [`atheriz/objects/base_obj.py`](../atheriz/objects/base_obj.py).
 
 ### 2.1.2 Creating Objects
-Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it with the global cache, and calls the `at_create` hook for customized setup. Note: objects are not persisted to the database until `Object.save()` is called.
+Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it in the in-memory global cache (`atheriz.globals.objects`), marks it as modified, and calls the `at_create` hook for customized setup. Nothing is written to the database at this point — the object lives only in memory until the next save checkpoint calls `save_objects()`, which persists everything flagged `is_modified = True` (unless the object is `is_temporary`).
 
 Key parameters include `caller`, `name`, `desc`, `location`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds`.
 
