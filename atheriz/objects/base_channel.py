@@ -215,7 +215,7 @@ class Channel(Flags, DbOps, AccessLock):
     def get_history(self, count: int = settings.CHANNEL_HISTORY_LIMIT) -> str:
         """Return last 'count' messages, oldest first, each formatted with newline."""
         with self.lock:
-            entries = list(self.history)[-count:]
+            entries = list(self.history)[-count:] if count else []
         lines = []
         for timestamp, sender, message in entries:
             formatted = self.format_message(timestamp, sender, message)

@@ -47,3 +47,13 @@ class TestChannelHistory:
         out = ch.get_history(1)
         assert "three" in out
         assert "one" not in out
+
+    def test_get_history_zero_does_not_affect_default(self, global_test_env):
+        """INTENT: the count==0 guard must not break the default (full) call."""
+        ch = Channel.create("testchan", None)
+        ch.msg("one")
+        ch.msg("two")
+        assert ch.get_history(0) == ""
+        out = ch.get_history()
+        assert "one" in out
+        assert "two" in out
