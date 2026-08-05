@@ -26,9 +26,9 @@ class TestSessionConstructor:
         assert s.map_height == 0
         assert s.screenreader is False
         assert s.conn_time == 0.0
-        assert s.cmd_last is None
-        assert s.cmd_total == 0
-        assert s.last_cmd == ""
+        assert not hasattr(s, "cmd_last")
+        assert not hasattr(s, "cmd_total")
+        assert not hasattr(s, "last_cmd")
         assert s.input_future is None
 
     def test_with_account_and_connection(self, global_test_env):

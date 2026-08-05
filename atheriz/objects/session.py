@@ -32,9 +32,6 @@ class Session:
         self.map_height: int = 0
         self.screenreader: bool = False
         self.conn_time = 0.0
-        self.cmd_last = None
-        self.cmd_total = 0
-        self.last_cmd = ""
         self.input_future: asyncio.Future | None = None
 
     def at_connect(self):

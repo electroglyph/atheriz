@@ -88,9 +88,6 @@ class FakeSession:
         self.map_height = 0
         self.screenreader = screenreader
         self.conn_time = 0.0
-        self.cmd_last = None
-        self.cmd_total = 0
-        self.last_cmd = ""
         self.input_future: asyncio.Future | None = None
         self.at_disconnect = MagicMock()
         self.msgs: list[tuple] = []
