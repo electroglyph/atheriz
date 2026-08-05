@@ -1049,7 +1049,8 @@ class NodeArea:
             for dx, dy, dz in ((1, 0, 0), (-1, 0, 0), (0, 1, 0), (0, -1, 0), (0, 0, 1), (0, 0, -1)):
                 g = self.grids.get(z + dz)
                 if g:
-                    n = g.nodes.get((x + dx, y + dy))
+                    with g.lock:
+                        n = g.nodes.get((x + dx, y + dy))
                     if n:
                         neighbors.append(n)
         return neighbors
