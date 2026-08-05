@@ -38,6 +38,18 @@ class BaseConnection:
         self._input_running = False
         self._last_input_busy = 0.0
 
+    def _resolve_loop(self):
+        """Return the loop to schedule cross-thread work on. Falls back to the
+        running loop, then the async threadpool loop, when the connection was
+        constructed outside an event loop (self.loop is None)."""
+        if self.loop is not None:
+            return self.loop
+        try:
+            return asyncio.get_running_loop()
+        except RuntimeError:
+            from atheriz.globals.get import get_async_threadpool
+            return get_async_threadpool().loop
+
     def enqueue_input(self, handler, args: list, kwargs: dict):
         """Queue one input handler for serialized execution on the game
         threadpool. Called from the protocol event loop; returns immediately.

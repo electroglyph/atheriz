@@ -73,6 +73,25 @@ class TestTelnetConnectionSendCommand:
         # Should not raise, even with no args
         w.write.assert_called_with("")
 
+    def test_send_from_other_thread_without_loop(self, global_test_env):
+        """A connection built outside an event loop (self.loop is None) must
+        still deliver a cross-thread send instead of hitting AttributeError."""
+        import threading
+        import time
+
+        w = _make_writer()
+        conn = TelnetConnection(MagicMock(), w)
+        assert conn.loop is None
+
+        t = threading.Thread(target=lambda: conn.send_command("text", "hello"))
+        t.start()
+        t.join()
+
+        deadline = time.time() + 1.0
+        while w.write.call_count == 0 and time.time() < deadline:
+            time.sleep(0.01)
+        w.write.assert_called_once_with("hello")
+
 
 class TestTelnetConnectionClose:
     def test_close_calls_writer_close(self, global_test_env):

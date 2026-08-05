@@ -47,7 +47,7 @@ class WebSocketConnection(BaseConnection):
                 task = self.loop.create_task(self.websocket.send_text(data))
             else:
                 task = asyncio.run_coroutine_threadsafe(
-                    self.websocket.send_text(data), self.loop
+                    self.websocket.send_text(data), self._resolve_loop()
                 )
             self._track_task(task)
         except Exception as e:
@@ -64,7 +64,7 @@ class WebSocketConnection(BaseConnection):
             if threading.get_ident() == self.thread_id:
                 task = self.loop.create_task(self._close_websocket())
             else:
-                task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self.loop)
+                task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self._resolve_loop())
             self._track_task(task)
         except Exception as e:
             logger.debug(f"[WebSocket] Error closing connection: {e}")

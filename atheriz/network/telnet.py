@@ -46,7 +46,7 @@ class TelnetConnection(BaseConnection):
                 if threading.get_ident() == self.thread_id:
                     self.writer.write(text)
                 else:
-                    self.loop.call_soon_threadsafe(self.writer.write, text)
+                    self._resolve_loop().call_soon_threadsafe(self.writer.write, text)
             except Exception:
                 pass
 
@@ -56,7 +56,7 @@ class TelnetConnection(BaseConnection):
             if threading.get_ident() == self.thread_id:
                 self.writer.close()
             else:
-                self.loop.call_soon_threadsafe(self.writer.close)
+                self._resolve_loop().call_soon_threadsafe(self.writer.close)
         except Exception as e:
             logger.debug(f"[Telnet] Error closing connection: {e}")
 
