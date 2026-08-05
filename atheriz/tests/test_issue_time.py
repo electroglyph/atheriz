@@ -44,10 +44,11 @@ class TestWildcardAlarms:
         obj = Object.create(None, "alarmee")
         add_object(obj)
 
-        minute = str(settings.TICK_MINUTES)  # after one tick, the clock reads :minute
+        gt.ticks = 1
+        minute = str(gt.get_time()["minute"])  # the minute the clock will read after the tick
         gt.ticks = 0
         gt.add_alarm("?", minute, obj, repeat=False)
 
         gt.on_tick()
 
-        assert ("?", minute) not in gt.alarms
+        assert gt.alarms.get(("?", minute)) == []  # entry removed; won't re-fire

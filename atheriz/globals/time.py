@@ -94,7 +94,7 @@ class GameTime:
             minute (int): minute
             caller (Object | int): object which has the alarm set or pk
         """
-        if not caller:
+        if caller is None:
             return
         if isinstance(caller, Object):
             caller = caller.id
@@ -145,20 +145,29 @@ class GameTime:
             # there's an alarm that matches this exact hour and minute
             c = self.alarms.get((str(after_time["hour"]), str(after_time["minute"])))
             if c:
-                callers.extend(c)
+                callers.extend(
+                    ((str(after_time["hour"]), str(after_time["minute"])), id, repeat, data)
+                    for id, repeat, data in c
+                )
             # alarms that match (?, minute) go off every hour at the same minute
             c = self.alarms.get(("?", str(after_time["minute"])))
             if c:
-                callers.extend(c)
+                callers.extend(
+                    (("?", str(after_time["minute"])), id, repeat, data)
+                    for id, repeat, data in c
+                )
             # alarms that match (hour, ?) go off every minute for that hour
             c = self.alarms.get((str(after_time["hour"]), "?"))
             if c:
-                callers.extend(c)
+                callers.extend(
+                    ((str(after_time["hour"]), "?"), id, repeat, data)
+                    for id, repeat, data in c
+                )
         if callers:
             atp = get_async_threadpool()
-            for id, repeat, data in callers:
+            for key, id, repeat, data in callers:
                 if not repeat:
-                    self.remove_alarm(after_time["hour"], after_time["minute"], id)
+                    self.remove_alarm(key[0], key[1], id)
                 objs = get(id)
                 if objs:
                     func = getattr(objs[0], "at_alarm")
