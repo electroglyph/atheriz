@@ -179,15 +179,16 @@ class Channel(Flags, DbOps, AccessLock):
         Returns:
             Command | None: The specialized hook command for this channel.
         """
-        if self.command is not None:
-            return self.command
-        command = BaseChannelCommand()
-        command.key = self.name.lower()
-        command.desc = self.desc
-        command.channel = self
-        command.id = self.id
-        self.command = command
-        return command
+        with self.lock:
+            if self.command is not None:
+                return self.command
+            command = BaseChannelCommand()
+            command.key = self.name.lower()
+            command.desc = self.desc
+            command.channel = self
+            command.id = self.id
+            self.command = command
+            return command
 
     def msg(self, message: str, sender: Object | None = None) -> None:
         """Send a message to the channel."""

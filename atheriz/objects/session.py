@@ -69,6 +69,11 @@ class Session:
         """
         self.msg(text)
         with self.lock:
-            self.input_future = asyncio.Future()
-            future = self.input_future
+            prev = self.input_future
+            future = asyncio.Future()
+            if prev and not prev.done():
+                # a prior prompt was never resolved (superseded by this one):
+                # resolve it now so it can't hang forever
+                prev.set_result("")
+            self.input_future = future
         return await future
