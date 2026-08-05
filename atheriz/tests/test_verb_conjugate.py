@@ -32,8 +32,8 @@ def test_verb_infinitive_already_infinitive():
     assert c.verb_infinitive("run") == "run"
 
 
-def test_verb_infinitive_unknown_returns_empty():
-    assert c.verb_infinitive("xyzzy") == ""
+def test_verb_infinitive_unknown_returns_original():
+    assert c.verb_infinitive("xyzzy") == "xyzzy"
     assert c.verb_infinitive("") == ""
 
 
@@ -86,13 +86,11 @@ def test_verb_conjugate_negate_supported():
     assert c.verb_conjugate("can", "infinitive", negate=True) == "can't"
 
 
-def test_verb_conjugate_unknown_returns_empty_string():
-    """verb_conjugate first lemmatizes the input. Unknown verbs have empty
-    lemma, so the dict lookup raises KeyError and the (now-empty) verb is
-    returned. (Not the original input — the function reassigns `verb` to
-    the lemma before the try/except.)"""
-    assert c.verb_conjugate("xyzzy", "infinitive") == ""
-    assert c.verb_conjugate("flibbertigibbet", "past") == ""
+def test_verb_conjugate_unknown_returns_original():
+    """verb_conjugate first lemmatizes the input. Unknown verbs have no lemma,
+    so the original verb is returned unchanged (as the docstring documents)."""
+    assert c.verb_conjugate("xyzzy", "infinitive") == "xyzzy"
+    assert c.verb_conjugate("flibbertigibbet", "past") == "flibbertigibbet"
 
 
 def test_verb_conjugate_accepts_inflected_input():
@@ -201,9 +199,9 @@ def test_verb_tense_known():
     assert c.verb_tense("is") == "3rd singular present"
 
 
-def test_verb_tense_unknown_returns_empty():
-    """An unknown verb has an empty lemma, which is returned."""
-    assert c.verb_tense("xyzzy") == ""
+def test_verb_tense_unknown_returns_original():
+    """An unknown verb has no lemma, so the original verb is returned."""
+    assert c.verb_tense("xyzzy") == "xyzzy"
 
 
 def test_verb_tense_infinitive():
