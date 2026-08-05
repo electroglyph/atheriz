@@ -23,7 +23,6 @@ _mods_to_mock = [
     "atheriz.globals.get",
     "atheriz.globals.objects",
     "atheriz.utils",
-    "atheriz.websocket",
     "atheriz.objects.persist",
     "atheriz.objects.session",
     "atheriz.objects.base_account",

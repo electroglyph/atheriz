@@ -12,7 +12,6 @@ from atheriz.logger import logger
 _EXCLUDED_MODULES = {
     "atheriz.atheriz",
     "atheriz.reloader",
-    "atheriz.websocket",
     "atheriz.globals.get",
     "atheriz.globals.objects",
     # `settings` holds live game-folder values injected by setup_game_folder();
