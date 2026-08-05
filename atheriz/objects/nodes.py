@@ -86,6 +86,9 @@ class Node(Flags, AccessLock):
             return self.coord == other.coord
         return False
 
+    def __hash__(self):
+        return hash(self.coord)
+
     def __ne__(self, other):
         if isinstance(other, Node):
             return self.coord != other.coord
