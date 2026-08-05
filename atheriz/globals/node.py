@@ -179,9 +179,9 @@ class NodeHandler:
 
     def remove_area(self, name: str):
         with self.lock:
-            area = self.areas[name]
-            area.clear()
-            del self.areas[name]
+            area = self.areas.pop(name, None)
+            if area:
+                area.clear()
 
     def clear(self):
         with self.lock:
@@ -230,7 +230,7 @@ class NodeHandler:
 
     def remove_transition(self, destination: Coord):
         with self.lock2:
-            del self.transitions[destination]
+            self.transitions.pop(destination, None)
 
     def find_transitions(
         self, from_z=None, to_z=None, from_area=None, to_area=None
