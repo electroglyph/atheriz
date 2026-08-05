@@ -281,12 +281,15 @@ bool: Indicates if this object possesses builder world-editing rights.
 
 #### `def execute_cmd(self, raw_string, session, **kwargs)`
 
-Mock compatibility method simulating executing a command directly as this object.
-Currently unimplemented.
+Execute a command as this object, exactly as if the string had been
+typed into this object's own session. Uses the same command lookup,
+aliasing, access control, and dispatch as the logged-in session text
+handler; the command runs asynchronously on the global async threadpool.
 
 Args:
     raw_string (str): The raw string to execute.
-    session (Session, optional): The session executing the command.
+    session (Session, optional): Ignored for compatibility; this object's
+        own ``session`` is used for message routing.
 
 
 
@@ -1933,15 +1936,14 @@ in a single pass over the grid, then stores the result in post_grid.
 
 #### `def batch_update(self)`
 
-Context manager that defers map renders until the outermost block exits.
-Multiple grid changes inside a single batch only trigger one final render.
+
+
+#### `def render_legend(self)`
+
 
 
 #### `def render(self, force)`
 
-Renders the map and pushes updates to subscribed listeners.
-Listeners with `map_enabled=False` are silently skipped.
-Use `force=True` to bypass the change-detection throttle for a listener.
 
 
 #### `def add_legend_entry(self, entry)`
@@ -1952,7 +1954,7 @@ Use `force=True` to bypass the change-detection throttle for a listener.
 
 
 
-#### `def add_listener(self, listener)`
+#### `def add_listener(self, listener, notify)`
 
 
 
@@ -1960,7 +1962,7 @@ Use `force=True` to bypass the change-detection throttle for a listener.
 
 
 
-#### `def add_mapable(self, mapable)`
+#### `def add_mapable(self, mapable, notify)`
 
 
 
@@ -1968,7 +1970,7 @@ Use `force=True` to bypass the change-detection throttle for a listener.
 
 
 
-#### `def add_mapable_list(self, mapables)`
+#### `def add_mapable_list(self, mapables, notify)`
 
 
 
@@ -1986,13 +1988,13 @@ Use `force=True` to bypass the change-detection throttle for a listener.
 
 
 
-#### `def add_mapable(self, mapable)`
+#### `def add_mapable(self, mapable, notify)`
 
 helper to add mapable to their current location's mapinfo
 
 
 
-#### `def add_listener(self, listener)`
+#### `def add_listener(self, listener, notify)`
 
 helper to add character as a listener to their current location's mapinfo
 
@@ -2006,21 +2008,15 @@ helper to remove listener from their current location's mapinfo
 
 #### `def move_listener(self, listener, to_coord, from_coord)`
 
-Moves a listener from one map area/z to another.
-Renders the old map without the listener (`force=False`) and the new map
-with the listener (`force=True`).
 
 
 #### `def move_mapable(self, mapable, to_coord, from_coord)`
 
-Moves a mapable from one map area/z to another.
-Renders the old map without the mapable (`force=False`) and the new map
-with the mapable (`force=True`).
 
 
 #### `def remove_mapable(self, mapable, from_area, from_z)`
 
-Removes a mapable from the given map area/z and renders the affected map once.
+
 
 ## 14.11 `atheriz.globals.time`
 
@@ -2890,7 +2886,7 @@ Default value: `200`
 
 ### `STRIP_INPUT_ESCAPE_SEQUENCES`
 
-Default value: `False`
+Default value: `True`
 
 
 ### `TERM_SIZE_MAX_WIDTH`
@@ -2941,6 +2937,16 @@ Default value: `'0.0.0.0'`
 ### `THREADPOOL_LIMIT`
 
 Default value: `os.cpu_count()`
+
+
+### `THREADPOOL_QUEUE_LIMIT`
+
+Default value: `10000`
+
+
+### `CONNECTION_INPUT_QUEUE_LIMIT`
+
+Default value: `100`
 
 
 ### `MAX_CHARACTERS`
@@ -3036,6 +3042,11 @@ Default value: `3`
 ### `LOGIN_ATTEMPT_COOLDOWN`
 
 Default value: `100`
+
+
+### `GUEST_CREATION_COOLDOWN`
+
+Default value: `60`
 
 
 ### `ALWAYS_SAVE_ALL`
