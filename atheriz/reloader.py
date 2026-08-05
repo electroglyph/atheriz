@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 import types
 from atheriz.globals.objects import _ALL_OBJECTS, _ALL_OBJECTS_LOCK, filter_by
+from atheriz.logger import logger
 
 # Core modules that should never be reloaded (would break server state)
 _EXCLUDED_MODULES = {
@@ -63,7 +64,7 @@ def _discover_new_atheriz_modules():
                 importlib.import_module(module_name)
                 discovered += 1
             except Exception as e:
-                print(f"[HotReload] Could not import new module {module_name}: {e}")
+                logger.error(f"[HotReload] Could not import new module {module_name}: {e}")
 
     return discovered
 
@@ -112,7 +113,7 @@ def _discover_new_game_modules():
                     importlib.import_module(module_name)
                 discovered += 1
             except Exception as e:
-                print(f"[HotReload] Could not import new game module {module_name}: {e}")
+                logger.error(f"[HotReload] Could not import new game module {module_name}: {e}")
 
     return discovered
 
@@ -128,7 +129,7 @@ def _reload_game_folder_modules():
     # grab new game folder modules from disk
     new_count = _discover_new_game_modules()
     if new_count:
-        print(f"[HotReload] Discovered {new_count} new game module(s).")
+        logger.info(f"[HotReload] Discovered {new_count} new game module(s).")
 
     cwd = Path.cwd().resolve()
     cwd_str = str(cwd)
@@ -172,7 +173,7 @@ def _reload_game_folder_modules():
             reloaded += 1
         except Exception as e:
             msg = f"Failed to reload game module {module_name}: {e}"
-            print(f"[HotReload] {msg}")
+            logger.error(f"[HotReload] {msg}")
             errors.append(msg)
 
     # second pass: re-reload so that cross-imports (e.g. `from .test import TestCommand`
@@ -205,11 +206,11 @@ def _reload_game_folder_modules():
                 setattr(target, cls_name, new_cls)
         except Exception as e:
             msg = f"Failed to re-inject {cls_name} from {local_mod}: {e}"
-            print(f"[HotReload] {msg}")
+            logger.error(f"[HotReload] {msg}")
             errors.append(msg)
 
     if reloaded:
-        print(f"[HotReload] Reloaded {reloaded} game folder module(s).")
+        logger.info(f"[HotReload] Reloaded {reloaded} game folder module(s).")
 
     return reloaded, errors
 
@@ -280,7 +281,7 @@ def reload_game_logic() -> str:
     # Discover new atheriz.* modules from disk (e.g. newly added command files)
     new_count = _discover_new_atheriz_modules()
     if new_count:
-        print(f"[HotReload] Discovered {new_count} new module(s) from disk.")
+        logger.info(f"[HotReload] Discovered {new_count} new module(s) from disk.")
 
     modules_to_reload = []
 
@@ -302,7 +303,7 @@ def reload_game_logic() -> str:
     reloaded_count = 0
     errors = []
 
-    print(f"[HotReload] Found {len(modules_to_reload)} atheriz modules to reload.")
+    logger.info(f"[HotReload] Found {len(modules_to_reload)} atheriz modules to reload.")
 
     # Reload atheriz modules
     for module_name, module in modules_to_reload:
@@ -311,7 +312,7 @@ def reload_game_logic() -> str:
             reloaded_count += 1
         except Exception as e:
             msg = f"Failed to reload {module_name}: {e}"
-            print(f"[HotReload] {msg}")
+            logger.error(f"[HotReload] {msg}")
             errors.append(msg)
 
     # reload game folder modules and re-run class injections
@@ -351,7 +352,7 @@ def reload_game_logic() -> str:
                     objects_patched += 1
                     patched_objects[id(obj)] = obj
         except Exception as e:
-            print(f"[HotReload] Error patching object {obj}: {e}")
+            logger.error(f"[HotReload] Error patching object {obj}: {e}")
 
         # recurse into cmdsets (for objects and sessions)
         # we need to do this even if the object itself wasn't patched,
@@ -364,7 +365,7 @@ def reload_game_logic() -> str:
                 for cmd in list(obj.external_cmdset.commands.values()):
                     _patch_object(cmd)
         except Exception as e:
-            print(f"[HotReload] Error patching cmdsets for {obj}: {e}")
+            logger.error(f"[HotReload] Error patching cmdsets for {obj}: {e}")
 
     try:
         # import here to avoid potential circular imports
@@ -390,7 +391,7 @@ def reload_game_logic() -> str:
 
     except Exception as e:
         msg = f"Error patching nodes: {e}"
-        print(f"[HotReload] {msg}")
+        logger.error(f"[HotReload] {msg}")
         errors.append(msg)
 
     # do channnels first so that they are available for objects to use
@@ -418,10 +419,10 @@ def reload_game_logic() -> str:
                 try:
                     s.__init__()
                 except Exception as e:
-                    print(f"[HotReload] Error re-initializing CmdSet {s}: {e}")
+                    logger.error(f"[HotReload] Error re-initializing CmdSet {s}: {e}")
     except Exception as e:
         msg = f"Error patching global cmdsets: {e}"
-        print(f"[HotReload] {msg}")
+        logger.error(f"[HotReload] {msg}")
         errors.append(msg)
 
     for obj in patched_objects.values():
@@ -430,7 +431,7 @@ def reload_game_logic() -> str:
                 obj.resolve_relations()
             except Exception as e:
                 msg = f"Error resolving relations for {obj}: {e}"
-                print(f"[HotReload] {msg}")
+                logger.error(f"[HotReload] {msg}")
                 errors.append(msg)
 
     result_msg = (
@@ -441,6 +442,5 @@ def reload_game_logic() -> str:
     if errors:
         result_msg += f"\nFirst Error: {errors[0]}"
 
-    print(f"[HotReload] {result_msg}")
-    logger.info(f"Server reload complete: {result_msg}")
+    logger.info(f"[HotReload] {result_msg}")
     return result_msg

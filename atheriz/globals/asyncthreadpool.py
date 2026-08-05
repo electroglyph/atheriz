@@ -97,7 +97,7 @@ class AsyncThreadPool:
             wait (bool, optional): wait for async tasks to finish. Defaults to True.
             timeout (float, optional): seconds to wait for worker threads. Defaults to 10.
         """
-        print("at AsyncThreadPool.stop() ...")
+        logger.info("at AsyncThreadPool.stop() ...")
         self.threads[0].stop(wait)
         for _ in range(self.max_threads):
             while True:
@@ -237,7 +237,7 @@ class AsyncTicker:
         """
         stop all running tickers
         """
-        print("at AsyncTicker.stop() ...")
+        logger.info("at AsyncTicker.stop() ...")
         with self.lock:
             try:
                 for v in self.slots.values():

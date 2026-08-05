@@ -5,6 +5,7 @@ from threading import RLock
 from pathlib import Path
 from atheriz.globals.get import get_async_ticker, get_async_threadpool
 from atheriz.globals.objects import get, filter_by
+from atheriz.logger import logger
 import json
 import ast
 import os
@@ -173,7 +174,7 @@ class GameTime:
                     func = getattr(objs[0], "at_alarm")
                     atp.add_task(func, after_time, data)
                 else:
-                    print(f"obj not found for alarm: {id}")
+                    logger.warning(f"obj not found for alarm: {id}")
         after_sun = self.sun_up_alt(after_time["hour"])
         after_phase = after_time["moon_phase"]
         if before_phase != after_phase:

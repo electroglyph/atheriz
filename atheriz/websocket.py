@@ -49,7 +49,7 @@ class Connection:
                     self.websocket.send_text(data), self.loop
                 )
         except Exception as e:
-            print(f"Error sending command: {e}")
+            logger.error(f"Error sending command: {e}")
 
     def msg(self, *args, **kwargs):
         """Send a message to this connection."""
@@ -89,7 +89,7 @@ class Connection:
             else:
                 asyncio.run_coroutine_threadsafe(self._close_websocket(), self.loop)
         except Exception as e:
-            print(f"Error closing connection: {e}")
+            logger.error(f"Error closing connection: {e}")
 
     # def send_text_sync(self, text: str):
     #     """Send a text message synchronously (schedules task)."""
@@ -146,7 +146,7 @@ class WebSocketManager:
         with self._lock:
             self._connections[conn_id] = connection
         
-        print(f"[WebSocket] Connection opened: {conn_id} (total: {self.connection_count})")
+        logger.info(f"[WebSocket] Connection opened: {conn_id} (total: {self.connection_count})")
         return connection
     
     def disconnect(self, connection: Connection):
@@ -163,7 +163,7 @@ class WebSocketManager:
                 del self._connections[conn_id]
                 if connection.session:
                     connection.session.at_disconnect()
-                print(f"[WebSocket] Connection closed: {conn_id} (total: {self.connection_count})")
+                logger.info(f"[WebSocket] Connection closed: {conn_id} (total: {self.connection_count})")
     
     @property
     def connection_count(self) -> int:
@@ -183,7 +183,7 @@ class WebSocketManager:
             try:
                 conn.msg(text)
             except Exception as e:
-                print(f"[WebSocket] Broadcast error: {e}")
+                logger.error(f"[WebSocket] Broadcast error: {e}")
 
     def register_handler(self, message_type: str, handler: Callable):
         """
@@ -210,7 +210,7 @@ class WebSocketManager:
 
             # Validate structure: [cmd (str), args (list), kwargs (dict)]
             if not isinstance(data, list) or len(data) < 1:
-                print(f"[WebSocket] Invalid message format (not list or empty): {raw_message}")
+                logger.warning(f"[WebSocket] Invalid message format (not list or empty): {raw_message}")
                 return
 
             cmd = data[0]
@@ -227,12 +227,9 @@ class WebSocketManager:
                 pass
 
         except json.JSONDecodeError:
-            print(f"[WebSocket] Error decoding JSON: {raw_message}")
+            logger.warning(f"[WebSocket] Error decoding JSON: {raw_message}")
         except Exception as e:
-            print(f"[WebSocket] Error handling message: {e}")
-            import traceback
-
-            traceback.print_exc()
+            logger.error(f"[WebSocket] Error handling message: {e}", exc_info=True)
 
 
 websocket_manager = WebSocketManager()

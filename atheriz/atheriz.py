@@ -231,11 +231,11 @@ async def shutdown_endpoint(request: Request):
     if token != expected_token:
         return {"status": "error", "message": "Invalid token."}
 
-    print("Internal shutdown request received. Running shutdown tasks...")
+    logger.info("Internal shutdown request received. Running shutdown tasks...")
     try:
         await run_in_threadpool(do_shutdown)
     except Exception as e:
-        print(f"Error during internal shutdown: {e}")
+        logger.error(f"Error during internal shutdown: {e}")
         return {"status": "error", "message": str(e)}
 
     server_state.running = False
