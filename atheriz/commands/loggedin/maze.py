@@ -105,8 +105,8 @@ class MazeCommand(Command):
             else:
                 caller.msg(f"path not found in: {elapsed:.2f} milliseconds")
                 caller.msg(background={"color": (90, 0, 0), "coords": [(n.coord.x, n.coord.y) for n in deadend]})
-        get_async_threadpool().add_task(do_pathfind, caller, node, end)
         if node:
+            get_async_threadpool().add_task(do_pathfind, caller, node, end)
             caller.msg(f"moving to: {node} ...")
             caller.map_enabled = True
             caller.move_to(node)
@@ -241,15 +241,6 @@ def create_map(maze: dict, width: int, height: int, area: str):
         elif dirs[2] or dirs[3]:
             map[(k[0], k[1])] = "═"
     return map, grid
-
-
-def map_to_string(map: list, w: int, h: int):
-    s = ""
-    for iy in range(h - 1, -1, -1):
-        for ix in range(w):
-            s += "".join(map[iy * w + ix])
-        s += "\n"
-    return s
 
 
 def gen_map_and_grid(w: int, h: int, area: str):

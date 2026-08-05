@@ -4,7 +4,6 @@ INTENT: Documents the *behavior* of:
   - MazeCommand.run: builder-only, generates 3 mazes, wires exits between them
   - create_maze: returns a dict {(x,y): [(nx,ny), ...]} of valid neighbors
   - create_map: turns the dict into a {coord: glyph} map + NodeGrid with linked nodes
-  - map_to_string: pretty-prints the map list
 """
 from __future__ import annotations
 
@@ -18,7 +17,6 @@ from atheriz.commands.loggedin.maze import (
     create_map,
     create_maze,
     gen_map_and_grid,
-    map_to_string,
 )
 from atheriz.globals.get import get_async_threadpool, get_node_handler
 from atheriz.objects.base_obj import Object
@@ -173,21 +171,6 @@ class TestCreateMap:
         n0 = grid.get_node((0, 0))
         assert n0 is not None
         assert n0.has_link_name("east")
-
-
-# ---------------------------------------------------------------------------
-# map_to_string helper
-# ---------------------------------------------------------------------------
-
-class TestMapToString:
-    """INTENT: joins the (already-formatted) map list into a printable string."""
-
-    def test_prints_rows(self):
-        m = [["a"], ["b"], ["c"]]
-        s = map_to_string(m, 1, 3)
-        # Order is reversed (y high to low), so c is first
-        assert s.startswith("c")
-        assert "a" in s
 
 
 # ---------------------------------------------------------------------------
