@@ -347,6 +347,15 @@ class FuncParser:
             if char == escape_char and string[ichar + 1 : ichar + 2] != escape_char:
                 # don't store the escape-char itself, but keep one escape-char,
                 # if it's followed by another escape-char
+                if ichar + 1 >= len(string):
+                    # trailing singleton escape char: keep it verbatim
+                    if curr_func:
+                        infuncstr += char
+                        curr_func.rawstr += char
+                    else:
+                        fullstr += char
+                    return_str = True
+                    continue
                 escaped = True
                 continue
 
