@@ -123,15 +123,14 @@ class BaseConnection:
             text = kwargs.pop("text", None)
             if text:
                 args.insert(0, text)
-            else:
+            elif kwargs:
                 k, v = kwargs.popitem()
                 cmd = k
-                if args:
-                    args = [v] + args
-                else:
-                    args = [v]
+                args = [v] + args
 
         if cmd == "text" and args:
+            if not isinstance(args[0], str):
+                args[0] = str(args[0])
             if not args[0].endswith(("\r\n", "\n")):
                 args[0] += "\r\n"
             if self.session.screenreader:
