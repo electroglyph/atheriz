@@ -1070,7 +1070,7 @@ class NodeArea:
 
     def remove_data(self, key):
         with self.lock:
-            del self.data[key]
+            self.data.pop(key, None)
 
     def remove_linked_area(self, area: str):
         with self.lock:
