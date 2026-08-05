@@ -1,5 +1,6 @@
 import asyncio
 from asyncio import AbstractEventLoop
+import inspect
 import os
 from threading import Thread, RLock, Event
 import time
@@ -73,7 +74,7 @@ class AsyncThreadPool:
         """Execute one task with pool semantics: coroutines go to the async
         loop, sync functions run inline on the calling worker. Shared by
         _work_loop and by in-worker dispatch (issue #31)."""
-        if hasattr(func, "__code__") and func.__code__.co_flags & 128 == 128:
+        if inspect.iscoroutinefunction(func):
             asyncio.run_coroutine_threadsafe(self._do_async(func, *args, **kwargs), self.loop)
         else:
             try:

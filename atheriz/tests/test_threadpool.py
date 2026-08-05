@@ -2,6 +2,7 @@ import pytest
 import time
 import threading
 import asyncio
+import functools
 from typing import NoReturn
 from atheriz.globals.asyncthreadpool import AsyncThreadPool, AsyncTicker
 
@@ -128,6 +129,23 @@ class TestAsyncThreadPool:
         
         assert end_time - start_time >= 0.2
         assert result_data["test_async"] == 456
+        atp.stop()
+
+    def test_async_partial(self):
+        """A functools.partial of an async function must run on the loop
+        (the co_flags check missed partials, dropping the coroutine)."""
+        atp = AsyncThreadPool(max_threads=2)
+        result_event = threading.Event()
+        result_data = {}
+
+        async def my_task(key, val):
+            result_data[key] = val
+            result_event.set()
+
+        atp.add_task(functools.partial(my_task, "k", "v"))
+
+        assert result_event.wait(timeout=2.0)
+        assert result_data["k"] == "v"
         atp.stop()
 
     def test_stop_timeout_on_stuck_worker(self):
