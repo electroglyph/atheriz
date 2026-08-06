@@ -17,6 +17,14 @@ Communications between the client UI and the game server use a structured JSON f
 
 Built-in message commands natively handled by the engine include: `text`, `term_size`, `map_size`, `screenreader`, and `client_ready`. You can add custom commands (like button clicks or UI events) by writing custom input handlers on the server and sending matching JSON arrays from the client.
 
+### 8.1.3 Login Flow
+The connection screen is rendered by `atheriz/connection_screen.py`. When `ACCOUNT_CREATION_ENABLED` is `True`, it shows an `enter 'create' to make a new account` hint. The unlogged-in command set (`atheriz/commands/unloggedin/`) handles the flow:
+
+1. `connect` logs an existing account in; after a successful login the player is routed through character selection (`char_selection` in `connect.py`), which lists their characters and lets them pick one (or `new`).
+2. `create` (key `create`, available when `ACCOUNT_CREATION_ENABLED` is `True`) prompts for a name and password, creates a new account, auto-logs the player in, and routes them straight to character selection.
+3. `new` (key `new`, available when `CHAR_CREATION_ENABLED` is `True`) lets a logged-in account create a new character — name, gender, and description prompts, mirroring the guest flow — and attaches the new `is_pc` object to the account.
+4. `guest` (available when `GUEST_ENABLED` is `True`) connects without an account.
+
 ## 8.2 Input Functions
 
 ### 8.2.1 The `InputFuncs` Class

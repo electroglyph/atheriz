@@ -130,16 +130,22 @@ class TestModuleConstants:
     def test_guest_text_is_string(self):
         assert isinstance(cs.GUEST_TEXT, str)
 
+    def test_create_text_enabled_by_default(self):
+        # ACCOUNT_CREATION_ENABLED defaults to True -> hint present
+        assert cs.CREATE_TEXT == "enter 'create' to make a new account"
+
     def test_screen_contains_placeholders(self):
         assert "{version}" in cs.SCREEN
         assert "{known}" in cs.SCREEN
         assert "{online}" in cs.SCREEN
+        assert "{CREATE_TEXT}" in cs.SCREEN
         assert "{GUEST_TEXT}" in cs.SCREEN
 
     def test_screen2_contains_placeholders(self):
         assert "{version}" in cs.SCREEN2
         assert "{known}" in cs.SCREEN2
         assert "{online}" in cs.SCREEN2
+        assert "{CREATE_TEXT}" in cs.SCREEN2
         assert "{GUEST_TEXT}" in cs.SCREEN2
 
     def test_screen_is_larger_than_screen2(self):

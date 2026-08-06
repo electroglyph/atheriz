@@ -26,8 +26,28 @@ _IGNORE_FILES = [
 # not persisted
 TEMP_BANNED_IPS = {}
 TEMP_BANNED_LOCK = RLock()
-GUEST_CREATION_COOLDOWNS = {}
-GUEST_CREATION_COOLDOWN_LOCK = RLock()
+CREATION_COOLDOWNS = {}
+CREATION_COOLDOWN_LOCK = RLock()
+
+
+def creation_cooldown_active(op: str, host: str, now: float) -> bool:
+    """Return True if ``op`` for ``host`` is still within its cooldown window."""
+    key = f"{op}:{host}"
+    with CREATION_COOLDOWN_LOCK:
+        expires = CREATION_COOLDOWNS.get(key)
+        if expires is None:
+            return False
+        if expires > now:
+            return True
+        CREATION_COOLDOWNS.pop(key, None)
+        return False
+
+
+def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> None:
+    """Record a creation cooldown expiry for ``op`` and ``host``."""
+    if cooldown > 0:
+        with CREATION_COOLDOWN_LOCK:
+            CREATION_COOLDOWNS[f"{op}:{host}"] = now + cooldown
 
 # key = id, value = object
 # only access via the lock

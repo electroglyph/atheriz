@@ -12,6 +12,56 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
 
+async def char_selection(caller: Connection, account: Account) -> None:
+    """Prompt a logged-in account to choose a character to puppet.
+
+    When `settings.CHAR_CREATION_ENABLED` is on, the selection screen always
+    mentions that typing 'new' creates a fresh character, whether or not the
+    account already has characters. Otherwise, an account without characters
+    is told it has nothing to play.
+    """
+    while caller.session.puppet is None:
+        chars: list[Object] = get(account.characters)
+        text = "Please select a character to play: \r\n"
+        for x, c in enumerate(chars):
+            tag = " [banned]" if getattr(c, "is_banned", False) else ""
+            text += f"{x}. {c.name}{tag}\r\n"
+        if settings.CHAR_CREATION_ENABLED:
+            text += "\r\nor type 'new' to create a new character\r\n"
+        if not chars and not settings.CHAR_CREATION_ENABLED:
+            caller.msg("This account has no characters to play.")
+            return
+        caller.msg(text)
+        choice = await caller.session.prompt("Enter your choice:")
+        if settings.CHAR_CREATION_ENABLED and choice.strip().lower() == "new":
+            from atheriz.commands.unloggedin.new import NewCharacterCommand
+
+            await NewCharacterCommand().run(caller, None)
+            continue
+        try:
+            choice = int(choice)
+        except ValueError:
+            caller.msg("Invalid choice.")
+            continue
+        if choice >= len(chars) or choice < 0:
+            caller.msg("Invalid choice.")
+            continue
+        if getattr(chars[choice], "is_banned", False):
+            msg = "That character is banned."
+            reason = getattr(chars[choice], "ban_reason", None)
+            if reason:
+                msg += f" Reason: {reason}"
+            caller.msg(msg)
+            continue
+        if not account.at_pre_puppet(chars[choice]):
+            caller.msg("This character is not available.")
+            continue
+        caller.session.puppet = chars[choice]
+        caller.session.puppet.session = caller.session
+        caller.session.conn_time = time.time()
+        caller.session.puppet.at_post_puppet()
+
+
 class ConnectCommand(Command):
     key = "connect"
     desc = "Connect to an existing account with a password."
@@ -58,39 +108,4 @@ class ConnectCommand(Command):
             return
         caller.session.account = account
         caller.send_command("logged_in")
-        if account.characters is None:
-            caller.msg("Character creation not implemented yet.")
-            return
-        while caller.session.puppet is None:
-            text = "Please select a character to play: \r\n"
-            chars: list[Object] = get(account.characters)
-            if not chars:
-                caller.msg("This account has no characters to play.")
-                return
-            for x, c in enumerate(chars):
-                tag = " [banned]" if getattr(c, "is_banned", False) else ""
-                text += f"{x}. {c.name}{tag}\r\n"
-            caller.msg(text)
-            choice = await caller.session.prompt("Enter your choice:")
-            try:
-                choice = int(choice)
-            except ValueError:
-                caller.msg("Invalid choice.")
-                continue
-            if choice >= len(chars) or choice < 0:
-                caller.msg("Invalid choice.")
-                continue
-            if getattr(chars[choice], "is_banned", False):
-                msg = "That character is banned."
-                reason = getattr(chars[choice], "ban_reason", None)
-                if reason:
-                    msg += f" Reason: {reason}"
-                caller.msg(msg)
-                continue
-            if not account.at_pre_puppet(chars[choice]):
-                caller.msg("This character is not available.")
-                continue
-            caller.session.puppet = chars[choice]
-            caller.session.puppet.session = caller.session
-            caller.session.conn_time = time.time()
-            caller.session.puppet.at_post_puppet()
+        await char_selection(caller, account)

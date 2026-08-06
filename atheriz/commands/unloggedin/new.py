@@ -1,9 +1,10 @@
 from __future__ import annotations
 import time
 from atheriz.commands.base_cmd import Command
-from atheriz.menu import Choice, MenuEngine
+from atheriz.menu import MenuEngine
 from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
+from atheriz.commands.unloggedin.guest import _gender_menu
 from atheriz.globals.objects import (
     apply_creation_cooldown,
     creation_cooldown_active,
@@ -13,45 +14,34 @@ import atheriz.settings as settings
 
 if TYPE_CHECKING:
     from atheriz.network.connection import BaseConnection as Connection
+    from atheriz.objects.base_account import Account
 
 
-def _gender_menu(context):
-    def _set_gender(value):
-        def callback(ctx):
-            ctx.state["gender"] = value
-
-        return callback
-
-    def _set_custom(ctx):
-        ctx.state["custom_gender"] = True
-
-    return (
-        "Select your character's gender:",
-        [
-            Choice(key="M", desc="Male", callback=_set_gender("Male")),
-            Choice(key="F", desc="Female", callback=_set_gender("Female")),
-            Choice(key="N", desc="Non-binary", callback=_set_gender("Non-binary")),
-            Choice(key="C", desc="Custom", callback=_set_custom),
-        ],
-    )
-
-
-class GuestCommand(Command):
-    key = "guest"
-    desc = "Create a temporary guest character and enter the game."
+class NewCharacterCommand(Command):
+    key = "new"
+    desc = "Create a new character for your account."
     use_parser = False
 
+    # pyrefly: ignore
     async def run(self, caller: Connection, args):
-        if not settings.GUEST_ENABLED:
-            caller.msg("Guest accounts are not enabled.")
+        if not settings.CHAR_CREATION_ENABLED:
+            caller.msg("Character creation is not enabled.")
             return
+        account: Account | None = caller.session.account
+        if account is None:
+            caller.msg("You must be logged in first.")
+            return
+        if len(account.characters) >= settings.MAX_CHARACTERS:
+            caller.msg(f"You already have {settings.MAX_CHARACTERS} characters.")
+            return
+
         host = getattr(caller, "client_host", None)
         rate_key = host if isinstance(host, str) and host else id(caller)
-        now = time.monotonic()
-        if creation_cooldown_active("guest", rate_key, now):
+        if creation_cooldown_active("character", rate_key, time.monotonic()):
             caller.msg("Creation is temporarily rate-limited. Please try again later.")
             return
-        name = await caller.session.prompt("Enter a name for your guest character:")
+
+        name = await caller.session.prompt("Enter a name for your character:")
         name = name.strip()
         if not name:
             caller.msg("Name cannot be empty.")
@@ -84,13 +74,15 @@ class GuestCommand(Command):
         )
         desc = desc.strip()
 
-        if creation_cooldown_active("guest", rate_key, time.monotonic()):
+        if creation_cooldown_active("character", rate_key, time.monotonic()):
             caller.msg("Creation is temporarily rate-limited. Please try again later.")
             return
         character = Object.create(None, name, desc=desc, is_pc=True)
-        apply_creation_cooldown("guest", rate_key, time.monotonic(), settings.CREATION_COOLDOWN)
-        character.is_temporary = True
+        apply_creation_cooldown(
+            "character", rate_key, time.monotonic(), settings.CREATION_COOLDOWN
+        )
         character.gender = gender
+        account.add_character(character)
         caller.session.puppet = character
         character.session = caller.session
         caller.session.conn_time = time.time()

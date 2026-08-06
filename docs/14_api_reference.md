@@ -2893,6 +2893,10 @@ Default value: `['atheriz.network.websocket.WebSocketProtocol', 'atheriz.network
 
 Default value: `True`
 
+### `CHAR_CREATION_ENABLED`
+
+Default value: `True`
+
 ### `WEBSERVER_ENABLED`
 
 Default value: `True`

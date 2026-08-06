@@ -7,6 +7,7 @@ if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
 GUEST_TEXT = "enter 'guest' to create a temporary character" if settings.GUEST_ENABLED else ""
+CREATE_TEXT = "enter 'create' to make a new account" if settings.ACCOUNT_CREATION_ENABLED else ""
 
 SCREEN = r"""
    _____   __  .__                 .____________
@@ -15,14 +16,15 @@ SCREEN = r"""
 /    |    \  | |   Y  \  ___/|  | \/  |/     /_ 
 \____|__  /__| |___|  /\___  >__|  |__/_______ \
         \/          \/     \/                 \/                                  
-                                                                        
-                                                                  
+                                                                         
+                                                                   
          ATHERIZ VERSION = {version}
        KNOWN ADVENTURERS = {known}
       ONLINE ADVENTURERS = {online}
 
 enter 'sr' for screenreader mode
 enter 'connect <account> <password>' to login
+{CREATE_TEXT}
 {GUEST_TEXT}
 """
 
@@ -34,6 +36,7 @@ SCREEN2 = r"""
 
 enter 'sr' for screenreader mode
 enter 'connect <account> <password>' to login
+{CREATE_TEXT}
 {GUEST_TEXT}
 """
 
@@ -50,11 +53,13 @@ def render(session=None):
             version=metadata.version("atheriz"),
             known=f"{online[1]}",
             online=f"{online[0]}",
+            CREATE_TEXT=CREATE_TEXT,
             GUEST_TEXT=GUEST_TEXT,
         )
     return SCREEN.format(
         version=metadata.version("atheriz"),
         known=f"{online[1]}",
         online=f"{online[0]}",
+        CREATE_TEXT=CREATE_TEXT,
         GUEST_TEXT=GUEST_TEXT,
     )

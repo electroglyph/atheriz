@@ -28,6 +28,7 @@ NETWORK_PROTOCOLS = [
     "atheriz.network.telnet.TelnetProtocol",
 ]
 ACCOUNT_CREATION_ENABLED = True
+CHAR_CREATION_ENABLED = True
 WEBSERVER_ENABLED = True
 WEBSERVER_PORT = 9999
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
@@ -84,8 +85,8 @@ SLOW_LOCKS = True
 MAX_LOGIN_ATTEMPTS = 3
 # Cooldown in seconds for temporary ban
 LOGIN_ATTEMPT_COOLDOWN = 100
-# Minimum time in seconds between successful guest character creations from one host
-GUEST_CREATION_COOLDOWN = 60
+# Minimum time in seconds between successful guest/account/character creations from one host
+CREATION_COOLDOWN = 60
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False
 DEFAULT_HOME = Coord("limbo", 4, 4, 4)

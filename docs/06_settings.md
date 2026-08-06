@@ -55,6 +55,7 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 
 ### 6.2.3 Accounts & Security
 - `ACCOUNT_CREATION_ENABLED`: Allows new accounts to be created from the client.
+- `CHAR_CREATION_ENABLED`: Allows logged-in accounts to create new characters from the client (via the `new` command).
 - `GUEST_ENABLED`: Allows guests to connect without an account.
 - `GUEST_CREATION_COOLDOWN`: Minimum seconds between successful guest character creations from one host.
 - `MAX_LOGIN_ATTEMPTS`: Maximum failed login attempts before a temporary ban.
