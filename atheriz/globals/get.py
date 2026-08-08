@@ -44,6 +44,13 @@ _ID = -1
 _SINGLETON_LOCK = RLock()
 
 
+def get_id() -> int:
+    """Get the current global ID without incrementing it."""
+    with _ID_LOCK:
+        global _ID
+        return _ID
+
+
 def set_id(id: int) -> None:
     """Set the global ID to the given value."""
     with _ID_LOCK:

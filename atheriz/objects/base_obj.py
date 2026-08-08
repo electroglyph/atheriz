@@ -995,6 +995,7 @@ class Object(Flags, DbOps, AccessLock):
                         destination.add_exits(self, internal=True)
                         with self.lock:
                             self.location = destination
+                            self.last_touched_by = destination.id
                 if announce:
                     self.announce_move_to(loc, to_exit, **kwargs)
                     self.announce_move_from(destination, from_exit, **kwargs)
@@ -1009,6 +1010,7 @@ class Object(Flags, DbOps, AccessLock):
                     destination.add_exits(self, internal=True)
                     with self.lock:
                         self.location = destination
+                        self.last_touched_by = destination.id
                 if announce:
                     self.announce_move_from(destination, from_exit, **kwargs)
             if settings.MAP_ENABLED:

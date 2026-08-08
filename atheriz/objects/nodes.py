@@ -13,9 +13,9 @@ from atheriz.utils import (
 )
 from atheriz.objects import funcparser
 from atheriz.objects.funcparser_helpers import _SafeFormatMap
-from atheriz.globals.objects import get
+from atheriz.globals.objects import get, add_object, remove_object
 from atheriz.objects.contents import search
-from atheriz.globals.get import get_node_handler, get_async_ticker, get_map_handler
+from atheriz.globals.get import get_node_handler, get_async_ticker, get_map_handler, get_unique_id
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
@@ -146,12 +146,13 @@ class Node(Flags, AccessLock):
         self.links = links if links else []
         self._contents = set()
         self.is_node = True
-        self.id = -1
+        self.id = get_unique_id()
         self.nouns = {}
         self.scripts: set[int] = set()
         self.hooks: dict[str, set[Callable]] = {}
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
+        add_object(self)
 
     def __getstate__(self):
         with self.lock:
@@ -910,8 +911,11 @@ class NodeGrid:
 
     def add_node(self, node: Node):
         with self.lock:
+            old = self.nodes.get((node.coord.x, node.coord.y))
             self.nodes[(node.coord.x, node.coord.y)] = node
             self.is_modified = True
+        if old is not None and old is not node:
+            remove_object(old)
         if node.links:
             nh = get_node_handler()
             for l in node.links:

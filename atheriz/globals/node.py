@@ -1,5 +1,6 @@
 from __future__ import annotations
-from atheriz.globals.get import get_map_handler
+from atheriz.globals.get import get_map_handler, get_id, set_id
+from atheriz.globals.objects import get, add_object, remove_object
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
@@ -57,11 +58,22 @@ class NodeHandler:
                     except Exception as e:
                         logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
 
+            max_node_id = 0
             for area in self.areas.values():
                 for grid in area.grids.values():
                     for node in grid.nodes.values():
                         if hasattr(node, "resolve_relations"):
                             node.resolve_relations()
+                        if node.id is not None and node.id > max_node_id:
+                            max_node_id = node.id
+                        existing = get(node.id)
+                        if existing is not None and existing is not node:
+                            logger.warning(
+                                f"Node id collision on load: id {node.id} already mapped to {existing}"
+                            )
+                        add_object(node)
+            if max_node_id:
+                set_id(max(get_id(), max_node_id))
 
         except Exception as e:
             logger.error(f"Error loading node data from DB: {e}")
@@ -186,6 +198,9 @@ class NodeHandler:
     def clear(self):
         with self.lock:
             for v in self.areas.values():
+                for grid in v.grids.values():
+                    for node in grid.nodes.values():
+                        remove_object(node)
                 v.clear()
             self.areas.clear()
         with self.lock2:
@@ -210,11 +225,14 @@ class NodeHandler:
         return None
 
     def remove_node(self, coord: Coord):
+        node = self.get_node(coord)
         area = self.get_area(coord.area)
         if area:
             grid = area.get_grid(coord.z)
             if grid:
                 grid.remove_node((coord.x, coord.y))
+        if node:
+            remove_object(node)
 
     def get_nodes(self, coords: list[Coord]) -> list:
         result = []

@@ -115,6 +115,9 @@ def add_object(obj: Object | Channel | Script | Account) -> None:
     """Add an object to the global object registry."""
     global _ALL_OBJECTS
     with _ALL_OBJECTS_LOCK:
+        stale_keys = [k for k, v in _ALL_OBJECTS.items() if v is obj and k != obj.id]
+        for k in stale_keys:
+            _ALL_OBJECTS.pop(k, None)
         _ALL_OBJECTS[obj.id] = obj
 
 
@@ -157,7 +160,11 @@ def save_objects(force: bool = False):
     """Save modified objects to the database."""
     db = get_database()
     with _ALL_OBJECTS_LOCK:
-        snapshot = list(o for o in _ALL_OBJECTS.values() if not getattr(o, "is_temporary", False))
+        snapshot = list(
+            o
+            for o in _ALL_OBJECTS.values()
+            if not getattr(o, "is_temporary", False) and not getattr(o, "is_node", False)
+        )
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         cursor = db.connection.cursor()
