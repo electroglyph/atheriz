@@ -18,6 +18,7 @@ warnings.filterwarnings(
 from atheriz import settings, database_setup
 from atheriz.globals import objects as obj_singleton
 from atheriz.globals import get as get_singleton
+from atheriz.globals import startstop as startstop_module
 
 
 def _clear_ticker():
@@ -62,6 +63,9 @@ def global_test_env():
     # Stop any background ticker left running by a previous test, then drop the
     # singleton, so its at_tick coros can't fire across the test boundary.
     _clear_ticker()
+
+    # Reset the shutdown-guard flag so each test gets a fresh shutdown cycle.
+    startstop_module._shutdown_completed = False
 
     yield temp_dir
 

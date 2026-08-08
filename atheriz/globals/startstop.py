@@ -6,13 +6,21 @@ from atheriz.database_setup import get_database
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
+import threading
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from atheriz.objects.base_channel import Channel
     from atheriz.objects.base_obj import Object
 
 
+_shutdown_lock = threading.Lock()
+_shutdown_completed = False
+
+
 def do_startup():
+    global _shutdown_completed
+    with _shutdown_lock:
+        _shutdown_completed = False
     load_objects()
     get_async_threadpool()
     get_map_handler()
@@ -29,6 +37,12 @@ def do_startup():
 
 
 def do_shutdown():
+    global _shutdown_completed
+    with _shutdown_lock:
+        if _shutdown_completed:
+            logger.info("Shutdown already completed; skipping.")
+            return
+        _shutdown_completed = True
     channel: Channel | None = get_server_channel()
     if channel:
         channel.msg("Server is shutting down!")
