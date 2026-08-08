@@ -82,8 +82,9 @@ class WebSocketProtocol(BaseProtocol):
 
         @app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
+            client_host = websocket.client.host if websocket.client else "?"
             with TEMP_BANNED_LOCK:
-                if websocket.client.host in TEMP_BANNED_IPS:
+                if client_host in TEMP_BANNED_IPS:
                     if time.time() < TEMP_BANNED_IPS[websocket.client.host]:
                         logger.warning(f"Host {websocket.client.host} in temp ban list has tried to connect.")
                         await websocket.close()
