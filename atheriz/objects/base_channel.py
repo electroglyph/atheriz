@@ -3,7 +3,7 @@ from collections import deque
 from threading import RLock
 import atheriz.settings as settings
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
-from atheriz.globals.objects import get, add_object, filter_by, remove_object, delete_objects
+from atheriz.globals.objects import get, add_object_unique, remove_object, delete_objects
 from atheriz.globals.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
@@ -102,14 +102,15 @@ class Channel(Flags, DbOps, AccessLock):
 
     @classmethod
     def create(cls, name: str, caller: Object | None = None) -> "Channel":
-        results = filter_by(lambda x: x.is_channel and x.name == name)
-        if results:
-            raise ValueError(f"Channel {name} already exists.")
         c = cls()
         c.name = name
         c.id = get_unique_id()
         c.created_by = caller.id if caller else -1
-        add_object(c)
+        add_object_unique(
+            c,
+            lambda x: x.is_channel and x.name == name,
+            f"Channel {name} already exists.",
+        )
         c.at_create()
         return c
 

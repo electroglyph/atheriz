@@ -1,5 +1,5 @@
 from __future__ import annotations
-from atheriz.globals.objects import add_object, remove_object, filter_by, delete_objects
+from atheriz.globals.objects import add_object_unique, remove_object, delete_objects
 from atheriz.utils import ensure_thread_safe
 from atheriz.globals.salt import get_salt
 from atheriz.globals.get import get_unique_id
@@ -37,15 +37,16 @@ class Account(Flags, DbOps):
         """Create a new account."""
         if not name or not password:
             raise ValueError("Name and password must not be empty.")
-        existing = filter_by(lambda x: x.is_account and x.name == name)
-        if existing:
-            raise ValueError(f"Account with this name ({name}) already exists.")
         account = cls()
         account.id = get_unique_id()
         account.name = name
         account.password = Account.hash_password(password)
         account.characters = []
-        add_object(account)
+        add_object_unique(
+            account,
+            lambda x: x.is_account and x.name == name,
+            f"Account with this name ({name}) already exists.",
+        )
         account.at_create()
         return account
 

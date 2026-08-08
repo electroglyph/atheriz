@@ -14,20 +14,20 @@ from atheriz.objects.base_account import Account
 from atheriz.objects.base_channel import Channel
 
 
-def _gated(monkeypatch, module_name):
-    """Gate `add_object` so both racing threads reach the insert while the
-    store still holds no entries (making the race window deterministic)."""
-    import importlib
+def _gated(monkeypatch):
+    """Gate `add_object_unique` so both racing threads enter the atomic
+    check+insert only after both have reached it, then run it through to
+    completion; the loser must observe the winner's registration."""
+    import atheriz.globals.objects as store
 
-    mod = importlib.import_module(module_name)
     gate = threading.Barrier(2)
-    orig = mod.add_object
+    orig = store.add_object_unique
 
-    def gated(obj):
+    def gated(*args, **kwargs):
         gate.wait(timeout=10)
-        return orig(obj)
+        return orig(*args, **kwargs)
 
-    monkeypatch.setattr(mod, "add_object", gated)
+    monkeypatch.setattr(store, "add_object_unique", gated)
     return gate
 
 
@@ -53,7 +53,7 @@ def _run_race(fn):
 
 
 def test_concurrent_account_create_same_name(global_test_env, monkeypatch, fixed_salt):
-    _gated(monkeypatch, "atheriz.objects.base_account")
+    _gated(monkeypatch)
     name = "shared_account_name"
 
     outcomes = _run_race(lambda: Account.create(name, "password123"))
@@ -66,7 +66,7 @@ def test_concurrent_account_create_same_name(global_test_env, monkeypatch, fixed
 
 
 def test_concurrent_channel_create_has_name(global_test_env, monkeypatch):
-    _gated(monkeypatch, "atheriz.objects.base_channel")
+    _gated(monkeypatch)
     name = "unique_channel_name"
 
     outcomes = _run_race(lambda: Channel.create(name))

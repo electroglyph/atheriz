@@ -121,6 +121,25 @@ def add_object(obj: Object | Channel | Script | Account) -> None:
         _ALL_OBJECTS[obj.id] = obj
 
 
+def add_object_unique(
+    obj: Object | Channel | Script | Account,
+    predicate: Callable[[Any], bool],
+    error: str,
+) -> None:
+    """Register ``obj`` only if no registered object satisfies ``predicate``.
+
+    The uniqueness check and the insert share one critical section, so racing
+    creators cannot both pass the check.
+
+    Raises:
+        ValueError: If an already-registered object satisfies ``predicate``.
+    """
+    with _ALL_OBJECTS_LOCK:
+        if any(predicate(r) for r in _ALL_OBJECTS.values()):
+            raise ValueError(error)
+        add_object(obj)
+
+
 def remove_object(obj: Object | Channel | Script | Account) -> None:
     """Remove an object from the global object registry."""
     global _ALL_OBJECTS
