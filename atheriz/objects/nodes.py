@@ -394,8 +394,15 @@ class Node(Flags, AccessLock):
 
         def _move_contents(obj: Node) -> list:
             if obj.contents:
+                fallback = caller.location
+                if fallback is obj:
+                    fallback = None
                 for content in list(obj.contents):
-                    content.move_to(content.home)
+                    home = content.home
+                    if home is not None:
+                        content.move_to(home)
+                    elif fallback is not None:
+                        content.move_to(fallback, force=True, announce=False)
             return []
 
         def _self_delete():
@@ -916,6 +923,10 @@ class NodeGrid:
             self.is_modified = True
         if old is not None and old is not node:
             remove_object(old)
+            logger.warning(
+                f"Overwriting node at area {self.area} z {self.z} "
+                f"({node.coord.x},{node.coord.y}): id {old.id} replaced by id {node.id}"
+            )
         if node.links:
             nh = get_node_handler()
             for l in node.links:

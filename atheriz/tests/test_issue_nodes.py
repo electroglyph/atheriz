@@ -104,6 +104,37 @@ class TestNodeDeleteRelocation:
 
         assert obj.location is home_node
 
+    def test_nonrecursive_delete_falls_back_to_callers_location(self, global_test_env):
+        """INTENT: contents without a home must be relocated to the caller's
+        location specifically, not just to any live node."""
+        nh = NodeHandler()
+        node = Node(coord=Coord("test", 5, 5, 0))
+        fallback = Node(coord=Coord("test", 5, 4, 0))
+        caller = Object.create(None, "caller")
+        caller.move_to(fallback)
+        obj = Object.create(None, "item")
+        obj.move_to(node)
+
+        with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+            node.delete(caller, recursive=False)
+
+        assert obj.location is fallback
+
+    def test_nonrecursive_delete_self_fallback_leaves_contents(self, global_test_env):
+        """INTENT: when the caller stands on the node being deleted there is
+        no sensible fallback, so contents must not be re-moved anywhere."""
+        nh = NodeHandler()
+        node = Node(coord=Coord("test", 5, 5, 0))
+        caller = Object.create(None, "caller")
+        caller.move_to(node)
+        obj = Object.create(None, "item")
+        obj.move_to(node)
+
+        with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+            node.delete(caller, recursive=False)
+
+        assert obj.location is node
+
 
 class TestNodeGridOverwrite:
     def test_add_node_overwrite_warns(self, global_test_env, capture_atheriz_log):
@@ -120,3 +151,14 @@ class TestNodeGridOverwrite:
 
         log = capture_atheriz_log()
         assert "overwrit" in log.lower(), f"no overwrite warning logged: {log!r}"
+
+    def test_add_node_same_instance_does_not_warn(self, global_test_env, capture_atheriz_log):
+        """INTENT: re-adding the same node instance must not be treated as an
+        overwrite and must not spam the log."""
+        grid = NodeGrid(area="test", z=0)
+        node = Node(coord=Coord("test", 0, 0, 0))
+        grid.add_node(node)
+        grid.add_node(node)
+
+        log = capture_atheriz_log()
+        assert "overwrit" not in log.lower(), f"idempotent re-add warned: {log!r}"
