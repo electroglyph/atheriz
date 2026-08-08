@@ -66,16 +66,16 @@ class TestSaveOps:
         assert loaded.id == 1
         assert loaded.label == "test-label"
 
-    def test_save_clears_is_modified(self, global_test_env):
-        # INTENT: after save, is_modified is False so the next autosave
-        # cycle won't redundantly write this object
+    def test_get_save_ops_does_not_clear_is_modified(self, global_test_env):
+        # INTENT: get_save_ops alone must NOT clear the dirty flag — the flag
+        # is cleared by save_objects() only after a successful COMMIT.
         obj = _DbHolder()
         import _thread
         obj.lock = _thread.RLock()
         obj.id = 1
         obj.is_modified = True
         obj.get_save_ops()
-        assert obj.is_modified is False
+        assert obj.is_modified is True
 
     def test_save_uses_lock(self, monkeypatch, global_test_env):
         # INTENT: the lock guards the state during serialization
@@ -97,20 +97,18 @@ class TestSaveOps:
         obj.get_save_ops()
         assert acquired == [True]
 
-    def test_save_uses_object_setattr_to_set_modified(self, global_test_env):
-        # INTENT: is_modified is set with object.__setattr__ to bypass
-        # any thread-safe wrapper that might be in place
-        # (This is the implementation detail: the source uses
-        #  `object.__setattr__(self, "is_modified", False)`)
+    def test_flag_stays_dirty_across_repeated_save_ops(self, global_test_env):
+        # INTENT: consecutive get_save_ops calls never clear the flag; only a
+        # successful save_objects() commit does.
         obj = _DbHolder()
         import _thread
         obj.lock = _thread.RLock()
         obj.id = 1
-        # If is_modified were set via a property that raises, this would fail.
-        # Verify the basic path:
         obj.is_modified = True
         obj.get_save_ops()
-        assert obj.is_modified is False
+        assert obj.is_modified is True
+        obj.get_save_ops()
+        assert obj.is_modified is True
 
 
 class TestDelOps:
@@ -191,15 +189,15 @@ class TestDbOpsIntegration:
         import _thread
         obj.lock = _thread.RLock()
         obj.id = 1
+        obj.is_modified = True
         obj.field1 = "a"
         obj.get_save_ops()
-        assert obj.is_modified is False
-        # Mutate, then save again
+        assert obj.is_modified is True
+        # Mutate and dump again; the flag still reflects in-memory dirtiness
         obj.field1 = "b"
-        obj.is_modified = True
         obj.get_save_ops()
-        assert obj.is_modified is False
-        # And the new state is in the saved blob
+        assert obj.is_modified is True
+        # The new state is in the saved blob
         _sql, params = obj.get_save_ops()
         loaded = dill.loads(params[1])
         assert loaded.field1 == "b"

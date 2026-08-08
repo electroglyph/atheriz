@@ -430,13 +430,13 @@ class TestAccountDbOps:
         assert loaded.id == acc.id
         assert loaded.name == acc.name
 
-    def test_get_save_ops_clears_is_modified(self, fixed_salt, global_test_env):
-        # INTENT: after save, the in-memory dirty flag is cleared so the
-        # next autosave cycle doesn't redundantly write this object
+    def test_get_save_ops_does_not_clear_is_modified(self, fixed_salt, global_test_env):
+        # INTENT: get_save_ops alone must NOT clear the dirty flag — save_objects()
+        # clears it only after a successful COMMIT.
         acc = _make_account("inga", "pw")
         assert acc.is_modified is True
         acc.get_save_ops()
-        assert acc.is_modified is False
+        assert acc.is_modified is True
 
     def test_get_del_ops_returns_correct_sql(self, fixed_salt, global_test_env):
         acc = _make_account("juno", "pw")

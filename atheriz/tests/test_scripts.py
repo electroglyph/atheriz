@@ -154,11 +154,7 @@ def test_script_db_serialization():
     # Test getting save ops
     ops = script.get_save_ops()
     assert ops is not None
-    
-    # NOTE: get_save_ops() sets is_modified to False, but we want save_objects
-    # to actually save it, so we must set it back to True for the test.
-    script.is_modified = True
-    
+
     # Save to the test database
     save_objects()
     

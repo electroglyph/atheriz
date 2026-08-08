@@ -7,14 +7,13 @@ class DbOps:
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
+            had_flag = getattr(self, "is_modified", False)
             object.__setattr__(self, "is_modified", False)
             try:
                 blob = dill.dumps(self)
-            except Exception:
-                object.__setattr__(self, "is_modified", True)
-                raise
-            params = (self.id, blob)
-        return sql, params
+            finally:
+                object.__setattr__(self, "is_modified", had_flag)
+        return sql, (self.id, blob)
 
     def get_del_ops(self) -> tuple[str, tuple]:
         """

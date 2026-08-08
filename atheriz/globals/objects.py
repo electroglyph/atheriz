@@ -165,6 +165,9 @@ def save_objects(force: bool = False):
         except Exception:
             cursor.execute("ROLLBACK")
             raise
+    for obj in to_save:
+        with obj.lock:
+            object.__setattr__(obj, "is_modified", False)
 
 
 def delete_objects(ops: list[tuple[str, tuple]]):
