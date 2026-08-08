@@ -5,7 +5,7 @@ import threading
 from fastapi import WebSocket, WebSocketDisconnect, FastAPI
 from .protocol import BaseProtocol
 from .connection import BaseConnection
-from . import connection_manager
+from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 import time
@@ -92,10 +92,10 @@ class WebSocketProtocol(BaseProtocol):
                         del TEMP_BANNED_IPS[websocket.client.host]
 
             await websocket.accept()
-            
-            conn_id = connection_manager.generate_connection_id()
+
+            conn_id = get_connection_manager().generate_connection_id()
             connection = WebSocketConnection(websocket=websocket, session_id=conn_id)
-            connection_manager.register_connection(conn_id, connection)
+            get_connection_manager().register_connection(conn_id, connection)
 
             try:
                 while True:
@@ -103,10 +103,10 @@ class WebSocketProtocol(BaseProtocol):
                     if len(raw_message) > settings.WEBSOCKET_MAX_MESSAGE_SIZE:
                         await websocket.close(code=1009, reason="Message too large")
                         break
-                    connection_manager.handle_command(connection, raw_message)
+                    get_connection_manager().handle_command(connection, raw_message)
             except WebSocketDisconnect:
                 pass
             except Exception as e:
                 logger.warning(f"[WebSocket] Connection error: {e}")
             finally:
-                connection_manager.disconnect(connection)
+                get_connection_manager().disconnect(connection)

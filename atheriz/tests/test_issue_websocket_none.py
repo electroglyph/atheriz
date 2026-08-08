@@ -52,7 +52,7 @@ def test_ws_endpoint_tolerates_client_none(global_test_env):
 
     with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
          patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}), \
-         patch("atheriz.network.websocket.connection_manager") as mcm:
+         patch("atheriz.network.websocket.get_connection_manager") as mcm:
         async def run():
             await endpoint(ws)
 
@@ -62,4 +62,4 @@ def test_ws_endpoint_tolerates_client_none(global_test_env):
         finally:
             loop.close()
 
-    mcm.disconnect.assert_called_once()
+    mcm.return_value.disconnect.assert_called_once()

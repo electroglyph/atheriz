@@ -12,7 +12,6 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 from starlette.concurrency import run_in_threadpool
 from atheriz import settings
-from atheriz.network import connection_manager
 from atheriz.objects.base_account import Account
 from atheriz.objects.base_obj import Object
 from atheriz.globals.objects import add_object, get, load_objects, save_objects

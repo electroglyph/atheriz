@@ -114,10 +114,21 @@ class TestGetConnectionManager:
         m2 = get_connection_manager()
         assert m1 is m2
 
-    def test_returns_module(self, global_test_env):
-        # ConnectionManager is just the module (no instance)
-        from atheriz.network import connection_manager
-        assert get_connection_manager() is connection_manager
+    def test_returns_manager_instance(self, global_test_env):
+        # ConnectionManager must be lazily built (importing the network
+        # package must not start the threadpool), and the getter must hand
+        # out the same instance every time.
+        from atheriz.network.manager import ConnectionManager
+
+        with patch("atheriz.network.manager.ConnectionManager") as MockCls:
+            MockCls.return_value = MagicMock(name="manager")
+            m1 = get_connection_manager()
+            m2 = get_connection_manager()
+        assert m1 is m2
+        assert MockCls.call_count == 1
+        get_singleton._CONNECTION_MANAGER = None
+        base = get_connection_manager()
+        assert isinstance(base, ConnectionManager)
 
 
 class TestGetAsyncTicker:

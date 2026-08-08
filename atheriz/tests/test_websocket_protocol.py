@@ -183,7 +183,7 @@ class TestWebSocketMessageSize:
 
         with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
              patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}), \
-             patch("atheriz.network.websocket.connection_manager") as mock_cm:
+             patch("atheriz.network.websocket.get_connection_manager") as mock_get_cm:
             async def run():
                 await endpoint(ws)
 
@@ -193,5 +193,5 @@ class TestWebSocketMessageSize:
             finally:
                 loop.close()
 
-            mock_cm.handle_command.assert_called_once()
-            ws.close.assert_not_called()
+        mock_get_cm.return_value.handle_command.assert_called_once()
+        ws.close.assert_not_called()

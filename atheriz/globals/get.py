@@ -80,9 +80,9 @@ def get_connection_manager() -> ConnectionManager:
     global _CONNECTION_MANAGER
     with _SINGLETON_LOCK:
         if _CONNECTION_MANAGER is None:
-            from atheriz.network import connection_manager
+            from atheriz.network.manager import ConnectionManager
 
-            _CONNECTION_MANAGER = connection_manager
+            _CONNECTION_MANAGER = ConnectionManager()
     return _CONNECTION_MANAGER
 
 

@@ -65,10 +65,10 @@ class TestWebSocketDisconnect:
 
         with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
              patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}), \
-             patch("atheriz.network.websocket.connection_manager.disconnect") as mock_disconnect:
+             patch("atheriz.network.websocket.get_connection_manager") as mcm:
             _run(endpoint, ws)
 
-        mock_disconnect.assert_called_once()
+        mcm.return_value.disconnect.assert_called_once()
 
     def test_receive_error_disconnects_connection(self, global_test_env):
         """INTENT: any unhandled exception while reading a message must still
@@ -82,7 +82,7 @@ class TestWebSocketDisconnect:
 
         with patch("atheriz.network.websocket.TEMP_BANNED_LOCK"), \
              patch("atheriz.network.websocket.TEMP_BANNED_IPS", {}), \
-             patch("atheriz.network.websocket.connection_manager.disconnect") as mock_disconnect:
+             patch("atheriz.network.websocket.get_connection_manager") as mcm:
             _run(endpoint, ws)
 
-        mock_disconnect.assert_called_once()
+        mcm.return_value.disconnect.assert_called_once()

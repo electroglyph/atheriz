@@ -6,7 +6,7 @@ from fastapi import FastAPI
 import telnetlib3
 from .protocol import BaseProtocol
 from .connection import BaseConnection
-from . import connection_manager
+from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 import atheriz.settings as settings
@@ -90,9 +90,9 @@ class TelnetProtocol(BaseProtocol):
                         else:
                             del TEMP_BANNED_IPS[host]
 
-                conn_id = connection_manager.generate_connection_id()
+                conn_id = get_connection_manager().generate_connection_id()
                 connection = TelnetConnection(reader, writer, session_id=conn_id)
-                connection_manager.register_connection(conn_id, connection)
+                get_connection_manager().register_connection(conn_id, connection)
 
                 # Initialize terminal size if possible
                 writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
@@ -108,20 +108,20 @@ class TelnetProtocol(BaseProtocol):
                 writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
 
                 # mock a client_ready command since webclient normally sends it
-                connection_manager.dispatch(connection, "client_ready", [], {})
+                get_connection_manager().dispatch(connection, "client_ready", [], {})
 
                 try:
                     while True:
                         inp = await reader.readline()
                         if not inp:
                             break
-                        connection_manager.dispatch(connection, "text", [inp.strip()], {})
+                        get_connection_manager().dispatch(connection, "text", [inp.strip()], {})
                 except asyncio.CancelledError:
                     pass
                 except Exception as e:
                     logger.error(f"[Telnet] Error in shell for {conn_id}: {e}")
                 finally:
-                    connection_manager.disconnect(connection)
+                    get_connection_manager().disconnect(connection)
 
             port = getattr(settings, "TELNET_PORT", 4000)
             interface = getattr(settings, "TELNET_INTERFACE", "0.0.0.0")
