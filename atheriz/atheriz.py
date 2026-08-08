@@ -491,13 +491,44 @@ def request_create_account(
         return "unavailable", "Server did not respond to account creation request."
 
 
-def stop_server(port: int | None = None):
-    """Stop the atheriz server using the PID file."""
-    import os
+def _process_listening_by_port(proc, port: int) -> bool:
+    """Return True only if ``proc`` positively holds a LISTEN socket on ``port``.
+
+    psutil-based (works on Windows and Linux). Any inspection error is treated
+    as "not verified" so an unverified PID is never terminated.
+    """
     import psutil
 
-    # try graceful shutdown first
-    request_internal_shutdown(port)
+    try:
+        for conn in psutil.net_connections(kind="inet"):
+            if (
+                conn.pid == proc.pid
+                and conn.laddr.port == port
+                and conn.status == "LISTEN"
+            ):
+                return True
+    except Exception:
+        return False
+    return False
+
+
+def stop_server(port: int | None = None):
+    """Stop the atheriz server using the PID file.
+
+    Only processes positively verified as the server (graceful-shutdown
+    handshake succeeded, or the process listens on the webserver port) are
+    terminated. An unverified PID file entry is never killed and never cleaned
+    up while its process is still alive; the file is removed only when its PID
+    is verifiably dead or the verified server has been stopped.
+    """
+    import psutil
+
+    target_port = port or settings.WEBSERVER_PORT
+
+    # graceful shutdown handshake IS verification when it succeeds
+    if request_internal_shutdown(port):
+        print("Graceful shutdown request accepted; the server will stop itself.")
+        return
 
     save_path = Path(settings.SAVE_PATH)
     pid_file = save_path / "server.pid"
@@ -512,39 +543,47 @@ def stop_server(port: int | None = None):
         except ValueError:
             print("Invalid PID file content.")
 
-    # if we have a PID, try to kill it
+    # if we have a PID, terminate it only after verifying it is the server
     if pid:
         try:
             proc = psutil.Process(pid)
-            print(f"Stopping server process with PID: {pid}...", end="", flush=True)
-            proc.terminate()
-
-            # wait for process to stop
-            try:
-                proc.wait(timeout=10)
-            except psutil.TimeoutExpired:
-                print(" Timeout! Force killing...", end="", flush=True)
-                proc.kill()
-                proc.wait(timeout=5)
-
-            print(" Done.")
-
-            # clean up PID file if the process is gone
-            if pid_file.exists():
-                if not proc.is_running():
-                    pid_file.unlink()
-                else:
-                    print("\nWarning: Process still exists after kill.")
-            return
         except psutil.NoSuchProcess:
-            print("\nProcess from PID file not found.")
-        except psutil.AccessDenied:
-            print(f"\nAccess denied when trying to stop PID {pid}.")
+            print("Process from PID file not found; removing stale PID file.")
+            pid_file.unlink(missing_ok=True)
+            return
         except Exception as e:
-            print(f"\nError stopping server by PID: {e}")
+            print(f"Could not inspect PID {pid}: {e}")
+            return
 
-    # fallback: scan for process listening on the port
-    target_port = port or settings.WEBSERVER_PORT
+        if not _process_listening_by_port(proc, target_port):
+            print(
+                f"PID {pid} is not listening on port {target_port}; refusing to "
+                "terminate an unverified process."
+            )
+            return
+
+        print(f"Stopping server process with PID: {pid}...", end="", flush=True)
+        proc.terminate()
+
+        # wait for process to stop
+        try:
+            proc.wait(timeout=10)
+        except psutil.TimeoutExpired:
+            print(" Timeout! Force killing...", end="", flush=True)
+            proc.kill()
+            proc.wait(timeout=5)
+
+        print(" Done.")
+
+        # clean up PID file if the process is gone
+        if pid_file.exists():
+            if not proc.is_running():
+                pid_file.unlink()
+            else:
+                print("\nWarning: Process still exists after kill.")
+        return
+
+    # fallback: scan for process listening on the port (verified by construction)
     print(f"Scanning for process listening on port {target_port}...")
     try:
         for conn in psutil.net_connections(kind="inet"):
@@ -567,6 +606,8 @@ def stop_server(port: int | None = None):
                         proc.wait()
 
                     print(" Done.")
+                    if pid_file.exists() and not proc.is_running():
+                        pid_file.unlink()
                     return
                 except (
                     psutil.NoSuchProcess,
@@ -577,10 +618,6 @@ def stop_server(port: int | None = None):
         print("No server process found.")
     except Exception as e:
         print(f"Error scanning for process: {e}")
-
-    if pid_file.exists():
-        print("Cleaning up stale PID file.")
-        pid_file.unlink()
 
 
 def main():
