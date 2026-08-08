@@ -65,69 +65,71 @@ class TelnetProtocol(BaseProtocol):
     """
     Sets up telnetlib3 server via a FastAPI lifespan/startup event task.
     """
-    _server_task = None
-    
     @classmethod
     def setup(cls, app: FastAPI):
         if not getattr(settings, "TELNET_ENABLED", False):
             return
 
+        previous_lifespan = app.router.lifespan_context
+        server_task = None
+
+        async def shell(reader, writer):
+            host = "?"
+            try:
+                host = writer.get_extra_info("peername")[0]
+            except Exception:
+                pass
+
+            with TEMP_BANNED_LOCK:
+                if host in TEMP_BANNED_IPS:
+                    if time.time() < TEMP_BANNED_IPS[host]:
+                        logger.warning(f"Host {host} in temp ban list has tried to connect.")
+                        writer.close()
+                        return
+                    else:
+                        del TEMP_BANNED_IPS[host]
+
+            conn_id = get_connection_manager().generate_connection_id()
+            connection = TelnetConnection(reader, writer, session_id=conn_id)
+            get_connection_manager().register_connection(conn_id, connection)
+
+            # Initialize terminal size if possible
+            writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
+
+            def on_naws(rows, cols):
+                if connection.session:
+                    rows, cols = _clamp_naws(rows, cols)
+                    connection.session.term_width = cols
+                    connection.session.term_height = rows
+
+            # ask the client to report window size
+            writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
+            writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
+
+            # mock a client_ready command since webclient normally sends it
+            get_connection_manager().dispatch(connection, "client_ready", [], {})
+
+            try:
+                while True:
+                    inp = await reader.readline()
+                    if not inp:
+                        break
+                    get_connection_manager().dispatch(connection, "text", [inp.strip()], {})
+            except asyncio.CancelledError:
+                pass
+            except Exception as e:
+                logger.error(f"[Telnet] Error in shell for {conn_id}: {e}")
+            finally:
+                get_connection_manager().disconnect(connection)
+
         @asynccontextmanager
-        async def lifespan(app: FastAPI):
-            async def shell(reader, writer):
-                host = "?"
-                try:
-                    host = writer.get_extra_info("peername")[0]
-                except Exception:
-                    pass
-
-                with TEMP_BANNED_LOCK:
-                    if host in TEMP_BANNED_IPS:
-                        if time.time() < TEMP_BANNED_IPS[host]:
-                            logger.warning(f"Host {host} in temp ban list has tried to connect.")
-                            writer.close()
-                            return
-                        else:
-                            del TEMP_BANNED_IPS[host]
-
-                conn_id = get_connection_manager().generate_connection_id()
-                connection = TelnetConnection(reader, writer, session_id=conn_id)
-                get_connection_manager().register_connection(conn_id, connection)
-
-                # Initialize terminal size if possible
-                writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
-
-                def on_naws(rows, cols):
-                    if connection.session:
-                        rows, cols = _clamp_naws(rows, cols)
-                        connection.session.term_width = cols
-                        connection.session.term_height = rows
-
-                # ask the client to report window size
-                writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
-                writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
-
-                # mock a client_ready command since webclient normally sends it
-                get_connection_manager().dispatch(connection, "client_ready", [], {})
-
-                try:
-                    while True:
-                        inp = await reader.readline()
-                        if not inp:
-                            break
-                        get_connection_manager().dispatch(connection, "text", [inp.strip()], {})
-                except asyncio.CancelledError:
-                    pass
-                except Exception as e:
-                    logger.error(f"[Telnet] Error in shell for {conn_id}: {e}")
-                finally:
-                    get_connection_manager().disconnect(connection)
-
+        async def run_telnet_server():
+            nonlocal server_task
             port = getattr(settings, "TELNET_PORT", 4000)
             interface = getattr(settings, "TELNET_INTERFACE", "0.0.0.0")
 
             logger.info(f"Starting Telnet Protocol on {interface}:{port}")
-            cls._server_task = await telnetlib3.create_server(
+            server_task = await telnetlib3.create_server(
                 port=port,
                 host=interface,
                 shell=shell,
@@ -136,9 +138,19 @@ class TelnetProtocol(BaseProtocol):
             try:
                 yield
             finally:
-                if cls._server_task:
-                    cls._server_task.close()
-                    await cls._server_task.wait_closed()
+                if server_task:
+                    server_task.close()
+                    await server_task.wait_closed()
                     logger.info("Telnet Protocol server stopped.")
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            if previous_lifespan is not None:
+                async with previous_lifespan(app):
+                    async with run_telnet_server():
+                        yield
+            else:
+                async with run_telnet_server():
+                    yield
 
         app.router.lifespan_context = lifespan
