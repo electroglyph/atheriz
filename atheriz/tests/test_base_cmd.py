@@ -288,12 +288,11 @@ class TestExecute:
         # No cmdstring passed
         assert parsed.cmdstring == ""
 
-    def test_shlex_preserves_quotes(self):
+    def test_shlex_strips_quotes(self):
         c = ConcreteCommand()
         caller = MagicMock()
-        # 'alice "the builder"' — with posix=False, shlex still respects quotes
-        # but keeps them as literal characters in the token
-        # Result: ['alice', '"the builder"']
+        # 'alice "the builder"' — with posix=True, shlex strips the quotes
+        # Result: ['alice', 'the builder']
         run_fn, _, parsed = c.execute(caller, 'alice "the builder"', cmdstring="test")
         # Two tokens -> target='alice' AND one extra positional 'the builder'
         # Argparse rejects the extra, so we get help text and (None, None, None)
@@ -301,7 +300,7 @@ class TestExecute:
         assert parsed is None
         caller.msg.assert_called_once()
         # Verify shlex behavior directly
-        assert shlex.split('alice "the builder"', posix=False) == ['alice', '"the builder"']
+        assert shlex.split('alice "the builder"', posix=True) == ['alice', 'the builder']
 
     def test_shlex_simple_split_with_required_target(self):
         c = ConcreteCommand()
