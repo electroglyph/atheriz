@@ -37,10 +37,34 @@ class ConnectionManager:
             self._connection_counter += 1
             return f"conn_{self._connection_counter}"
 
-    def register_connection(self, conn_id: str, connection: "BaseConnection"):
+    def register_connection(self, conn_id: str, connection: "BaseConnection") -> bool:
+        """Register a connection, refusing it when the per-IP limit is reached.
+
+        Returns True when the connection was registered, False when it was
+        refused (and closed) due to ``settings.MAX_CONNECTIONS_PER_IP``.
+        """
+        host = getattr(connection, "client_host", "?")
+        limit = settings.MAX_CONNECTIONS_PER_IP
         with self._lock:
+            if limit > 0 and host != "?":
+                same_host = sum(
+                    1
+                    for c in self._connections.values()
+                    if getattr(c, "client_host", "?") == host
+                )
+                if same_host >= limit:
+                    logger.warning(
+                        f"[Network] Refusing connection from {host}: "
+                        f"per-IP limit ({limit}) reached"
+                    )
+                    try:
+                        connection.close()
+                    except Exception:
+                        pass
+                    return False
             self._connections[conn_id] = connection
         logger.info(f"[Network] Connection opened: {conn_id} (total: {self.connection_count})")
+        return True
 
     def disconnect(self, connection: "BaseConnection"):
         with self._lock:

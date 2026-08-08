@@ -89,9 +89,10 @@ class TelnetProtocol(BaseProtocol):
                     else:
                         del TEMP_BANNED_IPS[host]
 
-            conn_id = get_connection_manager().generate_connection_id()
-            connection = TelnetConnection(reader, writer, session_id=conn_id)
-            get_connection_manager().register_connection(conn_id, connection)
+                conn_id = get_connection_manager().generate_connection_id()
+                connection = TelnetConnection(reader, writer, session_id=conn_id)
+                if not get_connection_manager().register_connection(conn_id, connection):
+                    return
 
             # Initialize terminal size if possible
             writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen

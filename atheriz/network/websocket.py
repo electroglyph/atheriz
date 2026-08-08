@@ -96,7 +96,8 @@ class WebSocketProtocol(BaseProtocol):
 
             conn_id = get_connection_manager().generate_connection_id()
             connection = WebSocketConnection(websocket=websocket, session_id=conn_id)
-            get_connection_manager().register_connection(conn_id, connection)
+            if not get_connection_manager().register_connection(conn_id, connection):
+                return
 
             try:
                 while True:
