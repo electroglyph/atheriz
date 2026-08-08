@@ -1153,3 +1153,14 @@ class TestIntegration:
 
         with pytest.raises((ValueError, SyntaxError)):
             _safe_arith_eval("9**9**9")
+
+    def test_chained_pow_size_cap_is_controlled(self, global_test_env):
+        """A chained power whose individual exponents pass the guard but whose
+        result is astronomically large must be refused instantly and in a
+        controlled way (not peg a worker thread)."""
+        from atheriz.objects.funcparser_helpers import _safe_arith_eval
+
+        with pytest.raises((ValueError, SyntaxError)):
+            _safe_arith_eval("(10**10000)**9999")
+
+        assert _safe_arith_eval("2**1000") is not None

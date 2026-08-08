@@ -15,6 +15,7 @@ Original file: evennia/utils/utils.py
 
 import importlib
 import inspect
+import math
 import types
 from ast import literal_eval
 from collections.abc import Callable
@@ -312,6 +313,11 @@ def int2str(number, adjective=False):
 # digit integer (CPU/memory DoS). `2**2**16` (exponent 65536) is rejected.
 _MAX_POW_EXPONENT = 10000
 
+# Maximum estimated digits of a `**` result. Bounds chained powers like
+# `(10**10000)**9999` whose individual exponents pass the guard above but
+# whose result is astronomically large (CPU/memory DoS).
+_MAX_POW_DIGITS = 50_000
+
 # Maximum width a player can request for padding/justification ($space/$pad/
 # $just). Bounds string allocations from player text (memory DoS guard).
 # Matches the websocket per-message budget.
@@ -328,9 +334,11 @@ class _SafeFormatMap(dict):
 
 def _safe_pow(base, exponent):
     if exponent > _MAX_POW_EXPONENT:
-        raise OverflowError(
+        raise ValueError(
             f"exponent {exponent} exceeds safe limit {_MAX_POW_EXPONENT}"
         )
+    if base and int(exponent * math.log10(abs(base))) + 1 > _MAX_POW_DIGITS:
+        raise ValueError(f"estimated size exceeds safe limit {_MAX_POW_DIGITS}")
     return base ** exponent
 
 
