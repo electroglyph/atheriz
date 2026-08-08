@@ -46,18 +46,25 @@ def get_online():
     return (sum(1 for x in results if x.is_connected), len(results))
 
 
+def _version():
+    try:
+        return metadata.version("atheriz")
+    except metadata.PackageNotFoundError:
+        return "?"
+
+
 def render(session=None):
     online = get_online()
     if session and session.screenreader:
         return SCREEN2.format(
-            version=metadata.version("atheriz"),
+            version=_version(),
             known=f"{online[1]}",
             online=f"{online[0]}",
             CREATE_TEXT=CREATE_TEXT,
             GUEST_TEXT=GUEST_TEXT,
         )
     return SCREEN.format(
-        version=metadata.version("atheriz"),
+        version=_version(),
         known=f"{online[1]}",
         online=f"{online[0]}",
         CREATE_TEXT=CREATE_TEXT,
