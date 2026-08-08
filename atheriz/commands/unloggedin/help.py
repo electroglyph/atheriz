@@ -7,6 +7,12 @@ from atheriz.globals.get import get_unloggedin_cmdset
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
+NO_PARSER_TEMPLATE = """
+{description}
+
+Aliases: {aliases}
+"""
+
 class HelpCommand(Command):
     key = "help"
     aliases = ["?"]
@@ -46,6 +52,12 @@ class HelpCommand(Command):
 
         cmd = cmdset.get(args.command)
         if cmd and cmd.access(caller):
-            caller.msg(cmd.print_help())
+            if cmd.parser:
+                caller.msg(cmd.print_help())
+            else:
+                caller.msg(NO_PARSER_TEMPLATE.format(
+                    description=cmd.desc,
+                    aliases=f"{cmd.key}, " + ", ".join(cmd.aliases) if cmd.aliases else f"{cmd.key}",
+                ))
         else:
             caller.msg("Command not found.")
