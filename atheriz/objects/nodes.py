@@ -1076,27 +1076,31 @@ class NodeArea:
             self.data.pop(key, None)
 
     def remove_linked_area(self, area: str):
+        removed = False
         with self.lock:
-            if self.linked_areas:
-                try:
-                    self.linked_areas.remove(area)
-                except:
-                    pass
-        nh = get_node_handler()
-        a = nh.get_area(area)
-        if a:
-            a.remove_linked_area(self.name)
+            if self.linked_areas and area in self.linked_areas:
+                self.linked_areas.remove(area)
+                removed = True
+        if removed:
+            nh = get_node_handler()
+            a = nh.get_area(area)
+            if a:
+                a.remove_linked_area(self.name)
 
     def add_linked_area(self, area: str):
+        added = False
         with self.lock:
-            if not self.linked_areas:
+            if self.linked_areas is None:
                 self.linked_areas = {area}
-            else:
+                added = True
+            elif area not in self.linked_areas:
                 self.linked_areas.add(area)
-        nh = get_node_handler()
-        a = nh.get_area(area)
-        if a:
-            a.add_linked_area(self.name)
+                added = True
+        if added:
+            nh = get_node_handler()
+            a = nh.get_area(area)
+            if a:
+                a.add_linked_area(self.name)
 
     def add_grid(self, grid: NodeGrid):
         grid.area = self.name
