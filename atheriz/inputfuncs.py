@@ -141,6 +141,9 @@ def _resolve_unloggedin(connection: Connection, text: str):
             cmd_args = raw_cmd_key
     if not cmd:
         return None
+    if not cmd.access(connection):
+        connection.msg("You can't do that.")
+        return None
     func, caller, eargs = cmd.execute(connection, cmd_args, cmdstring=matched_alias)
     return (func, caller, eargs) if func else None
 
