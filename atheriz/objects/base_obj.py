@@ -208,6 +208,7 @@ class Object(Flags, DbOps, AccessLock):
         script.install_hooks(self)
         with self.lock:
             self.scripts.add(script.id)
+            self.is_modified = True
 
     def remove_script(self, script: Script | int):
         """
@@ -223,6 +224,7 @@ class Object(Flags, DbOps, AccessLock):
         script.remove_hooks(self)
         with self.lock:
             self.scripts.discard(script.id)
+            self.is_modified = True
 
     def has_script_type(self, script_type: str) -> bool:
         """
@@ -631,6 +633,7 @@ class Object(Flags, DbOps, AccessLock):
         """
         with self.lock:
             self._contents.update([obj.id for obj in objs])
+            self.is_modified = True
 
     def add_object(self, obj: Object):
         """

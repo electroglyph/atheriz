@@ -69,11 +69,26 @@ def test_script_attachment_marks_object_modified(global_test_env):
     script_id = script.id
     save_objects()
     database_setup._DATABASE.close()
+    database_setup._CLOSED = False
     _ALL_OBJECTS.clear()
     load_objects()
     reloaded = get(obj_id)
     assert reloaded is not None
     assert script_id in reloaded[0].scripts
+
+
+def test_script_removal_marks_object_modified(global_test_env):
+    """Detaching a Script must mark the owning object for persistence:
+    the removal is a content change like the attachment is."""
+    obj = Object.create(None, "HarborMaster")
+    script = Script.create(obj, "PatternScript")
+    obj.add_script(script)
+    save_objects()
+    assert obj.is_modified is False
+
+    obj.remove_script(script)
+
+    assert obj.is_modified is True
 
 
 def test_bulk_add_contents_marks_container_modified(global_test_env):
@@ -96,11 +111,32 @@ def test_bulk_add_contents_marks_container_modified(global_test_env):
     bag_id = bag.id
     save_objects()
     database_setup._DATABASE.close()
+    database_setup._CLOSED = False
     _ALL_OBJECTS.clear()
     load_objects()
     reloaded = get(bag_id)
     assert reloaded is not None
     assert sword.id in reloaded[0]._contents
+
+
+def test_node_bulk_add_contents_marks_node_modified(global_test_env):
+    """Bulk-adding contents to a node must mark the node (and each added
+    object) modified, matching Object.add_objects semantics."""
+    from atheriz.globals.node import NodeHandler
+    from atheriz.objects.nodes import Node
+    from atheriz.utils import Coord
+
+    nh = NodeHandler()
+    node = Node(coord=Coord("test", 7, 7, 0))
+    nh.add_node(node)
+    obj = Object.create(None, "Sword")
+    node.is_modified = False
+    obj.is_modified = False
+
+    node.add_objects([obj])
+
+    assert node.is_modified is True
+    assert obj.is_modified is True
 
 
 def test_corrupt_row_skipped_on_load(global_test_env):
