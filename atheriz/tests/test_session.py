@@ -130,6 +130,10 @@ class TestAtDisconnect:
             assert s.input_future is not None
             assert not s.input_future.done()
             s.at_disconnect()
+            for _ in range(100):
+                if s.input_future.cancelled():
+                    break
+                await asyncio.sleep(0.01)
             assert s.input_future.cancelled()
 
         asyncio.run(run())

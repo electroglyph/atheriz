@@ -43,7 +43,7 @@ class Session:
             stack, self.puppet_stack = self.puppet_stack, []
             puppet = self.puppet
         if future and not future.done():
-            future.cancel()
+            future.get_loop().call_soon_threadsafe(future.cancel)
         # unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while stack:

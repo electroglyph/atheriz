@@ -87,6 +87,8 @@ MAX_LOGIN_ATTEMPTS = 3
 LOGIN_ATTEMPT_COOLDOWN = 100
 # Max simultaneous connections per client IP (0 = unlimited)
 MAX_CONNECTIONS_PER_IP = 2
+# seconds to wait for a menu prompt before giving up
+MENU_PROMPT_TIMEOUT = 60
 # Minimum time in seconds between successful guest/account/character creations from one host
 CREATION_COOLDOWN = 60
 # if true, save all objects instead of only modified ones

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
+
+from atheriz import settings
 
 MenuNode = Callable[["MenuContext"], tuple[str, list["Choice"]]]
 
@@ -83,9 +86,12 @@ def run_menu(caller, start_node: MenuNode) -> None:
     try:
         while engine.current_node:
             display = engine.get_display()
-            user_input = asyncio.run_coroutine_threadsafe(
-                caller.session.prompt(display), atp.loop
-            ).result()
+            try:
+                user_input = asyncio.run_coroutine_threadsafe(
+                    caller.session.prompt(display), atp.loop
+                ).result(timeout=settings.MENU_PROMPT_TIMEOUT)
+            except (concurrent.futures.CancelledError, asyncio.CancelledError):
+                break
             if not engine.handle_input(user_input):
                 break
     finally:
