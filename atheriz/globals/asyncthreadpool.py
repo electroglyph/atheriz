@@ -173,6 +173,10 @@ class AsyncTicker:
         def remove_coro(self, coro):
             with self.lock:
                 self.coros.discard(coro)
+                if not self.coros:
+                    self.running = False
+                    if self._future:
+                        self._future.cancel()
 
         def stop(self):
             with self.lock:
@@ -223,8 +227,6 @@ class AsyncTicker:
             slot = self.slots.get(interval)
         if slot:
             slot.remove_coro(coro)
-            if len(slot.coros) == 0:
-                slot.stop()
                 
     def clear(self):
         """

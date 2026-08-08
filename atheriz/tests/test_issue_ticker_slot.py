@@ -1,9 +1,11 @@
 """Issue tests: #23 — `AsyncTicker.add_coro` for an interval that is not yet
 registered had a lost-update race (two threads each built a TimeSlot; the loser
 was overwritten). Current code creates the slot under `self.lock`, so both
-coroutines must end up in the SAME slot.
+coroutines must end up in the SAME slot. The stop-if-empty decision is made
+inside the slot's own lock (remove/stop vs. concurrent add), so a registered
+coroutine always has a live timer.
 
-This is a green (already-fixed) regression guard, not a red defect pin.
+These are green (already-fixed) regression guards, not red defect pins.
 """
 from __future__ import annotations
 
@@ -49,5 +51,60 @@ def test_concurrent_add_coro_same_interval_registers_both(global_test_env):
     finally:
         ticker.remove_coro(coro_a, interval)
         ticker.remove_coro(coro_b, interval)
+        ticker.stop()
+        ticker.clear()
+
+
+def test_remove_coro_stops_slot_when_empty(global_test_env):
+    ticker = AsyncTicker()
+    interval = 0.05
+    registered = set()
+
+    def coro():
+        registered.add("x")
+
+    ticker.add_coro(coro, interval)
+    slot = ticker.slots[interval]
+    ticker.remove_coro(coro, interval)
+    assert not slot.running, "slot must stop once its last coro is removed"
+    ticker.remove_coro(coro, interval)
+    assert not slot.running, "removing again must be a no-op"
+    ticker.stop()
+    ticker.clear()
+
+
+def test_concurrent_add_remove_never_orphans_coro(global_test_env):
+    for _ in range(200):
+        ticker = AsyncTicker()
+        interval = 0.05
+        leftover = set()
+
+        def filler():
+            leftover.add(1)
+
+        ticker.add_coro(filler, interval)
+        slot = ticker.slots[interval]
+
+        barrier = threading.Barrier(2)
+
+        def do_add():
+            barrier.wait()
+            ticker.add_coro(filler, interval)
+
+        def do_remove():
+            barrier.wait()
+            ticker.remove_coro(filler, interval)
+
+        t1 = threading.Thread(target=do_add)
+        t2 = threading.Thread(target=do_remove)
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+        assert bool(slot.coros) == slot.running, (
+            f"registered coros without a live timer (or timer with none): "
+            f"coros={slot.coros!r} running={slot.running}"
+        )
         ticker.stop()
         ticker.clear()
