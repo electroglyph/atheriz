@@ -65,4 +65,5 @@ def do_setup():
         cursor.execute(
             "CREATE TABLE IF NOT EXISTS doors (area TEXT, x INTEGER, y INTEGER, z INTEGER, data BLOB, PRIMARY KEY (area, x, y, z))"
         )
+        cursor.execute("CREATE TABLE IF NOT EXISTS gametime (id INTEGER PRIMARY KEY, data BLOB)")
         conn.connection.commit()

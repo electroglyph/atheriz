@@ -35,9 +35,13 @@ def test_dict_alarm_data_saves_without_error(global_test_env):
 
     gt.save()  # must not raise
 
-    from pathlib import Path
+    from atheriz.database_setup import get_database
 
-    assert Path(settings.SAVE_PATH, "time").exists()
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT data FROM gametime WHERE id = 0")
+        assert cursor.fetchone() is not None
 
 
 def test_save_must_serialize_with_alarm_mutations(global_test_env):

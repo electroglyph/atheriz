@@ -5,39 +5,57 @@ from threading import RLock
 from pathlib import Path
 from atheriz.globals.get import get_async_ticker, get_async_threadpool
 from atheriz.globals.objects import get, filter_by
+from atheriz.database_setup import get_database
 from atheriz.logger import logger
 import json
 import ast
 import os
-from atheriz.logger import logger
+import dill
 from atheriz.objects.base_obj import Object
 
 
 class GameTime:
     def save(self) -> None:
-        path = Path(settings.SAVE_PATH) / "time"
-        path.parent.mkdir(parents=True, exist_ok=True)
+        db = get_database()
         with self.lock:
-            alarms_data = {str(k): v for k, v in self.alarms.items()}
-        tmp = str(path) + ".tmp"
-        with open(tmp, "w") as f:
-            json.dump({"ticks": self.ticks, "alarms": alarms_data}, f)
-        os.replace(tmp, path)
+            blob = dill.dumps({"ticks": self.ticks, "alarms": self.alarms})
+            with db.lock:
+                cursor = db.connection.cursor()
+                cursor.execute(
+                    "INSERT OR REPLACE INTO gametime (id, data) VALUES (0, ?)", (blob,)
+                )
 
     def load(self) -> None:
-        path = Path(settings.SAVE_PATH) / "time"
-        if not path.exists():
+        db = get_database()
+        with db.lock:
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT data FROM gametime WHERE id = 0")
+            row = cursor.fetchone()
+        if row is None:
+            if self._load_legacy_file():
+                return
             self.ticks = 0
             self.alarms: dict[tuple[str, str], list[tuple[int, bool, Any]]] = {}
             return
+        try:
+            data = dill.loads(row[0])
+            self.ticks = data["ticks"]
+            self.alarms = data["alarms"]
+        except Exception as e:
+            logger.warning(f"Corrupt gametime row, resetting to defaults: {e}")
+            self.ticks = 0
+            self.alarms = {}
+
+    def _load_legacy_file(self) -> bool:
+        path = Path(settings.SAVE_PATH) / "time"
+        if not path.exists():
+            return False
         try:
             with open(path, "r") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             logger.warning(f"Corrupt time file, resetting to defaults: {e}")
-            self.ticks = 0
-            self.alarms = {}
-            return
+            return False
         self.ticks = data.get("ticks", 0)
         self.alarms = {}
         for k, v in data.get("alarms", {}).items():
@@ -55,6 +73,16 @@ class GameTime:
             except (ValueError, SyntaxError):
                 logger.warning(f"Error parsing alarm key: {k}")
                 pass
+        try:
+            self.save()
+        except Exception as e:
+            logger.warning(f"Legacy time file migration to database failed: {e}")
+            return False
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+        return True
 
     def __init__(self) -> None:
         self.lock = RLock()

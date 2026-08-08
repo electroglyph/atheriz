@@ -9,6 +9,7 @@ import sys
 import pytest
 import json
 import shutil
+import dill
 from pathlib import Path
 from unittest.mock import patch, MagicMock
 
@@ -738,52 +739,63 @@ class TestAlarms:
 
 
 class TestSaveLoad:
-    """Test persistence of ticks and alarms."""
+    """Test persistence of ticks and alarms in the gametime table."""
 
     def test_save_and_load(self):
+        gt = _make_gt(500)
+        gt.alarms = {("6", "0"): [(1, True, None)]}
+        gt.save()
+
+        # Create a new instance and load from the database
+        with patch.object(GameTime, "load"):
+            gt2 = GameTime()
+        gt2.load()
+        assert gt2.ticks == 500
+        assert gt2.alarms == {("6", "0"): [(1, True, None)]}
+
+    def test_load_empty_database(self):
+        """Loading when the gametime table has no row should default to 0 ticks."""
+        with patch.object(GameTime, "load"):
+            gt = GameTime()
+        gt.load()
+        assert gt.ticks == 0
+        assert gt.alarms == {}
+
+    def test_save_writes_database_row(self):
+        """save() must write a dill blob into the gametime table."""
+        from atheriz.database_setup import get_database
+
+        gt = _make_gt(100)
+        gt.alarms = {("8", "0"): [(5, False, None)]}
+        gt.save()
+        db = get_database()
+        with db.lock:
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT data FROM gametime WHERE id = 0")
+            row = cursor.fetchone()
+        assert row is not None
+        data = dill.loads(row[0])
+        assert data["ticks"] == 100
+        assert data["alarms"] == {("8", "0"): [(5, False, None)]}
+
+    def test_load_migrates_legacy_time_file(self):
+        """A legacy SAVE_PATH/time JSON file is migrated into the database on
+        first load and then removed."""
         with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            gt = _make_gt(500)
-            gt.alarms = {("6", "0"): [(1, True, None)]}
-            gt.save()
-
-            # Create a new instance and load
-            with patch.object(GameTime, "load"):
-                gt2 = GameTime()
-            gt2.load()
-            assert gt2.ticks == 500
-
-    def test_load_missing_file(self):
-        """Loading when no save file exists should default to 0 ticks."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR / "nonexistent")):
+            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
+            time_path = TEST_SAVE_DIR / "time"
+            time_path.write_text(
+                json.dumps({"ticks": 42, "alarms": {"('9', '0')": [[3, False, None]]}})
+            )
             with patch.object(GameTime, "load"):
                 gt = GameTime()
             gt.load()
-            assert gt.ticks == 0
-            assert gt.alarms == {}
-
-    def test_save_atomic_no_tmp_left_behind(self):
-        """Atomic save should not leave a .tmp file after completion."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            gt = _make_gt(42)
-            gt.save()
-            time_path = TEST_SAVE_DIR / "time"
-            tmp_path = Path(str(time_path) + ".tmp")
-            assert time_path.exists()
-            assert not tmp_path.exists()
-
-    def test_save_atomic_file_contains_valid_json(self):
-        """Saved file must be valid JSON."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            gt = _make_gt(100)
-            gt.alarms = {("8", "0"): [(5, False, None)]}
-            gt.save()
-            time_path = TEST_SAVE_DIR / "time"
-            data = json.loads(time_path.read_text())
-            assert data["ticks"] == 100
-            assert "('8', '0')" in data["alarms"]
+            assert gt.ticks == 42
+            assert gt.alarms == {("9", "0"): [(3, False, None)]}
+            assert not time_path.exists(), "legacy time file was not removed"
 
     def test_load_corrupt_json_resets_to_defaults(self):
-        """Corrupt JSON in the time file should reset to defaults, not crash."""
+        """Corrupt legacy JSON should reset to defaults, not crash."""
         with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
             TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
             time_path = TEST_SAVE_DIR / "time"
@@ -795,7 +807,7 @@ class TestSaveLoad:
             assert gt.alarms == {}
 
     def test_load_empty_file_resets_to_defaults(self):
-        """Empty file should reset to defaults."""
+        """Empty legacy file should reset to defaults."""
         with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
             TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
             time_path = TEST_SAVE_DIR / "time"
@@ -807,7 +819,7 @@ class TestSaveLoad:
             assert gt.alarms == {}
 
     def test_load_missing_ticks_key_defaults_to_zero(self):
-        """JSON missing 'ticks' key should default to 0."""
+        """Legacy JSON missing 'ticks' key should default to 0."""
         with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
             TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
             time_path = TEST_SAVE_DIR / "time"
