@@ -35,6 +35,33 @@ class _StubCmdSet:
         return ["none"]
 
 
+class _ShortAliasCmd:
+    def access(self, caller):
+        return True
+
+    def execute(self, caller, cmd_args, cmdstring=""):
+        return (self, caller, cmd_args)
+
+
+class _ShortAliasCmdSet:
+    """A cmdset with a single-letter 'b' alias; only the short-alias path can
+    resolve inputs starting with 'b'."""
+
+    def __init__(self):
+        self.cmd = _ShortAliasCmd()
+
+    def get(self, key):
+        if key == "b":
+            return self.cmd
+        return None
+
+    def get_keys(self):
+        return []
+
+
+_SHORT_ALIAS_CMDSET = _ShortAliasCmdSet()
+
+
 def test_capital_first_letter_obeys_no_alias_guard(global_test_env, monkeypatch):
     """INTENT: typing 'N' must be handled exactly like 'n' - the reserved
     single-letter movement guard blocks both. Today the unlowered 'N' escapes
@@ -55,3 +82,22 @@ def test_capital_first_letter_obeys_no_alias_guard(global_test_env, monkeypatch)
     assert result is None, (
         f"capitalized first letter bypassed the no-alias guard and resolved a command: {result!r}"
     )
+
+
+def test_capital_first_letter_matches_short_alias(global_test_env, monkeypatch):
+    """INTENT: the short-alias lookup must be case-insensitive: 'Bleh' must
+    resolve through the 'b' alias exactly like 'bleh'. Today the unlowered
+    'B' never matches the lowercase key (inputfuncs.py:69) -> FAIL."""
+    monkeypatch.setattr(
+        "atheriz.inputfuncs.get_loggedin_cmdset", lambda: _SHORT_ALIAS_CMDSET
+    )
+
+    puppet = Object.create(None, "walker")
+    puppet.location = None
+
+    lower = dispatch_loggedin(puppet, "bleh", immediate=True)
+    upper = dispatch_loggedin(puppet, "Bleh", immediate=True)
+    assert lower is not None
+    assert upper is not None
+    assert upper[0] is lower[0]
+    assert upper[2] == lower[2] == "leh"

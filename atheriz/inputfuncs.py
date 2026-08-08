@@ -66,7 +66,7 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
     if not cmd:
         # handle aliasing / short commands
         # this makes 'bleh work as `say bleh`
-        cmd = get_loggedin_cmdset().get(text[:1])
+        cmd = get_loggedin_cmdset().get(raw_cmd_key[:1])
         if cmd:
             matched_alias = text[:1]
             cmd_args = text[1:]
@@ -84,7 +84,7 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
                         break
 
         if not cmd and settings.AUTO_COMMAND_ALIASING:
-            if text[:1] in _NO_ALIAS_COMMANDS:
+            if raw_cmd_key[:1] in _NO_ALIAS_COMMANDS:
                 puppet.msg("You can't do that.")
                 return None
             for key in get_loggedin_cmdset().get_keys():
