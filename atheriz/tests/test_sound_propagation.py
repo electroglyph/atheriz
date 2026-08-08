@@ -232,3 +232,37 @@ def test_empty_message_no_propagation(cube):
 def test_no_location_no_propagation():
     emitter = TrackingObject.create(None, "Float", is_npc=True)
     emitter.at_emit_sound("desc", "msg", 100.0, False)
+
+
+def test_door_in_room_does_not_break_sound_emission(cube):
+    """A door in the source room must not crash sound propagation.
+
+    at_emit_sound reads ``door.open`` but ``Door`` only defines ``closed``
+    and ``locked``, so emitting from a room that contains a door raises
+    AttributeError and the sound never leaves the room.
+    """
+    from atheriz.objects.base_door import Door
+
+    nh, area = cube
+    center = Coord(AREA, 4, 4, 4)
+    emitter, center_node = _place(nh, center)
+
+    listener = TrackingObject.create(None, "L", is_npc=True)
+    listener.location = center_node
+    center_node._contents.add(listener.id)
+
+    door = Door.create(
+        center,
+        "north",
+        Coord(AREA, 5, 4, 4),
+        "south",
+        symbol_coord=(center.x, center.y),
+    )
+    nh.add_door(door)
+
+    neighbor = nh.get_node(Coord(AREA, 5, 4, 4))
+
+    emitter.at_emit_sound("bang", "bang!", 100.0, False)
+
+    assert listener.heard_sounds[0][3] == pytest.approx(100.0)
+    assert neighbor.heard_sounds, "sound must propagate to the neighboring room"

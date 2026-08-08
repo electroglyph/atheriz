@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import _thread
 import threading
+import time
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -936,3 +937,21 @@ def test_map_save_snapshot_independence():
     assert len(deserialized.pre_grid) == 1, (
         "saved map should reflect pre-mutation state — deep copy snapshot is independent"
     )
+
+
+class TestFPSLimitProtection:
+    def test_renders_when_fps_limit_is_zero(self, global_test_env, monkeypatch):
+        """INTENT: MAP_FPS_LIMIT=0 (never auto-throttle) must not crash the
+        render path with a ZeroDivisionError, which a bare `1 / MAP_FPS_LIMIT`
+        divisor currently causes."""
+        monkeypatch.setattr(settings, "MAP_FPS_LIMIT", 0)
+        mi = MapInfo()
+        mi.pre_grid[(0, 0)] = "X"
+        mi.pre_render()
+        listener = MagicMock()
+        listener.id = 99
+        listener.at_pre_map_render.side_effect = lambda g: g
+        listener.last_map_time = time.time()
+        mi.add_listener(listener)
+        mi.render(force=True)
+        listener.at_map_update.assert_called_once()

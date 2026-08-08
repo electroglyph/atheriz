@@ -67,18 +67,21 @@ def test_database_close_clears_singleton():
 
 
 def test_database_close_idempotent_safe():
-    """Closing twice is OK — second close is a no-op because singleton
-    is None. (Note: closing the same sqlite3.Connection twice would
-    raise, but the singleton clear guards against that.)"""
+    """Closing twice is OK — the second close is a no-op because the singleton
+    is None. (Note: closing the same sqlite3.Connection twice would raise, but
+    the singleton clear guards against that.)"""
     db = database_setup.get_database()
     db.close()
-    # Singleton is None now; getting a fresh one should work.
-    db2 = database_setup.get_database()
-    assert db2 is not db
+    # INTENT (post-issue-10): reopening after an explicit close must fail
+    # loudly rather than silently minting a fresh connection.
+    with pytest.raises(Exception):
+        database_setup.get_database()
 
 
 def test_database_close_no_toctou():
-    """Concurrent close and get_database must not return a closed connection."""
+    """Concurrent close and get_database: a getter may observe a live
+    connection (before the close lands) or an explicit closed-store error, but
+    the store must never silently hand out a re-opened connection afterwards."""
     errors = []
 
     def closer():
@@ -104,8 +107,9 @@ def test_database_close_no_toctou():
     for t in threads:
         t.join()
 
-    real_errors = [e for e in errors if "closed database" not in str(e).lower()]
-    assert real_errors == []
+    # INTENT: after the close, the store must stay closed - no silent reopen.
+    with pytest.raises(Exception):
+        database_setup.get_database()
 
 
 # ---------------------------------------------------------------------------

@@ -58,3 +58,37 @@ class TestPyDoubleEval:
             if line == "hi"
         ]
         assert stdout_lines == ["hi"]
+
+
+class TestPySandboxEscape:
+    def test_dunder_attribute_walk_denied(self, global_test_env):
+        """INTENT: the py sandbox must not let a Builder reach private objects
+        through dunder attribute access (`caller.__class__.__mro__[1]
+        .__subclasses__()` -> os.system, importlib, ...). Only getattr()
+        *calls* are blacklisted today; plain `.<attr>` loads are not."""
+        c = Object.create(None, "Admin")
+        c.privilege_level = settings.Privilege.Admin
+        c.msg = MagicMock()
+
+        PyCommand().run(c, "caller.__class__")
+
+        texts = _msg_texts(c)
+        assert any("Error" in t for t in texts), f"dunder access should be denied, got {texts}"
+        assert not any("<class " in t for t in texts), f"sandbox leaked a class object: {texts}"
+
+    def test_bad_builtins_lookup_denied(self, global_test_env):
+        """INTENT: lookups outside the whitelisted globals/`__builtins__` must
+        be denied (os, subprocess, importlib, open, compile...)."""
+        c = Object.create(None, "Admin")
+        c.privilege_level = settings.Privilege.Admin
+        c.msg = MagicMock()
+
+        for code in ("__import__('os')", "open('/etc/passwd')", "eval('1+1')"):
+            c.msg.reset_mock()
+            PyCommand().run(c, code)
+            texts = _msg_texts(c)
+            errors = [
+                t for t in texts
+                if t.startswith("Error:") or "named 'os'" in t or "not defined" in t or "is not defined" in t
+            ]
+            assert errors, f"{code!r} unexpectedly succeeded: {texts}"

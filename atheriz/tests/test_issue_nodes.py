@@ -1,13 +1,17 @@
 """Issue tests: Node/NodeGrid/NodeArea defensive behaviors — empty-grid random
-selection, missing-key removal, string formatting, and hashability.
+selection, missing-key removal, string formatting, hashability, delete
+relocation, and overwrite warnings.
 """
 from __future__ import annotations
+
+from unittest.mock import patch
 
 import pytest
 
 from atheriz.globals.node import NodeHandler
 from atheriz.globals.objects import add_object
-from atheriz.objects.nodes import Node, NodeArea, NodeGrid
+from atheriz.objects.base_obj import Object
+from atheriz.objects.nodes import Node, NodeArea, NodeGrid, NodeLink
 from atheriz.utils import Coord
 
 
@@ -62,3 +66,57 @@ class TestNodeHandler:
         """INTENT: removing a non-existent transition must not raise KeyError."""
         handler = NodeHandler()
         handler.remove_transition(Coord("missing", 0, 0, 0))
+
+
+class TestNodeDeleteRelocation:
+    def test_nonrecursive_delete_does_not_orphan_contents(self, global_test_env):
+        """INTENT: Node.delete(recursive=False) must relocate contents to a real
+        location. Today it moves them to `content.home` (None for most objects),
+        orphaning them off the map."""
+        nh = NodeHandler()
+        node = Node(coord=Coord("test", 5, 5, 0))
+        fallback = Node(coord=Coord("test", 5, 4, 0))
+        caller = Object.create(None, "caller")
+        caller.move_to(fallback)
+        obj = Object.create(None, "item")
+        obj.move_to(node)
+        assert obj.location is node
+
+        with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+            node.delete(caller, recursive=False)
+
+        assert obj.location is not None, "contents were orphaned off the map"
+        assert obj.location is not node, "contents should have been relocated"
+
+    def test_nonrecursive_delete_uses_home(self, global_test_env):
+        """INTENT: when a content object does have a home, relocation must go
+        there rather than to the caller's location."""
+        nh = NodeHandler()
+        node = Node(coord=Coord("test", 5, 5, 0))
+        home_node = Node(coord=Coord("test", 0, 0, 0))
+        caller = Object.create(None, "caller")
+        obj = Object.create(None, "item")
+        obj.home = home_node
+        obj.move_to(node)
+
+        with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+            node.delete(caller, recursive=False)
+
+        assert obj.location is home_node
+
+
+class TestNodeGridOverwrite:
+    def test_add_node_overwrite_warns(self, global_test_env, capture_atheriz_log):
+        """INTENT: overwriting an existing node at the same coordinates must log
+        a warning. Today NodeGrid.add_node silently replaces it."""
+        grid = NodeGrid(area="test", z=0)
+        node_a = Node(coord=Coord("test", 0, 0, 0))
+        node_a.add_link(NodeLink("north", Coord("test", 0, 2, 0), ["n"]))
+        grid.add_node(node_a)
+
+        node_b = Node(coord=Coord("test", 0, 0, 0))
+        node_b.add_link(NodeLink("south", Coord("test", 0, -2, 0), ["s"]))
+        grid.add_node(node_b)
+
+        log = capture_atheriz_log()
+        assert "overwrit" in log.lower(), f"no overwrite warning logged: {log!r}"

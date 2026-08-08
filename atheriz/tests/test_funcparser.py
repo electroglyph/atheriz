@@ -1113,7 +1113,7 @@ class TestIntegration:
         # The parser catches ParsingError internally. The result includes
         # the failed function (in some form) and the others work.
         parser = FuncParser(FUNCPARSER_CALLABLES)
-        result = parser.parse("A$eval(abc)B and $an(orange)")
+        result = parser.parse("A $eval(abc)B and $an(orange)")
         # $an(orange) should work
         assert "an orange" in result
         # The result should still be a string
@@ -1121,3 +1121,35 @@ class TestIntegration:
         # 'A' and 'B' should surround the failed eval
         assert result.startswith("A")
         assert "B and" in result
+
+    def test_dollar_inside_quoted_argument_stays_literal(self, global_test_env):
+        """$func inside a "quoted" argument must not be executed.
+
+        A double-quoted argument is a literal string. Today the parser starts
+        the nested-func branch on ``$`` *before* the double-quote guard, so
+        ``$pad("costs $boom()", 12)`` executes ``$boom()`` inside the literal
+        and corrupts the string.
+        """
+        boom = make_func("boom", return_value="DOOM")
+        pad = make_func("pad", "x")
+        pad.side_effect = lambda text, width: text[: width].ljust(width)
+
+        parser = FuncParser({"pad": pad, "boom": boom})
+        result = parser.parse('$pad("loot $boom() here", 30)')
+
+        boom.assert_not_called()
+        assert "$boom()" in result
+
+    def test_oversized_pow_is_handled_error_not_overflow(self, global_test_env):
+        """A too-big exponent must surface as a controlled error.
+
+        ``_safe_pow`` raises OverflowError when the exponent exceeds its guard,
+        and ``_safe_arith_eval`` lets that raw OverflowError escape even though
+        ``safe_convert_to_types`` only catches (ValueError, SyntaxError) -- so
+        ``$eval(9**9**9)`` surfaces an OverflowError instead of an unparsed
+        function.  The eval helper must only raise the controlled exceptions.
+        """
+        from atheriz.objects.funcparser_helpers import _safe_arith_eval
+
+        with pytest.raises((ValueError, SyntaxError)):
+            _safe_arith_eval("9**9**9")

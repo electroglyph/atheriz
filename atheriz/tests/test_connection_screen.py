@@ -125,6 +125,21 @@ class TestRender:
         out = cs.render(None)
         assert "_____" in out
 
+    def test_render_survives_uninstalled_package(self, global_test_env, monkeypatch):
+        """INTENT: rendering the banner must not crash with
+        PackageNotFoundError when the 'atheriz' distribution is not installed
+        (e.g. a source tree run); it should fall back to a version placeholder."""
+
+        def _no_distribution(name):
+            from importlib.metadata import PackageNotFoundError
+
+            raise PackageNotFoundError(name)
+
+        monkeypatch.setattr(importlib_metadata, "version", _no_distribution)
+        out = cs.render()
+        assert isinstance(out, str)
+        assert "ATHERIZ VERSION" in out
+
 
 class TestModuleConstants:
     def test_guest_text_is_string(self):
