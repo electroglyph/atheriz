@@ -2,6 +2,7 @@ from __future__ import annotations
 from atheriz.globals.get import set_id
 from threading import RLock
 from atheriz.database_setup import get_database
+from atheriz.logger import logger
 import atheriz.settings as settings
 import dill
 from typing import Any, Callable, TYPE_CHECKING, Iterable
@@ -134,7 +135,11 @@ def load_objects():
         cursor = db.connection.cursor()
         cursor.execute("SELECT id, data FROM objects")
         for obj_id, blob in cursor:
-            obj = dill.loads(blob)
+            try:
+                obj = dill.loads(blob)
+            except Exception as e:
+                logger.error(f"Error loading object {obj_id}: {e}")
+                continue
             objects[obj_id] = obj
             max_id = max(max_id, obj_id)
     with _ALL_OBJECTS_LOCK:
