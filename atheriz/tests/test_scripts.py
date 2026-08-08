@@ -337,6 +337,7 @@ def test_temporary_script_not_saved(db_setup):
     if db_mod._DATABASE:
         db_mod._DATABASE.close()
     db_mod._DATABASE = None
+    db_mod._CLOSED = False
     db_mod.do_setup()
     load_objects()
 

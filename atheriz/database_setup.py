@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 
 _INIT_LOCK = Lock()
 _DATABASE: Database | None = None
+_CLOSED = False
 
 
 class Database:
@@ -18,11 +19,12 @@ class Database:
         self.connection = connection
 
     def close(self):
+        global _DATABASE, _CLOSED
         with _INIT_LOCK:
             with self.lock:
                 self.connection.close()
-            global _DATABASE
             _DATABASE = None
+            _CLOSED = True
 
 
 def get_database():
@@ -30,6 +32,8 @@ def get_database():
     Grabs a cache global copy of the sqlite connection used to access the db.
     """
     global _DATABASE
+    if _CLOSED:
+        raise RuntimeError("database is closed; refusing to reopen")
     if _DATABASE is None:
         with _INIT_LOCK:
             if _DATABASE is not None:

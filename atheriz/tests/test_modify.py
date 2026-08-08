@@ -18,6 +18,7 @@ def db_setup():
         database_setup._DATABASE.close()
     else:
         database_setup._DATABASE = None
+    database_setup._CLOSED = False
     database_setup.do_setup()
     
     # Reload objects (clears memory and loads from empty DB)
@@ -110,6 +111,7 @@ def test_load_is_modified_false(db_setup):
     # Force reload from DB
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
+    database_setup._CLOSED = False
     load_objects()
     
     loaded_obj = get(obj_id)[0]

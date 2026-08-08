@@ -1,9 +1,8 @@
 """Regression tests for GameTime persistence robustness.
 
-An alarm added by a game may carry arbitrary ``data`` -- GameTime.save() must
-not be able to crash the save checkpoints (autosave / shutdown) when that
-payload is not JSON-serializable, and ``save()`` must not race a concurrent
-alarm mutation.
+Alarm ``data`` is now enforced to be a dict (or None) at add_alarm() time so
+GameTime.save() can never hit a json.dump TypeError during save checkpoints
+(autosave / shutdown), and save() must not race a concurrent alarm mutation.
 """
 
 import threading
@@ -17,17 +16,22 @@ from atheriz.globals.time import GameTime
 from atheriz.objects.base_obj import Object
 
 
-def test_non_serializable_alarm_payload_does_not_crash_save(global_test_env):
-    """GameTime.save() must tolerate alarm data that JSON cannot encode.
-
-    add_alarm() accepts an arbitrary ``data`` (``Any``) documented as "data to
-    pass to at_alarm()". json.dump raises TypeError on such payloads today,
-    which fails the every-autosave tick and aborts GameTime.stop() during the
-    shutdown sequence.
-    """
+def test_non_dict_alarm_data_is_rejected(global_test_env):
+    """add_alarm() must refuse anything that is not a dict or None."""
     gt = GameTime()
     caller = Object.create(None, "timer")
-    gt.add_alarm("7", "0", caller, repeat=True, data=object())
+
+    with pytest.raises(TypeError):
+        gt.add_alarm("7", "0", caller, repeat=True, data=object())
+
+    assert gt.alarms == {}
+
+
+def test_dict_alarm_data_saves_without_error(global_test_env):
+    """GameTime.save() must succeed with dict alarm data."""
+    gt = GameTime()
+    caller = Object.create(None, "timer")
+    gt.add_alarm("7", "0", caller, repeat=True, data={"key": "val"})
 
     gt.save()  # must not raise
 
@@ -47,7 +51,7 @@ def test_save_must_serialize_with_alarm_mutations(global_test_env):
     """
     gt = GameTime()
     caller = Object.create(None, "timer")
-    gt.add_alarm("7", "0", caller, repeat=True, data="ok")
+    gt.add_alarm("7", "0", caller, repeat=True)
 
     errors = []
 

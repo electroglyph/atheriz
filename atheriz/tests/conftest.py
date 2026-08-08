@@ -42,6 +42,7 @@ def global_test_env():
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
     database_setup._DATABASE = None
+    database_setup._CLOSED = False
     database_setup.do_setup()
 
 
@@ -74,6 +75,7 @@ def global_test_env():
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
     database_setup._DATABASE = None
+    database_setup._CLOSED = False
 
     try:
         shutil.rmtree(temp_dir)

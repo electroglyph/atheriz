@@ -46,6 +46,7 @@ def test_save_load_object(db_setup):
     # Clear memory
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
+    database_setup._CLOSED = False
     
     # Load objects from DB
     load_objects()
@@ -273,6 +274,7 @@ def test_loaded_objects_threadsafe(db_setup):
     if database_setup._DATABASE:
         database_setup._DATABASE.close()
     database_setup._DATABASE = None
+    database_setup._CLOSED = False
     
     # Unpatch the classes to simulate a fresh server start
     for cls in (Object, Channel, Account, Script, Node):

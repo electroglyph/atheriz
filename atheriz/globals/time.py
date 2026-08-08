@@ -17,7 +17,8 @@ class GameTime:
     def save(self) -> None:
         path = Path(settings.SAVE_PATH) / "time"
         path.parent.mkdir(parents=True, exist_ok=True)
-        alarms_data = {str(k): v for k, v in self.alarms.items()}
+        with self.lock:
+            alarms_data = {str(k): v for k, v in self.alarms.items()}
         tmp = str(path) + ".tmp"
         with open(tmp, "w") as f:
             json.dump({"ticks": self.ticks, "alarms": alarms_data}, f)
@@ -43,7 +44,14 @@ class GameTime:
             try:
                 key = ast.literal_eval(k)
                 if isinstance(key, tuple) and len(key) == 2:
-                    self.alarms[key] = v
+                    cleaned = []
+                    for id, repeat, adata in v:
+                        if adata is None or isinstance(adata, dict):
+                            cleaned.append((id, repeat, adata))
+                        else:
+                            logger.warning(f"Skipping alarm with non-dict data: {k}")
+                    if cleaned:
+                        self.alarms[key] = cleaned
             except (ValueError, SyntaxError):
                 logger.warning(f"Error parsing alarm key: {k}")
                 pass
@@ -62,7 +70,7 @@ class GameTime:
             minute (str): minute
             caller (Object): obj to add alarm to
             repeat (bool, optional): if True, repeat forever. Defaults to False.
-            data (Any, optional): data to pass to at_alarm(). Defaults to None.
+            data (dict, optional): data to pass to at_alarm(). Defaults to None.
         """
         if not caller:
             return
@@ -70,6 +78,8 @@ class GameTime:
             hour = str(hour)
         if not isinstance(minute, str):
             minute = str(minute)
+        if data is not None and not isinstance(data, dict):
+            raise TypeError(f"alarm data must be a dict or None, got {type(data).__name__}")
         with self.lock:
             a = self.alarms.get((hour, minute))
             if a:
