@@ -398,9 +398,9 @@ def copy_word_case(base_word, new_word):
     else:
         # WorD - a mix. Handle each character
         maxlen = len(base_word)
-        shared, excess = new_word[:maxlen], new_word[maxlen - 1 :]
+        shared, excess = new_word[:maxlen], new_word[maxlen:]
         return (
-            "".join(char.upper() if base_word[ic].isupper() else char.lower() for ic, char in enumerate(new_word))
+            "".join(char.upper() if base_word[ic].isupper() else char.lower() for ic, char in enumerate(shared))
             + excess
         )
 
