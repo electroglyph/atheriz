@@ -158,7 +158,12 @@ class BanCommand(Command):
                     TEMP_BANNED_IPS[host] = float("inf")
                 kicked_ip = host
 
-        _kick(target, reason, banned=True)
+        if args.account and scope == "account":
+            kick_targets = get(account.characters)
+        else:
+            kick_targets = [target]
+        for t in kick_targets:
+            _kick(t, reason, banned=True)
 
         msg = f"Banned {target.name} ({scope}"
         if reason:
