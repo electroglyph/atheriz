@@ -1537,7 +1537,7 @@ class Object(Flags, DbOps, AccessLock):
                 if doors:
                     # update for windows later?
                     for door in doors.values():
-                        if door.open:
+                        if not door.closed:
                             open = True
                             break
                 else:
