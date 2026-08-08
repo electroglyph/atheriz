@@ -37,7 +37,7 @@ from atheriz.commands.loggedin.open import UnlockCommand
 from atheriz.commands.loggedin.noun import NounCommand
 from atheriz.commands.loggedin.py import PyCommand
 from atheriz.commands.loggedin.group import GroupCommand
-from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand
+from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand, UnfollowCommand
 from atheriz.commands.loggedin.socials import CmdSocials
 from atheriz.commands.loggedin.puppet import PuppetCommand, UnpuppetCommand
 from atheriz.commands.loggedin.ban import BanCommand, UnbanCommand
@@ -85,6 +85,7 @@ class LoggedinCmdSet(CmdSet):
         self.add(NounCommand())
         self.add(PyCommand())
         self.add(FollowCommand())
+        self.add(UnfollowCommand())
         self.add(NoFollowCommand())
         self.add(GroupCommand())
         self.add(CmdSocials())
