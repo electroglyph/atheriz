@@ -573,6 +573,75 @@ class TestParseReturnStr:
         result = parser.parse("text $foo() more", return_str=False)
         assert isinstance(result, str)
 
+    def test_parse_does_not_leak_unknown_kwargs_to_callables(self, global_test_env):
+        """INTENT: reserved kwargs (caller/receiver/mapping) must reach executed
+        callables, but unknown kwarg typos (like a 'return_string' misspelling
+        of return_str) must not be forwarded."""
+        seen = {}
+
+        def spy(*args, **kwargs):
+            seen["kwargs"] = kwargs
+            return ""
+
+        parser = FuncParser({"spy": spy})
+        parser.parse("$spy()", return_str=True, caller=1, receiver=2)
+
+        assert "return_string" not in seen["kwargs"], (
+            f"unknown kwarg leaked to callable: {seen['kwargs']!r}"
+        )
+        assert seen["kwargs"].get("caller") == 1
+        assert seen["kwargs"].get("receiver") == 2
+
+
+class TestMsgContentsParseKwargs:
+    """The msg_contents paths must call parse with return_str (not the
+    return_string typo, which would leak the stray kwarg into every callable)."""
+
+    def test_object_msg_contents_uses_return_str(self, global_test_env, monkeypatch):
+        from atheriz.objects import base_obj
+        from atheriz.objects.base_obj import Object
+
+        calls = []
+        orig = base_obj._MSG_CONTENTS_PARSER.parse
+
+        def spy(*args, **kwargs):
+            calls.append(kwargs)
+            return "hi"
+
+        monkeypatch.setattr(base_obj._MSG_CONTENTS_PARSER, "parse", spy)
+        a = Object.create(None, "a")
+        b = Object.create(None, "b")
+        a.add_object(b)
+        a.msg_contents("hello", from_obj=a)
+
+        assert calls, "msg_contents never called the parser"
+        for kw in calls:
+            assert kw.get("return_str") is True
+            assert "return_string" not in kw
+
+    def test_node_msg_contents_uses_return_str(self, global_test_env, monkeypatch):
+        from atheriz.objects import nodes
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord
+
+        calls = []
+
+        def spy(*args, **kwargs):
+            calls.append(kwargs)
+            return "hi"
+
+        monkeypatch.setattr(nodes._MSG_CONTENTS_PARSER, "parse", spy)
+        node = Node(coord=Coord("test", 1, 1, 0))
+        o = Object.create(None, "o")
+        node.add_object(o)
+        node.msg_contents("hi", from_obj=o)
+
+        assert calls, "msg_contents never called the parser"
+        for kw in calls:
+            assert kw.get("return_str") is True
+            assert "return_string" not in kw
+
 
 class TestParseToAny:
     def test_pure_call_returns_raw(self, global_test_env):

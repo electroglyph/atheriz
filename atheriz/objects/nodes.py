@@ -714,7 +714,7 @@ class Node(Flags, AccessLock):
             outmessage = _MSG_CONTENTS_PARSER.parse(
                 text,
                 raise_errors=raise_funcparse_errors,
-                return_string=True,
+                return_str=True,
                 caller=you,
                 receiver=receiver,
                 mapping=mapping,
