@@ -56,7 +56,7 @@ def worker():
     try:
         R.reload_game_logic()
     except Exception as exc:
-        sys.stderr.write(f"AT_ERR {exc!r}\n")
+        sys.stderr.write(f"AT_ERR {{exc!r}}\n")
     finally:
         t.start()
         t.join()
@@ -69,12 +69,12 @@ t2.start()
 t1.join(timeout=180)
 t2.join(timeout=180)
 
-print(f"AT_RESULT max_overlap={max_overlap}")
+print(f"AT_RESULT max_overlap={{max_overlap}}")
 """
 
 
 def _run_child():
-    child = CHILD.format(repo_root=REPO_ROOT)
+    child = CHILD.format(repo_root=str(REPO_ROOT))
     proc = subprocess.run(
         [sys.executable, "-c", child],
         capture_output=True,

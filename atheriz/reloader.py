@@ -2,6 +2,7 @@ import sys
 import importlib
 import inspect
 import os
+import threading
 from pathlib import Path
 from typing import Any
 import types
@@ -273,6 +274,19 @@ def reload_game_logic() -> str:
     Returns:
         str: A status message describing what was done.
     """
+    if not _reload_lock.acquire(blocking=False):
+        return "Reload already in progress; skipping."
+
+    try:
+        return _reload_game_logic()
+    finally:
+        _reload_lock.release()
+
+
+_reload_lock = threading.Lock()
+
+
+def _reload_game_logic() -> str:
     from atheriz.logger import logger
 
     logger.info("Server reload initiated.")
