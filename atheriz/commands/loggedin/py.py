@@ -1,6 +1,7 @@
 from __future__ import annotations
 import ast
 import contextlib
+import ctypes
 import io
 import pprint
 import threading
@@ -104,6 +105,51 @@ class _SelfToCaller(ast.NodeTransformer):
         return node
 
 
+class _SandboxValidator(ast.NodeVisitor):
+    """Reject dunder attribute loads / names so the sandbox cannot reach
+    `__class__`/`__mro__`/`__subclasses__`/`__globals__` and escape."""
+
+    def __init__(self):
+        self.denied: list[str] = []
+
+    def visit_Attribute(self, node: ast.Attribute) -> ast.AST:
+        if node.attr.startswith("__") and node.attr.endswith("__"):
+            self.denied.append(node.attr)
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> ast.AST:
+        if node.id.startswith("__") and node.id.endswith("__"):
+            self.denied.append(node.id)
+        self.generic_visit(node)
+
+
+def _guard_sandbox(tree: ast.AST) -> None:
+    """Raise ValueError if the tree contains dunder attribute/name access."""
+    validator = _SandboxValidator()
+    validator.visit(tree)
+    if validator.denied:
+        raise ValueError(
+            "sandbox: dunder access denied: " + ", ".join(sorted(set(validator.denied)))
+        )
+
+
+class _PySandboxTimeout(BaseException):
+    """Forcibly raised in the sandbox thread by the kill watchdog."""
+
+
+def _raise_in_thread(ident, exc_type):
+    """Forcibly raise exc_type in another thread via PyThreadState_SetAsyncExc."""
+    res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
+        ctypes.c_long(ident), ctypes.py_object(exc_type)
+    )
+    if res == 0:
+        return  # thread already gone
+    if res != 1:
+        ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_long(ident), ctypes.c_long(0)
+        )
+
+
 def _rewrite_self_to_caller(tree: ast.AST) -> ast.AST:
     return _SelfToCaller().visit(tree)
 
@@ -201,6 +247,7 @@ class PyCommand(Command):
             try:
                 with contextlib.redirect_stdout(stdout_buf):
                     tree = _rewrite_self_to_caller(ast.parse(code, mode="exec"))
+                    _guard_sandbox(tree)
                     if len(tree.body) == 1 and isinstance(tree.body[0], ast.Expr):
                         result[0] = eval(
                             compile(ast.Expression(tree.body[0].value), "<py>", "eval"),
@@ -211,15 +258,23 @@ class PyCommand(Command):
                         exec(compile(tree, "<py>", "exec"), py_globals)
             except SyntaxError as e:
                 error[0] = ("SyntaxError", str(e))
+            except _PySandboxTimeout:
+                return
             except Exception as e:
                 error[0] = (type(e).__name__, str(e))
 
         thread = threading.Thread(target=_exec_code, daemon=True)
         thread.start()
-        thread.join(timeout=5)
-        if thread.is_alive():
-            caller.msg(_colorize("Error: Code execution timed out (5s limit)"))
-            return
+        limit = settings.KILL_PY_COMMAND_AFTER
+        if limit <= 0:
+            thread.join()
+        else:
+            thread.join(timeout=limit)
+            if thread.is_alive():
+                _raise_in_thread(thread.ident, _PySandboxTimeout)
+                thread.join(timeout=0.5)
+                caller.msg(_colorize("Error: Code execution timed out (killed)"))
+                return
 
         if error[0]:
             err_type, err_msg = error[0]

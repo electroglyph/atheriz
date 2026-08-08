@@ -216,3 +216,6 @@ PY_MAX_OUTPUT_BYTES = 50_000
 # xterm256 foreground color used to colorize the `py` command's output
 # 15 is standard bright white
 PY_OUTPUT_FG = 15
+# seconds a `py` command may run before its thread is force-killed;
+# 0 disables the timeout (commands run to completion)
+KILL_PY_COMMAND_AFTER = 5

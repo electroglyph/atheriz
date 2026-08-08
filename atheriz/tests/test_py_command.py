@@ -267,37 +267,37 @@ class TestPyCommandSandboxGlobals:
 
 
 class TestPyCommandSandboxRestrictions:
-    @pytest.mark.parametrize("snippet", [
-        "__import__('os')",
-        "open('/etc/passwd')",
-        "exec('1+1')",
-        "eval('1+1')",
-        "compile('1+1', '<>', 'eval')",
-        "globals()",
-        "locals()",
-        "input('> ')",
-        "breakpoint()",
+    @pytest.mark.parametrize("snippet,expected", [
+        ("__import__('os')", "dunder"),  # blocked by the AST dunder guard
+        ("open('/etc/passwd')", "NameError"),
+        ("exec('1+1')", "NameError"),
+        ("eval('1+1')", "NameError"),
+        ("compile('1+1', '<>', 'eval')", "NameError"),
+        ("globals()", "NameError"),
+        ("locals()", "NameError"),
+        ("input('> ')", "NameError"),
+        ("breakpoint()", "NameError"),
     ])
-    def test_forbidden_builtin_raises_nameerror(self, caller, snippet):
+    def test_forbidden_builtin_raises_denied(self, caller, snippet, expected):
         PyCommand().run(caller, snippet)
         text = _last_msg(caller)
         assert "Error:" in text, f"Expected an error for `{snippet}`, got: {text!r}"
-        assert "NameError" in text, f"Expected NameError for `{snippet}`, got: {text!r}"
+        assert expected in text, f"Expected {expected} for `{snippet}`, got: {text!r}"
 
-    @pytest.mark.parametrize("snippet", [
-        "type(caller)",
-        "vars(caller)",
-        "object.__subclasses__()",
-        "format(caller)",
-        "issubclass(type(caller), object)",
-        "setattr(caller, 'name', 'hacked')",
-        "delattr(caller, 'name')",
+    @pytest.mark.parametrize("snippet,expected", [
+        ("type(caller)", "NameError"),
+        ("vars(caller)", "NameError"),
+        ("object.__subclasses__()", "dunder"),  # blocked by the AST dunder guard
+        ("format(caller)", "NameError"),
+        ("issubclass(type(caller), object)", "NameError"),
+        ("setattr(caller, 'name', 'hacked')", "NameError"),
+        ("delattr(caller, 'name')", "NameError"),
     ])
-    def test_removed_builtins_raises_nameerror(self, caller, snippet):
+    def test_removed_builtins_raises_denied(self, caller, snippet, expected):
         PyCommand().run(caller, snippet)
         text = _last_msg(caller)
         assert "Error:" in text, f"Expected an error for `{snippet}`, got: {text!r}"
-        assert "NameError" in text, f"Expected NameError for `{snippet}`, got: {text!r}"
+        assert expected in text, f"Expected {expected} for `{snippet}`, got: {text!r}"
 
     def test_syntax_error_reported(self, caller):
         PyCommand().run(caller, "1 +")
