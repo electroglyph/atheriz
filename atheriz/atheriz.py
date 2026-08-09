@@ -6,7 +6,7 @@ import signal
 import time
 from pathlib import Path
 import uvicorn
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -209,7 +209,7 @@ async def hot_reload_endpoint(request: Request):
 
 
 @app.post("/_internal/shutdown")
-async def shutdown_endpoint(request: Request):
+async def shutdown_endpoint(request: Request, background_tasks: BackgroundTasks):
     token = request.headers.get("X-Admin-Token")
 
     secret_path = Path(settings.SECRET_PATH)
@@ -228,17 +228,16 @@ async def shutdown_endpoint(request: Request):
         return {"status": "error", "message": "Invalid token."}
 
     logger.info("Internal shutdown request received. Running shutdown tasks...")
-    try:
-        await run_in_threadpool(do_shutdown)
-    except Exception as e:
-        logger.error(f"Error during internal shutdown: {e}")
-        return {"status": "error", "message": str(e)}
+    # Run shutdown work after the response is sent so the admin client never
+    # blocks on saves/locks held by stuck game threads (background tasks run
+    # on the threadpool executor after the reply).
+    background_tasks.add_task(do_shutdown)
 
     server_state.running = False
     if server_state.uvicorn_server:
         server_state.uvicorn_server.should_exit = True
 
-    return {"status": "ok", "message": "Shutdown tasks completed."}
+    return {"status": "ok", "message": "Shutdown tasks queued."}
 
 
 @app.post("/_internal/create_account")
@@ -434,7 +433,7 @@ def request_internal_shutdown(port: int | None = None) -> bool:
     req.add_header("X-Admin-Token", token)
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode())
                 print(f"Internal shutdown response: {data}")
@@ -484,7 +483,7 @@ def request_create_account(
     req.add_header("Content-Type", "application/json")
 
     try:
-        with urllib.request.urlopen(req, timeout=30) as response:
+        with urllib.request.urlopen(req, timeout=5) as response:
             result = json.loads(response.read().decode())
             return result.get("status", "error"), result.get("message", "")
     except Exception:
@@ -567,11 +566,11 @@ def stop_server(port: int | None = None):
 
         # wait for process to stop
         try:
-            proc.wait(timeout=10)
+            proc.wait(timeout=5)
         except psutil.TimeoutExpired:
             print(" Timeout! Force killing...", end="", flush=True)
             proc.kill()
-            proc.wait(timeout=5)
+            proc.wait(timeout=3)
 
         print(" Done.")
 
@@ -599,11 +598,11 @@ def stop_server(port: int | None = None):
 
                     # wait for process to stop
                     try:
-                        proc.wait(timeout=5)
+                        proc.wait(timeout=3)
                     except psutil.TimeoutExpired:
                         print("\nProcess did not stop in time. Killing...", end="")
                         proc.kill()
-                        proc.wait()
+                        proc.wait(timeout=3)
 
                     print(" Done.")
                     if pid_file.exists() and not proc.is_running():

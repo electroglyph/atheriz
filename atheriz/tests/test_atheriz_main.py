@@ -429,18 +429,23 @@ class TestInternalAdminEndpointsBlockLoop:
         self._assert_reload_loop_delay(delay)
 
     def test_shutdown_blocks_loop(self, global_test_env, tmp_path):
-        # INTENT: shutdown handler does blocking work on the loop; PASSES now,
-        # fails if fixed.
+        # INTENT: shutdown handler must NOT do blocking work on the loop; the
+        # blocking work is deferred to BackgroundTasks and only runs after the
+        # endpoint has returned.
         from atheriz.atheriz import shutdown_endpoint
+        from fastapi import BackgroundTasks
         (tmp_path / "admin.token").write_text("real-token")
         blocking = self._make_blocking()
         with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
              patch("atheriz.atheriz.do_shutdown", blocking):
+            bt = BackgroundTasks()
             delay = self._ordered_measure(
                 lambda: shutdown_endpoint(
-                    _FakeRequest(token="real-token", host="127.0.0.1")
+                    _FakeRequest(token="real-token", host="127.0.0.1"),
+                    background_tasks=bt,
                 )
             )
+            asyncio.run(bt())
         self._assert_reload_loop_delay(delay)
 
 

@@ -1591,7 +1591,9 @@ class Object(Flags, DbOps, AccessLock):
             is_say (bool, optional): Whether the sound is a say. Defaults to False.
         """
         atp = get_async_threadpool()
-        atp.add_task(self.at_emit_sound, sound_desc, sound_msg, loudness, is_say)
+        if not atp.add_task(self.at_emit_sound, sound_desc, sound_msg, loudness, is_say):
+            from atheriz.logger import logger
+            logger.warning(f"[Sound] Task queue full; sound from {self} dropped.")
 
     # this is from Evennia, see EVENNIA_LICENSE.txt
     @hookable

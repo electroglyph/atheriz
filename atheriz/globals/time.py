@@ -219,7 +219,8 @@ class GameTime:
                 objs = get(id)
                 if objs:
                     func = getattr(objs[0], "at_alarm")
-                    atp.add_task(func, after_time, data)
+                    if not atp.add_task(func, after_time, data):
+                        logger.warning(f"Task queue full; alarm for {objs[0]} dropped.")
                 else:
                     logger.warning(f"obj not found for alarm: {id}")
         after_sun = self.sun_up_alt(after_time["hour"])

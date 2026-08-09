@@ -25,7 +25,15 @@ class AsyncThread(Thread):
         if self._wait_event.is_set():
             pending = asyncio.all_tasks(self.loop)
             if pending:
-                self.loop.run_until_complete(asyncio.gather(*pending))
+                done, not_done = self.loop.run_until_complete(
+                    asyncio.wait(pending, timeout=10)
+                )
+                if not_done:
+                    for task in not_done:
+                        task.cancel()
+                    self.loop.run_until_complete(
+                        asyncio.gather(*not_done, return_exceptions=True)
+                    )
 
     async def do_stop(self):
         self.stop_event.set()

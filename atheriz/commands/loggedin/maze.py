@@ -106,8 +106,10 @@ class MazeCommand(Command):
                 caller.msg(f"path not found in: {elapsed:.2f} milliseconds")
                 caller.msg(background={"color": (90, 0, 0), "coords": [(n.coord.x, n.coord.y) for n in deadend]})
         if node:
-            get_async_threadpool().add_task(do_pathfind, caller, node, end)
-            caller.msg(f"moving to: {node} ...")
+            if not get_async_threadpool().add_task(do_pathfind, caller, node, end):
+                caller.msg("Pathfinding queue full; try again in a moment.")
+            else:
+                caller.msg(f"moving to: {node} ...")
             caller.map_enabled = True
             caller.move_to(node)
 

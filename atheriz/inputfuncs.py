@@ -109,7 +109,8 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
         return None
     if immediate:
         return (func, caller, eargs)
-    get_async_threadpool().add_task(func, caller, eargs)
+    if not get_async_threadpool().add_task(func, caller, eargs):
+        logger.warning(f"Command {raw_cmd_key} dropped: task queue full")
     return None
 
 
