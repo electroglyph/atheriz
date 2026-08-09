@@ -66,9 +66,9 @@ class NodeHandler:
                         if node.id is not None and node.id > max_node_id:
                             max_node_id = node.id
                         existing = get(node.id)
-                        if existing is not None and existing is not node:
+                        if existing and existing[0] is not node:
                             logger.warning(
-                                f"Node id collision on load: id {node.id} already mapped to {existing}"
+                                f"Node id collision on load: id {node.id} already mapped to {existing[0]}"
                             )
                         add_object(node)
             if max_node_id:

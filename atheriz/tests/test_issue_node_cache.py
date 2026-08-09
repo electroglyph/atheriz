@@ -13,7 +13,7 @@ import os
 
 from atheriz import database_setup, settings
 from atheriz.globals.node import NodeHandler
-from atheriz.globals.objects import _ALL_OBJECTS, get, save_objects
+from atheriz.globals.objects import _ALL_OBJECTS, get, load_objects, save_objects
 from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node, NodeGrid
 from atheriz.utils import Coord
@@ -100,3 +100,41 @@ class TestNodePersistence:
 
         new_node = Node(coord=Coord("TestAreaNC", 2, 2, 0))
         assert new_node.id > node.id
+
+    def test_no_collision_warning_on_boot_load(self, global_test_env):
+        """INTENT: the boot sequence (load_objects + fresh NodeHandler) must
+        not log 'Node id collision on load' false positives. Nodes restored
+        from the areas table are not yet in the object cache at load time and
+        get() returns [] for unknown ids, so a check against None never
+        triggered and warned for every node."""
+        import logging
+
+        from atheriz import logger as logger_mod
+
+        nh = NodeHandler()
+        nodes = [Node(coord=Coord("TestAreaNCC", x, 0, 0)) for x in range(3)]
+        for node in nodes:
+            nh.add_node(node)
+        nh.save()
+
+        if database_setup._DATABASE:
+            database_setup._DATABASE.close()
+        database_setup._DATABASE = None
+        database_setup._CLOSED = False
+        _ALL_OBJECTS.clear()
+
+        records = []
+        handler = logging.Handler()
+        handler.emit = records.append
+        logger_mod.logger.addHandler(handler)
+        try:
+            load_objects()
+            nh2 = NodeHandler()
+        finally:
+            logger_mod.logger.removeHandler(handler)
+
+        for node in nodes:
+            assert get(node.id) == [nh2.get_node(node.coord)]
+        assert not any(
+            "Node id collision on load" in r.getMessage() for r in records
+        )
