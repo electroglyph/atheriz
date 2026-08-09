@@ -25,6 +25,7 @@ You *can* use it with regular Python builds, but you lose out on the whole reaso
 - at_tick() for thousands of objects is feasible
 - built-in web client based on xterm.js with a split-screen dual pane view
 - built-in telnet and websocket protocols
+- telnet can be encrypted too (TELNETS); plaintext clients still work on the same port
 - built-in TLS: serve https/wss directly (single combined cert file suffices) or behind Caddy/nginx
 - hot-reload game logic without restarting or dropping connections
 - admin CLI (atheriz): account creation, start/stop/restart, hot reset

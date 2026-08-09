@@ -12,6 +12,9 @@ TELNET_ENABLED = True
 TELNET_PORT = 4444
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 TELNET_INTERFACE = "0.0.0.0"
+# Serve TLS (TELNETS) on the same port; plaintext clients are auto-detected
+# and still work. Uses SSL_CERTFILE (combined PEM ok) and SSL_KEYFILE.
+TELNET_TLS_ENABLED = False
 # timeout in seconds
 TELNET_CONNECTION_TIMEOUT = 300
 TELNET_NAWS_MIN_COLS = 20

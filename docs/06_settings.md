@@ -31,6 +31,10 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `TELNET_PORT`: The port the telnet server listens on.
 - `TELNET_INTERFACE`: The network interface to bind the telnet server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
 - `TELNET_CONNECTION_TIMEOUT`: Seconds a telnet connection may sit idle before being disconnected.
+- `TELNET_TLS_ENABLED`: If `True`, serves the telnet port over TLS
+  (TELNETS) using `SSL_CERTFILE`/`SSL_KEYFILE`. Plaintext telnet clients are
+  auto-detected and keep working on the same port. See
+  [16 SSL/TLS & Reverse Proxying](./16_ssl_tls.md).
 - `TELNET_NAWS_MIN_COLS` / `TELNET_NAWS_MAX_COLS` / `TELNET_NAWS_MIN_ROWS` / `TELNET_NAWS_MAX_ROWS`: Clamp the terminal size reported by telnet clients via NAWS.
 - `NETWORK_PROTOCOLS`: The list of protocol classes the server starts (websocket and telnet).
 - `STRIP_INPUT_ESCAPE_SEQUENCES`: If `True`, strips terminal escape sequences (CSI/OSC, null bytes) from player input before dispatch.

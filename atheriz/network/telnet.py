@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import ssl
 import threading
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -9,8 +10,26 @@ from .connection import BaseConnection
 from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from pathlib import Path
 import atheriz.settings as settings
 import time
+
+
+def build_telnet_ssl_context() -> ssl.SSLContext | None:
+    certfile = getattr(settings, "SSL_CERTFILE", None)
+    if not certfile:
+        return None
+    if not Path(certfile).is_file():
+        logger.warning(f"WARNING: SSL cert file not found: {certfile}")
+        return None
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    keyfile = getattr(settings, "SSL_KEYFILE", None)
+    try:
+        context.load_cert_chain(certfile, keyfile=keyfile)
+    except (ssl.SSLError, OSError) as e:
+        logger.warning(f"WARNING: Could not load telnet TLS cert: {e}")
+        return None
+    return context
 
 
 def _clamp_naws(rows: int, cols: int) -> tuple[int, int]:
@@ -129,13 +148,27 @@ class TelnetProtocol(BaseProtocol):
             port = getattr(settings, "TELNET_PORT", 4000)
             interface = getattr(settings, "TELNET_INTERFACE", "0.0.0.0")
 
+            kwargs = {
+                "port": port,
+                "host": interface,
+                "shell": shell,
+                "timeout": getattr(settings, "TELNET_CONNECTION_TIMEOUT", 300),
+            }
+            tls_context = None
+            if getattr(settings, "TELNET_TLS_ENABLED", False):
+                tls_context = build_telnet_ssl_context()
+                if tls_context is not None:
+                    kwargs["ssl"] = tls_context
+                    kwargs["tls_auto"] = True
+                    logger.info(
+                        f"SSL is enabled for telnet (cert: {settings.SSL_CERTFILE}) with "
+                        "auto-detection for plaintext clients"
+                    )
+                else:
+                    logger.warning("TELNET_TLS_ENABLED is on but no usable cert — running plaintext")
+
             logger.info(f"Starting Telnet Protocol on {interface}:{port}")
-            server_task = await telnetlib3.create_server(
-                port=port,
-                host=interface,
-                shell=shell,
-                timeout=getattr(settings, "TELNET_CONNECTION_TIMEOUT", 300)
-            )
+            server_task = await telnetlib3.create_server(**kwargs)
             try:
                 yield
             finally:

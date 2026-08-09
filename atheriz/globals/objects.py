@@ -71,7 +71,8 @@ def filter_by(l: Callable[[Any], bool]) -> list[Any]:
         list[Any]: The list of objects that match the search criteria.
     """
     with _ALL_OBJECTS_LOCK:
-        return [r for r in _ALL_OBJECTS.values() if l(r)]
+        snapshot = list(_ALL_OBJECTS.values())
+    return [r for r in snapshot if l(r)]
 
 
 def get_by_tag(tag: str | list[str] | set[str], all: bool = False) -> list[Any]:
