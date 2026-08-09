@@ -15,7 +15,15 @@ from atheriz.objects.base_obj import Object
 
 
 class GameTime:
+    def _ensure_table(self) -> None:
+        db = get_database()
+        with db.lock:
+            db.connection.cursor().execute(
+                "CREATE TABLE IF NOT EXISTS gametime (id INTEGER PRIMARY KEY, data BLOB)"
+            )
+
     def save(self) -> None:
+        self._ensure_table()
         db = get_database()
         with self.lock:
             blob = dill.dumps({"ticks": self.ticks, "alarms": self.alarms})
@@ -26,6 +34,7 @@ class GameTime:
                 )
 
     def load(self) -> None:
+        self._ensure_table()
         db = get_database()
         with db.lock:
             cursor = db.connection.cursor()
