@@ -33,6 +33,10 @@ WEBSERVER_ENABLED = True
 WEBSERVER_PORT = 9999
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces
 WEBSERVER_INTERFACE = "0.0.0.0"
+# paths for SSL cert and key. leave unset for no SSL
+# if you have combined key/cert just set the certfile
+SSL_CERTFILE = os.getenv("ATHERIZ_SSL_CERTFILE")
+SSL_KEYFILE = os.getenv("ATHERIZ_SSL_KEYFILE")
 THREADPOOL_LIMIT = os.cpu_count()
 # maximum pending threadpool tasks; add_task returns False when full
 THREADPOOL_QUEUE_LIMIT = 10000

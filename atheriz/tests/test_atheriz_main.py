@@ -539,3 +539,98 @@ class TestSpawnDaemon:
             spawn_daemon(args)
         # No new process spawned
         mock_popen.assert_not_called()
+
+
+class TestSSLConfig:
+    """INTENT: uvicorn.Config must receive ssl_certfile when SSL_CERTFILE is
+    set (a single combined cert+key PEM), plus ssl_keyfile only when
+    SSL_KEYFILE is also set, so the webserver (and /ws) serves https/wss."""
+
+    def _run_start(self, monkeypatch, tmp_path):
+        from atheriz import atheriz as az
+        captured = {}
+        import uvicorn
+
+        class FakeConfig:
+            def __init__(self, *args, **kwargs):
+                captured.update(kwargs)
+
+        class FakeServer:
+            def __init__(self, config):
+                self.config = config
+
+            def run(self):
+                pass
+
+        monkeypatch.setattr(az, "setup_game_folder", lambda required=False: None)
+        monkeypatch.setattr(az, "setup_protocols", lambda: None)
+        monkeypatch.setattr(az, "do_startup", lambda: None)
+        monkeypatch.setattr(az, "setup_static_files", lambda: None)
+        monkeypatch.setattr(az, "do_shutdown", lambda: None)
+        monkeypatch.setattr(az.settings, "SAVE_PATH", str(tmp_path))
+        monkeypatch.setattr(az.settings, "SECRET_PATH", str(tmp_path / "secret"))
+        monkeypatch.setattr(az.settings, "WEBSOCKET_ENABLED", False)
+        monkeypatch.setattr(uvicorn, "Config", FakeConfig)
+        monkeypatch.setattr(uvicorn, "Server", FakeServer)
+        az.server_state.running = False
+        az.server_state.uvicorn_server = None
+        try:
+            az.start_server()
+        finally:
+            az.server_state.running = False
+            az.server_state.uvicorn_server = None
+        return captured
+
+    def test_no_ssl_kwargs_when_unset(self, global_test_env, monkeypatch, tmp_path, capsys):
+        from atheriz import atheriz as az
+        monkeypatch.setattr(az.settings, "SSL_CERTFILE", None)
+        monkeypatch.setattr(az.settings, "SSL_KEYFILE", None)
+        captured = self._run_start(monkeypatch, tmp_path)
+        assert "ssl_certfile" not in captured
+        assert "ssl_keyfile" not in captured
+        assert "SSL is disabled" in capsys.readouterr().out
+
+    def test_ssl_kwargs_when_both_set(self, global_test_env, monkeypatch, tmp_path, capsys):
+        from atheriz import atheriz as az
+        cert = tmp_path / "cert.pem"
+        cert.write_text("fake-cert")
+        key = tmp_path / "key.pem"
+        key.write_text("fake-key")
+        monkeypatch.setattr(az.settings, "SSL_CERTFILE", str(cert))
+        monkeypatch.setattr(az.settings, "SSL_KEYFILE", str(key))
+        captured = self._run_start(monkeypatch, tmp_path)
+        assert captured.get("ssl_certfile") == str(cert)
+        assert captured.get("ssl_keyfile") == str(key)
+        out = capsys.readouterr().out
+        assert "SSL is enabled" in out
+        assert "separate key file" in out
+
+    def test_combined_pem_when_only_cert_set(self, global_test_env, monkeypatch, tmp_path, capsys):
+        from atheriz import atheriz as az
+        cert = tmp_path / "combined.pem"
+        cert.write_text("fake")
+        monkeypatch.setattr(az.settings, "SSL_CERTFILE", str(cert))
+        monkeypatch.setattr(az.settings, "SSL_KEYFILE", None)
+        captured = self._run_start(monkeypatch, tmp_path)
+        assert captured.get("ssl_certfile") == str(cert)
+        assert "ssl_keyfile" not in captured
+        out = capsys.readouterr().out
+        assert "SSL is enabled" in out
+        assert "combined PEM" in out
+
+    def test_warns_when_cert_file_missing(self, global_test_env, monkeypatch, tmp_path, capsys):
+        from atheriz import atheriz as az
+        monkeypatch.setattr(az.settings, "SSL_CERTFILE", "/nonexistent/cert.pem")
+        monkeypatch.setattr(az.settings, "SSL_KEYFILE", None)
+        self._run_start(monkeypatch, tmp_path)
+        out = capsys.readouterr().out
+        assert "SSL is enabled" in out
+        assert "WARNING: SSL cert file not found" in out
+
+    def test_no_ssl_kwargs_when_only_key_set(self, global_test_env, monkeypatch, tmp_path):
+        from atheriz import atheriz as az
+        monkeypatch.setattr(az.settings, "SSL_CERTFILE", None)
+        monkeypatch.setattr(az.settings, "SSL_KEYFILE", "/tmp/key.pem")
+        captured = self._run_start(monkeypatch, tmp_path)
+        assert "ssl_certfile" not in captured
+        assert "ssl_keyfile" not in captured

@@ -86,7 +86,7 @@
     <script language="javascript" type="text/javascript">
         const wsactive = true;
         const csessid = false;
-        const wsurl = "ws://" + window.location.hostname + ":" + window.location.port + "/ws";
+        const wsurl = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.hostname + (location.port ? ':' + location.port : '') + '/ws';
     </script>
     <script src="js/xterm.js?v={{ v('webclient/js/xterm.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>
     <script src="js/addon-fit.js?v={{ v('webclient/js/addon-fit.js') }}" language="javascript" type="text/javascript" charset="utf-8"></script>

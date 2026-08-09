@@ -327,7 +327,10 @@ def start_server():
         do_startup()
     except Exception as e:
         print(f"Startup tasks failed: {traceback.format_exc()}")
-        return
+        # a failed boot must never linger: game libraries (qdrant, fastembed)
+        # leave non-daemon threads alive that would keep this process — and
+        # its file locks — hanging forever with no server listening.
+        os._exit(1)
 
     pid = os.getpid()
     if not save_path.exists():
@@ -356,6 +359,12 @@ def start_server():
     host = settings.WEBSERVER_INTERFACE
     port = settings.WEBSERVER_PORT
 
+    tls_kwargs = {}
+    if settings.SSL_CERTFILE:
+        tls_kwargs = {"ssl_certfile": settings.SSL_CERTFILE}
+        if settings.SSL_KEYFILE:
+            tls_kwargs["ssl_keyfile"] = settings.SSL_KEYFILE
+
     config = uvicorn.Config(
         app=app,
         host=host,
@@ -364,6 +373,7 @@ def start_server():
         ws_ping_interval=20,
         ws_ping_timeout=300,
         timeout_graceful_shutdown=5,
+        **tls_kwargs,
     )
 
     server_state.uvicorn_server = uvicorn.Server(config)
@@ -372,9 +382,24 @@ def start_server():
     if ":" in host:
         display_host = f"[{host}]"
 
-    print(f"Web server listening on http://{display_host}:{port}")
+    scheme = "https" if tls_kwargs else "http"
+    print(f"Web server listening on {scheme}://{display_host}:{port}")
     if settings.WEBSOCKET_ENABLED:
-        print(f"WebSocket server available at ws://{display_host}:{port}/ws")
+        wss_scheme = "wss" if tls_kwargs else "ws"
+        print(f"WebSocket server available at {wss_scheme}://{display_host}:{port}/ws")
+
+    if tls_kwargs:
+        print(f"SSL is enabled (cert: {settings.SSL_CERTFILE})")
+        if not Path(settings.SSL_CERTFILE).exists():
+            print(f"WARNING: SSL cert file not found: {settings.SSL_CERTFILE}")
+        if settings.SSL_KEYFILE:
+            print(f"SSL status: separate key file ({settings.SSL_KEYFILE})")
+            if not Path(settings.SSL_KEYFILE).exists():
+                print(f"WARNING: SSL key file not found: {settings.SSL_KEYFILE}")
+        else:
+            print("SSL status: combined PEM (private key embedded)")
+    else:
+        print("SSL is disabled (set SSL_CERTFILE to enable)")
 
     # handle shutdown signals
     def signal_handler(signum, frame):
@@ -426,14 +451,18 @@ def request_internal_shutdown(port: int | None = None) -> bool:
     except Exception:
         return False
 
-    url = f"http://localhost:{port}/_internal/shutdown"
+    tls_on = bool(settings.SSL_CERTFILE)
+    url = f"{'https' if tls_on else 'http'}://localhost:{port}/_internal/shutdown"
     print(f"Requesting graceful shutdown via internal API...")
 
     req = urllib.request.Request(url, method="POST")
     req.add_header("X-Admin-Token", token)
 
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
+        import ssl
+
+        ctx = ssl._create_unverified_context() if tls_on else None
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode())
                 print(f"Internal shutdown response: {data}")
@@ -474,7 +503,8 @@ def request_create_account(
     except Exception:
         return "unavailable", "Could not read admin.token."
 
-    url = f"http://localhost:{port}/_internal/create_account"
+    tls_on = bool(settings.SSL_CERTFILE)
+    url = f"{'https' if tls_on else 'http'}://localhost:{port}/_internal/create_account"
     data = json.dumps(
         {"account_name": account_name, "char_name": char_name, "password": password}
     ).encode()
@@ -483,7 +513,10 @@ def request_create_account(
     req.add_header("Content-Type", "application/json")
 
     try:
-        with urllib.request.urlopen(req, timeout=5) as response:
+        import ssl
+
+        ctx = ssl._create_unverified_context() if tls_on else None
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
             result = json.loads(response.read().decode())
             return result.get("status", "error"), result.get("message", "")
     except Exception:
@@ -801,7 +834,7 @@ def main():
             do_startup()
         except Exception as e:
             print(f"Startup tasks failed: {traceback.format_exc()}")
-            return
+            os._exit(1)
 
         if args.foreground:
             start_server()
