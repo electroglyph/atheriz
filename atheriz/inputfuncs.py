@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import Node
     from atheriz.objects.base_obj import Object
     
-_IGNORE_KEYS = ["save", "quit", "wander", "exit", "logout", "disconnect"]
+_IGNORE_KEYS = list(settings.AUTO_ALIAS_IGNORED_KEYS)
 _NO_ALIAS_COMMANDS = ["n", "s", "e", "w", "u", "d"]
 
 def inputfunc(name: str | None = None) -> Callable:

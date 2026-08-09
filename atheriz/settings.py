@@ -109,6 +109,9 @@ AUTOSAVE_MINUTES = 0
 # for instance, player enters "exa" and "examine" is found, it will run examine
 # uses str.startswith() to find matching commands
 AUTO_COMMAND_ALIASING = True
+# keys the resolver refuses to auto-alias (inputfuncs) and the "did you mean?"
+# fallback refuses to suggest (none.py); single source for both blocklists
+AUTO_ALIAS_IGNORED_KEYS = ["save", "quit", "wander", "exit", "logout", "disconnect", "none"]
 # if true, will use thread-safe getters and setters for attributes
 # this slows down attribute access but makes thread-safety much easier
 # if you disable this, you'll probably run into thread-safety issues because core code is relying on this

@@ -1,6 +1,7 @@
 from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.get import get_loggedin_cmdset
+import atheriz.settings as settings
 from polyleven import levenshtein
 from typing import TYPE_CHECKING
 
@@ -8,7 +9,7 @@ if TYPE_CHECKING:
     from atheriz.network.connection import BaseConnection as Connection
     from atheriz.objects.base_obj import Object
 
-_IGNORED_COMMANDS = ["none", "quit", "save"]
+_IGNORED_COMMANDS = list(settings.AUTO_ALIAS_IGNORED_KEYS)
 
 
 class NoneCommand(Command):
