@@ -113,6 +113,51 @@ def test_database_close_no_toctou():
 
 
 # ---------------------------------------------------------------------------
+# reopen_database
+# ---------------------------------------------------------------------------
+
+
+def test_reopen_database_after_close_restores_access():
+    """After close(), get_database() must raise (issue #10 contract) until
+    reopen_database() is called explicitly; then a fresh connection works."""
+    db = database_setup.get_database()
+    db.close()
+
+    with pytest.raises(RuntimeError):
+        database_setup.get_database()
+
+    database_setup.reopen_database()
+    reopened = database_setup.get_database()
+    assert reopened is not db
+    with reopened.lock:
+        reopened.connection.execute("SELECT 1")
+
+
+def test_reopen_database_survives_close_reopen_cycles():
+    """Repeated close -> reopen cycles must not leak stale state."""
+    for _ in range(3):
+        database_setup.get_database().close()
+        with pytest.raises(RuntimeError):
+            database_setup.get_database()
+        database_setup.reopen_database()
+        db = database_setup.get_database()
+        with db.lock:
+            db.connection.execute("SELECT 1")
+
+
+def test_do_setup_works_after_close_and_reopen():
+    """The reset-command flow: close (to release file locks), reopen, then
+    do_setup() must rebuild the tables without raising."""
+    database_setup.get_database().close()
+    database_setup.reopen_database()
+    database_setup.do_setup()
+    db = database_setup.get_database()
+    cursor = db.connection.cursor()
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='objects'")
+    assert cursor.fetchone() is not None
+
+
+# ---------------------------------------------------------------------------
 # do_setup
 # ---------------------------------------------------------------------------
 

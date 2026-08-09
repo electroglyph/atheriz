@@ -1042,6 +1042,10 @@ def do_reset_command(args):
 
     print("Setting up new world...")
 
+    from atheriz.database_setup import reopen_database
+
+    reopen_database()
+
     # Try to use local initial_setup.py if it exists
     cwd = Path.cwd()
     parent_dir = str(cwd.parent.resolve())

@@ -27,6 +27,17 @@ class Database:
             _CLOSED = True
 
 
+def reopen_database():
+    """
+    Explicitly allow `get_database()` to open a fresh connection after a
+    `close()`. Used by the `reset` command, which closes the store to release
+    file locks before deleting the data files.
+    """
+    global _CLOSED
+    with _INIT_LOCK:
+        _CLOSED = False
+
+
 def get_database():
     """
     Grabs a cache global copy of the sqlite connection used to access the db.

@@ -444,6 +444,61 @@ class TestInternalAdminEndpointsBlockLoop:
         self._assert_reload_loop_delay(delay)
 
 
+class TestDoResetCommand:
+    def test_reset_completes_and_database_usable_after_setup(self, global_test_env):
+        """INTENT: `atheriz reset` must not crash with "database is closed;
+        refusing to reopen". The command closes the store to release file
+        locks, deletes the data files, then reopens and rebuilds the world
+        via the game folder's do_setup() -> database_setup.do_setup()."""
+        from atheriz.atheriz import do_reset_command
+        import atheriz.atheriz as az
+        from atheriz import database_setup
+        from atheriz import settings
+
+        args = MagicMock()
+        args.force = True
+
+        def fake_local_setup():
+            database_setup.do_setup()
+            db = database_setup.get_database()
+            with db.lock:
+                db.connection.execute("SELECT 1")
+
+        fake_module = SimpleNamespace(do_setup=fake_local_setup)
+        fake_importlib = MagicMock()
+        fake_importlib.import_module.return_value = fake_module
+
+        with patch.object(az, "setup_game_folder", return_value=True), \
+             patch.object(az, "importlib", fake_importlib), \
+             patch.object(az, "spawn_daemon") as m_spawn:
+            do_reset_command(args)
+
+        fake_importlib.import_module.assert_called_once()
+        m_spawn.assert_called_once()
+        assert settings.SAVE_PATH is not None
+        db = database_setup.get_database()
+        with db.lock:
+            db.connection.execute("SELECT 1")
+
+    def test_reset_aborts_when_confirmation_declined(self, global_test_env, capsys):
+        """Declining the prompt must not delete anything or call do_setup."""
+        from atheriz.atheriz import do_reset_command
+        import atheriz.atheriz as az
+        from atheriz import settings
+
+        args = SimpleNamespace(force=False)
+
+        fake_importlib = MagicMock()
+        with patch.object(az, "setup_game_folder", return_value=True), \
+             patch.object(az, "importlib", fake_importlib), \
+             patch("builtins.input", return_value="n"):
+            do_reset_command(args)
+
+        assert "Aborted." in capsys.readouterr().out
+        fake_importlib.import_module.assert_not_called()
+        assert settings.SAVE_PATH is not None
+
+
 class TestSpawnDaemon:
     def test_spawn_subprocess(self, global_test_env, tmp_path):
         from atheriz.atheriz import spawn_daemon
