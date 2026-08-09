@@ -1,12 +1,18 @@
-"""Issue tests: #12 — the hot-reload path has no mutex.
+"""Issue tests: #12 — concurrent hot-reloads must be serialized.
 
 Two concurrent `reload_game_logic()` calls both iterate `sys.modules` and
-`importlib.reload` the same module graph at once (reloader.py:269-325); nothing
-serializes them. This test spawns a subprocess (fresh interpreter) and
-instruments `importlib.reload` to report the maximum reload depth across a
-concurrent pair of reloads.
+`importlib.reload` the same module graph at once; `_reload_lock`
+(reloader.py:277-286) serializes them. This test spawns a subprocess (fresh
+interpreter) and instruments `importlib.reload` to report the maximum number
+of *concurrent threads* inside a reload across a pair of concurrent reloads.
 
-INTENT: concurrent reload requests must be serialized (max in-flight == 1).
+Only distinct threads count as overlap: reloading the command modules
+(`commands/loggedin/reload.py`, `shutdown.py`, `rehash.py`) legitimately nests
+a same-thread `importlib.reload(server_events)` in their module-level code, so
+a plain in-flight counter would report a false overlap of 2.
+
+INTENT: concurrent reload requests must be serialized (max concurrent threads
+inside `importlib.reload` == 1).
 """
 from __future__ import annotations
 
@@ -26,23 +32,24 @@ sys.path.insert(0, {repo_root!r})
 
 import atheriz.reloader as R
 
-in_flight = 0
+active = set()
 max_overlap = 0
 rlock = threading.Lock()
 orig_reload = R.importlib.reload
 
 
 def slow_reload(module):
-    global in_flight, max_overlap
+    global max_overlap
+    tid = threading.get_ident()
     with rlock:
-        in_flight += 1
-        max_overlap = max(max_overlap, in_flight)
+        active.add(tid)
+        max_overlap = max(max_overlap, len(active))
     time.sleep(0.05)
     try:
         return orig_reload(module)
     finally:
         with rlock:
-            in_flight -= 1
+            active.discard(tid)
 
 
 R.importlib.reload = slow_reload
@@ -86,9 +93,10 @@ def _run_child():
 
 
 def test_reloads_are_serialized(global_test_env):
-    """INTENT: concurrent reloads never overlap (max in-flight importlib.reload
-    is 1). Without a reload mutex both threads reload the same modules at once
-    -> max_overlap == 2 -> FAIL."""
+    """INTENT: concurrent reloads never overlap (max concurrent threads inside
+    importlib.reload is 1). `_reload_lock` serializes the requests; nested
+    same-thread reloads (e.g. a command module's module-level
+    importlib.reload(server_events)) must NOT count as overlap."""
     proc, results = _run_child()
     assert proc.returncode == 0, proc.stdout + proc.stderr
     max_overlap = int(results.get("max_overlap", "-1"))
