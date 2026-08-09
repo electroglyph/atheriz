@@ -59,6 +59,8 @@ CHAPTERS = [
      "Auto-generated documentation outlining public classes, methods, and functions."),
     ("15", "15_sound_propagation.md", "Sound Propagation",
      "Acoustic system, BFS room traversal, loudness attenuation, and hooks for emitting and hearing sounds."),
+    ("16", "16_ssl_tls.md", "SSL/TLS & Reverse Proxying",
+     "Serving the webclient over https/wss directly or behind Caddy or nginx."),
 ]
 
 # (section number, module name, classes to document; [] = all public classes)

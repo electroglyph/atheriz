@@ -41,10 +41,12 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
 - `SSL_CERTFILE`: Path to the TLS certificate file. Setting this enables the
   web server (and its `/ws` WebSocket endpoint) to serve `https`/`wss`
-  instead of `http`/`ws`. The file may be a single combined PEM containing
-  the certificate and its private key (common with dyndns-style downloads).
-  Overridable via the `ATHERIZ_SSL_CERTFILE` environment variable. Defaults
-  to `None` (no TLS).
+  instead of `http`/`ws`. **This is the only setting required** when the cert
+  file is a combined PEM containing the certificate and its private key
+  (common with single-file downloads). Overridable via the
+  `ATHERIZ_SSL_CERTFILE` environment variable. Defaults to `None` (no TLS).
+  See [16 SSL/TLS & Reverse Proxying](./16_ssl_tls.md) for a full guide,
+  including the Caddy/nginx proxy alternatives.
 - `SSL_KEYFILE`: Path to the TLS private key file. Optional — only needed if
   the key is stored separately from the certificate. Overridable via the
   `ATHERIZ_SSL_KEYFILE` environment variable. Defaults to `None`.

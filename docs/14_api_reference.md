@@ -2957,6 +2957,18 @@ Default value: `9999`
 
 Default value: `'0.0.0.0'`
 
+### `SSL_CERTFILE`
+
+Default value: `os.getenv('ATHERIZ_SSL_CERTFILE')`
+
+### `SSL_KEYFILE`
+
+Default value: `os.getenv('ATHERIZ_SSL_KEYFILE')`
+
+### `WEBCLIENT_SYNC_CHECK`
+
+Default value: `True`
+
 ### `THREADPOOL_LIMIT`
 
 Default value: `os.cpu_count()`

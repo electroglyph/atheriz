@@ -32,3 +32,5 @@ Welcome to the Atheriz documentation. Atheriz is a Python framework built for cr
     *Auto-generated documentation outlining public classes, methods, and functions.*
 15. **[15 Sound Propagation](./15_sound_propagation.md)**  
     *Acoustic system, BFS room traversal, loudness attenuation, and hooks for emitting and hearing sounds.*
+16. **[16 SSL/TLS & Reverse Proxying](./16_ssl_tls.md)**  
+    *Serving the webclient over https/wss directly or behind Caddy or nginx.*
