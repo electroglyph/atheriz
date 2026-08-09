@@ -955,3 +955,35 @@ class TestFPSLimitProtection:
         mi.add_listener(listener)
         mi.render(force=True)
         listener.at_map_update.assert_called_once()
+
+    def test_zero_fps_limit_never_throttles_unforced_renders(
+        self, global_test_env, monkeypatch
+    ):
+        """INTENT: MAP_FPS_LIMIT=0 means never auto-throttle — a non-forced
+        render must reach the listener even right after a previous one."""
+        monkeypatch.setattr(settings, "MAP_FPS_LIMIT", 0)
+        mi = MapInfo()
+        mi.pre_grid[(0, 0)] = "X"
+        mi.pre_render()
+        listener = MagicMock()
+        listener.id = 99
+        listener.at_pre_map_render.side_effect = lambda g: g
+        listener.last_map_time = time.time()
+        mi.add_listener(listener)
+        mi.render()
+        listener.at_map_update.assert_called_once()
+
+    def test_positive_fps_limit_still_throttles(self, global_test_env, monkeypatch):
+        """INTENT: with a normal MAP_FPS_LIMIT (> 0), a render too soon after
+        the previous one is still skipped."""
+        monkeypatch.setattr(settings, "MAP_FPS_LIMIT", 1)
+        mi = MapInfo()
+        mi.pre_grid[(0, 0)] = "X"
+        mi.pre_render()
+        listener = MagicMock()
+        listener.id = 99
+        listener.at_pre_map_render.side_effect = lambda g: g
+        listener.last_map_time = time.time()
+        mi.add_listener(listener)
+        mi.render()
+        listener.at_map_update.assert_not_called()

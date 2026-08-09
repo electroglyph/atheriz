@@ -302,12 +302,12 @@ class MapInfo:
             listeners = list(self.listeners.values())
             grid_snapshot = self.post_grid.copy()
 
-        fps_limit = 1 / settings.MAP_FPS_LIMIT
+        fps_limit = 1 / settings.MAP_FPS_LIMIT if settings.MAP_FPS_LIMIT > 0 else 0.0
         for l in listeners:
             if not getattr(l, "map_enabled", True):
                 continue
             last_map_time = l.last_map_time
-            if last_map_time and not force and (t - last_map_time) <= fps_limit:
+            if last_map_time and not force and fps_limit and (t - last_map_time) <= fps_limit:
                 continue
             entries = [e for oid, e in obj_entries if oid != l.id]
             entries.extend(static_entries)
