@@ -204,6 +204,7 @@ class Channel(Flags, DbOps, AccessLock):
                 self.history.append((timestamp, sender_name, message))
             else:
                 self.history.append((timestamp, "", message))
+            self.is_modified = True
             listeners = list(self.listeners.values())
         for listener in listeners:
             listener.msg(self.format_message(timestamp, sender_name, message))
@@ -228,6 +229,7 @@ class Channel(Flags, DbOps, AccessLock):
         """Clear all history from the channel."""
         with self.lock:
             self.history.clear()
+            self.is_modified = True
 
     def __getstate__(self) -> dict:
         with self.lock:
