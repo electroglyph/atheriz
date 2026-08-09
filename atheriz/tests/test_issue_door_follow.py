@@ -52,7 +52,6 @@ def test_door_passage_clears_following(global_test_env, monkeypatch):
     follower.move_to(src)
 
     monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
-    monkeypatch.setattr("atheriz.commands.loggedin.exit.get", lambda _id: [leader])
 
     follower.following = leader.id
     leader.followers = {follower.id}
@@ -67,3 +66,59 @@ def test_door_passage_clears_following(global_test_env, monkeypatch):
     assert follower.following is None, (
         "door passage must clear following the same way a plain exit does"
     )
+
+
+def test_open_door_passage_clears_following(global_test_env, monkeypatch):
+    """INTENT: passing through an already-open door must clear following too."""
+    nh = NodeHandler()
+    src, dest = _make_area(nh)
+    door = _Door()
+    door.closed = False
+    nh.doors[Coord("a", 0, 0, 0)] = {"iron_door": door}
+
+    leader = Object.create(None, "Leader")
+    follower = Object.create(None, "Follower")
+    follower.move_to(src)
+
+    monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
+
+    follower.following = leader.id
+    leader.followers = {follower.id}
+
+    ex = ExitCommand()
+    ex.caller_id = follower.id
+    ex.location = Coord("a", 0, 0, 0)
+    ex.destination = Coord("a", 0, 1, 0)
+    ex.name = "iron_door"
+    ex.do_move()
+
+    assert follower.following is None
+
+
+def test_locked_door_keeps_following(global_test_env, monkeypatch):
+    """INTENT: when the door refuses passage the follower does not move, so
+    following must be preserved."""
+    nh = NodeHandler()
+    src, dest = _make_area(nh)
+    door = _Door()
+    door.try_open = lambda caller: False
+    nh.doors[Coord("a", 0, 0, 0)] = {"iron_door": door}
+
+    leader = Object.create(None, "Leader")
+    follower = Object.create(None, "Follower")
+    follower.move_to(src)
+
+    monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
+
+    follower.following = leader.id
+    leader.followers = {follower.id}
+
+    ex = ExitCommand()
+    ex.caller_id = follower.id
+    ex.location = Coord("a", 0, 0, 0)
+    ex.destination = Coord("a", 0, 1, 0)
+    ex.name = "iron_door"
+    ex.do_move()
+
+    assert follower.following == leader.id
+    assert follower.id in leader.followers

@@ -48,14 +48,20 @@ class ExitCommand(Command):
             door = d.get(self.name)
             if door:
                 if door.closed and door.try_open(c):
+                    self._clear_following(c)
                     if c.move_to(dest, self.name):
                         door.try_close(c)
                     return
                 elif not door.closed:
+                    self._clear_following(c)
                     c.move_to(dest, self.name)
                     return
                 else:
                     return
+        self._clear_following(c)
+        c.move_to(dest, self.name)
+
+    def _clear_following(self, c: Object):
         if c.following is not None:
             leader = get(c.following)
             if leader:
@@ -66,4 +72,3 @@ class ExitCommand(Command):
                 if leader[0].access(c, "view"):
                     c.msg(f"You are no longer following {leader[0].get_display_name(c)}.")
             c.following = None
-        c.move_to(dest, self.name)
