@@ -23,16 +23,23 @@ You *can* use it with regular Python builds, but you lose out on the whole reaso
 - fast object deletion
 - live map editing/room creation even with logged in players on the same map
 - at_tick() for thousands of objects is feasible
-- built-in web client based on xterm.js
+- built-in web client based on xterm.js with a split-screen dual pane view
+- built-in telnet and websocket protocols
+- built-in TLS: serve https/wss directly (single combined cert file suffices) or behind Caddy/nginx
+- hot-reload game logic without restarting or dropping connections
+- admin CLI (atheriz): account creation, start/stop/restart, hot reset
+- accounts with multiple characters, bans, and per-IP connection limits
 - 3d coordinate room system
 - optional ascii maps
 - built-in pathfinding
 - follow and group commands
 - built-in door system
 - built-in script system
+- menu engine for interactive prompts and dialogs
 - built-in tick system
 - built-in time system with sunset, sunrise, and moon phases
 - webclient has command history/completion, font size, etc. options
+- autosave via SQLite with dill serialization and dirty-flag gated checkpoints
 - 3d sound propagation thru rooms, with per-room sound attenuation
 
 # SSL/TLS
