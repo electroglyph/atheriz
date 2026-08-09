@@ -171,7 +171,99 @@ def setup_game_folder(required=True):
         if game_static.is_dir():
             static_dir = game_static
             print(f"  - Using game folder static files: {game_static}")
+    try:
+        sync_summary = check_webclient_sync(cwd)
+        if sync_summary:
+            print(format_webclient_sync_warning(sync_summary, cwd))
+    except Exception as e:
+        logger.warning(f"  - Webclient sync check failed: {e}")
     return True
+
+
+def _collect_files(root: Path) -> dict:
+    files = {}
+    if root.is_dir():
+        for f in root.rglob("*"):
+            if f.is_file():
+                files[f.relative_to(root)] = f
+    return files
+
+
+def _file_hash(path: Path) -> str:
+    import hashlib
+
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def check_webclient_sync(
+    game_cwd: Path | None = None, engine_web: Path | None = None
+) -> dict | None:
+    if not getattr(settings, "WEBCLIENT_SYNC_CHECK", True):
+        return None
+    if game_cwd is None:
+        game_cwd = Path.cwd()
+    game_web = game_cwd / "web"
+    if not game_web.is_dir():
+        return None
+    if engine_web is None:
+        engine_web = Path(__file__).parent / "web"
+    summary = {}
+    for area in ("templates", "static"):
+        engine_files = _collect_files(engine_web / area / "webclient")
+        game_files = _collect_files(game_web / area / "webclient")
+        common = set(engine_files) & set(game_files)
+        summary[area] = {
+            "missing": sorted(set(engine_files) - set(game_files)),
+            "different": sorted(
+                r for r in common if _file_hash(engine_files[r]) != _file_hash(game_files[r])
+            ),
+            "extra": sorted(set(game_files) - set(engine_files)),
+        }
+    if all(
+        not (v["missing"] or v["different"] or v["extra"])
+        for v in summary.values()
+    ):
+        return None
+    return summary
+
+
+def format_webclient_sync_warning(
+    summary: dict, game_cwd: Path, os_name: str | None = None, engine_web: Path | None = None
+) -> str:
+    os_name = os_name or os.name
+    if engine_web is None:
+        engine_web = Path(__file__).parent / "web"
+    lines = ["WARNING: Game webclient is out of sync with the server's!"]
+    for area in ("templates", "static"):
+        d = summary.get(area, {})
+        missing = d.get("missing", [])
+        different = d.get("different", [])
+        extra = d.get("extra", [])
+        if not (missing or different or extra):
+            continue
+        parts = []
+        if different:
+            parts.append(f"{len(different)} modified")
+        if missing:
+            parts.append(f"{len(missing)} missing")
+        if extra:
+            parts.append(f"{len(extra)} extra")
+        lines.append(f"  web/{area}/webclient: {', '.join(parts)}")
+        names = [str(p) for p in (different + missing + extra)[:3]]
+        lines.append("    e.g. " + ", ".join(names))
+    lines.append("  Copy the server's webclient over the game's:")
+    rel = os.path.relpath(str(engine_web), str(game_cwd))
+    if os_name == "nt":
+        lines.append(f'    xcopy "{rel}\\templates\\webclient" "web\\templates\\webclient\\" /E /Y /I')
+        lines.append(f'    xcopy "{rel}\\static\\webclient" "web\\static\\webclient\\" /E /Y /I')
+    else:
+        lines.append(f'    cp -r "{rel}/templates/webclient" "web/templates/"')
+        lines.append(f'    cp -r "{rel}/static/webclient" "web/static/"')
+    return "\n".join(lines)
 
 
 @app.get("/", response_class=HTMLResponse)

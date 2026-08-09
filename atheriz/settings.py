@@ -37,6 +37,8 @@ WEBSERVER_INTERFACE = "0.0.0.0"
 # if you have combined key/cert just set the certfile
 SSL_CERTFILE = os.getenv("ATHERIZ_SSL_CERTFILE")
 SSL_KEYFILE = os.getenv("ATHERIZ_SSL_KEYFILE")
+# Warn at startup when the game folder's webclient differs from the engine's
+WEBCLIENT_SYNC_CHECK = True
 THREADPOOL_LIMIT = os.cpu_count()
 # maximum pending threadpool tasks; add_task returns False when full
 THREADPOOL_QUEUE_LIMIT = 10000
