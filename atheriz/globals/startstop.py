@@ -55,6 +55,10 @@ def do_shutdown():
     stop_autosave()
     get_async_ticker().stop()
     get_async_threadpool().stop(True, 10)
+    # the pool is single-use: anything that touches it after shutdown must get
+    # a fresh one (e.g. a server booted and torn down inside a test process)
+    import atheriz.globals.get as get_singleton
+    get_singleton._ASYNC_THREAD_POOL = None
     if settings.AUTOSAVE_ON_SHUTDOWN:
         save_objects()
         get_map_handler().save()

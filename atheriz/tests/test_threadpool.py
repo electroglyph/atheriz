@@ -294,3 +294,45 @@ class TestAsyncThread:
         t.stop(wait=False)
         assert not t._wait_event.is_set()
 
+
+def test_do_shutdown_resets_global_threadpool(global_test_env):
+    """A real do_shutdown() must not leave its dead pool as the singleton:
+    anything touching the pool afterwards gets a fresh working one."""
+    from unittest.mock import MagicMock, patch
+
+    import atheriz.globals.startstop as ss
+    from atheriz.globals import get as get_singleton
+    from atheriz.globals.asyncthreadpool import AsyncThreadPool
+    from atheriz.globals.get import get_async_threadpool
+
+    get_singleton._ASYNC_THREAD_POOL = None
+    old_pool = get_async_threadpool()
+    assert isinstance(old_pool, AsyncThreadPool)
+
+    with patch.object(ss, "get_server_channel", return_value=None), \
+         patch.object(ss, "stop_autosave"), \
+         patch("atheriz.server_events"), \
+         patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
+         patch.object(ss, "get_game_time"), \
+         patch.object(ss, "get_database", return_value=MagicMock()), \
+         patch.object(ss, "msg_all"), \
+         patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
+         patch.object(ss.settings, "AUTOSAVE_ON_SHUTDOWN", False):
+        ss.do_shutdown()
+
+    # the old pool's workers are gone and the singleton was dropped
+    assert not any(t.is_alive() for t in old_pool.threads[1:])
+    assert get_singleton._ASYNC_THREAD_POOL is None
+
+    # a fresh pool must be created and actually execute work
+    new_pool = get_async_threadpool()
+    assert isinstance(new_pool, AsyncThreadPool)
+    assert new_pool is not old_pool
+
+    got = []
+    new_pool.add_task(lambda: got.append("ok"))
+    deadline = time.time() + 3
+    while time.time() < deadline and not got:
+        time.sleep(0.01)
+    assert got == ["ok"]
+

@@ -41,11 +41,20 @@ def test_run_menu_returns_when_session_is_dead(global_test_env):
     blocks on `.result()` with no timeout -> the thread never returns -> FAIL.
     The timeout is lowered from the 60s default so the test stays fast."""
     caller = _DeadCaller()
+    errors = []
+
+    def target():
+        try:
+            run_menu(caller, _node)
+        except BaseException as e:  # noqa: BLE001
+            errors.append(e)
+
     with patch("atheriz.menu.settings.MENU_PROMPT_TIMEOUT", 1):
-        t = threading.Thread(target=run_menu, args=(caller, _node), daemon=True)
+        t = threading.Thread(target=target, daemon=True)
         t.start()
         t.join(timeout=5)
     assert not t.is_alive(), "run_menu() parked a worker thread forever"
+    assert errors == [], f"run_menu() raised an unhandled exception: {errors}"
 
 
 def test_run_menu_returns_when_prompt_cancelled(global_test_env):

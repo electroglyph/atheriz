@@ -22,6 +22,7 @@ import telnetlib3
 import atheriz.atheriz as az
 from atheriz import settings
 from atheriz.atheriz import request_internal_shutdown, server_state
+from atheriz.globals import get as get_singleton
 
 BOOT_DEADLINE = 15.0
 READ_TIMEOUT = 10.0
@@ -100,6 +101,9 @@ class TestServerBoot:
         assert not (Path(settings.SAVE_PATH) / "server.pid").exists()
         assert not (Path(settings.SECRET_PATH) / "admin.token").exists()
         assert "Server stopped." in capsys.readouterr().out
+        assert get_singleton._ASYNC_THREAD_POOL is None, (
+            "shutdown must drop the global threadpool so a later boot gets a fresh one"
+        )
 
     def test_server_refuses_second_instance(
         self, global_test_env, monkeypatch, capsys
