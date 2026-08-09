@@ -172,7 +172,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
             if args.south:
                 to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y - 2, loc.coord.z)
                 door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y - 1, loc.coord.z)
@@ -232,7 +231,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
             if args.east:
                 to_coord = Coord(loc.coord.area, loc.coord.x + 2, loc.coord.y, loc.coord.z)
                 door_coord = Coord(loc.coord.area, loc.coord.x + 1, loc.coord.y, loc.coord.z)
@@ -292,7 +290,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
             if args.west:
                 to_coord = Coord(loc.coord.area, loc.coord.x - 2, loc.coord.y, loc.coord.z)
                 door_coord = Coord(loc.coord.area, loc.coord.x - 1, loc.coord.y, loc.coord.z)
@@ -352,7 +349,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
             if args.up:
                 to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z + 2)
                 door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z + 1)
@@ -412,7 +408,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
             if args.down:
                 to_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z - 2)
                 door_coord = Coord(loc.coord.area, loc.coord.x, loc.coord.y, loc.coord.z - 1)
@@ -472,7 +467,6 @@ class DoorCommand(Command):
                 )
                 nh.add_door(door)
                 caller.msg(f"Created door at {door_coord}.")
-                return
 
     def _replace_node_with_door(self, nh, door_coord: Coord, caller: Object) -> None:
         """Move anyone standing on the node being replaced by a door back to

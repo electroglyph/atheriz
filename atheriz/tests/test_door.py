@@ -601,18 +601,20 @@ def test_north_link_not_duplicated(setup_area):
 
 
 def test_create_multi_direction_all_created(setup_area):
-    """INTENT: `door -n -s -e -w -a` must create doors in every requested
+    """INTENT: `door -n -s -e -w -u -d -a` must create doors in every requested
     direction. Create-mode currently returns after the first matching
     direction flag, so only the north door is ever built."""
     nh, area, grid, start_node = setup_area
     cmd = DoorCommand()
     caller = MockCaller(location=start_node)
-    args = make_args(north=True, south=True, east=True, west=True, auto=True)
+    args = make_args(
+        north=True, south=True, east=True, west=True, up=True, down=True, auto=True
+    )
     cmd.run(caller, args)
 
     doors = nh.get_doors(Coord("TestArea", 0, 0, 0))
     assert doors is not None
-    for d in ("north", "south", "east", "west"):
+    for d in ("north", "south", "east", "west", "up", "down"):
         assert d in doors, f"door {d} was not created: {list(doors or {})}"
 
 
