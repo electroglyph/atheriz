@@ -75,6 +75,9 @@ class DeleteCommand(Command):
                         return
                     else:
                         target = target[0]
+                else:
+                    caller.msg(f"No match found for '{target_name}'.")
+                    return
             elif len(target) > 1:
                 caller.msg(f"Multiple matches for '{target_name}'.")
                 return

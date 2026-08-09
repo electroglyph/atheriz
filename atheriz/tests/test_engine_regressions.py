@@ -170,6 +170,35 @@ def test_delete_command_not_found_no_crash(global_test_env):
     assert any("No match" in (m or "") for m in caller.sent)
 
 
+def test_delete_no_match_when_location_view_denied(global_test_env):
+    """Deleting when the caller's location denies view reports 'no match'
+    instead of crashing on `[].access(...)`."""
+    from atheriz.commands.loggedin.delete import DeleteCommand
+    from atheriz.objects.base_obj import Object
+    from atheriz.objects.nodes import Node
+    from atheriz.utils import Coord
+
+    class RecvObject(Object):
+        def __init__(self):
+            super().__init__()
+            self.sent = []
+
+        def at_msg_receive(self, text=None, **kwargs):
+            self.sent.append(text)
+            return True
+
+    caller = RecvObject.create(None, "Builder")
+    loc = Node(coord=Coord("a", 0, 0, 0))
+    loc.add_lock("view", lambda x: False)
+    caller.location = loc
+
+    DeleteCommand().run(
+        caller, types.SimpleNamespace(target=["nope"], recursive=False)
+    )
+
+    assert any("No match" in (m or "") for m in caller.sent)
+
+
 def test_group_kick_clears_group_channel(global_test_env):
     """Kicking a player from a group must clear their group_channel.
 
