@@ -703,8 +703,11 @@ class Object(Flags, DbOps, AccessLock):
         from_obj = kwargs.pop("from_obj", None)
         msg_type = kwargs.pop("msg_type", None)
         if from_obj:
+            send_kwargs = dict(kwargs)
+            if "text" not in send_kwargs and args:
+                send_kwargs["text"] = args[0]
             for obj in make_iter(from_obj):
-                obj.at_msg_send(to_obj=self, msg_type=msg_type, **kwargs)
+                obj.at_msg_send(to_obj=self, msg_type=msg_type, **send_kwargs)
         if "text" in kwargs:
             if not self.at_msg_receive(from_obj=from_obj, msg_type=msg_type, **kwargs):
                 return

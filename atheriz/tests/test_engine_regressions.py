@@ -247,3 +247,113 @@ def test_msg_passes_text_to_at_msg_send(global_test_env):
 
     assert sender.seen is not None
     assert sender.seen.get("text") == "hello there!"
+    assert sender.seen.get("to_obj") is sender
+
+def test_msg_passes_text_kwarg_to_at_msg_send(global_test_env):
+    class Sender(Object):
+        def __init__(self):
+            super().__init__()
+            self.seen = None
+
+        def at_msg_send(self, **kwargs):
+            self.seen = kwargs
+
+    sender = Sender.create(None, "S")
+    sender.msg(text="via kwarg", from_obj=sender)
+
+    assert sender.seen is not None
+    assert sender.seen.get("text") == "via kwarg"
+
+def test_msg_passes_text_to_all_at_msg_send_senders(global_test_env):
+    class Sender(Object):
+        def __init__(self):
+            super().__init__()
+            self.seen = None
+
+        def at_msg_send(self, **kwargs):
+            self.seen = kwargs
+
+    first = Sender.create(None, "First")
+    second = Sender.create(None, "Second")
+    first.msg("multi", from_obj=[first, second])
+
+    assert first.seen is not None and first.seen.get("text") == "multi"
+    assert second.seen is not None and second.seen.get("text") == "multi"
+
+def test_msg_passes_text_without_clobbering_msg_type_or_kwargs(global_test_env):
+    class Sender(Object):
+        def __init__(self):
+            super().__init__()
+            self.seen = None
+
+        def at_msg_send(self, **kwargs):
+            self.seen = kwargs
+
+    sender = Sender.create(None, "S")
+    sender.msg("typed", msg_type="say", foo=1, from_obj=sender)
+
+    assert sender.seen is not None
+    assert sender.seen.get("text") == "typed"
+    assert sender.seen.get("msg_type") == "say"
+    assert sender.seen.get("foo") == 1
+
+def test_at_msg_send_hook_observes_message_body(global_test_env):
+    class _CensorHook:
+        is_before = True
+        is_after = False
+        is_replace = False
+
+        def __init__(self):
+            self.text = None
+            self.to_obj = None
+
+        def __call__(self, text=None, to_obj=None, **kwargs):
+            self.text = text
+            self.to_obj = to_obj
+
+    sender = Object.create(None, "S")
+    hook = _CensorHook()
+    sender.hooks["at_msg_send"] = {hook}
+
+    sender.msg("secret", from_obj=sender)
+
+    assert hook.text == "secret"
+    assert hook.to_obj is sender
+
+def test_msg_positional_text_still_reaches_at_msg_receive(global_test_env):
+    class Receiver(Object):
+        def __init__(self):
+            super().__init__()
+            self.seen = None
+
+        def at_msg_receive(self, **kwargs):
+            self.seen = kwargs
+            return True
+
+    receiver = Receiver.create(None, "R")
+    sender = Object.create(None, "S")
+    receiver.msg("body", msg_type="say", from_obj=sender)
+
+    assert receiver.seen is not None
+    assert receiver.seen.get("text") == "body"
+    assert receiver.seen.get("msg_type") == "say"
+
+def test_msg_contents_passes_text_to_sender_at_msg_send(global_test_env):
+    class Sender(Object):
+        def __init__(self):
+            super().__init__()
+            self.seen = None
+
+        def at_msg_send(self, **kwargs):
+            self.seen = kwargs
+
+    sender = Sender.create(None, "S")
+    receiver = Object.create(None, "R")
+    room = Object.create(None, "Room")
+    room._contents.add(receiver.id)
+
+    room.msg_contents("hi", from_obj=sender)
+
+    assert sender.seen is not None
+    assert sender.seen.get("text") == "hi"
+    assert sender.seen.get("to_obj") is receiver
