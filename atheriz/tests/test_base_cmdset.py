@@ -9,6 +9,8 @@ import pytest
 
 from atheriz.commands.base_cmd import Command
 from atheriz.commands.base_cmdset import CmdSet
+from atheriz.commands.loggedin.cmdset import LoggedinCmdSet
+from atheriz.commands.unloggedin.cmdset import UnloggedinCmdSet
 
 
 class FakeCommand(Command):
@@ -85,17 +87,18 @@ class TestCmdSetAdd:
         a = FakeCommand("a")
         b = FakeCommand("a")
         cs.add(a)
-        cs.add(b)
-        assert cs.commands["a"] is b
+        with pytest.raises(ValueError, match="'a' already registered"):
+            cs.add(b)
+        assert cs.commands["a"] is a
 
     def test_add_overwrites_existing_alias(self, global_test_env):
         cs = CmdSet()
         a = FakeCommand("a", aliases=["x"])
         b = FakeCommand("b", aliases=["x"])
         cs.add(a)
-        cs.add(b)
-        # 'x' now maps to b
-        assert cs.commands["x"] is b
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.add(b)
+        assert cs.commands["x"] is a
 
     def test_add_with_tag_sets_command_tag(self, global_test_env):
         cs = CmdSet()
@@ -121,6 +124,40 @@ class TestCmdSetAdd:
     def test_add_returns_none(self, global_test_env):
         cs = CmdSet()
         assert cs.add(FakeCommand("a")) is None
+
+    def test_add_same_instance_readd_is_noop(self, global_test_env):
+        cs = CmdSet()
+        c = FakeCommand("a", aliases=["x", "y"])
+        cs.add(c)
+        cs.add(c)
+        assert cs.commands["a"] is c
+        assert cs.commands["x"] is c
+        assert cs.commands["y"] is c
+
+    def test_add_key_equal_own_alias_allowed(self, global_test_env):
+        cs = CmdSet()
+        c = FakeCommand("x", aliases=["x"])
+        cs.add(c)
+        assert cs.commands["x"] is c
+
+    def test_add_alias_shadowing_command_key_raises(self, global_test_env):
+        cs = CmdSet()
+        a = FakeCommand("a", aliases=["x"])
+        b = FakeCommand("x")
+        cs.add(a)
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.add(b)
+        assert cs.commands["x"] is a
+
+    def test_add_alias_vs_alias_raises(self, global_test_env):
+        cs = CmdSet()
+        a = FakeCommand("a", aliases=["x"])
+        b = FakeCommand("b", aliases=["x"])
+        cs.add(a)
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.add(b)
+        assert cs.commands["x"] is a
+        assert "b" not in cs.commands
 
 
 class TestCmdSetAdds:
@@ -165,16 +202,44 @@ class TestCmdSetAdds:
         cs = CmdSet()
         a = FakeCommand("a")
         b = FakeCommand("a")
-        cs.adds([a, b])
-        # The last one wins
-        assert cs.commands["a"] is b
+        cs.add(a)
+        with pytest.raises(ValueError, match="'a' already registered"):
+            cs.adds([b])
+        assert cs.commands["a"] is a
 
     def test_adds_overwrites_aliases(self, global_test_env):
         cs = CmdSet()
         a = FakeCommand("a", aliases=["x"])
         b = FakeCommand("b", aliases=["x"])
-        cs.adds([a, b])
-        assert cs.commands["x"] is b
+        cs.add(a)
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.adds([b])
+        assert cs.commands["x"] is a
+
+    def test_adds_atomic_on_collision(self, global_test_env):
+        cs = CmdSet()
+        a = FakeCommand("a")
+        b = FakeCommand("b", aliases=["x"])
+        c = FakeCommand("c", aliases=["x"])
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.adds([a, b, c])
+        assert cs.commands == {}
+
+    def test_adds_same_instance_readd_is_noop(self, global_test_env):
+        cs = CmdSet()
+        c = FakeCommand("a", aliases=["x"])
+        cs.add(c)
+        cs.adds([c])
+        assert cs.commands["a"] is c
+        assert cs.commands["x"] is c
+
+    def test_adds_atomic_within_batch(self, global_test_env):
+        cs = CmdSet()
+        a = FakeCommand("a", aliases=["x"])
+        b = FakeCommand("b", aliases=["x"])
+        with pytest.raises(ValueError, match="'x' already registered"):
+            cs.adds([a, b])
+        assert cs.commands == {}
 
 
 class TestCmdSetRemove:
@@ -415,8 +480,30 @@ class TestCmdSetIntegration:
         a = FakeCommand("a", tag="t1")
         b = FakeCommand("a", tag="t2")
         cs.add(a)
-        cs.add(b)
-        # b overwrote a
-        assert cs.get("a") is b
-        # b's tag is t2
-        assert b.tag == "t2"
+        with pytest.raises(ValueError, match="'a' already registered"):
+            cs.add(b)
+        assert cs.get("a") is a
+        assert a.tag == "t1"
+
+
+class TestLiveCmdSets:
+    def test_live_cmdsets_build_without_collision(self, global_test_env):
+        cs = LoggedinCmdSet()
+        assert len(cs.commands) > 100
+        cs2 = UnloggedinCmdSet()
+        assert len(cs2.commands) > 10
+
+    def test_every_registered_name_claimed_by_its_command(self, global_test_env):
+        for cs in (LoggedinCmdSet(), UnloggedinCmdSet()):
+            for name, cmd in cs.commands.items():
+                assert name == cmd.key or name in (cmd.aliases or []), (
+                    f"{name} registered but not claimed by {cmd.key}"
+                )
+
+    def test_no_command_lists_own_key_as_alias(self, global_test_env):
+        for cs in (LoggedinCmdSet(), UnloggedinCmdSet()):
+            for name, cmd in cs.commands.items():
+                if name == cmd.key:
+                    assert cmd.key not in (cmd.aliases or []), (
+                        f"{cmd.key} listed as its own alias"
+                    )

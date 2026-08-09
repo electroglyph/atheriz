@@ -1,7 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from threading import RLock
-from atheriz.logger import logger
 
 if TYPE_CHECKING:
     from atheriz.commands.base_cmd import Command
@@ -24,49 +23,55 @@ class CmdSet:
 
     def add(self, command: Command, tag: str | None = None) -> None:
         """
-        Merge a single Command instance into this command set. 
-        If a command with the same key or alias already exists, it is overwritten.
+        Merge a single Command instance into this command set.
 
         Args:
             command (Command): The command object to add.
-            tag (str | None, optional): An optional tag to categorize the command (e.g. "exits"). 
+            tag (str | None, optional): An optional tag to categorize the command (e.g. "exits").
                 Defaults to None.
+
+        Raises:
+            ValueError: If any of the command's keys or aliases is already
+                registered to a different command. Re-registering the same
+                instance (or a command listing its own key as an alias) is a
+                no-op and never raises.
         """
-        if tag is not None:
-            command.tag = tag
-        with self.lock:
-            if command.key in self.commands:
-                logger.warning(f"Overwriting command {command.key}")
-            self.commands[command.key] = command
-            if command.aliases:
-                for alias in command.aliases:
-                    if alias in self.commands:
-                        logger.warning(f"Overwriting command alias {alias}")
-                    self.commands[alias] = command
+        self.adds([command], tag)
 
     def adds(self, commands: list[Command], tag: str | None = None) -> None:
         """
         Merge multiple Command instances into this command set simultaneously.
-        Any commands with duplicate keys or aliases will overwrite pre-existing ones.
+
+        The whole batch is validated before any command is registered, so a
+        collision leaves the command set unchanged.
 
         Args:
             commands (list[Command]): A list of Command objects to add.
-            tag (str | None, optional): An optional tag to apply to all added commands. 
+            tag (str | None, optional): An optional tag to apply to all added commands.
                 Defaults to None.
+
+        Raises:
+            ValueError: If any of the commands' keys or aliases is already
+                registered to a different command. Re-registering the same
+                instance (or a command listing its own key as an alias) is a
+                no-op and never raises.
         """
         if tag is not None:
             for command in commands:
                 command.tag = tag
         with self.lock:
+            claimed: dict[str, Command] = {}
             for command in commands:
-                if command.key in self.commands:
-                    logger.warning(f"Overwriting command {command.key}")
-                self.commands[command.key] = command
-                if command.aliases:
-                    for alias in command.aliases:
-                        if alias in self.commands:
-                            logger.warning(f"Overwriting command alias {alias}")
-                        self.commands[alias] = command
+                for name in [command.key] + list(command.aliases or []):
+                    existing = claimed.get(name, self.commands.get(name))
+                    if existing is not None and existing is not command:
+                        raise ValueError(
+                            f"Command key/alias '{name}' already registered to "
+                            f"'{existing.key}'; refusing to overwrite with '{command.key}'."
+                        )
+                    claimed[name] = command
+            for command in commands:
+                self._register(command)
 
     def remove(self, command: Command) -> None:
         """
@@ -108,6 +113,12 @@ class CmdSet:
         """
         with self.lock:
             return self.commands.get(command)
+
+    def _register(self, command: Command) -> None:
+        """Register a pre-validated command (key and aliases)."""
+        self.commands[command.key] = command
+        for alias in command.aliases or []:
+            self.commands[alias] = command
 
     def get_keys(self) -> list[str]:
         """
