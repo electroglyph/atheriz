@@ -79,6 +79,7 @@ class GroupCommand(Command):
                 return
             channel.msg(f"{caller.get_display_name()} kicked {target.get_display_name()} from the group.")
             channel.remove_listener(target)
+            target.group_channel = None
             return
         if args[0].lower() == "leave":
             if not caller.group_channel:

@@ -70,6 +70,7 @@ def test_group_kick(test_objects):
     
     cmd.run(leader, MockArgs("kick", "Follower"))
     assert follower.id not in channel.listeners
+    assert follower.group_channel is None
 
 def test_group_kick_not_leader(test_objects):
     leader, follower, _ = test_objects
