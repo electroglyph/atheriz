@@ -82,7 +82,6 @@ class _ParsedFunc:
     # state storage
     fullstr: str = ""
     infuncstr: str = ""
-    rawstr: str = ""
     double_quoted: int = -1
     current_kwarg: str = ""
     open_lparens: int = 0
@@ -94,7 +93,7 @@ class _ParsedFunc:
         return self.funcname, self.args, self.kwargs
 
     def __str__(self):
-        return self.prefix + self.rawstr + self.infuncstr
+        return self.fullstr + self.infuncstr
 
 
 class ParsingError(RuntimeError):
@@ -338,7 +337,6 @@ class FuncParser:
                 # always store escaped characters verbatim
                 if curr_func:
                     infuncstr += char
-                    curr_func.rawstr += char
                 else:
                     fullstr += char
                 escaped = False
@@ -351,7 +349,6 @@ class FuncParser:
                     # trailing singleton escape char: keep it verbatim
                     if curr_func:
                         infuncstr += char
-                        curr_func.rawstr += char
                     else:
                         fullstr += char
                     return_str = True
@@ -359,7 +356,7 @@ class FuncParser:
                 escaped = True
                 continue
 
-            if char == start_char:
+            if char == start_char and not (curr_func and double_quoted >= 0):
                 # start a new function definition (not escaped as $$)
 
                 if curr_func:
@@ -374,6 +371,10 @@ class FuncParser:
                         infuncstr += char
                         continue
                     else:
+                        # merge any pending execution return before storing state
+                        if exec_return != "":
+                            infuncstr += str(exec_return)
+                            exec_return = ""
                         # store state for the current func and stack it
                         curr_func.current_kwarg = current_kwarg
                         curr_func.infuncstr = infuncstr
@@ -381,9 +382,6 @@ class FuncParser:
                         curr_func.open_lparens = open_lparens
                         curr_func.open_lsquare = open_lsquare
                         curr_func.open_lcurly = open_lcurly
-                        # we must strip the remaining funcstr so it's not counted twice
-                        if len(infuncstr) > 0:
-                            curr_func.rawstr = curr_func.rawstr[: -len(infuncstr)]
                         current_kwarg = ""
                         infuncstr = ""
                         double_quoted = -1
@@ -406,8 +404,6 @@ class FuncParser:
                 continue
 
             # in a function def (can be nested)
-
-            curr_func.rawstr += char
 
             if exec_return != "" and char not in (",=)"):
                 # if exec_return is followed by any other character

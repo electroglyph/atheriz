@@ -49,7 +49,6 @@ class TestParsedFunc:
         assert pf.kwargs == {}
         assert pf.fullstr == ""
         assert pf.infuncstr == ""
-        assert pf.rawstr == ""
         assert pf.double_quoted == -1
         assert pf.current_kwarg == ""
         assert pf.open_lparens == 0
@@ -61,8 +60,8 @@ class TestParsedFunc:
         pf = _ParsedFunc(funcname="foo", args=["a", 1], kwargs={"k": "v"})
         assert pf.get() == ("foo", ["a", 1], {"k": "v"})
 
-    def test_str_includes_prefix_rawstr_infuncstr(self, global_test_env):
-        pf = _ParsedFunc(prefix="$", rawstr="foo(", infuncstr="bar")
+    def test_str_includes_fullstr_infuncstr(self, global_test_env):
+        pf = _ParsedFunc(prefix="$", fullstr="$foo(", infuncstr="bar")
         assert str(pf) == "$foo(bar"
 
     def test_args_kwargs_not_shared_between_instances(self, global_test_env):
@@ -182,14 +181,14 @@ class TestExecute:
         # function as-is in the output, so typos don't break display strings.
         parser = FuncParser({})
         pf = _ParsedFunc(prefix="$", funcname="missing", args=[], kwargs={})
-        pf.rawstr = "missing()"
+        pf.fullstr = "$missing()"
         result = parser.execute(pf)
         assert result == "$missing()"
 
     def test_unknown_func_raises_when_requested(self, global_test_env):
         parser = FuncParser({})
         pf = _ParsedFunc(prefix="$", funcname="missing", args=[], kwargs={})
-        pf.rawstr = "missing()"
+        pf.fullstr = "$missing()"
         with pytest.raises(ParsingError, match="missing"):
             parser.execute(pf, raise_errors=True)
 
@@ -197,7 +196,7 @@ class TestExecute:
         fn = make_func("foo", return_value="RESULT")
         parser = FuncParser({"foo": fn})
         pf = _ParsedFunc(prefix="$", funcname="foo", args=["x"], kwargs={})
-        pf.rawstr = "foo(x)"
+        pf.fullstr = "$foo(x)"
         result = parser.execute(pf)
         fn.assert_called_once()
         assert result == "RESULT"
@@ -213,7 +212,7 @@ class TestExecute:
 
         parser = FuncParser({"myfn": myfn}, greeting="default", fromdefault="yes")
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={"fromstring": "yes"})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         parser.execute(pf, override="yes", reserved="yes")
         # All three layers should be present
         assert captured.get("fromdefault") == "yes"
@@ -233,7 +232,7 @@ class TestExecute:
 
         parser = FuncParser({"myfn": myfn}, x="default")
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={"x": "string"})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         parser.execute(pf, x="reserved")
         assert captured["x"] == "reserved"
 
@@ -246,7 +245,7 @@ class TestExecute:
 
         parser = FuncParser({"myfn": myfn}, x="default")
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={"x": "string"})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         parser.execute(pf)
         assert captured["x"] == "string"
 
@@ -259,7 +258,7 @@ class TestExecute:
 
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         parser.execute(pf)
         assert captured["funcparser"] is parser
 
@@ -272,7 +271,7 @@ class TestExecute:
 
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         parser.execute(pf, raise_errors=True)
         assert captured["raise_errors"] is True
 
@@ -281,7 +280,7 @@ class TestExecute:
             raise ParsingError("boom")
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         # Should NOT raise; returns str(parsedfunc)
         result = parser.execute(pf)
         assert result == "$myfn()"
@@ -291,7 +290,7 @@ class TestExecute:
             raise ParsingError("boom")
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         with pytest.raises(ParsingError, match="boom"):
             parser.execute(pf, raise_errors=True)
 
@@ -303,7 +302,7 @@ class TestExecute:
             raise ValueError("oops")
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         result = parser.execute(pf)
         assert result == "$myfn()"
 
@@ -314,7 +313,7 @@ class TestExecute:
             raise ValueError("oops")
         parser = FuncParser({"myfn": myfn})
         pf = _ParsedFunc(prefix="$", funcname="myfn", args=[], kwargs={})
-        pf.rawstr = "myfn()"
+        pf.fullstr = "$myfn()"
         with pytest.raises(ValueError, match="oops"):
             parser.execute(pf, raise_errors=True)
 
@@ -1201,13 +1200,25 @@ class TestIntegration:
         """
         boom = make_func("boom", return_value="DOOM")
         pad = make_func("pad", "x")
-        pad.side_effect = lambda text, width: text[: width].ljust(width)
+        pad.side_effect = lambda text, width, **kwargs: text[: width].ljust(width)
 
         parser = FuncParser({"pad": pad, "boom": boom})
         result = parser.parse('$pad("loot $boom() here", 30)')
 
         boom.assert_not_called()
         assert "$boom()" in result
+
+    def test_quoted_dollar_literal_survives_as_single_argument(self, global_test_env):
+        """A ``$func`` inside a quoted argument stays literal text in the arg."""
+        boom = make_func("boom", return_value="DOOM")
+        pad = make_func("pad", "x")
+        pad.side_effect = lambda text, width, **kwargs: text
+
+        parser = FuncParser({"pad": pad, "boom": boom})
+        result = parser.parse('$pad("costs $random() here", 12)')
+
+        boom.assert_not_called()
+        assert result == "costs $random() here"
 
     def test_oversized_pow_is_handled_error_not_overflow(self, global_test_env):
         """A too-big exponent must surface as a controlled error.
