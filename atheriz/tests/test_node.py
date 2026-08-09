@@ -520,3 +520,50 @@ def test_node_save_snapshot_independence():
     assert len(deserialized.grids[0].nodes) == 1, (
         "saved area should reflect pre-mutation state — deep copy snapshot is independent"
     )
+
+
+def test_save_with_rlock_in_area_data():
+    """#46: save() must not fail on values dill can persist (e.g. RLock)."""
+    import _thread
+    import threading
+    from atheriz.database_setup import get_database
+
+    handler = NodeHandler()
+    area = NodeArea(name="LockArea")
+    area.data["guard"] = threading.RLock()
+    handler.add_area(area)
+
+    handler.save()  # should not raise
+
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT data FROM areas WHERE name = ?", ("LockArea",))
+        row = cursor.fetchone()
+        assert row is not None, "area was never saved"
+        deserialized = dill.loads(row[0])
+
+    lock = deserialized.data["guard"]
+    assert isinstance(lock, _thread.RLock)
+
+
+def test_save_with_unpicklable_data_logs_error():
+    """#46: values neither deepcopy nor dill can persist are logged, not fatal."""
+    from unittest.mock import patch
+    from atheriz.database_setup import get_database
+
+    handler = NodeHandler()
+    area = NodeArea(name="BadArea")
+    area.data["bad"] = (i for i in range(3))
+    handler.add_area(area)
+
+    with patch("atheriz.globals.node.logger.error") as mock_error:
+        handler.save()  # should not raise
+    mock_error.assert_called_once()
+
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cursor.execute("SELECT data FROM areas WHERE name = ?", ("BadArea",))
+        row = cursor.fetchone()
+    assert row is None, "unsaveable area must not be persisted"

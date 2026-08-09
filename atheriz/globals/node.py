@@ -4,10 +4,9 @@ from atheriz.globals.objects import get, add_object, remove_object
 from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
-import copy
 import dill
 from atheriz.objects.nodes import Node, NodeArea, NodeGrid
-from atheriz.utils import Coord
+from atheriz.utils import Coord, detach
 
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Transition
@@ -81,12 +80,16 @@ class NodeHandler:
     def save(self):
         db = get_database()
 
-        with self.lock:
-            areas_snapshot = [copy.deepcopy(a) for a in self.areas.values()]
-        with self.lock2:
-            transitions_snapshot = [copy.deepcopy(t) for t in self.transitions.values()]
-        with self.lock3:
-            doors_snapshot = [(k, copy.deepcopy(v)) for k, v in self.doors.items()]
+        try:
+            with self.lock:
+                areas_snapshot = [detach(a) for a in self.areas.values()]
+            with self.lock2:
+                transitions_snapshot = [detach(t) for t in self.transitions.values()]
+            with self.lock3:
+                doors_snapshot = [(k, detach(v)) for k, v in self.doors.items()]
+        except Exception as e:
+            logger.error(f"Error preparing node save: {e}")
+            return
 
         with db.lock:
             cursor = db.connection.cursor()

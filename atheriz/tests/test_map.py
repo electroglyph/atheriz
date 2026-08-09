@@ -795,6 +795,23 @@ class TestMapHandlerSave:
         rollback_calls = [c for c in cursor.execute.call_args_list if "ROLLBACK" in str(c.args[0])]
         assert len(rollback_calls) == 1
 
+    def test_save_with_rlock_in_mapinfo(self, mock_db, global_test_env):
+        db, cursor = mock_db
+        handler = MapHandler()
+        mi = MapInfo(name="LockMap")
+        mi.guard = threading.RLock()
+        handler.set_mapinfo("LockMap", 0, mi)
+        handler.save()  # should not raise
+        insert_calls = [
+            c for c in cursor.execute.call_args_list
+            if c.args and "INSERT" in str(c.args[0])
+        ]
+        assert len(insert_calls) == 1
+        blob = insert_calls[0].args[1][2]
+        deserialized = dill.loads(blob)
+        lock = deserialized.guard
+        assert isinstance(lock, _thread.RLock)
+
 
 class TestMapHandlerAddMapable:
     def test_no_location_no_op(self, mock_db, global_test_env):

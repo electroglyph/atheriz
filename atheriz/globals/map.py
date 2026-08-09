@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from atheriz.globals.node import Node
 from atheriz.logger import logger
 import atheriz.settings as settings
-from atheriz.utils import Coord
+from atheriz.utils import Coord, detach
 import dill
 import time
 import copy
@@ -377,10 +377,14 @@ class MapHandler:
 
     def save(self):
         db = get_database()
-        
-        with self.lock:
-            snapshot = [(k, copy.deepcopy(v)) for k, v in self.data.items()]
-        
+
+        try:
+            with self.lock:
+                snapshot = [(k, detach(v)) for k, v in self.data.items()]
+        except Exception as e:
+            logger.error(f"Error preparing map save: {e}")
+            return
+
         with db.lock:
             cursor = db.connection.cursor()
             cursor.execute("BEGIN TRANSACTION")

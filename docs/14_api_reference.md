@@ -1552,23 +1552,36 @@ Returns:
 
 #### `def add(self, command: Command, tag: str | None = None)`
 
-Merge a single Command instance into this command set. 
-If a command with the same key or alias already exists, it is overwritten.
+Merge a single Command instance into this command set.
 
 Args:
     command (Command): The command object to add.
-    tag (str | None, optional): An optional tag to categorize the command (e.g. "exits"). 
+    tag (str | None, optional): An optional tag to categorize the command (e.g. "exits").
         Defaults to None.
+
+Raises:
+    ValueError: If any of the command's keys or aliases is already
+        registered to a different command. Re-registering the same
+        instance (or a command listing its own key as an alias) is a
+        no-op and never raises.
 
 #### `def adds(self, commands: list[Command], tag: str | None = None)`
 
 Merge multiple Command instances into this command set simultaneously.
-Any commands with duplicate keys or aliases will overwrite pre-existing ones.
+
+The whole batch is validated before any command is registered, so a
+collision leaves the command set unchanged.
 
 Args:
     commands (list[Command]): A list of Command objects to add.
-    tag (str | None, optional): An optional tag to apply to all added commands. 
+    tag (str | None, optional): An optional tag to apply to all added commands.
         Defaults to None.
+
+Raises:
+    ValueError: If any of the commands' keys or aliases is already
+        registered to a different command. Re-registering the same
+        instance (or a command listing its own key as an alias) is a
+        no-op and never raises.
 
 #### `def remove(self, command: Command)`
 
@@ -1593,6 +1606,10 @@ Args:
 
 Returns:
     Command | None: The matching Command object, or None if not found.
+
+#### `def _register(self, command: Command)`
+
+Register a pre-validated command (key and aliases).
 
 #### `def get_keys(self)`
 
@@ -1707,6 +1724,14 @@ crossing per network message).
 
 ## 14.9 `atheriz.globals.objects`
 
+### `def creation_cooldown_active(op: str, host: str, now: float)`
+
+Return True if ``op`` for ``host`` is still within its cooldown window.
+
+### `def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float)`
+
+Record a creation cooldown expiry for ``op`` and ``host``.
+
 ### `def filter_by(l: Callable[[Any], bool])`
 
 Filter objects by a lambda.
@@ -1749,6 +1774,16 @@ Returns:
 ### `def add_object(obj: Object | Channel | Script | Account)`
 
 Add an object to the global object registry.
+
+### `def add_object_unique(obj: Object | Channel | Script | Account, predicate: Callable[[Any], bool], error: str)`
+
+Register ``obj`` only if no registered object satisfies ``predicate``.
+
+The uniqueness check and the insert share one critical section, so racing
+creators cannot both pass the check.
+
+Raises:
+    ValueError: If an already-registered object satisfies ``predicate``.
 
 ### `def remove_object(obj: Object | Channel | Script | Account)`
 
@@ -1853,9 +1888,13 @@ helper to remove listener from their current location's mapinfo
 
 ### Class: `GameTime`
 
+#### `def _ensure_table(self)`
+
 #### `def save(self)`
 
 #### `def load(self)`
+
+#### `def _load_legacy_file(self)`
 
 #### `def add_alarm(self, hour: str, minute: str, caller: Object, repeat = False, data = None)`
 
@@ -1866,7 +1905,7 @@ Args:
     minute (str): minute
     caller (Object): obj to add alarm to
     repeat (bool, optional): if True, repeat forever. Defaults to False.
-    data (Any, optional): data to pass to at_alarm(). Defaults to None.
+    data (dict, optional): data to pass to at_alarm(). Defaults to None.
 
 #### `def remove_alarms_by_caller(self, caller: int | Object)`
 
@@ -1922,6 +1961,15 @@ Args:
 ### `def ensure_thread_safe(obj)`
 
 Patches the class of the provided object if not already patched.
+
+### `def detach(value)`
+
+Return a copy of value detached from the live object graph.
+
+deepcopy is tried first (full graph detachment); if it fails, a dill
+round-trip is used — the same serialization machinery saves use, so
+anything the save can persist can be detached (e.g. values containing
+threading locks). Raises if the value is not serializable at all.
 
 ### `def wrap_xterm256(input: str, fg = None, bg = None, bold = False, italic = False, underline = False, inverse = False, strikethru = False, clear = False)`
 
@@ -2997,7 +3045,15 @@ Default value: `3`
 
 Default value: `100`
 
-### `GUEST_CREATION_COOLDOWN`
+### `MAX_CONNECTIONS_PER_IP`
+
+Default value: `2`
+
+### `MENU_PROMPT_TIMEOUT`
+
+Default value: `60`
+
+### `CREATION_COOLDOWN`
 
 Default value: `60`
 
@@ -3044,6 +3100,10 @@ Default value: `0`
 ### `AUTO_COMMAND_ALIASING`
 
 Default value: `True`
+
+### `AUTO_ALIAS_IGNORED_KEYS`
+
+Default value: `['save', 'quit', 'wander', 'exit', 'logout', 'disconnect', 'none']`
 
 ### `THREADSAFE_GETTERS_SETTERS`
 
@@ -3212,6 +3272,10 @@ Default value: `50000`
 ### `PY_OUTPUT_FG`
 
 Default value: `15`
+
+### `KILL_PY_COMMAND_AFTER`
+
+Default value: `5`
 
 [Previous: 13 The Menu Engine](./13_menu_engine.md) | [Table of Contents](./table_of_contents.md) | [Next: 15 Sound Propagation](./15_sound_propagation.md)
 

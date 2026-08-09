@@ -1,5 +1,7 @@
 from __future__ import annotations
 from random import uniform
+import copy
+import dill
 import re
 from random import randint
 from string import punctuation
@@ -71,6 +73,21 @@ def ensure_thread_safe(obj):
     cls.__getattribute__ = __getattribute__
     cls.__setattr__ = __setattr__
     cls._is_thread_safe = True
+
+
+def detach(value):
+    """
+    Return a copy of value detached from the live object graph.
+
+    deepcopy is tried first (full graph detachment); if it fails, a dill
+    round-trip is used — the same serialization machinery saves use, so
+    anything the save can persist can be detached (e.g. values containing
+    threading locks). Raises if the value is not serializable at all.
+    """
+    try:
+        return copy.deepcopy(value)
+    except Exception:
+        return dill.loads(dill.dumps(value))
 
 
 def wrap_xterm256(
