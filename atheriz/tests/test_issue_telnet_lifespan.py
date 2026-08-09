@@ -49,13 +49,13 @@ def test_mounting_telnet_preserves_previous_lifespan(global_test_env):
     with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_fake_create_server):
         TelnetProtocol.setup(app)
 
-    installed = app.router.lifespan_context
+        installed = app.router.lifespan_context
 
-    async def run():
-        async with installed(app):
-            pass
+        async def run():
+            async with installed(app):
+                pass
 
-    asyncio.run(run())
+        asyncio.run(run())
 
     assert calls == ["start", "stop"], (
         f"the pre-installed lifespan was dropped by {TelnetProtocol.__name__}.setup; calls={calls}"
@@ -80,13 +80,13 @@ def test_setup_composes_server_lifecycle_with_previous(global_test_env):
     with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_fake_create_server):
         TelnetProtocol.setup(app)
 
-    installed = app.router.lifespan_context
+        installed = app.router.lifespan_context
 
-    async def run():
-        async with installed(app):
-            calls.append("inside")
+        async def run():
+            async with installed(app):
+                calls.append("inside")
 
-    asyncio.run(run())
+        asyncio.run(run())
 
     assert calls == ["start", "inside", "stop"], (
         f"composed lifespan ran out of order; calls={calls}"
