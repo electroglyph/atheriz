@@ -1,4 +1,4 @@
-export type RecordingEvent = [number, 'o' | 'r' | 'resize', unknown];
+export type RecordingEvent = [number, 'o' | 'r' | 'resize' | 'show_right' | 'hide_right', unknown];
 
 export interface RecordingTerminalSize {
     cols: number;
@@ -29,7 +29,7 @@ export class SessionRecorder {
         this.header = {
             version: 3,
             timestamp: Math.round(this.startedAt / 1000),
-            title: 'AtheriZ webclient recording',
+            title: 'xtermia2 recording',
             left,
             right,
             divider_pct: dividerPct,
@@ -44,6 +44,10 @@ export class SessionRecorder {
 
     resize(data: unknown): void {
         if (this.header) this.events.push([this.elapsed(), 'resize', data]);
+    }
+
+    layoutEvent(type: 'show_right' | 'hide_right'): void {
+        if (this.header) this.events.push([this.elapsed(), type, {}]);
     }
 
     stop(): string | null {

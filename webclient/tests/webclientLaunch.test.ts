@@ -27,5 +27,6 @@ describe('draw launch command', () => {
         vi.spyOn(window, 'open').mockReturnValue(null);
         expect(launchDraw()).toBe(false);
         expect(document.querySelector('a')?.href).toBe('http://localhost:3000/atheriz_draw/');
+        expect(document.querySelector('.popup-fallback')).not.toBeNull();
     });
 });

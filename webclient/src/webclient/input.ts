@@ -14,3 +14,13 @@ export function shouldNavigateHistory(
 export function inputHeight(scrollHeight: number, minimum = 30): number {
     return Math.max(scrollHeight, minimum);
 }
+
+export function shouldClearSubmittedInput(
+    key: string,
+    submitted: boolean,
+    controlKey: boolean,
+    altKey: boolean,
+    metaKey: boolean,
+): boolean {
+    return submitted && key.length === 1 && !controlKey && !altKey && !metaKey;
+}

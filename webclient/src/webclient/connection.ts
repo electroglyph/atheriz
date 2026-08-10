@@ -15,6 +15,7 @@ export interface ConnectionOptions {
     onMessage: MessageHandler;
     onStateChange?: (state: ConnectionState) => void;
     onInvalidMessage?: () => void;
+    onError?: (event: Event) => void;
     minReconnectDelayMs?: number;
     maxReconnectDelayMs?: number;
 }
@@ -36,6 +37,7 @@ export class WebSocketConnection {
     private readonly onMessage: MessageHandler;
     private readonly onStateChange?: (state: ConnectionState) => void;
     private readonly onInvalidMessage?: () => void;
+    private readonly onError?: (event: Event) => void;
     private readonly minReconnectDelayMs: number;
     private readonly maxReconnectDelayMs: number;
     private socket: WebSocketLike | null = null;
@@ -49,6 +51,7 @@ export class WebSocketConnection {
         this.onMessage = options.onMessage;
         this.onStateChange = options.onStateChange;
         this.onInvalidMessage = options.onInvalidMessage;
+        this.onError = options.onError;
         this.minReconnectDelayMs = options.minReconnectDelayMs ?? 500;
         this.maxReconnectDelayMs = options.maxReconnectDelayMs ?? 15_000;
     }
@@ -62,19 +65,22 @@ export class WebSocketConnection {
         const socket = this.createSocket(websocketUrl());
         this.socket = socket;
         socket.onopen = () => {
+            if (this.socket !== socket) return;
             this.reconnectAttempt = 0;
             this.setState('open');
         };
         socket.onmessage = (event) => {
+            if (this.socket !== socket) return;
             const message = parseWireMessage(event.data);
             if (message) this.onMessage(message);
             else this.onInvalidMessage?.();
         };
-        socket.onerror = () => {
-            // onclose owns reconnect scheduling; errors are intentionally quiet here.
+        socket.onerror = (event) => {
+            if (this.socket === socket) this.onError?.(event);
         };
         socket.onclose = () => {
-            if (this.socket === socket) this.socket = null;
+            if (this.socket !== socket) return;
+            this.socket = null;
             this.setState('closed');
             if (!this.manuallyClosed) this.scheduleReconnect();
         };

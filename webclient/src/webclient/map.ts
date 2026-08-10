@@ -1,20 +1,22 @@
-import { MapPayload } from './types';
+import { MapBackground, MapLegendEntry, MapPayload } from './types';
 
 const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RESET = '\x1b[0m';
+export const MAP_CLEAR_SEQUENCE = '\x1b[2J\x1b[3J\x1b[H';
 
 export function renderMap(payload: MapPayload, columns: number, rows: number): string {
     let lines = payload.map.split(/\r?\n/);
     applyBackground(lines, payload);
 
-    for (const entry of payload.legend ?? []) {
+    const processedLegend = processLegend(payload.legend ?? []);
+    for (const entry of processedLegend) {
         if (entry.coords) placeVisual(lines, relativePosition(entry.coords, payload), withReset(entry.symbol));
     }
     if (payload.pos && payload.symbol) {
         placeVisual(lines, relativePosition(payload.pos, payload), withReset(payload.symbol));
     }
 
-    const legend = payload.show_legend === false ? [] : buildLegend(payload, columns);
+    const legend = payload.show_legend === false ? [] : buildLegend(payload, processedLegend, columns, rows);
     const availableRows = Math.max(1, rows - (legend.length > 0 ? legend.length + 1 : 0));
     const mapWidth = Math.max(0, ...lines.map(visibleLength));
     const mapHeight = lines.length;
@@ -68,51 +70,169 @@ function applyBackground(lines: string[], payload: MapPayload): void {
     }
 }
 
-function buildLegend(payload: MapPayload, columns: number): string[] {
-    const entries = payload.legend ?? [];
-    if (entries.length === 0 && !payload.symbol) return [];
-    const title = payload.area ?? 'Legend';
-    const values = payload.symbol ? [{ symbol: payload.symbol, desc: 'You' }, ...entries] : entries;
-    const cells = values.map((entry) => {
-        const value = `${withReset(entry.symbol)} = ${entry.desc}`;
-        return visibleLength(value) > columns ? ansiSubstring(value, 0, columns) : value;
-    });
-    const cellWidth = Math.max(1, ...cells.map(visibleLength));
-    const columnCount = Math.max(1, Math.min(3, Math.floor(columns / Math.max(1, cellWidth + 2))));
-    const rowCount = Math.ceil(cells.length / columnCount);
-    const output = [title.length + 1 > columns ? `${title.slice(0, Math.max(0, columns - 1))}:` : `${title}:`];
-    for (let row = 0; row < rowCount; row += 1) {
-        const rowCells: string[] = [];
-        for (let column = 0; column < columnCount; column += 1) {
-            const cell = cells[row + column * rowCount];
-            if (cell) rowCells.push(cell);
+function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: number, rows: number): string[] {
+    const values = payload.symbol
+        ? [{ symbol: stylePlayerSymbol(payload.symbol), desc: 'You' }, ...entries]
+        : entries;
+    if (values.length === 0) return [];
+    const availableHeight = Math.max(5, Math.floor(rows / 3));
+    const minColumns = Math.min(values.length, Math.max(1, Math.ceil(values.length / Math.max(1, availableHeight - 2))));
+    let chosenColumns = minColumns;
+    let columnWidths = calculateLegendWidths(values, chosenColumns);
+    for (let candidate = minColumns; candidate >= 1; candidate -= 1) {
+        const widths = calculateLegendWidths(values, candidate);
+        if (legendWidth(widths, candidate) <= columns) {
+            chosenColumns = candidate;
+            columnWidths = widths;
+            break;
         }
-        output.push(rowCells.join('  '));
     }
+
+    const rowCount = Math.ceil(values.length / chosenColumns);
+    const totalWidth = legendWidth(columnWidths, chosenColumns);
+    const title = payload.area ?? 'Legend';
+    const headerText = `╭─ ${title} `;
+    const header = `${headerText}${'─'.repeat(Math.max(1, totalWidth - visibleLength(headerText) - 1))}╮`;
+    const output = [header];
+    for (let row = 0; row < rowCount; row += 1) {
+        let line = '│';
+        for (let column = 0; column < chosenColumns; column += 1) {
+            const item = values[column * rowCount + row];
+            const width = columnWidths[column];
+            const text = item ? `${item.symbol} = ${item.desc}` : '';
+            line += ` ${text}${' '.repeat(Math.max(0, width - visibleLength(text)))} │`;
+        }
+        output.push(line);
+    }
+    let footer = '╰';
+    for (let column = 0; column < chosenColumns; column += 1) {
+        footer += `${'─'.repeat(columnWidths[column] + 2)}${column === chosenColumns - 1 ? '╯' : '┴'}`;
+    }
+    output.push(footer);
     return output;
+}
+
+function processLegend(entries: MapLegendEntry[]): MapLegendEntry[] {
+    const seen = new Map<string, number>();
+    const colorized = entries.flatMap((entry) => {
+        if (!entry.symbol) return [];
+        const stripped = stripAnsi(entry.symbol);
+        const color = extractTrueColor(entry.symbol);
+        const key = `${stripped}|${color ? color.join(',') : 'none'}`;
+        const hue = seen.get(key);
+        if (hue === undefined) {
+            seen.set(key, 131);
+            return [{ ...entry, symbol: withReset(entry.symbol) }];
+        }
+        seen.set(key, (hue + 57) % 360);
+        const [r, g, b] = hslToRgb(hue / 360, 1, 0.5);
+        return [{ ...entry, symbol: `\x1b[38;2;${r};${g};${b}m${stripped}${RESET}` }];
+    });
+
+    const grouped = new Map<string, MapLegendEntry>();
+    const result: MapLegendEntry[] = [];
+    for (const entry of colorized) {
+        if (!entry.coords) {
+            result.push(entry);
+            continue;
+        }
+        const key = `${entry.coords[0]},${entry.coords[1]}`;
+        const existing = grouped.get(key);
+        if (!existing) {
+            grouped.set(key, entry);
+            result.push(entry);
+            continue;
+        }
+        const descriptions = `${existing.desc}, ${entry.desc}`;
+        existing.desc = descriptions;
+        const firstColor = extractTrueColor(existing.symbol) ?? [190, 190, 190];
+        const secondColor = extractTrueColor(entry.symbol) ?? [190, 190, 190];
+        existing.symbol = `\x1b[38;2;${secondColor[0]};${secondColor[1]};${secondColor[2]}m\x1b[48;2;${firstColor[0]};${firstColor[1]};${firstColor[2]}m${stripAnsi(existing.symbol)}${RESET}`;
+    }
+    return result;
+}
+
+function calculateLegendWidths(entries: MapLegendEntry[], columns: number): number[] {
+    const rows = Math.ceil(entries.length / columns);
+    return Array.from({ length: columns }, (_, column) => {
+        let width = 0;
+        for (let row = 0; row < rows; row += 1) {
+            const item = entries[column * rows + row];
+            if (item) width = Math.max(width, visibleLength(`${item.symbol} = ${item.desc}`));
+        }
+        return width;
+    });
+}
+
+function legendWidth(widths: number[], columns: number): number {
+    return widths.reduce((total, width) => total + width, 0) + columns * 3 + 1;
+}
+
+function stylePlayerSymbol(symbol: string): string {
+    if (extractTrueColor(symbol) || /\x1b\[[0-9;]+m/.test(symbol)) return withReset(symbol);
+    return `\x1b[38;2;255;255;255m${symbol}${RESET}`;
+}
+
+function stripAnsi(value: string): string {
+    return value.replace(ANSI, '');
+}
+
+function extractTrueColor(value: string): [number, number, number] | undefined {
+    const match = value.match(/\x1b\[38;2;(\d+);(\d+);(\d+)m/);
+    return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined;
+}
+
+function hslToRgb(h: number, s: number, l: number): [number, number, number] {
+    if (s === 0) return [l, l, l].map((value) => Math.round(value * 255)) as [number, number, number];
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    const channel = (part: number) => {
+        if (part < 0) part += 1;
+        if (part > 1) part -= 1;
+        if (part < 1 / 6) return p + (q - p) * 6 * part;
+        if (part < 1 / 2) return q;
+        if (part < 2 / 3) return p + (q - p) * (2 / 3 - part) * 6;
+        return p;
+    };
+    return [channel(h + 1 / 3), channel(h), channel(h - 1 / 3)].map((value) => Math.round(value * 255)) as [number, number, number];
 }
 
 export function mergeBackgrounds(
     current: MapPayload['background'],
     next: Exclude<MapPayload['background'], undefined>,
 ): MapPayload['background'] {
-    const groups = current
-        ? Array.isArray(current)
-            ? current.map((item) => ({ color: item.color, coords: [...item.coords] }))
-            : [{ color: current.color, coords: [...current.coords] }]
-        : [];
+    const entries = new Map<string, { color: [number, number, number]; coord: [number, number] }>();
+    const existing = current ? Array.isArray(current) ? current : [current] : [];
+    for (const item of existing) {
+        for (const coord of item.coords) entries.set(`${coord[0]},${coord[1]}`, { color: item.color, coord });
+    }
     const incoming = Array.isArray(next) ? next : [next];
     for (const item of incoming) {
-        const group = groups.find((candidate) => candidate.color.every((part, index) => part === item.color[index]));
-        if (group) {
-            for (const coord of item.coords) {
-                if (!group.coords.some((existing) => existing[0] === coord[0] && existing[1] === coord[1])) group.coords.push(coord);
-            }
-        } else {
-            groups.push({ color: item.color, coords: [...item.coords] });
-        }
+        for (const coord of item.coords) entries.set(`${coord[0]},${coord[1]}`, { color: item.color, coord });
+    }
+    const groups: MapBackground[] = [];
+    for (const { color, coord } of entries.values()) {
+        const group = groups.find((candidate) => candidate.color.every((part, index) => part === color[index]));
+        if (group) group.coords.push(coord);
+        else groups.push({ color, coords: [coord] });
     }
     return groups.length === 1 ? groups[0] : groups;
+}
+
+export function parseBackground(value: unknown): MapPayload['background'] | undefined {
+    const values = Array.isArray(value) ? value : [value];
+    const backgrounds: MapBackground[] = [];
+    for (const entry of values) {
+        if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
+        const data = entry as { color?: unknown; coords?: unknown };
+        if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number')) continue;
+        if (!Array.isArray(data.coords)) continue;
+        const coords = data.coords.filter((coord): coord is [number, number] => {
+            return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number';
+        });
+        backgrounds.push({ color: [data.color[0], data.color[1], data.color[2]], coords });
+    }
+    return backgrounds.length === 1 ? backgrounds[0] : backgrounds.length > 1 ? backgrounds : undefined;
 }
 
 function relativePosition(position: [number, number], payload: MapPayload): [number, number] {

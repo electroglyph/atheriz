@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeBackgrounds, renderMap } from '../src/webclient/map';
+import { MAP_CLEAR_SEQUENCE, mergeBackgrounds, parseBackground, renderMap } from '../src/webclient/map';
 
 describe('webclient map renderer', () => {
     it('renders the map, player, and legend in the map pane', () => {
@@ -15,7 +15,8 @@ describe('webclient map renderer', () => {
 
         expect(output).toContain('a@');
         expect(output).toContain('c');
-        expect(output).toContain('Room:');
+        expect(output).toContain('Room');
+        expect(output).toContain('╭');
         expect(output).toContain('x');
         expect(output).toContain('Exit');
         expect(output).toContain('\x1b[');
@@ -42,6 +43,28 @@ describe('webclient map renderer', () => {
         expect(merged).toEqual({ color: [1, 2, 3], coords: [[0, 0], [1, 0]] });
     });
 
+    it('replaces the color at a coordinate when it is updated', () => {
+        const merged = mergeBackgrounds(
+            { color: [1, 2, 3], coords: [[0, 0]] },
+            { color: [4, 5, 6], coords: [[0, 0]] },
+        );
+        expect(merged).toEqual({ color: [4, 5, 6], coords: [[0, 0]] });
+    });
+
+    it('exposes the legacy map clear sequence for recording', () => {
+        expect(MAP_CLEAR_SEQUENCE).toBe('\x1b[2J\x1b[3J\x1b[H');
+    });
+
+    it('parses both single and array background payloads', () => {
+        expect(parseBackground([
+            { color: [1, 2, 3], coords: [[0, 0]] },
+            { color: [4, 5, 6], coords: [[1, 0]] },
+        ])).toEqual([
+            { color: [1, 2, 3], coords: [[0, 0]] },
+            { color: [4, 5, 6], coords: [[1, 0]] },
+        ]);
+    });
+
     it('renders accumulated backgrounds with distinct colors', () => {
         const output = renderMap({
             map: 'ab',
@@ -66,5 +89,18 @@ describe('webclient map renderer', () => {
         }, 12, 8);
         expect(output).toMatch(/\x1b\[\d+;\d+H/);
         expect(output.split('\r\n')).toHaveLength(1);
+    });
+
+    it('recolors duplicate legend symbols and combines same-coordinate descriptions', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'x', desc: 'Exit', coords: [0, 0] },
+            ],
+        }, 30, 12);
+        expect(output).toContain('Door, Exit');
+        expect(output).toContain('\x1b[48;2;');
     });
 });

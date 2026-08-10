@@ -32,6 +32,20 @@ body {
     overflow: hidden;
 }
 
+#left-terminal {
+    border-left: 5px solid #333;
+    border-top: 5px solid #333;
+    border-bottom: 5px solid #333;
+    box-sizing: border-box;
+}
+
+#right-terminal {
+    border-right: 5px solid #333;
+    border-top: 5px solid #333;
+    border-bottom: 5px solid #333;
+    box-sizing: border-box;
+}
+
 #left-terminal:not(:only-child) {
     width: 50%;
 }
@@ -75,6 +89,22 @@ body {
 #input-box-ghost {
     position: relative;
     z-index: 2;
+}
+
+.popup-fallback {
+    position: fixed;
+    z-index: 20;
+    top: 8px;
+    left: 8px;
+    max-width: calc(100% - 16px);
+    padding: 8px 12px;
+    color: #fff;
+    background: #333;
+    border: 1px solid #777;
+}
+
+.popup-fallback a {
+    color: #7dd3fc;
 }
 
 #input-box-ghost {

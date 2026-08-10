@@ -17,7 +17,10 @@ export function launchDraw(): boolean {
     link.rel = 'noopener noreferrer';
     link.textContent = 'Open AtheriZ Draw in a new tab';
     link.style.color = '#7dd3fc';
-    const container = document.getElementById('left-terminal');
-    container?.append(document.createTextNode('\nPopup blocked. '), link, document.createTextNode('\n'));
+    const fallback = document.createElement('div');
+    fallback.className = 'popup-fallback';
+    fallback.setAttribute('role', 'alert');
+    fallback.append(document.createTextNode('Popup blocked. '), link);
+    document.body.append(fallback);
     return false;
 }

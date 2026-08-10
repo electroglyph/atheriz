@@ -27,6 +27,10 @@ class FakeSocket implements WebSocketLike {
         this.readyState = 3;
         this.onclose?.({} as CloseEvent);
     }
+
+    fail(): void {
+        this.onerror?.(new Event('error'));
+    }
 }
 
 describe('webclient connection', () => {
@@ -76,5 +80,50 @@ describe('webclient connection', () => {
         expect(sockets).toHaveLength(2);
         connection.close();
         vi.useRealTimers();
+    });
+
+    it('ignores close events from stale sockets', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const states: string[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            onMessage: () => undefined,
+            onStateChange: (state) => states.push(state),
+            minReconnectDelayMs: 100,
+            maxReconnectDelayMs: 100,
+        });
+
+        connection.connect();
+        sockets[0].drop();
+        vi.advanceTimersByTime(100);
+        sockets[1].open();
+        sockets[0].drop();
+
+        expect(connection.getState()).toBe('open');
+        expect(states.at(-1)).toBe('open');
+        connection.close();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it('reports errors from the active socket', () => {
+        const socket = new FakeSocket();
+        const errors: Event[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => socket,
+            onMessage: () => undefined,
+            onError: (event) => errors.push(event),
+        });
+
+        connection.connect();
+        socket.fail();
+
+        expect(errors).toHaveLength(1);
     });
 });

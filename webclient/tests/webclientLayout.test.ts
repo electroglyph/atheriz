@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mapLayout } from '../src/webclient/layout';
+import { mapLayout, resizeWidth } from '../src/webclient/layout';
 
 describe('webclient map layout', () => {
     it('expands the main terminal when the map is hidden', () => {
@@ -24,5 +24,11 @@ describe('webclient map layout', () => {
             rightHidden: false,
             dividerHidden: false,
         });
+    });
+
+    it('keeps both panes at least 50px wide while dragging', () => {
+        expect(resizeWidth(200, 500, -300, 5)).toBe(50);
+        expect(resizeWidth(200, 500, 400, 5)).toBe(445);
+        expect(resizeWidth(200, 500, 20, 5)).toBe(220);
     });
 });

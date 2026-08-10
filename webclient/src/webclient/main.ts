@@ -8,13 +8,15 @@ import '../../fonts/FiraCode.css';
 import { WebSocketConnection } from './connection';
 import { CommandHistory } from './history';
 import { launchDraw } from './launch';
-import { MapBackground, MapPayload, WebClientElements, WireMessage } from './types';
+import { MapPayload, WebClientElements, WireMessage } from './types';
 import { SessionRecorder } from './recorder';
-import { mergeBackgrounds, renderMap as renderMapText } from './map';
-import { mapLayout } from './layout';
-import { inputHeight, shouldNavigateHistory } from './input';
+import { MAP_CLEAR_SEQUENCE, mergeBackgrounds, parseBackground, renderMap as renderMapText } from './map';
+import { mapLayout, resizeWidth } from './layout';
+import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory } from './input';
 import { formatPrompt, formatTextOutput } from './text';
 import { BUFFER_FINAL_SEQUENCE } from './buffer';
+import { playAudio as playAudioElement } from './audio';
+import { screenReaderFeedback, settingFeedback } from './feedback';
 import './style.css';
 
 const elements = getElements();
@@ -28,6 +30,7 @@ const terminalOptions = {
     convertEol: true,
     allowProposedApi: true,
     cursorInactiveStyle: 'none' as const,
+    cursorStyle: readSetting('cursorstyle', 'block') as 'block' | 'underline' | 'bar',
     fontFamily: readSetting('font', '"Fira Custom", Menlo, monospace'),
     fontSize: readNumberSetting('fontsize', 19),
     cursorBlink: readBooleanSetting('cursorblink', true),
@@ -38,7 +41,7 @@ const terminalOptions = {
 };
 
 const left = new Terminal(terminalOptions);
-const right = new Terminal({ ...terminalOptions, cursorBlink: false, screenReaderMode: screenReaderEnabled });
+const right = new Terminal({ ...terminalOptions, cursorBlink: false, cursorStyle: 'bar', screenReaderMode: screenReaderEnabled });
 const leftFit = new FitAddon();
 const rightFit = new FitAddon();
 let mapEnabled = false;
@@ -52,6 +55,7 @@ let audio: HTMLAudioElement | null = null;
 let bufferQueue: string[] = [];
 let bufferWriting = false;
 let autosaveSetting = readBooleanSetting('autosave', false);
+let commandSubmitted = false;
 const recorder = new SessionRecorder();
 const DIVIDER_POSITION_KEY = 'xtermDividerPos';
 let lastRecordedLayout = '';
@@ -69,7 +73,6 @@ installWebgl(right);
 write('\x1b[1;97mxtermia2\x1b[0m terminal emulator (made with xterm.js)\n');
 write('revision \x1b[1;97m14\x1b[0m\n');
 write('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands');
-void document.fonts?.ready.then(() => fitAndReportSize());
 
 const connection = new WebSocketConnection({
     onMessage: handleMessage,
@@ -88,9 +91,18 @@ const connection = new WebSocketConnection({
         }
     },
     onInvalidMessage: () => write('\n======== Invalid server message.\n'),
+    onError: (event) => {
+        console.error('WebSocket error', event);
+        write('\n======== Connection error.\n');
+    },
 });
 
-connection.connect();
+const startConnection = () => {
+    fitAndReportSize();
+    connection.connect();
+};
+if (document.fonts) void document.fonts.ready.then(startConnection);
+else startConnection();
 installInputHandlers();
 installResizeHandlers();
 window.addEventListener('focus', () => elements.input.focus());
@@ -146,11 +158,28 @@ function installInputHandlers(): void {
         hint.scrollLeft = elements.input.scrollLeft;
     };
     elements.input.addEventListener('keydown', (event) => {
+        if (shouldClearSubmittedInput(event.key, commandSubmitted, event.ctrlKey, event.altKey, event.metaKey)) {
+            commandSubmitted = false;
+            elements.input.value = '';
+            history.reset();
+            resizeInput();
+            updateHint();
+            return;
+        }
         const suggestion = history.getSuggestion();
         if (suggestion && (event.key === 'Tab' || (event.key === 'ArrowRight' && elements.input.selectionStart === elements.input.value.length))) {
             event.preventDefault();
             elements.input.value = suggestion;
             history.reset();
+            resizeInput();
+            updateHint();
+            return;
+        }
+        if (event.key === 'Escape') {
+            event.preventDefault();
+            commandSubmitted = false;
+            history.reset();
+            updateHint();
             return;
         }
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
@@ -172,20 +201,30 @@ function installInputHandlers(): void {
 
         event.preventDefault();
         const command = elements.input.value;
-        elements.input.value = '';
-        resizeInput();
-        history.reset();
-        updateHint();
         if (!command) {
+            elements.input.value = '';
+            resizeInput();
+            history.reset();
+            updateHint();
             connection.send('text', ['\n']);
             return;
         }
         if (!censorInput) history.add(command);
-        if (command.startsWith(':') && handleInternalCommand(command)) return;
+        if (command.startsWith(':') && handleInternalCommand(command)) {
+            elements.input.value = '';
+            resizeInput();
+            history.reset();
+            updateHint();
+            return;
+        }
         connection.send('text', [command]);
         if (!censorInput) writeSelf(command);
+        elements.input.select();
+        commandSubmitted = true;
     });
     elements.input.addEventListener('input', () => {
+        commandSubmitted = false;
+        history.reset();
         history.findCompletions(elements.input.value);
         resizeInput();
         updateHint();
@@ -205,9 +244,15 @@ function installResizeHandlers(): void {
         const startX = event.clientX;
         const startWidth = elements.leftTerminal.getBoundingClientRect().width;
         const parentWidth = elements.leftTerminal.parentElement?.getBoundingClientRect().width ?? 1;
+        const dividerWidth = elements.divider.getBoundingClientRect().width || 5;
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+        document.body.style.pointerEvents = 'none';
+        elements.leftTerminal.style.pointerEvents = 'none';
+        elements.rightTerminal.style.pointerEvents = 'none';
         const move = (moveEvent: PointerEvent) => {
-            const next = Math.min(parentWidth * 0.95, Math.max(parentWidth * 0.05, startWidth + moveEvent.clientX - startX));
-            elements.leftTerminal.style.width = `${(next / parentWidth) * 100}%`;
+            const next = resizeWidth(startWidth, parentWidth, moveEvent.clientX - startX, dividerWidth);
+            elements.leftTerminal.style.width = `${next}px`;
             leftFit.fit();
             rightFit.fit();
         };
@@ -215,6 +260,11 @@ function installResizeHandlers(): void {
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', stop);
             window.removeEventListener('pointercancel', stop);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            document.body.style.pointerEvents = '';
+            elements.leftTerminal.style.pointerEvents = '';
+            elements.rightTerminal.style.pointerEvents = '';
             saveDividerPosition();
             fitAndReportSize();
         };
@@ -260,7 +310,7 @@ function handleMessage(message: WireMessage): void {
             fitAndReportSize();
             break;
         case 'screenreader':
-            applyScreenReader(asBoolean(message.args[0]));
+            applyScreenReader(asBoolean(message.args[0]), true);
             break;
         case 'map_enable':
             setMapVisibility(!screenReaderEnabled);
@@ -353,7 +403,7 @@ function writeBuffer(args: unknown[]): void {
     flushBuffer();
 }
 
-function applyScreenReader(enabled: boolean): void {
+function applyScreenReader(enabled: boolean, announce: boolean): void {
     screenReaderEnabled = enabled;
     left.options.screenReaderMode = enabled;
     right.options.screenReaderMode = enabled;
@@ -366,6 +416,7 @@ function applyScreenReader(enabled: boolean): void {
     } catch {
         // Storage is optional.
     }
+    if (announce) write(screenReaderFeedback(enabled));
 }
 
 function handleInternalCommand(command: string): boolean {
@@ -378,14 +429,19 @@ function handleInternalCommand(command: string): boolean {
             right.options.fontSize = size;
             safeSet('fontsize', String(size));
             fitAndReportSize();
+            write(settingFeedback('fontsize', String(size)));
             return true;
         }
         case ':help':
             write(`\r\nAvailable commands:\r\n${internalCommandHelp.join('\r\n')}\r\n`);
             return true;
         case ':reader':
+            if (!connected) {
+                write('\r\nNot connected to server.\r\n');
+                return true;
+            }
             screenReaderEnabled = !screenReaderEnabled;
-            applyScreenReader(screenReaderEnabled);
+            applyScreenReader(screenReaderEnabled, false);
             connection.send('screenreader', [screenReaderEnabled]);
             return true;
         case ':glyphs': {
@@ -402,6 +458,7 @@ function handleInternalCommand(command: string): boolean {
             left.options.minimumContrastRatio = contrast;
             right.options.minimumContrastRatio = contrast;
             safeSet('contrast', String(contrast));
+            write(settingFeedback('contrast', String(contrast)));
             return true;
         }
         case ':scrollback': {
@@ -410,6 +467,7 @@ function handleInternalCommand(command: string): boolean {
             left.options.scrollback = scrollback;
             right.options.scrollback = scrollback;
             safeSet('scrollback', String(scrollback));
+            write(settingFeedback('scrollback', String(scrollback)));
             return true;
         }
         case ':fontfamily':
@@ -418,6 +476,7 @@ function handleInternalCommand(command: string): boolean {
             right.options.fontFamily = args.join(' ');
             safeSet('font', args.join(' '));
             fitAndReportSize();
+            write(settingFeedback('fontfamily', args.join(' ')));
             return true;
         case ':save':
             saveTerminalHistory();
@@ -559,13 +618,14 @@ function asMapPayload(value: unknown): MapPayload {
         max_y: typeof data.max_y === 'number' ? data.max_y : 0,
         area: typeof data.area === 'string' ? data.area : undefined,
         show_legend: data.show_legend !== false,
-        background: asBackground(data.background),
+        background: parseBackground(data.background),
     };
 }
 
 function renderMap(): void {
     if (!mapEnabled || !mapPayload) return;
     right.clear();
+    recorder.output('r', MAP_CLEAR_SEQUENCE);
     const output = renderMapText(mapPayload, right.cols, right.rows);
     right.write(output);
     recorder.output('r', output);
@@ -574,9 +634,7 @@ function renderMap(): void {
 function playAudio(source: string): void {
     if (!source) return;
     audio ??= new Audio();
-    audio.pause();
-    audio.src = source;
-    void audio.play().catch(() => write('\r\nAudio playback requires a browser interaction.\r\n'));
+    void playAudioElement(audio, source);
 }
 
 function flushBuffer(): void {
@@ -595,19 +653,8 @@ function flushBuffer(): void {
     recorder.output('o', chunk);
 }
 
-function asBackground(value: unknown): MapBackground | undefined {
-    if (typeof value !== 'object' || value === null) return undefined;
-    const data = value as { color?: unknown; coords?: unknown };
-    if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number')) return undefined;
-    if (!Array.isArray(data.coords)) return undefined;
-    const coords = data.coords.filter((coord): coord is [number, number] => {
-        return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number';
-    });
-    return { color: [data.color[0], data.color[1], data.color[2]], coords };
-}
-
 function applyBackground(value: unknown): void {
-    const background = asBackground(value);
+    const background = parseBackground(value);
     if (!background) return;
     if (mapPayload) {
         mapPayload.background = mergeBackgrounds(mapPayload.background, background);
@@ -618,11 +665,13 @@ function applyBackground(value: unknown): void {
 }
 
 function setMapVisibility(enabled: boolean): void {
+    const changed = mapEnabled !== enabled;
     mapEnabled = enabled;
     const layout = mapLayout(enabled, readSetting(DIVIDER_POSITION_KEY, '50'));
     elements.rightTerminal.hidden = layout.rightHidden;
     elements.divider.hidden = layout.dividerHidden;
     elements.leftTerminal.style.width = layout.leftWidth;
+    if (changed && recorder.active) recorder.layoutEvent(enabled ? 'show_right' : 'hide_right');
 }
 
 function saveDividerPosition(): void {

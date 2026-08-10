@@ -10,3 +10,14 @@ export function mapLayout(enabled: boolean, savedPosition: string): MapLayout {
     const width = Number.isFinite(percentage) && percentage > 5 && percentage < 95 ? `${percentage}%` : '50%';
     return { leftWidth: width, rightHidden: false, dividerHidden: false };
 }
+
+export function resizeWidth(
+    startWidth: number,
+    parentWidth: number,
+    delta: number,
+    dividerWidth = 5,
+    minimumWidth = 50,
+): number {
+    const maximumWidth = Math.max(minimumWidth, parentWidth - minimumWidth - dividerWidth);
+    return Math.min(maximumWidth, Math.max(minimumWidth, startWidth + delta));
+}
