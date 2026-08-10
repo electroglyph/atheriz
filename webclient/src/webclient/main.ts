@@ -12,11 +12,12 @@ import { MapPayload, WebClientElements, WireMessage } from './types';
 import { SessionRecorder } from './recorder';
 import { MAP_CLEAR_SEQUENCE, mergeBackgrounds, parseBackground, renderMap as renderMapText } from './map';
 import { mapLayout, resizeWidth } from './layout';
-import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory } from './input';
+import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory, submissionFeedback } from './input';
 import { formatPrompt, formatTextOutput } from './text';
 import { BUFFER_FINAL_SEQUENCE } from './buffer';
 import { playAudio as playAudioElement } from './audio';
 import { screenReaderFeedback, settingFeedback } from './feedback';
+import { shouldResetSession } from './session';
 import './style.css';
 
 const elements = getElements();
@@ -77,7 +78,9 @@ write('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands');
 const connection = new WebSocketConnection({
     onMessage: handleMessage,
     onStateChange: (state) => {
+        const wasConnected = connected;
         connected = state === 'open';
+        if (shouldResetSession(wasConnected, state)) resetSessionState();
         if (state === 'connecting') write('\n======== Connecting...\n');
         if (state === 'closed') {
             write('\n======== Connection lost. Retrying...\n');
@@ -137,6 +140,19 @@ function readNumberSetting(key: string, fallback: number): number {
 function readBooleanSetting(key: string, fallback: boolean): boolean {
     const value = readSetting(key, String(fallback));
     return value === 'true' ? true : value === 'false' ? false : fallback;
+}
+
+function resetSessionState(): void {
+    censorInput = true;
+    prompt = '';
+    promptPrinted = false;
+    mapPayload = null;
+    pendingBackground = undefined;
+    commandSubmitted = false;
+    history.reset();
+    elements.input.value = '';
+    elements.input.style.height = '';
+    setMapVisibility(false);
 }
 
 function installInputHandlers(): void {
@@ -206,7 +222,8 @@ function installInputHandlers(): void {
             resizeInput();
             history.reset();
             updateHint();
-            connection.send('text', ['\n']);
+            const feedback = submissionFeedback(connection.send('text', ['\n']));
+            if (feedback) write(feedback);
             return;
         }
         if (!censorInput) history.add(command);
@@ -217,7 +234,12 @@ function installInputHandlers(): void {
             updateHint();
             return;
         }
-        connection.send('text', [command]);
+        const feedback = submissionFeedback(connection.send('text', [command]));
+        if (feedback) {
+            write(feedback);
+            commandSubmitted = false;
+            return;
+        }
         if (!censorInput) writeSelf(command);
         elements.input.select();
         commandSubmitted = true;

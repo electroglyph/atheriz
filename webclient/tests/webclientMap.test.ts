@@ -13,7 +13,7 @@ describe('webclient map renderer', () => {
             legend: [{ symbol: 'x', desc: 'Exit' }],
         }, 20, 10);
 
-        expect(output).toContain('a@');
+        expect(output).toContain('d@');
         expect(output).toContain('c');
         expect(output).toContain('Room');
         expect(output).toContain('╭');
@@ -91,6 +91,19 @@ describe('webclient map renderer', () => {
         expect(output.split('\r\n')).toHaveLength(1);
     });
 
+    it('treats the player position as already relative to the map string', () => {
+        const output = renderMap({
+            map: 'abc\ndef\nghi',
+            pos: [1, 2],
+            symbol: '@',
+            min_x: 10,
+            max_y: 20,
+            show_legend: false,
+        }, 20, 10);
+        expect(output).toContain('g@');
+        expect(output).toContain('i');
+    });
+
     it('recolors duplicate legend symbols and combines same-coordinate descriptions', () => {
         const output = renderMap({
             map: 'x',
@@ -102,5 +115,13 @@ describe('webclient map renderer', () => {
         }, 30, 12);
         expect(output).toContain('Door, Exit');
         expect(output).toContain('\x1b[48;2;');
+    });
+
+    it('truncates a legend entry wider than the terminal', () => {
+        const output = renderMap({
+            map: 'x',
+            legend: [{ symbol: 'x', desc: 'This description is much too long' }],
+        }, 12, 10);
+        expect(output).not.toContain('This description is much too long');
     });
 });

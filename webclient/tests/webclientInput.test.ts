@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory } from '../src/webclient/input';
+import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory, submissionFeedback } from '../src/webclient/input';
 
 describe('webclient input behavior', () => {
     it('keeps arrow navigation inside multiline input', () => {
@@ -22,5 +22,10 @@ describe('webclient input behavior', () => {
         expect(shouldClearSubmittedInput('Enter', true, false, false, false)).toBe(false);
         expect(shouldClearSubmittedInput('a', true, true, false, false)).toBe(false);
         expect(shouldClearSubmittedInput('a', false, false, false, false)).toBe(false);
+    });
+
+    it('reports when a command cannot be sent', () => {
+        expect(submissionFeedback(false)).toBe('\r\nNot connected to server.\r\n');
+        expect(submissionFeedback(true)).toBeNull();
     });
 });

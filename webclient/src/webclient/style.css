@@ -33,6 +33,7 @@ body {
 }
 
 #left-terminal {
+    flex: 0 0 auto;
     border-left: 5px solid #333;
     border-top: 5px solid #333;
     border-bottom: 5px solid #333;
@@ -40,6 +41,8 @@ body {
 }
 
 #right-terminal {
+    flex: 1 1 auto;
+    width: auto;
     border-right: 5px solid #333;
     border-top: 5px solid #333;
     border-bottom: 5px solid #333;

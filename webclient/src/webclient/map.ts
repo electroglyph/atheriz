@@ -13,14 +13,14 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
         if (entry.coords) placeVisual(lines, relativePosition(entry.coords, payload), withReset(entry.symbol));
     }
     if (payload.pos && payload.symbol) {
-        placeVisual(lines, relativePosition(payload.pos, payload), withReset(payload.symbol));
+        placeVisual(lines, payload.pos, withReset(payload.symbol));
     }
 
     const legend = payload.show_legend === false ? [] : buildLegend(payload, processedLegend, columns, rows);
     const availableRows = Math.max(1, rows - (legend.length > 0 ? legend.length + 1 : 0));
     const mapWidth = Math.max(0, ...lines.map(visibleLength));
     const mapHeight = lines.length;
-    const player = payload.pos ? relativePosition(payload.pos, payload) : undefined;
+    const player = payload.pos;
     const xStart = player && mapWidth > columns
         ? clamp(player[0] - Math.floor(columns / 2), 0, mapWidth - columns)
         : 0;
@@ -90,7 +90,8 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
 
     const rowCount = Math.ceil(values.length / chosenColumns);
     const totalWidth = legendWidth(columnWidths, chosenColumns);
-    const title = payload.area ?? 'Legend';
+    const rawTitle = payload.area ?? 'Legend';
+    const title = rawTitle.length > Math.max(1, columns - 6) ? rawTitle.slice(0, Math.max(1, columns - 9)) + '...' : rawTitle;
     const headerText = `╭─ ${title} `;
     const header = `${headerText}${'─'.repeat(Math.max(1, totalWidth - visibleLength(headerText) - 1))}╮`;
     const output = [header];
@@ -99,7 +100,10 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
         for (let column = 0; column < chosenColumns; column += 1) {
             const item = values[column * rowCount + row];
             const width = columnWidths[column];
-            const text = item ? `${item.symbol} = ${item.desc}` : '';
+            const rawText = item ? `${item.symbol} = ${item.desc}` : '';
+            const text = visibleLength(rawText) > Math.max(1, columns - 4)
+                ? ansiSubstring(rawText, 0, Math.max(1, columns - 7)) + '...'
+                : rawText;
             line += ` ${text}${' '.repeat(Math.max(0, width - visibleLength(text)))} │`;
         }
         output.push(line);
@@ -158,7 +162,7 @@ function calculateLegendWidths(entries: MapLegendEntry[], columns: number): numb
         let width = 0;
         for (let row = 0; row < rows; row += 1) {
             const item = entries[column * rows + row];
-            if (item) width = Math.max(width, visibleLength(`${item.symbol} = ${item.desc}`));
+            if (item) width = Math.max(width, Math.min(Math.max(1, columns - 4), visibleLength(`${item.symbol} = ${item.desc}`)));
         }
         return width;
     });

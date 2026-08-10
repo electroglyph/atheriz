@@ -24,3 +24,7 @@ export function shouldClearSubmittedInput(
 ): boolean {
     return submitted && key.length === 1 && !controlKey && !altKey && !metaKey;
 }
+
+export function submissionFeedback(sent: boolean): string | null {
+    return sent ? null : '\r\nNot connected to server.\r\n';
+}
