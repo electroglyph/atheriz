@@ -527,6 +527,16 @@ TEMPLATE_CONFIGS = [
 ]
 
 
+def copy_web_folder(destination: Path, web_src: Path | None = None) -> None:
+    import shutil
+
+    if web_src is None:
+        web_src = Path(__file__).parent / "web"
+    if not web_src.is_dir():
+        raise FileNotFoundError(f"Web folder not found at {web_src}")
+    shutil.copytree(web_src, destination / "web", dirs_exist_ok=True)
+
+
 
 def create_game_folder(folder_name: str) -> None:
     """
@@ -713,14 +723,8 @@ def create_game_folder(folder_name: str) -> None:
     server_events_src = Path(atheriz.server_events.__file__)
     (folder_path / "server_events.py").write_text(server_events_src.read_text())
 
-    # Copy web folder (templates + static files)
     print(f"  Copying web folder...")
-    import shutil
-    web_src = Path(__file__).parent / "web"
-    if web_src.exists():
-        shutil.copytree(web_src, folder_path / "web", dirs_exist_ok=True)
-    else:
-        print(f"  Warning: Web folder not found at {web_src}")
+    copy_web_folder(folder_path)
 
     # Create save directory in the game folder
     save_path = folder_path / "save"

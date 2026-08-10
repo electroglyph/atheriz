@@ -17,6 +17,13 @@ describe('webclient session recorder', () => {
         vi.useRealTimers();
     });
 
+    it('records layout changes as resize events', () => {
+        const recorder = new SessionRecorder();
+        recorder.start({ cols: 80, rows: 24 }, { cols: 40, rows: 24 }, 50, true);
+        recorder.resize({ divider_pct: 65, right_visible: false });
+        expect(recorder.stop()).toContain('[0,"resize",{"divider_pct":65,"right_visible":false}]');
+    });
+
     it('returns null when stopping an inactive recorder', () => {
         expect(new SessionRecorder().stop()).toBeNull();
     });

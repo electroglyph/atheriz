@@ -39,7 +39,9 @@ def copy_file(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
-def clean_generated_output(static_root: Path) -> None:
+def clean_generated_output(
+    static_root: Path, *, remove_legacy_webclient: bool = False
+) -> None:
     """Remove only paths owned by this build, not arbitrary game assets."""
     for relative in (
         "assets",
@@ -48,10 +50,15 @@ def clean_generated_output(static_root: Path) -> None:
         "gfonts",
     ):
         remove_path(static_root / relative)
-    remove_path(static_root / "webclient" / "index.html")
+    if remove_legacy_webclient:
+        remove_path(static_root / "webclient")
+    else:
+        remove_path(static_root / "webclient" / "index.html")
 
 
-def deploy(static_root: Path, clean: bool) -> None:
+def deploy(
+    static_root: Path, clean: bool, *, remove_legacy_webclient: bool = False
+) -> None:
     if not DIST_ROOT.is_dir():
         raise FileNotFoundError(
             f"Build output not found at {DIST_ROOT}; run `npm run build` first"
@@ -59,7 +66,9 @@ def deploy(static_root: Path, clean: bool) -> None:
 
     static_root.mkdir(parents=True, exist_ok=True)
     if clean:
-        clean_generated_output(static_root)
+        clean_generated_output(
+            static_root, remove_legacy_webclient=remove_legacy_webclient
+        )
 
     copy_tree(DIST_ROOT / "assets", static_root / "assets")
     copy_tree(PROJECT_ROOT / "fonts", static_root / "fonts")
@@ -113,7 +122,11 @@ def main() -> int:
         if args.web_root is None:
             raise SystemExit("The `game` target requires --web-root <game/web>")
         static_root = args.web_root.resolve() / "static"
-    deploy(static_root, clean=not args.no_clean)
+    deploy(
+        static_root,
+        clean=not args.no_clean,
+        remove_legacy_webclient=args.target == "package",
+    )
     return 0
 
 

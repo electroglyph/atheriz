@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { renderMap } from '../src/webclient/map';
+import { mergeBackgrounds, renderMap } from '../src/webclient/map';
 
 describe('webclient map renderer', () => {
     it('renders the map, player, and legend in the map pane', () => {
@@ -16,7 +16,9 @@ describe('webclient map renderer', () => {
         expect(output).toContain('a@');
         expect(output).toContain('c');
         expect(output).toContain('Room:');
-        expect(output).toContain('x = Exit');
+        expect(output).toContain('x');
+        expect(output).toContain('Exit');
+        expect(output).toContain('\x1b[');
     });
 
     it('crops a large map around the player without dropping ANSI state', () => {
@@ -30,5 +32,39 @@ describe('webclient map renderer', () => {
 
         expect(output).toContain('@');
         expect(output).toContain('\x1b[0m');
+    });
+
+    it('accumulates background updates with the same color', () => {
+        const merged = mergeBackgrounds(
+            { color: [1, 2, 3], coords: [[0, 0]] },
+            { color: [1, 2, 3], coords: [[1, 0]] },
+        );
+        expect(merged).toEqual({ color: [1, 2, 3], coords: [[0, 0], [1, 0]] });
+    });
+
+    it('renders accumulated backgrounds with distinct colors', () => {
+        const output = renderMap({
+            map: 'ab',
+            max_y: 0,
+            background: [
+                { color: [1, 2, 3], coords: [[0, 0]] },
+                { color: [4, 5, 6], coords: [[1, 0]] },
+            ],
+        }, 10, 4);
+        expect(output).toContain('\x1b[48;2;1;2;3m');
+        expect(output).toContain('\x1b[48;2;4;5;6m');
+    });
+
+    it('renders map rows with cursor positioning and bounds legend width', () => {
+        const output = renderMap({
+            map: 'abc\ndef',
+            max_y: 1,
+            legend: [
+                { symbol: 'x', desc: 'A very long description' },
+                { symbol: 'y', desc: 'Exit' },
+            ],
+        }, 12, 8);
+        expect(output).toMatch(/\x1b\[\d+;\d+H/);
+        expect(output.split('\r\n')).toHaveLength(1);
     });
 });

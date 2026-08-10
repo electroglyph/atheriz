@@ -4,11 +4,15 @@ import { join } from 'path';
 
 const root = join(__dirname, '..');
 
-describe('bundled Fira Code family is referenced consistently', () => {
-  it('bundled FiraCode.css declares the family the app references', () => {
+describe('bundled terminal font is referenced consistently', () => {
+  it('bundled FiraCode.css declares the legacy family the app references', () => {
     const css = readFileSync(join(root, 'fonts/FiraCode.css'), 'utf8');
-    // App uses 'Fira Code'; the css currently declares 'Fira Custom'.
-    expect(css).toMatch(/'Fira Code'/);
+    expect(css).toMatch(/'Fira Custom'/);
+  });
+
+  it('terminal defaults to the bundled legacy family', () => {
+    const source = readFileSync(join(root, 'src/webclient/main.ts'), 'utf8');
+    expect(source).toContain('"Fira Custom", Menlo, monospace');
   });
 });
 

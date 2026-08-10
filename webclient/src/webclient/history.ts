@@ -52,6 +52,10 @@ export class CommandHistory {
         return this.completionMatches[0] ?? '';
     }
 
+    isNavigating(): boolean {
+        return this.index !== -1;
+    }
+
     save(): void {
         try {
             window.localStorage.setItem(this.storageKey, JSON.stringify(this.history));

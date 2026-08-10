@@ -15,7 +15,7 @@ export interface MapPayload {
     max_y?: number;
     area?: string;
     show_legend?: boolean;
-    background?: MapBackground;
+    background?: MapBackground | MapBackground[];
 }
 
 export interface MapLegendEntry {

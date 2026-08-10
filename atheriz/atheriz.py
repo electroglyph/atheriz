@@ -215,6 +215,11 @@ def check_webclient_sync(
     for area in ("templates", "static"):
         engine_files = _collect_files(engine_web / area / "webclient")
         game_files = _collect_files(game_web / area / "webclient")
+        if area == "static" and Path("index.html") in engine_files:
+            engine_files = {Path("index.html"): engine_files[Path("index.html")]}
+            game_files = {
+                Path("index.html"): game_files[Path("index.html")]
+            } if Path("index.html") in game_files else {}
         common = set(engine_files) & set(game_files)
         summary[area] = {
             "missing": sorted(set(engine_files) - set(game_files)),
@@ -255,6 +260,14 @@ def format_webclient_sync_warning(
         lines.append(f"  web/{area}/webclient: {', '.join(parts)}")
         names = [str(p) for p in (different + missing + extra)[:3]]
         lines.append("    e.g. " + ", ".join(names))
+    compiled_webclient = (engine_web / "static" / "webclient" / "index.html").is_file()
+    if compiled_webclient:
+        lines.append("  Deploy the compiled webclient into the game:")
+        lines.append("    cd /path/to/atheriz/webclient")
+        lines.append(
+            f'    npm run deploy:game -- --web-root "{game_cwd / "web"}"'
+        )
+        return "\n".join(lines)
     lines.append("  Copy the server's webclient over the game's:")
     rel = os.path.relpath(str(engine_web), str(game_cwd))
     if os_name == "nt":

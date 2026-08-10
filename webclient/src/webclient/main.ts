@@ -10,17 +10,25 @@ import { CommandHistory } from './history';
 import { launchDraw } from './launch';
 import { MapBackground, MapPayload, WebClientElements, WireMessage } from './types';
 import { SessionRecorder } from './recorder';
-import { renderMap as renderMapText } from './map';
+import { mergeBackgrounds, renderMap as renderMapText } from './map';
+import { mapLayout } from './layout';
+import { inputHeight, shouldNavigateHistory } from './input';
+import { formatPrompt, formatTextOutput } from './text';
+import { BUFFER_FINAL_SEQUENCE } from './buffer';
 import './style.css';
 
 const elements = getElements();
+if (elements.rightTerminal.hidden) {
+    elements.divider.hidden = true;
+    elements.leftTerminal.style.width = '100%';
+}
 const history = new CommandHistory();
 let screenReaderEnabled = readBooleanSetting('reader', false);
 const terminalOptions = {
     convertEol: true,
     allowProposedApi: true,
     cursorInactiveStyle: 'none' as const,
-    fontFamily: readSetting('font', '"Fira Code", Menlo, monospace'),
+    fontFamily: readSetting('font', '"Fira Custom", Menlo, monospace'),
     fontSize: readNumberSetting('fontsize', 19),
     cursorBlink: readBooleanSetting('cursorblink', true),
     customGlyphs: readBooleanSetting('glyphs', true),
@@ -39,11 +47,14 @@ let promptPrinted = false;
 let censorInput = true;
 let connected = false;
 let mapPayload: MapPayload | null = null;
+let pendingBackground: MapPayload['background'];
 let audio: HTMLAudioElement | null = null;
 let bufferQueue: string[] = [];
 let bufferWriting = false;
 let autosaveSetting = readBooleanSetting('autosave', false);
 const recorder = new SessionRecorder();
+const DIVIDER_POSITION_KEY = 'xtermDividerPos';
+let lastRecordedLayout = '';
 
 left.loadAddon(leftFit);
 right.loadAddon(rightFit);
@@ -55,6 +66,10 @@ left.open(elements.leftTerminal);
 right.open(elements.rightTerminal);
 installWebgl(left);
 installWebgl(right);
+write('\x1b[1;97mxtermia2\x1b[0m terminal emulator (made with xterm.js)\n');
+write('revision \x1b[1;97m14\x1b[0m\n');
+write('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands');
+void document.fonts?.ready.then(() => fitAndReportSize());
 
 const connection = new WebSocketConnection({
     onMessage: handleMessage,
@@ -113,6 +128,23 @@ function readBooleanSetting(key: string, fallback: boolean): boolean {
 }
 
 function installInputHandlers(): void {
+    const hint = document.createElement('textarea');
+    hint.id = 'input-box-ghost';
+    hint.readOnly = true;
+    hint.tabIndex = -1;
+    hint.setAttribute('aria-hidden', 'true');
+    elements.input.parentElement?.insertBefore(hint, elements.input);
+    const resizeInput = () => {
+        elements.input.style.height = 'auto';
+        elements.input.style.height = `${inputHeight(elements.input.scrollHeight)}px`;
+        hint.style.height = elements.input.style.height;
+        window.setTimeout(fitAndReportSize, 0);
+    };
+    const updateHint = () => {
+        hint.value = history.getSuggestion();
+        hint.scrollTop = elements.input.scrollTop;
+        hint.scrollLeft = elements.input.scrollLeft;
+    };
     elements.input.addEventListener('keydown', (event) => {
         const suggestion = history.getSuggestion();
         if (suggestion && (event.key === 'Tab' || (event.key === 'ArrowRight' && elements.input.selectionStart === elements.input.value.length))) {
@@ -122,8 +154,18 @@ function installInputHandlers(): void {
             return;
         }
         if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
-            event.preventDefault();
-            elements.input.value = history.navigate(event.key === 'ArrowUp' ? 'up' : 'down', elements.input.value);
+            if (shouldNavigateHistory(
+                event.key,
+                elements.input.value,
+                elements.input.selectionStart,
+                elements.input.selectionEnd,
+                history.isNavigating(),
+            )) {
+                event.preventDefault();
+                elements.input.value = history.navigate(event.key === 'ArrowUp' ? 'up' : 'down', elements.input.value);
+                resizeInput();
+                updateHint();
+            }
             return;
         }
         if (event.key !== 'Enter' || event.shiftKey || event.isComposing || event.keyCode === 229) return;
@@ -131,7 +173,9 @@ function installInputHandlers(): void {
         event.preventDefault();
         const command = elements.input.value;
         elements.input.value = '';
+        resizeInput();
         history.reset();
+        updateHint();
         if (!command) {
             connection.send('text', ['\n']);
             return;
@@ -141,7 +185,16 @@ function installInputHandlers(): void {
         connection.send('text', [command]);
         if (!censorInput) writeSelf(command);
     });
-    elements.input.addEventListener('input', () => history.findCompletions(elements.input.value));
+    elements.input.addEventListener('input', () => {
+        history.findCompletions(elements.input.value);
+        resizeInput();
+        updateHint();
+    });
+    elements.input.addEventListener('scroll', () => {
+        hint.scrollTop = elements.input.scrollTop;
+        hint.scrollLeft = elements.input.scrollLeft;
+    });
+    resizeInput();
 }
 
 function installResizeHandlers(): void {
@@ -162,6 +215,8 @@ function installResizeHandlers(): void {
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', stop);
             window.removeEventListener('pointercancel', stop);
+            saveDividerPosition();
+            fitAndReportSize();
         };
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', stop);
@@ -176,6 +231,8 @@ function fitAndReportSize(): void {
     } catch {
         return;
     }
+    if (mapEnabled) renderMap();
+    recordLayout();
     if (!connected) return;
     connection.send('term_size', [left.cols, left.rows]);
     if (mapEnabled) connection.send('map_size', [right.cols, Math.max(1, right.rows - 1)]);
@@ -206,19 +263,22 @@ function handleMessage(message: WireMessage): void {
             applyScreenReader(asBoolean(message.args[0]));
             break;
         case 'map_enable':
-            mapEnabled = !screenReaderEnabled;
-            elements.rightTerminal.hidden = !mapEnabled;
+            setMapVisibility(!screenReaderEnabled);
             if (mapEnabled) fitAndReportSize();
             break;
         case 'map_disable':
-            mapEnabled = false;
-            elements.rightTerminal.hidden = true;
+            setMapVisibility(false);
+            fitAndReportSize();
             break;
         case 'get_map_size':
             if (mapEnabled) connection.send('map_size', [right.cols, Math.max(1, right.rows - 1)]);
             break;
         case 'map':
             mapPayload = asMapPayload(message.args[0]);
+            if (pendingBackground) {
+                mapPayload.background = mergeBackgrounds(mapPayload.background, pendingBackground);
+                pendingBackground = undefined;
+            }
             renderMap();
             break;
         case 'legend':
@@ -263,6 +323,7 @@ function handleMessage(message: WireMessage): void {
             applyBackground(message.args[0]);
             break;
         case 'unbackground':
+            pendingBackground = undefined;
             if (mapPayload) {
                 mapPayload.background = undefined;
                 renderMap();
@@ -274,15 +335,14 @@ function handleMessage(message: WireMessage): void {
 }
 
 function writeText(text: string): void {
-    const output = promptPrinted ? `\r${' '.repeat(stripAnsi(prompt).length)}\r${text}${prompt}` : `${text}${prompt}`;
-    write(output);
+    write(formatTextOutput(text, left.cols, screenReaderEnabled, prompt, promptPrinted));
     promptPrinted = prompt.length > 0;
 }
 
 function setPrompt(value: string): void {
-    if (promptPrinted) write(`\r${' '.repeat(stripAnsi(prompt).length)}\r`);
+    const oldPrompt = prompt;
     prompt = value;
-    write(prompt);
+    write(formatPrompt(prompt, oldPrompt, promptPrinted));
     promptPrinted = true;
 }
 
@@ -298,8 +358,8 @@ function applyScreenReader(enabled: boolean): void {
     left.options.screenReaderMode = enabled;
     right.options.screenReaderMode = enabled;
     if (enabled) {
-        mapEnabled = false;
-        elements.rightTerminal.hidden = true;
+        setMapVisibility(false);
+        fitAndReportSize();
     }
     try {
         window.localStorage.setItem('reader', String(enabled));
@@ -417,19 +477,19 @@ function reportInvalidCommand(help: string): true {
 }
 
 const internalCommandHelp = [
-    ':help',
-    ':fontsize <size>',
-    ':fontfamily <family>',
-    ':contrast <ratio>',
-    ':reader',
-    ':glyphs',
-    ':scrollback <rows>',
-    ':save',
-    ':record',
-    ':stop',
-    ':autosave',
-    ':reset',
-    ':draw',
+    ':help = This lists all available commands',
+    ':fontsize <size> = Change font size. Default = 19',
+    ':fontfamily <font> = Change font family. Default = "Fira Custom"',
+    ':contrast <ratio> = Change minimum contrast ratio. Default = 1',
+    ':reader = Toggle screen reader mode',
+    ':glyphs = Toggle custom box-drawing glyphs',
+    ':scrollback <rows> = Change terminal history size',
+    ':save = Save terminal history',
+    ':record = Start session recording',
+    ':stop = Stop session recording',
+    ':autosave = Toggle automatic history saving',
+    ':reset = Reset client settings',
+    ':draw = Open AtheriZ Draw',
 ];
 
 function saveTerminalHistory(): void {
@@ -511,10 +571,6 @@ function renderMap(): void {
     recorder.output('r', output);
 }
 
-function stripAnsi(value: string): string {
-    return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '');
-}
-
 function playAudio(source: string): void {
     if (!source) return;
     audio ??= new Audio();
@@ -533,7 +589,8 @@ function flushBuffer(): void {
     }
     left.write(chunk, () => {
         bufferWriting = false;
-        flushBuffer();
+        if (bufferQueue.length > 0) flushBuffer();
+        else write(BUFFER_FINAL_SEQUENCE);
     });
     recorder.output('o', chunk);
 }
@@ -550,9 +607,48 @@ function asBackground(value: unknown): MapBackground | undefined {
 }
 
 function applyBackground(value: unknown): void {
-    if (!mapPayload) return;
-    mapPayload.background = asBackground(value);
-    renderMap();
+    const background = asBackground(value);
+    if (!background) return;
+    if (mapPayload) {
+        mapPayload.background = mergeBackgrounds(mapPayload.background, background);
+        renderMap();
+    } else {
+        pendingBackground = mergeBackgrounds(pendingBackground, background);
+    }
+}
+
+function setMapVisibility(enabled: boolean): void {
+    mapEnabled = enabled;
+    const layout = mapLayout(enabled, readSetting(DIVIDER_POSITION_KEY, '50'));
+    elements.rightTerminal.hidden = layout.rightHidden;
+    elements.divider.hidden = layout.dividerHidden;
+    elements.leftTerminal.style.width = layout.leftWidth;
+}
+
+function saveDividerPosition(): void {
+    if (!mapEnabled) return;
+    const parentWidth = elements.leftTerminal.parentElement?.getBoundingClientRect().width ?? 0;
+    if (parentWidth <= 0) return;
+    const percentage = (elements.leftTerminal.getBoundingClientRect().width / parentWidth) * 100;
+    safeSet(DIVIDER_POSITION_KEY, percentage.toFixed(2));
+}
+
+function recordLayout(): void {
+    if (!recorder.active) return;
+    const parentWidth = elements.leftTerminal.parentElement?.getBoundingClientRect().width ?? 0;
+    const dividerPct = parentWidth > 0
+        ? (elements.leftTerminal.getBoundingClientRect().width / parentWidth) * 100
+        : 50;
+    const layout = JSON.stringify({
+        left: { cols: left.cols, rows: left.rows },
+        right: { cols: right.cols, rows: right.rows },
+        divider_pct: Number(dividerPct.toFixed(2)),
+        right_visible: mapEnabled,
+    });
+    if (layout !== lastRecordedLayout) {
+        recorder.resize(JSON.parse(layout));
+        lastRecordedLayout = layout;
+    }
 }
 
 function installWebgl(terminal: Terminal): WebglAddon | null {

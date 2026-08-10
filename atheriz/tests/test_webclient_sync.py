@@ -155,3 +155,53 @@ class TestFormatWebclientSyncWarning:
         assert "modified" not in msg
         assert "missing" not in msg
         assert "extra" not in msg
+
+
+def test_compiled_webclient_ignores_preserved_legacy_files(tmp_path):
+    engine = tmp_path / "engine" / "web"
+    _make_tree(
+        engine / "templates",
+        ENGINE_FILES["templates"],
+    )
+    _make_tree(
+        engine / "static",
+        {"webclient/index.html": "compiled"},
+    )
+    game = _game(
+        tmp_path,
+        {
+            "templates": ENGINE_FILES["templates"],
+            "static": {
+                "webclient/index.html": "compiled",
+                "webclient/js/webclient.js": "legacy",
+                "webclient/css/xterm.css": "legacy",
+            },
+        },
+    )
+
+    assert check_webclient_sync(game, engine_web=engine) is None
+
+
+def test_compiled_webclient_warning_uses_deploy_command(tmp_path):
+    engine = tmp_path / "engine" / "web"
+    _make_tree(
+        engine / "templates",
+        ENGINE_FILES["templates"],
+    )
+    _make_tree(
+        engine / "static",
+        {"webclient/index.html": "compiled"},
+    )
+    game = _game(
+        tmp_path,
+        {
+            "templates": ENGINE_FILES["templates"],
+            "static": {"webclient/index.html": "stale"},
+        },
+    )
+
+    summary = check_webclient_sync(game, engine_web=engine)
+    msg = format_webclient_sync_warning(summary, game, engine_web=engine)
+
+    assert "npm run deploy:game" in msg
+    assert "cp -r" not in msg
