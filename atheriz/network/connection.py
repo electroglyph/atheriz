@@ -110,6 +110,10 @@ class BaseConnection:
         """
         raise NotImplementedError
 
+    def launch_draw(self):
+        """Ask a browser-capable client to open the draw editor."""
+        self.send_command("launch_draw")
+
     def msg(self, *args, **kwargs):
         """
         Send a text message to this connection.
@@ -119,12 +123,13 @@ class BaseConnection:
         if not args and not kwargs:
             return
         args = list(args) or []
-        if kwargs:
-            text = kwargs.pop("text", None)
+        outgoing_kwargs = dict(kwargs)
+        if outgoing_kwargs:
+            text = outgoing_kwargs.pop("text", None)
             if text:
                 args.insert(0, text)
-            elif kwargs:
-                k, v = kwargs.popitem()
+            elif outgoing_kwargs:
+                k, v = outgoing_kwargs.popitem()
                 cmd = k
                 args = [v] + args
 
@@ -135,7 +140,7 @@ class BaseConnection:
                 args[0] += "\r\n"
             if self.session.screenreader:
                 args[0] = strip_ansi(args[0])
-        self.send_command(cmd, *args, **kwargs)
+        self.send_command(cmd, *args, **outgoing_kwargs)
 
     # pyrefly: ignore
     def close(self):

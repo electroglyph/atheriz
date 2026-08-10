@@ -193,7 +193,7 @@ class InputFuncs:
         """
         try:
             text = str(args[0]) if args else ""
-            logger.debug(f"text handler received: {text!r}")
+            logger.debug("text handler received input")
             session = connection.session
             atp = get_async_threadpool()
 
@@ -282,7 +282,13 @@ class InputFuncs:
             kwargs (dict): Extra Keyword arguments.
         """
         if len(args) > 0:
-            enabled = bool(args[0])
+            value = args[0]
+            if isinstance(value, bool):
+                enabled = value
+            elif isinstance(value, str):
+                enabled = value.lower() == "true"
+            else:
+                return
             connection.session.screenreader = enabled
             connection.msg(f"Screenreader {'enabled' if enabled else 'disabled'}.")
 

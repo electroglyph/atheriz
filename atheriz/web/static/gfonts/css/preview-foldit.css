@@ -1,0 +1,9 @@
+@font-face {
+  font-family: 'Foldit';
+  font-style: normal;
+  font-weight: 400;
+  src: url(../f/foldit-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-foldit:none;
+}

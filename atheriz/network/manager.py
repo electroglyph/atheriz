@@ -10,6 +10,17 @@ if TYPE_CHECKING:
     from .connection import BaseConnection
     from atheriz.globals.asyncthreadpool import AsyncThreadPool
 
+
+def _strip_input_value(value):
+    if isinstance(value, str):
+        return strip_terminal_escapes(value)
+    if isinstance(value, list):
+        return [_strip_input_value(item) for item in value]
+    if isinstance(value, dict):
+        return {key: _strip_input_value(item) for key, item in value.items()}
+    return value
+
+
 class ConnectionManager:
     """
     Manages all connections and orchestrates message handling across protocols.
@@ -79,6 +90,10 @@ class ConnectionManager:
                 connection.clear_pending_input()
                 if connection.session:
                     connection.session.at_disconnect()
+                try:
+                    connection.close()
+                except Exception as e:
+                    logger.debug(f"[Network] Connection cleanup failed: {e}")
                 logger.info(f"[Network] Connection closed: {conn_id} (total: {self.connection_count})")
 
     @property
@@ -132,7 +147,8 @@ class ConnectionManager:
         Handlers run on the game threadpool via the connection's serialized
         input queue; the protocol loop only parses, validates, and enqueues."""
         if settings.STRIP_INPUT_ESCAPE_SEQUENCES:
-            args = [strip_terminal_escapes(a) if isinstance(a, str) else a for a in args]
+            args = [_strip_input_value(value) for value in args]
+            kwargs = _strip_input_value(kwargs)
         handler = self._message_handlers.get(cmd)
         if handler:
             connection.enqueue_input(handler, args, kwargs)

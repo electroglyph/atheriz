@@ -1,0 +1,9 @@
+@font-face {
+  font-family: 'Nabla';
+  font-style: normal;
+  font-weight: 400;
+  src: url(../f/nabla-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-nabla:colrv1;
+}

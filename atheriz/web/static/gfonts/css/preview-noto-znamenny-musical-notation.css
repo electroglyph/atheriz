@@ -1,0 +1,9 @@
+@font-face {
+  font-family: 'Noto Znamenny Musical Notation';
+  font-style: normal;
+  font-weight: 400;
+  src: url(../f/noto-znamenny-musical-notation-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-notoznamennymusicalnotation:none;
+}

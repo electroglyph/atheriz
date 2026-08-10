@@ -1,0 +1,9 @@
+@font-face {
+  font-family: 'Bitcount Prop Single Ink';
+  font-style: normal;
+  font-weight: 400;
+  src: url(../f/bitcount-prop-single-ink-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-bitcountpropsingleink:none;
+}

@@ -61,7 +61,10 @@ Atheriz uses a structured JSON-over-WebSocket protocol. The following commands c
 - **`player_commands`**: populates the client's tab-completion list.
   - Arguments: `[array_of_strings]`
 - **`get_map_size`**: Requests the client send back its current map terminal dimensions.
-  - Arguments: None
+   - Arguments: None
+- **`launch_draw`**: Requests that the browser open AtheriZ Draw in a new tab.
+   - Arguments: None
+   - The client uses the fixed same-origin route `/atheriz_draw/` and shows a link fallback if the browser blocks the popup.
 
 ## 12.3 WebSocket Protocol (Client-to-Server)
 
@@ -72,5 +75,9 @@ The client also sends commands back to the server:
 - **`map_size`**: Updated dimensions of the map pane.
 - **`screenreader`**: Notification that the user toggled screen reader mode.
 - **`client_ready`**: Sent when the client initial load is complete.
+
+## 12.4 AtheriZ Draw
+
+The TypeScript frontend build serves the terminal client at `/webclient/index.html` and the ANSI editor at `/atheriz_draw/`. Build the frontend before starting the server and deploy it into the active game's `web/` directory. The server reports whether the draw entry point is present during startup; it does not build frontend assets at runtime.
 
 [Table of Contents](./table_of_contents.md) | [Next: 13 The Menu Engine](./13_menu_engine.md)

@@ -1,0 +1,10 @@
+@font-face {
+  font-family: 'Kalnia Glaze';
+  font-style: normal;
+  font-weight: 400;
+  font-stretch: 100%;
+  src: url(../f/kalnia-glaze-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-kalniaglaze:none;
+}

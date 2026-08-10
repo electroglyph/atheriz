@@ -1,0 +1,14 @@
+@font-face {
+	font-family: 'Unifont';
+	src: url('unifont-17.0.04.otf') format('opentype');
+	font-weight: normal;
+	font-style: normal;
+}
+
+@font-face {
+	font-family: 'Unifont';
+	src: url('unifont_upper-17.0.04.otf') format('opentype');
+	font-weight: normal;
+	font-style: normal;
+	unicode-range: U+10000-10FFFF;
+}

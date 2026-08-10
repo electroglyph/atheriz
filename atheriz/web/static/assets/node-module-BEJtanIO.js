@@ -1,0 +1,1 @@
+function e(){throw Error(`Node module loading is unavailable in the browser`)}export{e as createRequire};

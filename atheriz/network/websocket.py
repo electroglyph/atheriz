@@ -1,5 +1,6 @@
 from __future__ import annotations
 import asyncio
+import concurrent.futures
 import json
 import threading
 from fastapi import WebSocket, WebSocketDisconnect, FastAPI
@@ -20,6 +21,7 @@ class WebSocketConnection(BaseConnection):
         self.client_host = websocket.client.host if websocket.client else "?"
         self._pending_tasks = set()
         self._pending_tasks_lock = threading.Lock()
+        self._closing = False
 
     def _track_task(self, task):
         with self._pending_tasks_lock:
@@ -54,12 +56,32 @@ class WebSocketConnection(BaseConnection):
             logger.debug(f"[WebSocket] Error sending command: {e}")
 
     async def _close_websocket(self):
+        with self._pending_tasks_lock:
+            pending = list(self._pending_tasks)
+        if pending:
+            try:
+                pending_awaitables = [
+                    asyncio.wrap_future(task, loop=asyncio.get_running_loop())
+                    if isinstance(task, concurrent.futures.Future)
+                    else task
+                    for task in pending
+                ]
+                await asyncio.wait_for(
+                    asyncio.gather(*pending_awaitables, return_exceptions=True),
+                    timeout=0.25,
+                )
+            except asyncio.TimeoutError:
+                for pending_task in pending:
+                    pending_task.cancel()
         try:
             await self.websocket.close()
         except Exception:
             pass
 
     def close(self):
+        if self._closing:
+            return
+        self._closing = True
         try:
             if threading.get_ident() == self.thread_id:
                 task = self.loop.create_task(self._close_websocket())
@@ -85,12 +107,12 @@ class WebSocketProtocol(BaseProtocol):
             client_host = websocket.client.host if websocket.client else "?"
             with TEMP_BANNED_LOCK:
                 if client_host in TEMP_BANNED_IPS:
-                    if time.time() < TEMP_BANNED_IPS[websocket.client.host]:
-                        logger.warning(f"Host {websocket.client.host} in temp ban list has tried to connect.")
+                    if time.time() < TEMP_BANNED_IPS[client_host]:
+                        logger.warning(f"Host {client_host} in temp ban list has tried to connect.")
                         await websocket.close()
                         return
                     else:
-                        del TEMP_BANNED_IPS[websocket.client.host]
+                        del TEMP_BANNED_IPS[client_host]
 
             await websocket.accept()
 

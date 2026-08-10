@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Atheriz Draw</title>
+    <!-- We link the custom font CSS directly, vite will inline it -->
+    <link rel="stylesheet" href="./fonts/KreativeSquare.css" />
+    <link rel="stylesheet" href="./fonts/Unifont.css" />
+    <link rel="stylesheet" href="./fonts/FiraCode.css" />
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <!-- Toolbar -->
+      <header id="toolbar">
+        <button id="btn-new" title="New Canvas">📄 New</button>
+        <button id="btn-resize" title="Resize Canvas">📐 Resize</button>
+        <button id="btn-load-image" title="Load Image as ANSI">🖼️ Load Image</button>
+        <input type="file" id="image-upload" accept="image/*" style="display:none;" />
+        <div class="separator"></div>
+        <div class="tool-group" id="drawing-tools">
+          <button id="tool-brush" class="tool-btn active" title="Brush">🖌️ Brush</button>
+          <button id="tool-erase" class="tool-btn" title="Eraser">🧹 Erase</button>
+          <div class="tool-with-mode">
+            <button id="tool-type" class="tool-btn" title="Type">⌨️ Type</button>
+            <select id="type-style-select" title="Type Style">
+              <option value="regular">Regular</option>
+              <option value="bold">Bold</option>
+              <option value="italic">Italic</option>
+              <option value="underline">Underline</option>
+            </select>
+          </div>
+          <button id="tool-text" class="tool-btn" title="Render Text">📝 Render Text</button>
+          <div class="tool-with-mode">
+            <button id="tool-rect" class="tool-btn" title="Rectangle">🔲 Rect</button>
+            <select id="rect-mode-select" title="Rectangle Mode">
+              <option value="light">Light</option>
+              <option value="rounded">Rounded</option>
+              <option value="double">Double</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="tool-with-mode">
+            <button id="tool-oval" class="tool-btn" title="Oval">⭕ Oval</button>
+            <select id="oval-mode-select" title="Oval Mode">
+              <option value="light">Light</option>
+              <option value="rounded">Rounded</option>
+              <option value="double">Double</option>
+              <option value="circle">Circle</option>
+              <option value="custom">Custom</option>
+            </select>
+          </div>
+          <div class="tool-with-mode">
+            <button id="tool-line" class="tool-btn" title="Line">📏 Line</button>
+            <div style="display: flex; flex-direction: column;">
+              <select id="line-mode-select" title="Line Mode">
+                <option value="light">Light</option>
+                <option value="rounded">Rounded</option>
+                <option value="double">Double</option>
+                <option value="heavy">Heavy</option>
+                <option value="custom">Custom</option>
+              </select>
+              <label style="font-size: 10px; color: #fff; margin-top:2px;">
+                <input type="checkbox" id="line-diagonal-checkbox" style="vertical-align: middle;"> Diagonal
+              </label>
+            </div>
+          </div>
+          <div class="tool-with-mode">
+            <button id="tool-gradient" class="tool-btn" title="Apply Gradient">🌈 Gradient</button>
+            <select id="gradient-target-select" title="Gradient Target">
+              <option value="foreground">Foreground</option>
+              <option value="background">Background</option>
+              <option value="both">Both</option>
+              <option value="luminance">Luminance</option>
+              <option value="inverse-luminance">Inv. Luminance</option>
+            </select>
+          </div>
+          <div class="tool-with-mode">
+            <button id="tool-fill" class="tool-btn" title="Fill">🪣 Fill</button>
+            <select id="fill-mode-select" title="Fill Mode">
+              <option value="brush">Brush</option>
+              <option value="foreground">Foreground</option>
+              <option value="background">Background</option>
+              <option value="gradient">Gradient</option>
+            </select>
+          </div>
+          <div class="separator"></div>
+          <div class="tool-with-mode">
+            <button id="tool-eyedropper" class="tool-btn" title="Eyedropper">⌖ Eyedropper</button>
+            <select id="eyedropper-target-select" title="Eyedropper Target">
+              <option value="fg-fg">FG -&gt; FG</option>
+              <option value="fg-bg">FG -&gt; BG</option>
+              <option value="bg-fg">BG -&gt; FG</option>
+              <option value="bg-bg">BG -&gt; BG</option>
+            </select>
+          </div>
+          <div class="tool-with-mode">
+            <button id="tool-select" class="tool-btn" title="Select">☝ Select</button>
+            <select id="select-mode-select" title="Select Mode">
+              <option value="rectangle">Rectangle</option>
+              <option value="lasso">Lasso</option>
+              <option value="magic">Magic</option>
+              <option value="color-match">Color Match</option>
+              <option value="color-fuzzy">Color Fuzzy</option>
+              <option value="single">Single</option>
+            </select>
+          </div>
+          <button id="tool-move" class="tool-btn" title="Move">✋ Move</button>
+          <div class="tool-with-mode">
+            <button id="tool-rotate" class="tool-btn" title="Rotate / Transform">🔄 Rotate</button>
+            <select id="rotate-mode-select" title="Rotate Mode">
+              <option value="cw90">90° CW</option>
+              <option value="ccw90">90° CCW</option>
+              <option value="180">180°</option>
+              <option value="flip-h">Flip H</option>
+              <option value="flip-v">Mirror Vertical</option>
+              <option value="free">Free-form</option>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <div id="main-content">
+        <!-- Sidebar -->
+        <aside id="sidebar">
+          
+          <div class="sidebar-section">
+            <h3>Foreground</h3>
+            <div id="fg-picker-container" class="color-picker-widget"></div>
+          </div>
+          <div class="sidebar-section">
+            <h3>Background</h3>
+            <div id="bg-picker-container" class="color-picker-widget"></div>
+          </div>
+
+          <div class="sidebar-section">
+            <h3>Gradient</h3>
+            <div id="gradient-picker-container" class="gradient-picker-widget"></div>
+          </div>
+
+          <div class="sidebar-section" id="char-palette-section">
+            <h3>Palette</h3>
+            <div id="char-palette" class="palette-grid"></div>
+          </div>
+
+        </aside>
+
+        <!-- Resizer -->
+        <div id="sidebar-resizer"></div>
+
+        <!-- Center Column -->
+        <div id="center-column">
+          <!-- Canvas Area -->
+          <main id="canvas-container">
+            <canvas id="main-canvas"></canvas>
+          </main>
+          
+          <!-- Bottom Toolbar -->
+          <footer id="bottom-toolbar">
+            <div class="tool-with-mode">
+              <select id="font-select" title="Change display font" style="max-width: 150px; font-family: var(--main-font);">
+                 <!-- will be populated -->
+              </select>
+            </div>
+            <button id="btn-zoom-in" title="Zoom In (Increase Font Size)">🔍+</button>
+            <button id="btn-zoom-out" title="Zoom Out (Decrease Font Size)">🔍-</button>
+            <div class="separator"></div>
+            <button id="btn-undo" title="Undo (Ctrl+Z)">↩️ Undo</button>
+            <button id="btn-redo" title="Redo (Ctrl+Shift+Z)">↪️ Redo</button>
+            <div class="separator"></div>
+            <button id="btn-color-adjust" title="Color Adjust">🎨 Adjust Color</button>
+            <button id="btn-export" title="Export ANSI">💾 Export ANSI</button>
+            <button id="btn-load-ansi" title="Load ANSI file">📂 Load ANSI</button>
+            <input type="file" id="ansi-upload" accept=".ans,.txt" style="display:none;" />
+            <div style="flex: 1;"></div>
+            <button id="btn-preview" title="Preview in terminal">👁 Preview</button>
+          </footer>
+        </div>
+        
+        <!-- Right Sidebar Resizer -->
+        <div id="right-sidebar-resizer"></div>
+
+        <!-- Right Sidebar -->
+        <aside id="right-sidebar">
+          <h3>Layers</h3>
+          <div id="layer-manager-container"></div>
+        </aside>
+      </div>
+    </div>
+    
+    <!-- Modals -->
+    <div id="new-canvas-modal" class="modal hidden">
+      <div class="modal-content">
+        <h2>New Canvas</h2>
+        <div class="preset-buttons">
+          <button data-w="80" data-h="24">Small (80x24)</button>
+          <button data-w="120" data-h="40">Medium (120x40)</button>
+          <button data-w="160" data-h="50">Large (160x50)</button>
+          <button data-w="220" data-h="50">Wide (220x50)</button>
+        </div>
+        <div class="custom-size">
+          <label>W: <input type="number" id="new-width" value="80" min="1"></label>
+          <label>H: <input type="number" id="new-height" value="24" min="1"></label>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-new-cancel">Cancel</button>
+          <button id="btn-new-confirm" class="primary">Create</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Resize Canvas Modal -->
+    <div id="resize-canvas-modal" class="modal hidden">
+      <div class="modal-content" style="width: 300px;">
+        <h2>Resize Canvas</h2>
+        <div class="custom-size">
+          <label>W: <input type="number" id="resize-width" value="80" min="1"></label>
+          <label>H: <input type="number" id="resize-height" value="24" min="1"></label>
+        </div>
+        <p style="font-size: 0.85em; color: #888; margin-top: 10px;">Layers will be expanded or cropped from the bottom-right.</p>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button id="btn-resize-cancel">Cancel</button>
+          <button id="btn-resize-confirm" class="primary">Resize</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Image Import Modal -->
+    <div id="image-import-modal" class="modal hidden">
+      <div class="modal-content import-modal-content" style="width: 500px; max-width: 95vw; max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
+        <h2>Import Image Configuration</h2>
+        
+        <div class="import-section">
+          <h3>Dimension constraints</h3>
+          <div class="radio-group">
+            <label><input type="radio" name="import-mode" value="maxWidth" checked> Max Width (Keep AR)</label>
+            <label><input type="radio" name="import-mode" value="maxHeight"> Max Height (Keep AR)</label>
+            <label><input type="radio" name="import-mode" value="custom"> Custom Size (Stretch)</label>
+          </div>
+          <div class="custom-size">
+            <label>W: <input type="number" id="import-width" value="80" min="1"></label>
+            <label>H: <input type="number" id="import-height" value="24" min="1"></label>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 0.25rem;">
+          <label style="display: block; font-size: 0.9em; margin-bottom: 4px; color: #ccc;">Chafa Options:</label>
+          <div class="import-section" id="chafa-options-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; max-height:300px; overflow-y:auto; scrollbar-gutter:stable; padding-right:12px; font-size:0.9em; margin-bottom: 1rem;">
+           <!-- Dynamic options get injected here to keep HTML clean -->
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-import-cancel">Cancel</button>
+          <button id="btn-import-confirm" class="primary">Import</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Character Map Modal -->
+    <div id="char-map-modal" class="modal hidden">
+      <div class="modal-content char-map-content">
+        <h2>Select Custom Characters</h2>
+        
+        <div class="char-map-header">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div id="char-scan-status" style="font-size: 14px; color: #aaa; display: none;">Scanning for characters...</div>
+          </div>
+          <div class="char-map-selected-preview" id="char-map-selection"></div>
+        </div>
+
+        <div class="virtual-scroll-container" id="char-map-scroll-container">
+          <!-- The giant height inner container -->
+          <div class="virtual-scroll-inner" id="char-map-inner">
+            <!-- Rendered rows go here -->
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button id="btn-char-cancel">Cancel</button>
+          <button id="btn-char-confirm" class="primary">Add Selected</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Text Tool Modal -->
+    <div id="text-tool-modal" class="modal hidden">
+      <div class="modal-content" style="width: 600px; max-width: 90vw;">
+        <h2>Text to ANSI</h2>
+        
+        <div class="import-section" style="display: flex; flex-direction: column; gap: 10px;">
+          <textarea id="text-tool-input" rows="4" placeholder="Enter text here..." style="width: 100%; font-family: inherit; padding: 8px; box-sizing: border-box; background: var(--bg-color); color: var(--text-color); border: 1px solid var(--border-color); border-radius: 4px;"></textarea>
+          
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+            <div>
+              <label style="display: block; font-size: 0.9em; margin-bottom: 2px;">Font Family:</label>
+              <div style="display: flex; gap: 4px;">
+                <select id="text-tool-font" style="flex: 1; padding: 4px;"></select>
+                <button id="text-tool-google-fonts-btn" class="tool-btn" title="Browse Google Fonts" style="white-space: nowrap; font-size: 11px;">G Fonts</button>
+              </div>
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.9em; margin-bottom: 2px;">Font Style:</label>
+              <select id="text-tool-style" style="width: 100%; padding: 4px;">
+                <option value="normal">Normal</option>
+                <option value="bold">Bold</option>
+                <option value="italic">Italic</option>
+                <option value="bold italic">Bold Italic</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: block; font-size: 0.9em; margin-bottom: 2px;">Text Align:</label>
+              <select id="text-tool-align" style="width: 100%; padding: 4px;">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+            <div>
+              <label style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 2px;">
+                <span>Max Width (glyphs):</span> <span id="text-tool-max-width-val">80</span>
+              </label>
+              <input type="range" id="text-tool-max-width" value="80" min="1" max="200" style="width: 100%;">
+            </div>
+             <div>
+              <label style="display: flex; justify-content: space-between; font-size: 0.9em; margin-bottom: 2px;">
+                <span>Font Stretch:</span> <span id="text-tool-stretch-val">100%</span>
+              </label>
+              <input type="range" id="text-tool-stretch" min="50" max="300" value="100" style="width: 100%;">
+            </div>
+          </div>
+
+          <div style="margin-top: 10px;">
+             <label style="display: block; font-size: 0.9em; margin-bottom: 2px;">Preview (Graphical Render):</label>
+             <div style="border: 1px solid var(--border-color); background: #000; padding: 5px; overflow: auto; text-align: center; border-radius: 4px;">
+               <canvas id="text-tool-preview" style="max-height: 150px; max-width: 100%;"></canvas>
+             </div>
+          </div>
+
+          <div style="margin-top: 10px;">
+            <label style="display: block; font-size: 0.9em; margin-bottom: 2px;">Chafa Options:</label>
+            <div id="text-chafa-options-container" style="display:grid; grid-template-columns: 1fr 1fr; gap:0.5rem; max-height:200px; overflow-y:auto; font-size:0.85em; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; border: 1px solid var(--border-color);">
+               <!-- Dynamic options injected here -->
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-actions" style="margin-top: 15px;">
+          <button id="btn-text-cancel">Cancel</button>
+          <button id="btn-text-confirm" class="primary">Convert to ANSI Layer</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Google Font Picker Modal -->
+    <div id="google-font-picker-modal" class="modal hidden">
+      <div class="modal-content" style="width: 500px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column;">
+        <h2>Google Fonts</h2>
+        <div id="gfp-tabs" class="gfp-tabs"></div>
+        <input type="text" id="gfp-search" placeholder="Search fonts..." class="gfp-search">
+        <div id="gfp-list" class="gfp-list"></div>
+        <div class="modal-actions">
+          <button id="gfp-cancel">Cancel</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Picker Modal for Gradient Stops -->
+    <div id="color-picker-modal" class="modal hidden">
+      <div class="modal-content" style="width: 300px; padding: 16px;">
+        <div class="color-picker-content">
+          <canvas id="cp-sv-field" class="cp-sv-field" width="268" height="180"></canvas>
+          <canvas id="cp-hue-bar" class="cp-hue-bar" width="268" height="20"></canvas>
+          <div id="cp-preview" class="cp-color-preview"></div>
+          <div class="cp-inputs">
+            <label>R<input type="number" id="cp-r" min="0" max="255"></label>
+            <label>G<input type="number" id="cp-g" min="0" max="255"></label>
+            <label>B<input type="number" id="cp-b" min="0" max="255"></label>
+            <input type="text" id="cp-hex" placeholder="#FFFFFF" class="cp-hex-input">
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top: 12px;">
+          <button id="cp-cancel">Cancel</button>
+          <button id="cp-ok" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Type Tool Modal -->
+    <div id="type-tool-modal" class="modal hidden">
+      <div class="modal-content" style="width: 400px;">
+        <h2>Type Text</h2>
+        <input type="text" id="type-tool-input" placeholder="Enter text..." style="width: 100%; background-color: #333; color: #fff; border: 1px solid #555; padding: 8px; border-radius: 4px; font-size: 14px; box-sizing: border-box;">
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button id="type-tool-cancel">Cancel</button>
+          <button id="type-tool-ok" class="primary">OK</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Color Adjust Modal -->
+    <div id="color-adjust-modal" class="modal hidden">
+      <div class="modal-content" style="width: 350px;">
+        <h2>Adjust Color</h2>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+          <label style="display: flex; justify-content: space-between; font-size: 0.9em;">
+            <span>Brightness</span> <span id="color-adjust-brightness-val">0</span>
+          </label>
+          <input type="range" id="color-adjust-brightness" min="-100" max="100" value="0">
+
+          <label style="display: flex; justify-content: space-between; font-size: 0.9em;">
+            <span>Contrast</span> <span id="color-adjust-contrast-val">0</span>
+          </label>
+          <input type="range" id="color-adjust-contrast" min="-255" max="255" value="0">
+
+          <label style="display: flex; justify-content: space-between; font-size: 0.9em;">
+            <span>Hue</span> <span id="color-adjust-hue-val">0°</span>
+          </label>
+          <input type="range" id="color-adjust-hue" min="-180" max="180" value="0">
+
+          <label style="display: flex; justify-content: space-between; font-size: 0.9em;">
+            <span>Saturation</span> <span id="color-adjust-saturation-val">0</span>
+          </label>
+          <input type="range" id="color-adjust-saturation" min="-100" max="100" value="0">
+
+          <label style="margin-top: 10px; font-size: 0.9em; display: flex; align-items: center; gap: 6px;">
+            <input type="checkbox" id="color-adjust-all-layers"> Apply to all layers
+          </label>
+        </div>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button id="color-adjust-cancel">Cancel</button>
+          <button id="color-adjust-ok" class="primary">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Need to load the font explicitly before rendering canvas -->
+    <div style="font-family: 'KreativeSquare'; position: absolute; left: -9999px; top: -9999px;">.</div>
+    <div style="font-family: 'Unifont'; position: absolute; left: -9999px; top: -9999px;">.</div>
+    <div style="font-family: 'Fira Code', 'FiraCode'; position: absolute; left: -9999px; top: -9999px;">.</div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+@font-face {
+  font-family: 'Coral Pixels';
+  font-style: normal;
+  font-weight: 400;
+  src: url(../f/coral-pixels-preview.woff2) format('woff2');
+}
+body {
+  --google-font-color-coralpixels:none;
+}

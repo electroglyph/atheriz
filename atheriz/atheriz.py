@@ -9,7 +9,7 @@ import uvicorn
 from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from starlette.concurrency import run_in_threadpool
 from atheriz import settings
 from atheriz.objects.base_account import Account
@@ -273,6 +273,9 @@ async def read_root(request: Request):
 
 @app.get("/webclient/index.html", response_class=HTMLResponse)
 async def read_webclient(request: Request):
+    compiled_webclient = static_dir / "webclient" / "index.html"
+    if compiled_webclient.is_file():
+        return FileResponse(compiled_webclient, media_type="text/html")
     return templates.TemplateResponse(request, "webclient/index.html")
 
 
@@ -386,6 +389,11 @@ def setup_static_files():
     if static_dir.exists():
         app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
         print(f"Serving static files from: {static_dir}")
+        draw_entrypoint = static_dir / "atheriz_draw" / "index.html"
+        if draw_entrypoint.is_file():
+            print("AtheriZ Draw available at /atheriz_draw/")
+        else:
+            print("Warning: AtheriZ Draw build not found at /atheriz_draw/")
     else:
         print(f"Warning: Static directory not found: {static_dir}")
 
@@ -464,6 +472,7 @@ def start_server():
         log_level=settings.LOG_LEVEL,
         ws_ping_interval=20,
         ws_ping_timeout=300,
+        ws_max_size=settings.WEBSOCKET_MAX_MESSAGE_SIZE,
         timeout_graceful_shutdown=5,
         **tls_kwargs,
     )
