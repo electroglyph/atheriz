@@ -21,3 +21,8 @@ export function resizeWidth(
     const maximumWidth = Math.max(minimumWidth, parentWidth - minimumWidth - dividerWidth);
     return Math.min(maximumWidth, Math.max(minimumWidth, startWidth + delta));
 }
+
+export function recordingDividerPct(enabled: boolean, containerWidth: number, leftWidth: number): number {
+    if (!enabled || containerWidth <= 0) return 50;
+    return Number(((leftWidth / containerWidth) * 100).toFixed(2));
+}

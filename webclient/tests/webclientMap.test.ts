@@ -117,6 +117,47 @@ describe('webclient map renderer', () => {
         expect(output).toContain('\x1b[48;2;');
     });
 
+    it('counts duplicate descriptions at the same coordinate', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+            ],
+        }, 30, 12);
+        expect(output).toContain('Door (2)');
+        expect(output).not.toContain('Door, Door');
+    });
+
+    it('counts only the duplicate descriptions in a combined legend entry', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'x', desc: 'Exit', coords: [0, 0] },
+            ],
+        }, 30, 12);
+        expect(output).toContain('Door (2), Exit');
+    });
+
+    it('truncates a combined legend description at half the terminal width', () => {
+        const longDesc = 'The quick brown fox jumps over the lazy dog';
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'x', desc: longDesc, coords: [0, 0] },
+                { symbol: 'x', desc: longDesc, coords: [0, 0] },
+                { symbol: 'x', desc: 'Backdoor', coords: [0, 0] },
+            ],
+        }, 100, 12);
+        expect(output).toContain(`${longDesc} (2)...`);
+        expect(output).not.toContain('Backdoor');
+    });
+
     it('truncates a legend entry wider than the terminal', () => {
         const output = renderMap({
             map: 'x',

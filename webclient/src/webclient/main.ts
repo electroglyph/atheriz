@@ -11,7 +11,7 @@ import { launchDraw } from './launch';
 import { MapPayload, WebClientElements, WireMessage } from './types';
 import { SessionRecorder } from './recorder';
 import { MAP_CLEAR_SEQUENCE, mergeBackgrounds, parseBackground, renderMap as renderMapText } from './map';
-import { mapLayout, resizeWidth } from './layout';
+import { mapLayout, recordingDividerPct, resizeWidth } from './layout';
 import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory, submissionFeedback } from './input';
 import { formatPrompt, formatTextOutput } from './text';
 import { BUFFER_FINAL_SEQUENCE } from './buffer';
@@ -510,11 +510,10 @@ function handleInternalCommand(command: string): boolean {
             }
             const containerWidth = elements.leftTerminal.parentElement?.getBoundingClientRect().width ?? 0;
             const leftWidth = elements.leftTerminal.getBoundingClientRect().width;
-            const dividerPct = containerWidth > 0 ? (leftWidth / containerWidth) * 100 : 50;
             recorder.start(
                 { cols: left.cols, rows: left.rows },
                 { cols: right.cols, rows: right.rows },
-                Number(dividerPct.toFixed(2)),
+                recordingDividerPct(mapEnabled, containerWidth, leftWidth),
                 mapEnabled,
             );
             write('\r\nRecording started.\r\n');

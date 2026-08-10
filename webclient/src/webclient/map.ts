@@ -8,7 +8,7 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
     let lines = payload.map.split(/\r?\n/);
     applyBackground(lines, payload);
 
-    const processedLegend = processLegend(payload.legend ?? []);
+    const processedLegend = processLegend(payload.legend ?? [], columns);
     for (const entry of processedLegend) {
         if (entry.coords) placeVisual(lines, relativePosition(entry.coords, payload), withReset(entry.symbol));
     }
@@ -116,7 +116,7 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
     return output;
 }
 
-function processLegend(entries: MapLegendEntry[]): MapLegendEntry[] {
+function processLegend(entries: MapLegendEntry[], columns: number): MapLegendEntry[] {
     const seen = new Map<string, number>();
     const colorized = entries.flatMap((entry) => {
         if (!entry.symbol) return [];
@@ -134,6 +134,7 @@ function processLegend(entries: MapLegendEntry[]): MapLegendEntry[] {
     });
 
     const grouped = new Map<string, MapLegendEntry>();
+    const counts = new Map<string, Map<string, number>>();
     const result: MapLegendEntry[] = [];
     for (const entry of colorized) {
         if (!entry.coords) {
@@ -144,11 +145,19 @@ function processLegend(entries: MapLegendEntry[]): MapLegendEntry[] {
         const existing = grouped.get(key);
         if (!existing) {
             grouped.set(key, entry);
+            counts.set(key, new Map([[entry.desc, 1]]));
             result.push(entry);
             continue;
         }
-        const descriptions = `${existing.desc}, ${entry.desc}`;
-        existing.desc = descriptions;
+        const entryCounts = counts.get(key) ?? new Map<string, number>();
+        entryCounts.set(entry.desc, (entryCounts.get(entry.desc) ?? 0) + 1);
+        const combined = [...entryCounts.entries()]
+            .map(([desc, count]) => (count > 1 ? `${desc} (${count})` : desc))
+            .join(', ');
+        const maxDescLen = Math.floor(columns / 2);
+        existing.desc = combined.length > maxDescLen
+            ? `${combined.substring(0, Math.max(0, maxDescLen - 3))}...`
+            : combined;
         const firstColor = extractTrueColor(existing.symbol) ?? [190, 190, 190];
         const secondColor = extractTrueColor(entry.symbol) ?? [190, 190, 190];
         existing.symbol = `\x1b[38;2;${secondColor[0]};${secondColor[1]};${secondColor[2]}m\x1b[48;2;${firstColor[0]};${firstColor[1]};${firstColor[2]}m${stripAnsi(existing.symbol)}${RESET}`;
