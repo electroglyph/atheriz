@@ -133,35 +133,53 @@ function processLegend(entries: MapLegendEntry[], columns: number): MapLegendEnt
         return [{ ...entry, symbol: `\x1b[38;2;${r};${g};${b}m${stripped}${RESET}` }];
     });
 
-    const grouped = new Map<string, MapLegendEntry>();
-    const counts = new Map<string, Map<string, number>>();
-    const result: MapLegendEntry[] = [];
+    const groups = new Map<string, MapLegendEntry[]>();
+    const noCoord: MapLegendEntry[] = [];
     for (const entry of colorized) {
         if (!entry.coords) {
-            result.push(entry);
+            noCoord.push(entry);
+        } else {
+            const key = `${entry.coords[0]},${entry.coords[1]}`;
+            const group = groups.get(key);
+            if (group) group.push(entry);
+            else groups.set(key, [entry]);
+        }
+    }
+
+    const result: MapLegendEntry[] = [];
+    for (const group of groups.values()) {
+        if (group.length === 1) {
+            result.push(group[0]);
             continue;
         }
-        const key = `${entry.coords[0]},${entry.coords[1]}`;
-        const existing = grouped.get(key);
-        if (!existing) {
-            grouped.set(key, entry);
-            counts.set(key, new Map([[entry.desc, 1]]));
-            result.push(entry);
-            continue;
+        const entryCounts = new Map<string, number>();
+        for (const entry of group) {
+            entryCounts.set(entry.desc, (entryCounts.get(entry.desc) ?? 0) + 1);
         }
-        const entryCounts = counts.get(key) ?? new Map<string, number>();
-        entryCounts.set(entry.desc, (entryCounts.get(entry.desc) ?? 0) + 1);
-        const combined = [...entryCounts.entries()]
+        let combinedDesc = [...entryCounts.entries()]
             .map(([desc, count]) => (count > 1 ? `${desc} (${count})` : desc))
             .join(', ');
         const maxDescLen = Math.floor(columns / 2);
-        existing.desc = combined.length > maxDescLen
-            ? `${combined.substring(0, Math.max(0, maxDescLen - 3))}...`
-            : combined;
-        const firstColor = extractTrueColor(existing.symbol) ?? [190, 190, 190];
-        const secondColor = extractTrueColor(entry.symbol) ?? [190, 190, 190];
-        existing.symbol = `\x1b[38;2;${secondColor[0]};${secondColor[1]};${secondColor[2]}m\x1b[48;2;${firstColor[0]};${firstColor[1]};${firstColor[2]}m${stripAnsi(existing.symbol)}${RESET}`;
+        if (combinedDesc.length > maxDescLen) {
+            combinedDesc = `${combinedDesc.substring(0, Math.max(0, maxDescLen - 3))}...`;
+        }
+        let bgColor: [number, number, number] | undefined;
+        let fgColor: [number, number, number] | undefined;
+        for (const entry of group) {
+            const color = extractTrueColor(entry.symbol);
+            if (!color) continue;
+            if (!bgColor) bgColor = color;
+            else if (!fgColor) {
+                fgColor = color;
+                break;
+            }
+        }
+        const bg = bgColor ?? [30, 60, 120];
+        const fg = fgColor ?? [190, 190, 190];
+        const symbol = `\x1b[38;2;${fg[0]};${fg[1]};${fg[2]}m\x1b[48;2;${bg[0]};${bg[1]};${bg[2]}m${stripAnsi(group[0].symbol)}${RESET}`;
+        result.push({ ...group[0], desc: combinedDesc, symbol });
     }
+    for (const entry of noCoord) result.push(entry);
     return result;
 }
 

@@ -158,6 +158,50 @@ describe('webclient map renderer', () => {
         expect(output).not.toContain('Backdoor');
     });
 
+    it('places grouped legend entries before entries without coordinates', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'z', desc: 'Exit' },
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'p', desc: 'Portal' },
+            ],
+        }, 30, 12);
+        expect(output.indexOf('Door (2)')).toBeGreaterThan(-1);
+        expect(output.indexOf('Door (2)')).toBeLessThan(output.indexOf('Exit'));
+        expect(output.indexOf('Exit')).toBeLessThan(output.indexOf('Portal'));
+    });
+
+    it('keeps the first two entry colors when merging three duplicates', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: '\x1b[38;2;255;0;0mX\x1b[0m', desc: 'Door', coords: [0, 0] },
+                { symbol: '\x1b[38;2;0;255;0mX\x1b[0m', desc: 'Door', coords: [0, 0] },
+                { symbol: '\x1b[38;2;0;0;255mX\x1b[0m', desc: 'Door', coords: [0, 0] },
+            ],
+        }, 30, 12);
+        expect(output).toContain('Door (3)');
+        expect(output).toContain('\x1b[48;2;255;0;0m');
+        expect(output).not.toContain('\x1b[38;2;0;0;255m');
+    });
+
+    it('uses the legacy dark blue background for uncolored merged symbols', () => {
+        const output = renderMap({
+            map: 'x',
+            max_y: 0,
+            legend: [
+                { symbol: 'x', desc: 'Door', coords: [0, 0] },
+                { symbol: 'y', desc: 'Exit', coords: [0, 0] },
+            ],
+        }, 30, 12);
+        expect(output).toContain('\x1b[48;2;30;60;120m');
+        expect(output).toContain('\x1b[38;2;190;190;190m\x1b[48;2;30;60;120m');
+    });
+
     it('truncates a legend entry wider than the terminal', () => {
         const output = renderMap({
             map: 'x',
