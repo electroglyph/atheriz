@@ -21,6 +21,7 @@ export interface ConnectionOptions {
     maxReconnectAttempts?: number;
 }
 
+const STABLE_CONNECTION_MS = 30_000;
 export const OPEN_STATE = 1;
 
 export function websocketUrl(locationLike?: Pick<Location, 'protocol' | 'host'>): string {
@@ -45,6 +46,7 @@ export class WebSocketConnection {
     private socket: WebSocketLike | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     private reconnectAttempt = 0;
+    private openedAt = 0;
     private manuallyClosed = false;
     private state: ConnectionState = 'idle';
 
@@ -70,7 +72,7 @@ export class WebSocketConnection {
         this.socket = socket;
         socket.onopen = () => {
             if (this.socket !== socket) return;
-            this.reconnectAttempt = 0;
+            this.openedAt = Date.now();
             this.setState('open');
         };
         socket.onmessage = (event) => {
@@ -85,6 +87,9 @@ export class WebSocketConnection {
         socket.onclose = () => {
             if (this.socket !== socket) return;
             this.socket = null;
+            if (!this.manuallyClosed && this.openedAt > 0 && Date.now() - this.openedAt >= STABLE_CONNECTION_MS) {
+                this.reconnectAttempt = 0;
+            }
             if (this.manuallyClosed) {
                 this.setState('closed');
                 return;

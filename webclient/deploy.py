@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""Stage the built frontend into an AtheriZ runtime web directory.
+"""Build the frontend and stage it into an AtheriZ runtime web directory.
 
-This script intentionally uses only the Python standard library. It copies an
-already-built ``dist`` directory; building the frontend remains an npm/Vite
-step performed before this script runs.
+The script uses only the Python standard library. By default it first runs
+``npm run build`` (so Node.js must be on PATH) and then stages the resulting
+``dist`` directory. Pass ``--no-build`` to stage an already-built ``dist``
+without touching npm.
 """
 
 from __future__ import annotations
 
 import argparse
 import shutil
+import subprocess
 from pathlib import Path
 
 
@@ -111,11 +113,28 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="preserve generated output from an earlier deployment",
     )
+    parser.add_argument(
+        "--no-build",
+        action="store_true",
+        help="stage the existing dist/ directory without running npm run build",
+    )
     return parser.parse_args()
+
+
+def build_frontend() -> None:
+    npm = shutil.which("npm")
+    if npm is None:
+        raise SystemExit(
+            "npm was not found on PATH; install Node.js or pass --no-build "
+            "to stage an already-built dist/"
+        )
+    subprocess.run([npm, "run", "build"], cwd=PROJECT_ROOT, check=True)
 
 
 def main() -> int:
     args = parse_args()
+    if not args.no_build:
+        build_frontend()
     if args.target == "package":
         static_root = PACKAGE_STATIC_ROOT
     else:

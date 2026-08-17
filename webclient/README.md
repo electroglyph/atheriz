@@ -10,10 +10,13 @@ The build also includes the TypeScript AtheriZ webclient at `dist/webclient/`.
 
 To stage the compiled assets into the Python package, run:
 
-`npm run deploy:package`
+`python deploy.py package`
+
+(equivalently `npm run deploy:package`). The script builds first; pass
+`--no-build` to stage an existing `dist/`.
 
 To deploy into a game web directory, run:
 
-`npm run build && python deploy.py game --web-root /path/to/game/web`
+`python deploy.py game --web-root /path/to/game/web`
 
 note: this is almost entirely AI generated code, though i've attempted to do it sanely

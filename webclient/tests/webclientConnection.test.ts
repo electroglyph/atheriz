@@ -124,6 +124,76 @@ describe('webclient connection', () => {
         vi.useRealTimers();
     });
 
+    it('does not reset the retry budget for instantly flapping connections', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            onMessage: () => undefined,
+            minReconnectDelayMs: 100,
+            maxReconnectDelayMs: 100,
+        });
+
+        connection.connect();
+        for (const socket of sockets) {
+            socket.open();
+            socket.drop();
+        }
+        vi.advanceTimersByTime(100);
+        for (const socket of sockets) {
+            socket.open();
+            socket.drop();
+        }
+        vi.advanceTimersByTime(100);
+        for (const socket of sockets) {
+            socket.open();
+            socket.drop();
+        }
+        vi.advanceTimersByTime(100);
+        sockets[3].open();
+        sockets[3].drop();
+        vi.advanceTimersByTime(60_000);
+
+        expect(sockets).toHaveLength(4);
+        expect(connection.getState()).toBe('failed');
+        connection.close();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
+    it('resets the retry budget after a stable connection drops', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            onMessage: () => undefined,
+            minReconnectDelayMs: 100,
+            maxReconnectDelayMs: 100,
+        });
+
+        connection.connect();
+        sockets[0].open();
+        vi.advanceTimersByTime(31_000);
+        sockets[0].drop();
+        vi.advanceTimersByTime(100);
+
+        expect(sockets).toHaveLength(2);
+        expect(connection.getState()).toBe('connecting');
+        connection.close();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
     it('ignores close events from stale sockets', () => {
         vi.useFakeTimers();
         vi.spyOn(Math, 'random').mockReturnValue(0);
