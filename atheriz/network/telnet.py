@@ -169,6 +169,10 @@ class TelnetProtocol(BaseProtocol):
 
             # ask the client to report window size
             writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
+            writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
+
+            # mock a client_ready command since webclient normally sends it
+            get_connection_manager().dispatch(connection, "client_ready", [], {})
             try:
                 max_line = getattr(settings, "TELNET_MAX_LINE", 65536)
                 async for line in read_capped_lines(reader, max_line):

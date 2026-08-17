@@ -64,12 +64,6 @@ def do_shutdown():
     _shutdown_step("stop_autosave", stop_autosave)
     _shutdown_step("ticker_stop", get_async_ticker().stop)
     _shutdown_step("threadpool_stop", get_async_threadpool().stop, True, 10)
-    # the pool and ticker are single-use: anything that touches them after
-    # shutdown must get a fresh one (e.g. a server booted and torn down
-    # inside a test process)
-    import atheriz.globals.get as get_singleton
-    get_singleton._ASYNC_THREAD_POOL = None
-    get_singleton._ASYNC_TICKER = None
     if settings.AUTOSAVE_ON_SHUTDOWN:
         _shutdown_step("save_objects", save_objects)
         _shutdown_step("map_save", get_map_handler().save)
@@ -78,6 +72,13 @@ def do_shutdown():
     logger.info("Shutdown sequence completed.")
     if settings.TIME_SYSTEM_ENABLED:
         _shutdown_step("game_time_stop", get_game_time().stop)
+    # the pool and ticker are single-use: anything that touches them after
+    # shutdown must get a fresh one (e.g. a server booted and torn down
+    # inside a test process). This must come last: earlier steps (e.g.
+    # GameTime.stop) still resolve the live singletons.
+    import atheriz.globals.get as get_singleton
+    get_singleton._ASYNC_THREAD_POOL = None
+    get_singleton._ASYNC_TICKER = None
     _shutdown_step("db_close", get_database().close)
 
 

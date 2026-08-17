@@ -126,6 +126,9 @@ class WebSocketProtocol(BaseProtocol):
                     raw_message = await websocket.receive_text()
                     if len(raw_message) > settings.WEBSOCKET_MAX_MESSAGE_SIZE:
                         await websocket.close(code=1009, reason="Message too large")
+                        # protocol already closed the socket; disconnect()'s
+                        # connection.close() must not close it a second time
+                        connection._closing = True
                         break
                     get_connection_manager().handle_command(connection, raw_message)
             except WebSocketDisconnect:
