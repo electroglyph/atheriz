@@ -41,7 +41,7 @@ from atheriz.commands.loggedin.follow import FollowCommand, NoFollowCommand, Unf
 from atheriz.commands.loggedin.socials import CmdSocials
 from atheriz.commands.loggedin.puppet import PuppetCommand, UnpuppetCommand
 from atheriz.commands.loggedin.ban import BanCommand, UnbanCommand
-from atheriz.commands.loggedin.draw import DrawCommand
+from atheriz.commands.loggedin.mapedit import DrawCommand
 
 
 class LoggedinCmdSet(CmdSet):

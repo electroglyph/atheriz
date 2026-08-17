@@ -43,6 +43,13 @@ class ExitCommand(Command):
         if not dest:
             logger.error(f"Error getting destination node for: {self.destination}")
             return
+        # FL act_move.c:752 — tarot card 6 (Hierophant) locks the mover to
+        # their current area.
+        from grotto.commands.tarot import _tarot_card
+
+        if _tarot_card(c) == 6 and self.destination.area != self.location.area:
+            c.msg("You have been restricted to this area by your fate!")
+            return
         d = nh.get_doors(self.location)
         if d:
             door = d.get(self.name)

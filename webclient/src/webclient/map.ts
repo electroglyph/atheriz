@@ -13,7 +13,7 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
         if (entry.coords) placeVisual(lines, relativePosition(entry.coords, payload), withReset(entry.symbol));
     }
     if (payload.pos && payload.symbol) {
-        placeVisual(lines, payload.pos, withReset(payload.symbol));
+        placeVisual(lines, payload.pos, stylePlayerSymbol(payload.symbol));
     }
 
     const legend = payload.show_legend === false ? [] : buildLegend(payload, processedLegend, columns, rows);
@@ -33,16 +33,16 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
     });
 
     const mapStartRow = Math.max(1, Math.floor((rows - visible.length - (legend.length > 0 ? legend.length + 1 : 0)) / 2) + 1);
-    const mapStartColumn = Math.max(1, Math.floor((columns - Math.min(columns, mapWidth)) / 2) + 1);
+    const mapStartColumn = Math.max(1, Math.floor((columns - Math.max(0, ...visible.map(visibleLength))) / 2) + 1);
     const output: string[] = [];
     visible.forEach((line, index) => {
         output.push(`\x1b[${mapStartRow + index};${mapStartColumn}H${line}`);
     });
     if (legend.length > 0) {
         const legendStartRow = mapStartRow + visible.length + 1;
+        const legendColumn = Math.max(1, Math.floor((columns - Math.max(...legend.map(visibleLength))) / 2) + 1);
         legend.forEach((line, index) => {
-            const column = Math.max(1, Math.floor((columns - visibleLength(line)) / 2) + 1);
-            output.push(`\x1b[${legendStartRow + index};${column}H${line}`);
+            output.push(`\x1b[${legendStartRow + index};${legendColumn}H${line}`);
         });
     }
     return output.join('');
@@ -77,10 +77,11 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
     if (values.length === 0) return [];
     const availableHeight = Math.max(5, Math.floor(rows / 3));
     const minColumns = Math.min(values.length, Math.max(1, Math.ceil(values.length / Math.max(1, availableHeight - 2))));
-    let chosenColumns = minColumns;
-    let columnWidths = calculateLegendWidths(values, chosenColumns);
+    const maxWidth = Math.max(1, columns - 4);
+    let chosenColumns = 1;
+    let columnWidths = calculateLegendWidths(values, 1, maxWidth);
     for (let candidate = minColumns; candidate >= 1; candidate -= 1) {
-        const widths = calculateLegendWidths(values, candidate);
+        const widths = calculateLegendWidths(values, candidate, maxWidth);
         if (legendWidth(widths, candidate) <= columns) {
             chosenColumns = candidate;
             columnWidths = widths;
@@ -89,11 +90,16 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
     }
 
     const rowCount = Math.ceil(values.length / chosenColumns);
-    const totalWidth = legendWidth(columnWidths, chosenColumns);
-    const rawTitle = payload.area ?? 'Legend';
-    const title = rawTitle.length > Math.max(1, columns - 6) ? rawTitle.slice(0, Math.max(1, columns - 9)) + '...' : rawTitle;
-    const headerText = `╭─ ${title} `;
-    const header = `${headerText}${'─'.repeat(Math.max(1, totalWidth - visibleLength(headerText) - 1))}╮`;
+    const title = payload.area ?? 'Legend';
+    const minHeaderWidth = visibleLength(title) + 6;
+    let totalWidth = legendWidth(columnWidths, chosenColumns);
+    if (totalWidth < minHeaderWidth) {
+        columnWidths[chosenColumns - 1] += minHeaderWidth - totalWidth;
+        totalWidth = minHeaderWidth;
+    }
+
+    const headerText = `╭─ ${title} ─`;
+    const header = `${headerText}${'─'.repeat(Math.max(0, totalWidth - 1 - visibleLength(headerText)))}╮`;
     const output = [header];
     for (let row = 0; row < rowCount; row += 1) {
         let line = '│';
@@ -101,8 +107,8 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
             const item = values[column * rowCount + row];
             const width = columnWidths[column];
             const rawText = item ? `${item.symbol} = ${item.desc}` : '';
-            const text = visibleLength(rawText) > Math.max(1, columns - 4)
-                ? ansiSubstring(rawText, 0, Math.max(1, columns - 7)) + '...'
+            const text = visibleLength(rawText) > maxWidth
+                ? `${ansiSubstring(rawText, 0, maxWidth - 3)}...`
                 : rawText;
             line += ` ${text}${' '.repeat(Math.max(0, width - visibleLength(text)))} │`;
         }
@@ -183,13 +189,13 @@ function processLegend(entries: MapLegendEntry[], columns: number): MapLegendEnt
     return result;
 }
 
-function calculateLegendWidths(entries: MapLegendEntry[], columns: number): number[] {
-    const rows = Math.ceil(entries.length / columns);
-    return Array.from({ length: columns }, (_, column) => {
+function calculateLegendWidths(entries: MapLegendEntry[], columnCount: number, maxWidth: number): number[] {
+    const rows = Math.ceil(entries.length / columnCount);
+    return Array.from({ length: columnCount }, (_, column) => {
         let width = 0;
         for (let row = 0; row < rows; row += 1) {
             const item = entries[column * rows + row];
-            if (item) width = Math.max(width, Math.min(Math.max(1, columns - 4), visibleLength(`${item.symbol} = ${item.desc}`)));
+            if (item) width = Math.max(width, Math.min(maxWidth, visibleLength(`${item.symbol} = ${item.desc}`)));
         }
         return width;
     });

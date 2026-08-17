@@ -13,7 +13,7 @@ describe('webclient map renderer', () => {
             legend: [{ symbol: 'x', desc: 'Exit' }],
         }, 20, 10);
 
-        expect(output).toContain('d@');
+        expect(output).toContain('d\x1b[38;2;255;255;255m@');
         expect(output).toContain('c');
         expect(output).toContain('Room');
         expect(output).toContain('╭');
@@ -91,6 +91,28 @@ describe('webclient map renderer', () => {
         expect(output.split('\r\n')).toHaveLength(1);
     });
 
+    it('keeps every legend line inside the terminal width with a rectangular box', () => {
+        const output = renderMap({
+            map: Array.from({ length: 27 }, () => '#'.repeat(62)).join('\n'),
+            max_y: 26,
+            pos: [31, 13],
+            symbol: '@',
+            area: 'The Western Reaches of Eldermoor',
+            legend: Array.from({ length: 14 }, (_, index) => ({
+                symbol: String.fromCharCode(97 + index),
+                desc: `A dusty trail leading ${['north', 'south', 'east', 'west'][index % 4]}ward`,
+            })),
+        }, 62, 28);
+        const lines = output.split(/\x1b\[\d+;\d+H/).map((line) => line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''));
+        const maxLine = Math.max(...lines.map((line) => line.length));
+        expect(maxLine).toBeLessThanOrEqual(62);
+        const legendLines = lines.filter((line) => line.includes('╭') || line.includes('│') || line.includes('╰'));
+        const widths = [...new Set(legendLines.map((line) => line.trimEnd().length))];
+        expect(widths).toHaveLength(1);
+        const rowNumbers = [...output.matchAll(/\x1b\[(\d+);\d+H/g)].map((match) => Number(match[1]));
+        expect(Math.max(...rowNumbers)).toBeLessThanOrEqual(28);
+    });
+
     it('treats the player position as already relative to the map string', () => {
         const output = renderMap({
             map: 'abc\ndef\nghi',
@@ -100,7 +122,7 @@ describe('webclient map renderer', () => {
             max_y: 20,
             show_legend: false,
         }, 20, 10);
-        expect(output).toContain('g@');
+        expect(output).toContain('g\x1b[38;2;255;255;255m@');
         expect(output).toContain('i');
     });
 

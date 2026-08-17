@@ -77,6 +77,16 @@ class FollowCommand(Command):
         if not (target.is_pc or target.is_npc):
             caller.msg("You can't follow that!")
             return
+        # FL act_comm.c:2312/2329/2346 — tarot card 10 (Hermit) blocks
+        # following entirely.
+        from grotto.commands.tarot import _tarot_card
+
+        if _tarot_card(caller) == 10:
+            caller.msg("You feel too solutide to want companion.")
+            return
+        if _tarot_card(target) == 10 and caller.level < 52:
+            caller.msg(f"{target.name} doesn't seem to want any followers.")
+            return
         if target.no_follow and not caller.is_builder:
             caller.msg(f"{target.name} will not lead you.")
             return

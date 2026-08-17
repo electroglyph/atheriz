@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
 
 class DrawCommand(Command):
-    key = "draw"
-    desc = "Open the AtheriZ Draw editor in a new browser tab."
+    key = "mapedit"
+    desc = "Open the AtheriZ map editor in a new browser tab."
     use_parser = False
 
     # pyrefly: ignore

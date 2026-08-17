@@ -22,6 +22,7 @@ class WebSocketConnection(BaseConnection):
         self._pending_tasks = set()
         self._pending_tasks_lock = threading.Lock()
         self._closing = False
+        self._close_task = None
 
     def _track_task(self, task):
         with self._pending_tasks_lock:
@@ -84,10 +85,9 @@ class WebSocketConnection(BaseConnection):
         self._closing = True
         try:
             if threading.get_ident() == self.thread_id:
-                task = self.loop.create_task(self._close_websocket())
+                self._close_task = self.loop.create_task(self._close_websocket())
             else:
-                task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self._resolve_loop())
-            self._track_task(task)
+                self._close_task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self._resolve_loop())
         except Exception as e:
             logger.debug(f"[WebSocket] Error closing connection: {e}")
 
