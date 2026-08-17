@@ -18,6 +18,7 @@ export interface ConnectionOptions {
     onError?: (event: Event) => void;
     minReconnectDelayMs?: number;
     maxReconnectDelayMs?: number;
+    maxReconnectAttempts?: number;
 }
 
 export const OPEN_STATE = 1;
@@ -40,6 +41,7 @@ export class WebSocketConnection {
     private readonly onError?: (event: Event) => void;
     private readonly minReconnectDelayMs: number;
     private readonly maxReconnectDelayMs: number;
+    private readonly maxReconnectAttempts: number;
     private socket: WebSocketLike | null = null;
     private reconnectTimer: ReturnType<typeof setTimeout> | undefined;
     private reconnectAttempt = 0;
@@ -54,10 +56,12 @@ export class WebSocketConnection {
         this.onError = options.onError;
         this.minReconnectDelayMs = options.minReconnectDelayMs ?? 500;
         this.maxReconnectDelayMs = options.maxReconnectDelayMs ?? 15_000;
+        this.maxReconnectAttempts = Math.max(0, options.maxReconnectAttempts ?? 3);
     }
 
     connect(): void {
         this.manuallyClosed = false;
+        if (this.state === 'failed') this.reconnectAttempt = 0;
         this.clearReconnectTimer();
         if (this.socket?.readyState === OPEN_STATE || this.state === 'connecting') return;
 
@@ -81,8 +85,16 @@ export class WebSocketConnection {
         socket.onclose = () => {
             if (this.socket !== socket) return;
             this.socket = null;
+            if (this.manuallyClosed) {
+                this.setState('closed');
+                return;
+            }
+            if (this.reconnectAttempt >= this.maxReconnectAttempts) {
+                this.setState('failed');
+                return;
+            }
+            this.scheduleReconnect();
             this.setState('closed');
-            if (!this.manuallyClosed) this.scheduleReconnect();
         };
     }
 

@@ -36,7 +36,7 @@ export interface WebClientElements {
     input: HTMLTextAreaElement;
 }
 
-export type ConnectionState = 'idle' | 'connecting' | 'open' | 'closed';
+export type ConnectionState = 'idle' | 'connecting' | 'open' | 'closed' | 'failed';
 
 export type MessageHandler = (message: WireMessage) => void;
 

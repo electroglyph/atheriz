@@ -4,7 +4,7 @@ import { shouldResetSession } from '../src/webclient/session';
 describe('webclient session lifecycle', () => {
     it('resets authenticated state when an established connection closes', () => {
         expect(shouldResetSession(true, 'closed')).toBe(true);
-        expect(shouldResetSession(true, 'connecting')).toBe(true);
+        expect(shouldResetSession(true, 'failed')).toBe(true);
     });
 
     it('does not reset state during the initial connection', () => {

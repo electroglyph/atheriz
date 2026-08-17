@@ -71,8 +71,8 @@ left.open(elements.leftTerminal);
 right.open(elements.rightTerminal);
 installWebgl(left);
 installWebgl(right);
-write('\x1b[1;97mxtermia2\x1b[0m terminal emulator (made with xterm.js)\n');
-write('revision \x1b[1;97m14\x1b[0m\n');
+write('\x1b[1;97mxtermia3\x1b[0m terminal emulator (made with xterm.js)\n');
+write('revision \x1b[1;97m2\x1b[0m\n');
 write('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands');
 
 const connection = new WebSocketConnection({
@@ -84,6 +84,10 @@ const connection = new WebSocketConnection({
         if (state === 'connecting') write('\n======== Connecting...\n');
         if (state === 'closed') {
             write('\n======== Connection lost. Retrying...\n');
+            if (autosaveSetting) saveTerminalHistory();
+        }
+        if (state === 'failed') {
+            write('\n======== Connection lost.\n');
             if (autosaveSetting) saveTerminalHistory();
         }
         if (state === 'open') {

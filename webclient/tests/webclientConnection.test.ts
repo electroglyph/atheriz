@@ -82,6 +82,48 @@ describe('webclient connection', () => {
         vi.useRealTimers();
     });
 
+    it('gives up after three reconnect attempts', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const states: string[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            onMessage: () => undefined,
+            onStateChange: (state) => states.push(state),
+            minReconnectDelayMs: 100,
+            maxReconnectDelayMs: 100,
+        });
+
+        connection.connect();
+        sockets[0].open();
+        for (const socket of sockets) socket.drop();
+        vi.advanceTimersByTime(1000);
+        for (const socket of sockets) socket.drop();
+        vi.advanceTimersByTime(1000);
+        for (const socket of sockets) socket.drop();
+        vi.advanceTimersByTime(1000);
+        sockets[3].drop();
+        vi.advanceTimersByTime(60_000);
+
+        expect(sockets).toHaveLength(4);
+        expect(connection.getState()).toBe('failed');
+        expect(states.filter((state) => state === 'failed')).toHaveLength(1);
+
+        connection.connect();
+        expect(connection.getState()).toBe('connecting');
+        sockets[4].drop();
+        vi.advanceTimersByTime(1000);
+        expect(sockets).toHaveLength(6);
+        connection.close();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
     it('ignores close events from stale sockets', () => {
         vi.useFakeTimers();
         vi.spyOn(Math, 'random').mockReturnValue(0);
