@@ -90,6 +90,7 @@ export class WebSocketConnection {
             if (!this.manuallyClosed && this.openedAt > 0 && Date.now() - this.openedAt >= STABLE_CONNECTION_MS) {
                 this.reconnectAttempt = 0;
             }
+            this.openedAt = 0;
             if (this.manuallyClosed) {
                 this.setState('closed');
                 return;

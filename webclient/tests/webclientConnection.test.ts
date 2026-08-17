@@ -166,6 +166,41 @@ describe('webclient connection', () => {
         vi.useRealTimers();
     });
 
+    it('gives up after three failed retries even after a stable connection', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const states: string[] = [];
+        const connection = new WebSocketConnection({
+            createSocket: () => {
+                const socket = new FakeSocket();
+                sockets.push(socket);
+                return socket;
+            },
+            onMessage: () => undefined,
+            onStateChange: (state) => states.push(state),
+            minReconnectDelayMs: 100,
+            maxReconnectDelayMs: 100,
+        });
+
+        connection.connect();
+        sockets[0].open();
+        vi.advanceTimersByTime(31_000);
+        sockets[0].drop();
+        vi.advanceTimersByTime(100);
+        for (let i = 1; i < 10 && i < sockets.length; i += 1) {
+            sockets[i].drop();
+            vi.advanceTimersByTime(100);
+        }
+        vi.advanceTimersByTime(60_000);
+
+        expect(sockets).toHaveLength(4);
+        expect(connection.getState()).toBe('failed');
+        connection.close();
+        vi.restoreAllMocks();
+        vi.useRealTimers();
+    });
+
     it('resets the retry budget after a stable connection drops', () => {
         vi.useFakeTimers();
         vi.spyOn(Math, 'random').mockReturnValue(0);
