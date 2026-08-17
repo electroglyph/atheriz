@@ -39,6 +39,51 @@ def _clamp_naws(rows: int, cols: int) -> tuple[int, int]:
         max(settings.TELNET_NAWS_MIN_COLS, min(cols, settings.TELNET_NAWS_MAX_COLS)),
     )
 
+TELNET_INPUT_CHUNK = 4096
+
+
+def _find_eol(buf: str) -> int:
+    idx = buf.find("\r")
+    nl = buf.find("\n")
+    if idx == -1:
+        return nl
+    if nl == -1:
+        return idx
+    return min(idx, nl)
+
+
+async def read_capped_lines(reader, max_line: int):
+    """Yield complete telnet input lines from `reader` (CR, LF, CR LF, and
+    CR NUL terminators, matching telnetlib3's readline semantics, terminators
+    stripped). A line whose pending content exceeds `max_line` is discarded:
+    `None` is yielded at its terminator and memory stays bounded."""
+    buf = ""
+    dropping = False
+    while True:
+        chunk = await reader.read(TELNET_INPUT_CHUNK)
+        if not chunk:
+            break
+        buf += chunk
+        while True:
+            i = _find_eol(buf)
+            if i == -1:
+                break
+            line = buf[:i]
+            rest = buf[i + 1 :]
+            if buf[i] == "\r" and (rest.startswith("\n") or rest.startswith("\x00")):
+                rest = rest[1:]
+            buf = rest
+            if dropping or len(line) > max_line:
+                yield None
+                dropping = False
+            else:
+                yield line
+        if len(buf) > max_line:
+            dropping = True
+            buf = ""
+    if buf and not dropping:
+        yield buf
+
 class TelnetConnection(BaseConnection):
     """
     Telnet-specific implementation of the BaseConnection.
@@ -124,17 +169,13 @@ class TelnetProtocol(BaseProtocol):
 
             # ask the client to report window size
             writer.set_ext_callback(telnetlib3.telopt.NAWS, on_naws)
-            writer.iac(telnetlib3.telopt.DO, telnetlib3.telopt.NAWS)
-
-            # mock a client_ready command since webclient normally sends it
-            get_connection_manager().dispatch(connection, "client_ready", [], {})
-
             try:
-                while True:
-                    inp = await reader.readline()
-                    if not inp:
-                        break
-                    get_connection_manager().dispatch(connection, "text", [inp.strip()], {})
+                max_line = getattr(settings, "TELNET_MAX_LINE", 65536)
+                async for line in read_capped_lines(reader, max_line):
+                    if line is None:
+                        logger.warning(f"[Telnet] dropped overlong input line from {conn_id}")
+                        continue
+                    get_connection_manager().dispatch(connection, "text", [line.strip()], {})
             except asyncio.CancelledError:
                 pass
             except Exception as e:

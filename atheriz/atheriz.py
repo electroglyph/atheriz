@@ -411,6 +411,23 @@ def setup_static_files():
         print(f"Warning: Static directory not found: {static_dir}")
 
 
+def _pid_is_server_process(pid: int) -> bool:
+    """Return True only if `pid` is alive and looks like a python/atheriz
+    process (guards the stale-PID check against PID reuse by unrelated
+    processes)."""
+    try:
+        import psutil
+
+        if not psutil.pid_exists(pid):
+            return False
+        proc = psutil.Process(pid)
+        if proc.status() == psutil.STATUS_ZOMBIE:
+            return False
+        return proc.name().lower().startswith(("python", "atheriz"))
+    except Exception:
+        return False
+
+
 def start_server():
     """Start the atheriz server."""
     setup_game_folder()
@@ -426,13 +443,11 @@ def start_server():
         try:
             with open(pid_file, "r") as f:
                 old_pid = int(f.read().strip())
-            import psutil
-            if psutil.pid_exists(old_pid):
-                print(f"Server is already running with PID: {old_pid}")
-                return
         except Exception:
-            pass
-        
+            old_pid = None
+        if old_pid is not None and _pid_is_server_process(old_pid):
+            print(f"Server is already running with PID: {old_pid}")
+            return
         print("Removing stale PID file.")
         pid_file.unlink(missing_ok=True)
 

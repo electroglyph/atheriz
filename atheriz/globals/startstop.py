@@ -6,6 +6,7 @@ from atheriz.database_setup import get_database
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import msg_all
+import traceback
 import threading
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -15,6 +16,14 @@ if TYPE_CHECKING:
 
 _shutdown_lock = threading.Lock()
 _shutdown_completed = False
+
+
+def _shutdown_step(name: str, fn, *args, **kwargs):
+    try:
+        fn(*args, **kwargs)
+    except Exception:
+        logger.error(f"Shutdown step '{name}' failed:\n{traceback.format_exc()}")
+
 
 
 def do_startup():
@@ -51,23 +60,25 @@ def do_shutdown():
         import server_events
     except ImportError:
         import atheriz.server_events as server_events
-    server_events.at_server_stop()
-    stop_autosave()
-    get_async_ticker().stop()
-    get_async_threadpool().stop(True, 10)
-    # the pool is single-use: anything that touches it after shutdown must get
-    # a fresh one (e.g. a server booted and torn down inside a test process)
+    _shutdown_step("at_server_stop", server_events.at_server_stop)
+    _shutdown_step("stop_autosave", stop_autosave)
+    _shutdown_step("ticker_stop", get_async_ticker().stop)
+    _shutdown_step("threadpool_stop", get_async_threadpool().stop, True, 10)
+    # the pool and ticker are single-use: anything that touches them after
+    # shutdown must get a fresh one (e.g. a server booted and torn down
+    # inside a test process)
     import atheriz.globals.get as get_singleton
     get_singleton._ASYNC_THREAD_POOL = None
+    get_singleton._ASYNC_TICKER = None
     if settings.AUTOSAVE_ON_SHUTDOWN:
-        save_objects()
-        get_map_handler().save()
-        get_node_handler().save()
-    msg_all("Server is shutting down NOW!")
+        _shutdown_step("save_objects", save_objects)
+        _shutdown_step("map_save", get_map_handler().save)
+        _shutdown_step("node_save", get_node_handler().save)
+    _shutdown_step("msg_all", msg_all, "Server is shutting down NOW!")
     logger.info("Shutdown sequence completed.")
     if settings.TIME_SYSTEM_ENABLED:
-        get_game_time().stop()
-    get_database().close()
+        _shutdown_step("game_time_stop", get_game_time().stop)
+    _shutdown_step("db_close", get_database().close)
 
 
 def do_reload():

@@ -104,6 +104,9 @@ class TestServerBoot:
         assert get_singleton._ASYNC_THREAD_POOL is None, (
             "shutdown must drop the global threadpool so a later boot gets a fresh one"
         )
+        assert get_singleton._ASYNC_TICKER is None, (
+            "shutdown must drop the global ticker so a later boot gets a fresh one"
+        )
 
     def test_server_refuses_second_instance(
         self, global_test_env, monkeypatch, capsys

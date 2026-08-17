@@ -56,6 +56,7 @@ class AsyncThreadPool:
         self.timeout = default_timeout
         self.task_queue = queue.Queue(maxsize=settings.THREADPOOL_QUEUE_LIMIT)
         self._last_full_log = 0.0
+        self._stopped = False
         for _ in range(max_threads - 1):  # rest of the threads for sync
             t = Thread(daemon=True, target=self._work_loop)
             t.start()
@@ -94,10 +95,14 @@ class AsyncThreadPool:
         while True:
             task = self.task_queue.get()
             if task is None:  # kill signal
-                # print("worker thread stopping...")
                 break
-            func, args, kwargs = task
-            self.run(func, *args, **kwargs)
+            try:
+                func, args, kwargs = task
+                self.run(func, *args, **kwargs)
+            except Exception:
+                logger.error(
+                    f"[AsyncThreadPool] worker dispatch failed:\n{traceback.format_exc()}"
+                )
 
     def stop(self, wait=True, timeout=10):
         """
@@ -106,6 +111,7 @@ class AsyncThreadPool:
             wait (bool, optional): wait for async tasks to finish. Defaults to True.
             timeout (float, optional): seconds to wait for worker threads. Defaults to 10.
         """
+        self._stopped = True
         logger.info("at AsyncThreadPool.stop() ...")
         self.threads[0].stop(wait)
         for _ in range(self.max_threads):
@@ -136,6 +142,12 @@ class AsyncThreadPool:
         Returns True when the task was accepted, False when the queue is
         full (newest task rejected; admission never blocks the caller, #32).
         """
+        if self._stopped:
+            now = time.monotonic()
+            if now - self._last_full_log > 10:
+                self._last_full_log = now
+                logger.warning("[AsyncThreadPool] task submitted after stop; discarded")
+            return False
         try:
             self.task_queue.put_nowait((func, args, kwargs))
         except queue.Full:
@@ -167,10 +179,10 @@ class AsyncThreadPool:
 class AsyncTicker:
     class TimeSlot:
         def __init__(self, interval: float) -> None:
-            self.atp = get_async_threadpool()
             self.lock = RLock()
             self.interval = interval
             self.coros = set()
+            self.pending = set()
             self.running = False
             self._future = None
 
@@ -181,6 +193,7 @@ class AsyncTicker:
         def remove_coro(self, coro):
             with self.lock:
                 self.coros.discard(coro)
+                self.pending.discard(coro)
                 if not self.coros:
                     self.running = False
                     if self._future:
@@ -192,26 +205,52 @@ class AsyncTicker:
                 if self._future:
                     self._future.cancel()
 
+        def _release(self, coro):
+            with self.lock:
+                self.pending.discard(coro)
+
+        def _tick_once(self, coro):
+            atp = get_async_threadpool()
+            if inspect.iscoroutinefunction(coro):
+                future = asyncio.run_coroutine_threadsafe(atp._do_async(coro), atp.loop)
+                future.add_done_callback(lambda _f: self._release(coro))
+            else:
+                try:
+                    coro()
+                finally:
+                    self._release(coro)
+
         async def timer(self):
+            atp = get_async_threadpool()
+            loop = asyncio.get_running_loop()
+            next_tick = loop.time() + self.interval
             try:
                 while self.running:
-                    await asyncio.sleep(self.interval)
+                    delay = next_tick - loop.time()
+                    if delay > 0:
+                        await asyncio.sleep(delay)
+                    elif delay < -self.interval:
+                        next_tick = loop.time()
                     with self.lock:
                         if not self.running:
                             break
-                        batch = list(self.coros)
+                        batch = [c for c in self.coros if c not in self.pending]
+                        self.pending.update(batch)
                     for c in batch:
-                        self.atp.add_task(c)
+                        if not atp.add_task(self._tick_once, c):
+                            self._release(c)
+                    next_tick += self.interval
             except asyncio.CancelledError:
                 pass
 
         def start(self):
+            atp = get_async_threadpool()
             with self.lock:
                 if not self.running:
                     self.running = True
                     self._future = asyncio.run_coroutine_threadsafe(
-                        self.timer(), 
-                        self.atp.loop
+                        self.timer(),
+                        atp.loop
                     )
 
     def __init__(self) -> None:
@@ -250,8 +289,10 @@ class AsyncTicker:
         """
         logger.info("at AsyncTicker.stop() ...")
         with self.lock:
-            try:
-                for v in self.slots.values():
+            for v in self.slots.values():
+                try:
                     v.stop()
-            except:
-                pass
+                except Exception:
+                    logger.error(
+                        f"Error stopping ticker slot {v.interval}:\n{traceback.format_exc()}"
+                    )

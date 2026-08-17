@@ -2893,6 +2893,10 @@ Default value: `4444`
 
 Default value: `'0.0.0.0'`
 
+### `TELNET_TLS_ENABLED`
+
+Default value: `False`
+
 ### `TELNET_CONNECTION_TIMEOUT`
 
 Default value: `300`
