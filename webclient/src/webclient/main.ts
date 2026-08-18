@@ -260,6 +260,7 @@ function installInputHandlers(): void {
         hint.scrollLeft = elements.input.scrollLeft;
     });
     resizeInput();
+    document.fonts?.ready.then(() => resizeInput());
 }
 
 function installResizeHandlers(): void {
@@ -649,7 +650,8 @@ function asMapPayload(value: unknown): MapPayload {
 
 function renderMap(): void {
     if (!mapEnabled || !mapPayload) return;
-    right.clear();
+    right.scrollToBottom();
+    right.write(MAP_CLEAR_SEQUENCE);
     recorder.output('r', MAP_CLEAR_SEQUENCE);
     const output = renderMapText(mapPayload, right.cols, right.rows);
     right.write(output);
