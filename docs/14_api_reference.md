@@ -1689,6 +1689,15 @@ Args:
     args (list): Unused.
     kwargs (dict): Unused.
 
+#### `def map_edit(self, connection: Connection, args: list, kwargs: dict)`
+
+Handle map editor edits authenticated by the rotating key chain.
+
+Args:
+    connection (Connection): The connection sending the edit.
+    args (list): Expects `[key (str), seq (int), cells (list of [x, y, symbol])]`.
+    kwargs (dict): Unused.
+
 ### `def inputfunc(name: str | None = None)`
 
 Decorator to mark a method as an input handler for incoming client WebSocket commands.
@@ -2880,6 +2889,14 @@ Default value: `True`
 ### `WEBSOCKET_MAX_MESSAGE_SIZE`
 
 Default value: `65536`
+
+### `MAPEDIT_KEY_TTL`
+
+Default value: `7200`
+
+### `MAPEDIT_KEY_IDLE`
+
+Default value: `900`
 
 ### `TELNET_ENABLED`
 

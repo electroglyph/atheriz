@@ -1,8 +1,9 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
-from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset
+from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset, get_map_handler
 from atheriz.logger import logger
 import atheriz.settings as settings
+import atheriz.globals.mapedit as mapedit
 from atheriz.connection_screen import render
 
 if TYPE_CHECKING:
@@ -305,3 +306,47 @@ class InputFuncs:
         welcome = render(connection.session)
         connection.msg(welcome)
         connection.msg(prompt=">")
+
+    @inputfunc()
+    def map_edit(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle map editor edits authenticated by the rotating key chain.
+
+        Args:
+            connection (Connection): The connection sending the edit.
+            args (list): Expects `[key (str), seq (int), cells (list of [x, y, symbol])]`.
+            kwargs (dict): Unused.
+        """
+        if len(args) < 3:
+            return
+        key, seq, cells = args[0], args[1], args[2]
+        if not (isinstance(key, str) and isinstance(seq, int) and isinstance(cells, list)):
+            return
+        for cell in cells:
+            if not (
+                isinstance(cell, list)
+                and len(cell) == 3
+                and isinstance(cell[0], int)
+                and isinstance(cell[1], int)
+                and isinstance(cell[2], str)
+            ):
+                return
+        ip = getattr(connection, "client_host", "?")
+        result = mapedit.consume(key, ip, seq)
+        if result.status == mapedit.REJECT:
+            connection.send_command("map_edit_reject", result.reason)
+            return
+        if result.status == mapedit.RETRY:
+            connection.send_command("map_ack", seq, result.new_key)
+            return
+        mi = get_map_handler().get_mapinfo(result.chain.area, result.chain.z)
+        if mi:
+            with mi.batch_update():
+                with mi.lock:
+                    for x, y, symbol in cells:
+                        if symbol == "":
+                            mi.pre_grid.pop((x, y), None)
+                        else:
+                            mi.pre_grid[(x, y)] = symbol
+                    mi.map_changed = True
+        connection.send_command("map_ack", seq, result.new_key)

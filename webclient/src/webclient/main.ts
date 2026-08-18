@@ -394,7 +394,10 @@ function handleMessage(message: WireMessage): void {
                 : []);
             break;
         case 'launch_draw':
-            launchDraw();
+            launchDraw(
+                typeof message.args[0] === 'string' ? message.args[0] : undefined,
+                message.args[1],
+            );
             break;
         case 'background':
             applyBackground(message.args[0]);

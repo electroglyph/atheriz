@@ -1,15 +1,28 @@
 const DRAW_PATH = '/atheriz_draw/';
+const GRANT_KEY = 'atheriz_draw_grant';
 
 let lastLaunchAt = 0;
 
-export function launchDraw(): boolean {
+export interface DrawGrant {
+    key: string;
+    payload: unknown;
+}
+
+export function launchDraw(key?: string, payload?: unknown): boolean {
     const now = Date.now();
     if (now - lastLaunchAt < 1000) return true;
     lastLaunchAt = now;
 
+    if (key && payload) {
+        sessionStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
+    }
+
     const drawUrl = new URL(DRAW_PATH, window.location.origin).href;
     const opened = window.open(drawUrl, '_blank', 'noopener,noreferrer');
-    if (opened) return true;
+    if (opened) {
+        sessionStorage.removeItem(GRANT_KEY);
+        return true;
+    }
 
     const link = document.createElement('a');
     link.href = drawUrl;
@@ -23,4 +36,26 @@ export function launchDraw(): boolean {
     fallback.append(document.createTextNode('Popup blocked. '), link);
     document.body.append(fallback);
     return false;
+}
+
+export function readDrawGrant(): DrawGrant | null {
+    const raw = sessionStorage.getItem(GRANT_KEY);
+    if (!raw) return null;
+    try {
+        const parsed = JSON.parse(raw) as unknown;
+        if (!isDrawGrant(parsed)) return null;
+        return parsed;
+    } catch {
+        return null;
+    }
+}
+
+export function clearDrawGrant(): void {
+    sessionStorage.removeItem(GRANT_KEY);
+}
+
+function isDrawGrant(value: unknown): value is DrawGrant {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Record<string, unknown>;
+    return typeof candidate.key === 'string' && typeof candidate.payload === 'object' && candidate.payload !== null;
 }

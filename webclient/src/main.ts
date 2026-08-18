@@ -36,6 +36,8 @@ import { CHAR_GROUPS } from './utils/characters';
 import { LayerManager } from './ui/LayerManager';
 import { PreviewWindow } from './ui/PreviewWindow';
 import { GradientPicker } from './ui/GradientPicker';
+import { readDrawGrant, clearDrawGrant } from './webclient/launch';
+import { loadMapPayload, MapEditSession, MapEditPayload } from './mapedit';
 
 // Make sure fonts are loaded before we measure
 document.fonts.ready.then(() => {
@@ -68,6 +70,24 @@ function initApp() {
     const undoStack = new UndoStack();
 
     let canvasState = new CanvasState(80, 24);
+
+    const grant = readDrawGrant();
+    let mapEditSession: MapEditSession | null = null;
+    if (grant) {
+        const payload = grant.payload as MapEditPayload;
+        const origin = loadMapPayload(canvasState, payload);
+        mapEditSession = new MapEditSession(grant.key, canvasState, origin);
+        mapEditSession.onEvent((event) => {
+            if (event.type === 'reject') {
+                console.warn(`Map edit rejected (${event.reason}). Re-run 'mapedit' in-game.`);
+            } else if (event.type === 'error') {
+                console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
+            }
+        });
+        canvasState.onChange(() => mapEditSession?.scheduleSync());
+        clearDrawGrant();
+    }
+
     undoStack.setCurrentState(canvasState);
 
     let currentFontSize = 18;

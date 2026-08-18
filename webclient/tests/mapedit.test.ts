@@ -1,0 +1,238 @@
+import { describe, expect, it, vi } from 'vitest';
+import { WebSocketLike } from '../src/webclient/connection';
+import { CanvasState } from '../src/state/CanvasState';
+import { loadMapPayload, MapEditSession, MapEditPayload } from '../src/mapedit';
+
+class FakeSocket implements WebSocketLike {
+    readyState = 0;
+    onopen: ((event: Event) => void) | null = null;
+    onclose: ((event: CloseEvent) => void) | null = null;
+    onerror: ((event: Event) => void) | null = null;
+    onmessage: ((event: MessageEvent) => void) | null = null;
+    sent: string[] = [];
+    closeCalls = 0;
+
+    send(data: string): void {
+        this.sent.push(data);
+    }
+
+    close(): void {
+        this.closeCalls += 1;
+    }
+
+    open(): void {
+        this.readyState = 1;
+        this.onopen?.(new Event('open'));
+    }
+
+    drop(): void {
+        this.readyState = 3;
+        this.onclose?.({} as CloseEvent);
+    }
+}
+
+function makeSocketHolder(): { socket: FakeSocket; createSocket: (url: string) => WebSocketLike } {
+    let socket!: FakeSocket;
+    return {
+        get socket() {
+            return socket;
+        },
+        createSocket: () => {
+            socket = new FakeSocket();
+            return socket;
+        },
+    };
+}
+
+function makeCanvas(): CanvasState {
+    return new CanvasState(2, 1, false);
+}
+
+function ack(socket: FakeSocket, seq: number, key: string): void {
+    socket.onmessage?.(new MessageEvent('message', { data: `["map_ack",[${seq},"${key}"],{}]` }));
+}
+
+describe('loadMapPayload', () => {
+    it('sizes the canvas to the grid bounds and places cells', () => {
+        const canvas = makeCanvas();
+        const payload: MapEditPayload = {
+            area: 'TestArea',
+            z: 0,
+            grid: [[-2, 3, 'X'], [5, 3, 'Y']],
+        };
+        const origin = loadMapPayload(canvas, payload);
+        expect(origin).toEqual({ originX: -2, originY: 3 });
+        expect(canvas.width).toBe(8);
+        expect(canvas.height).toBe(1);
+        expect(canvas.getCompositeCell(0, 0)?.char).toBe('X');
+        expect(canvas.getCompositeCell(7, 0)?.char).toBe('Y');
+    });
+
+    it('handles an empty grid', () => {
+        const canvas = makeCanvas();
+        const payload: MapEditPayload = { area: 'TestArea', z: 0, grid: [] };
+        const origin = loadMapPayload(canvas, payload);
+        expect(origin).toEqual({ originX: 0, originY: 0 });
+        expect(canvas.width).toBe(1);
+        expect(canvas.height).toBe(1);
+    });
+});
+
+describe('MapEditSession', () => {
+    it('sends the handshake when the socket opens', () => {
+        const holder = makeSocketHolder();
+        const session = new MapEditSession('K0', makeCanvas(), { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        expect(holder.socket.sent).toEqual(['["map_edit",["K0",0,[]],{}]']);
+        session.dispose();
+    });
+
+    it('sends edits with the rotated key and advances seq on ack', () => {
+        vi.useFakeTimers();
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const session = new MapEditSession('K0', canvas, { originX: 10, originY: -5 }, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        canvas.setCell(0, 0, { char: 'X', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        canvas.setCell(1, 0, { char: 'Y', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+
+        expect(holder.socket.sent[1]).toBe('["map_edit",["K1",1,[[10,-5,"X"],[11,-5,"Y"]]],{}]');
+        ack(holder.socket, 1, 'K2');
+
+        canvas.setCell(0, 0, { char: 'Z', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[10,-5,"Z"]]],{}]');
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('queues edits while one is in flight', () => {
+        vi.useFakeTimers();
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        canvas.setCell(0, 0, { char: 'A', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        canvas.setCell(1, 0, { char: 'B', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(holder.socket.sent.length).toBe(2);
+
+        ack(holder.socket, 1, 'K2');
+        expect(holder.socket.sent.length).toBe(3);
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[1,0,"B"]]],{}]');
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('resends the in-flight edit with the same key and seq after reconnect', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const canvas = makeCanvas();
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, (url) => {
+            const socket = new FakeSocket();
+            sockets.push(socket);
+            return socket;
+        });
+        sockets[0].open();
+        ack(sockets[0], 0, 'K1');
+        canvas.setCell(0, 0, { char: 'A', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(sockets[0].sent.length).toBe(2);
+
+        sockets[0].drop();
+        vi.advanceTimersByTime(600);
+        expect(sockets.length).toBe(2);
+        sockets[1].open();
+        expect(sockets[1].sent).toEqual(['["map_edit",["K1",1,[[0,0,"A"]]],{}]']);
+
+        ack(sockets[1], 1, 'K2');
+        canvas.setCell(0, 0, { char: 'Z', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(sockets[1].sent[1]).toBe('["map_edit",["K2",2,[[0,0,"Z"]]],{}]');
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('emits an error and stops when reconnect attempts are exhausted', () => {
+        vi.useFakeTimers();
+        vi.spyOn(Math, 'random').mockReturnValue(0);
+        const sockets: FakeSocket[] = [];
+        const events: string[] = [];
+        const canvas = makeCanvas();
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, (url) => {
+            const socket = new FakeSocket();
+            sockets.push(socket);
+            return socket;
+        });
+        session.onEvent((event) => events.push(event.type === 'error' ? `error:${event.message}` : event.type));
+        sockets[0].open();
+        ack(sockets[0], 0, 'K1');
+
+        sockets[0].drop();
+        vi.advanceTimersByTime(500);
+        sockets[1].drop();
+        vi.advanceTimersByTime(1000);
+        sockets[2].drop();
+        vi.advanceTimersByTime(2000);
+        sockets[3].drop();
+
+        expect(events).toEqual(['synced', 'error:Connection failed.']);
+
+        canvas.setCell(0, 0, { char: 'X', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(sockets[3].sent.length).toBe(0);
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('dispose closes the connection and stops all syncs', () => {
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        session.dispose();
+
+        expect(holder.socket.closeCalls).toBe(1);
+        canvas.setCell(0, 0, { char: 'X', fg: [0, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        expect(holder.socket.sent).toEqual(['["map_edit",["K0",0,[]],{}]']);
+        session.dispose();
+    });
+
+    it('emits a reject event and stops on rejection', () => {
+        vi.useFakeTimers();
+        const holder = makeSocketHolder();
+        const events: string[] = [];
+        const session = new MapEditSession('K0', makeCanvas(), { originX: 0, originY: 0 }, holder.createSocket);
+        session.onEvent((event) => events.push(event.type === 'reject' ? `reject:${event.reason}` : event.type));
+        holder.socket.open();
+        holder.socket.onmessage?.(new MessageEvent('message', { data: '["map_edit_reject",["replay"],{}]' }));
+        expect(events).toEqual(['reject:replay']);
+        expect(holder.socket.closeCalls).toBe(1);
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('ignores acks that do not match the in-flight seq', () => {
+        const holder = makeSocketHolder();
+        const session = new MapEditSession('K0', makeCanvas(), { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 5, 'K99');
+        expect(holder.socket.sent).toEqual(['["map_edit",["K0",0,[]],{}]']);
+        session.dispose();
+    });
+});
