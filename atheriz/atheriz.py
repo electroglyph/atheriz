@@ -262,11 +262,17 @@ def format_webclient_sync_warning(
         lines.append("    e.g. " + ", ".join(names))
     compiled_webclient = (engine_web / "static" / "webclient" / "index.html").is_file()
     if compiled_webclient:
+        deploy_py = Path(__file__).resolve().parent.parent / "webclient" / "deploy.py"
         lines.append("  Deploy the compiled webclient into the game:")
-        lines.append("    cd /path/to/atheriz/webclient")
-        lines.append(
-            f'    npm run deploy:game -- --web-root "{game_cwd / "web"}"'
-        )
+        if deploy_py.is_file():
+            lines.append(
+                f'    python "{deploy_py}" game --web-root "{game_cwd / "web"}"'
+            )
+        else:
+            lines.append("    From the atheriz source checkout:")
+            lines.append(
+                f'    python webclient/deploy.py game --web-root "{game_cwd / "web"}"'
+            )
         return "\n".join(lines)
     lines.append("  Copy the server's webclient over the game's:")
     rel = os.path.relpath(str(engine_web), str(game_cwd))

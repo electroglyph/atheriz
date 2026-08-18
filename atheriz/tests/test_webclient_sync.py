@@ -203,5 +203,7 @@ def test_compiled_webclient_warning_uses_deploy_command(tmp_path):
     summary = check_webclient_sync(game, engine_web=engine)
     msg = format_webclient_sync_warning(summary, game, engine_web=engine)
 
-    assert "npm run deploy:game" in msg
+    assert "deploy.py" in msg
+    assert f'game --web-root "{game / "web"}"' in msg
+    assert "npm run" not in msg
     assert "cp -r" not in msg
