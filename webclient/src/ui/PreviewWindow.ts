@@ -2,6 +2,27 @@ import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import { CanvasState } from '../state/CanvasState';
 import { buildCompositeAnsiPreview } from '../export/AnsiPreview';
+import { measureCellMetrics, CellMetrics } from '../utils/fontMetrics';
+
+const PREVIEW_MAX_FONT_SIZE = 20;
+const PREVIEW_MIN_FONT_SIZE = 2;
+
+export function pickPreviewFontSize(
+    measure: (fontSize: number) => CellMetrics,
+    width: number,
+    height: number,
+    availW: number,
+    availH: number,
+): number {
+    let firstFit = -1;
+    for (let fs = PREVIEW_MAX_FONT_SIZE; fs >= PREVIEW_MIN_FONT_SIZE; fs--) {
+        const m = measure(fs);
+        if (m.width * width > availW || m.height * height > availH) continue;
+        if (Number.isInteger(m.advance)) return fs;
+        if (firstFit === -1) firstFit = fs;
+    }
+    return firstFit === -1 ? PREVIEW_MIN_FONT_SIZE : firstFit;
+}
 
 export class PreviewWindow {
     private modal: HTMLElement;
@@ -198,19 +219,10 @@ export class PreviewWindow {
         // Title bar (34) + win padding (20) + modal padding/buffer
         const availH = window.innerHeight * 0.90 - 70; 
 
-        // Approximate cell dimensions: monospace fonts ~0.6x width ratio
-        // We'll try sizes from 20px down to 2px to ensure fit
-        let fontSize = 20;
-        for (let fs = 20; fs >= 2; fs--) {
-            // Standard terminal cell ratios are roughly 1.2 height and 0.6 width
-            const cellH = fs * 1.2;
-            const cellW = fs * 0.6;
-            if (cellW * state.width <= availW && cellH * state.height <= availH) {
-                fontSize = fs;
-                break;
-            }
-            fontSize = fs;
-        }
+        // Use the same font metrics as the editor grid so the preview renders
+        // at an integral pixel scale; fractional advances anti-alias bitmap
+        // fonts into mush and the preview colors no longer match the editor.
+        const fontSize = pickPreviewFontSize((fs) => measureCellMetrics(fontFamily, fs), state.width, state.height, availW, availH);
 
         // Tear down previous terminal
         if (this.terminal) {

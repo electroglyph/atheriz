@@ -81,7 +81,11 @@ class NewCharacterCommand(Command):
         apply_creation_cooldown(
             "character", rate_key, time.monotonic(), settings.CREATION_COOLDOWN
         )
-        character.gender = gender
+        stats = getattr(character, "stats", None)
+        if stats is not None and hasattr(stats, "gender"):
+            stats.gender = gender
+        else:
+            character.gender = gender
         account.add_character(character)
         caller.session.puppet = character
         character.session = caller.session

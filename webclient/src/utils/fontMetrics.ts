@@ -4,6 +4,8 @@ export interface CellMetrics {
   width: number;
   height: number;
   font: string;
+  /** unrounded glyph advance; the editor cell grid is derived from this */
+  advance: number;
 }
 
 export interface TextMetricsInput {
@@ -40,6 +42,7 @@ export function measureCellMetrics(
 
   const tm = ctx.measureText("M") as TextMetricsInput;
   const { width, height } = deriveCellMetrics(fontSize, tm);
+  const advance = tm.width ?? fontSize * 0.6;
 
-  return { width, height, font };
+  return { width, height, font, advance };
 }
