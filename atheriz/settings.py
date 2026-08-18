@@ -8,9 +8,6 @@ SERVERNAME = "AtheriZ"
 SERVER_HOSTNAME = "localhost"
 WEBSOCKET_ENABLED = True
 WEBSOCKET_MAX_MESSAGE_SIZE = 65536
-# map editor key chain: hard cap on chain lifetime and idle timeout (seconds)
-MAPEDIT_KEY_TTL = 7200
-MAPEDIT_KEY_IDLE = 900
 TELNET_ENABLED = True
 TELNET_PORT = 4444
 # Use "::" to bind to all IPv6 (and often IPv4 via dual-stack) interfaces

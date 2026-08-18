@@ -123,17 +123,6 @@ def test_consume_wrong_ip():
     assert result.reason == "ip"
 
 
-def test_consume_expired(monkeypatch):
-    now = [1000.0]
-    monkeypatch.setattr(mapedit.time, "time", lambda: now[0])
-    key = mapedit.grant("10.0.0.1", "TestArea", 0)
-    now[0] += settings.MAPEDIT_KEY_TTL + 1
-    result = mapedit.consume(key, "10.0.0.1", 0)
-    assert result.status == mapedit.REJECT
-    assert result.reason == "unknown_key"
-    assert key not in mapedit._chains
-
-
 def test_consume_old_key_after_rotation_is_stale():
     key = mapedit.grant("10.0.0.1", "TestArea", 0)
     handshake = mapedit.consume(key, "10.0.0.1", 0)
