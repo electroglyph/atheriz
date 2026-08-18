@@ -37,7 +37,7 @@ import { LayerManager } from './ui/LayerManager';
 import { PreviewWindow } from './ui/PreviewWindow';
 import { GradientPicker } from './ui/GradientPicker';
 import { readDrawGrant, clearDrawGrant } from './webclient/launch';
-import { loadMapPayload, MapEditSession, MapEditPayload } from './mapedit';
+import { loadMapPayload, MapEditSession, MapEditPayload, MapEditOrigin, logRoomData } from './mapedit';
 
 // Make sure fonts are loaded before we measure
 document.fonts.ready.then(() => {
@@ -73,10 +73,13 @@ function initApp() {
 
     const grant = readDrawGrant();
     let mapEditSession: MapEditSession | null = null;
+    let mapEditOrigin: MapEditOrigin | null = null;
+    let mapPayload: MapEditPayload | null = null;
     if (grant) {
         const payload = grant.payload as MapEditPayload;
-        const origin = loadMapPayload(canvasState, payload);
-        mapEditSession = new MapEditSession(grant.key, canvasState, origin);
+        mapPayload = payload;
+        mapEditOrigin = loadMapPayload(canvasState, payload);
+        mapEditSession = new MapEditSession(grant.key, canvasState, mapEditOrigin);
         mapEditSession.onEvent((event) => {
             if (event.type === 'reject') {
                 console.warn(`Map edit rejected (${event.reason}). Re-run 'mapedit' in-game.`);
@@ -84,7 +87,6 @@ function initApp() {
                 console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
             }
         });
-        canvasState.onChange(() => mapEditSession?.scheduleSync());
         clearDrawGrant();
     }
 
@@ -93,6 +95,13 @@ function initApp() {
     let currentFontSize = 18;
     let metrics = measureCellMetrics('Unifont', currentFontSize);
     const renderer = new GridRenderer(canvasEl, canvasState, metrics);
+
+    if (mapEditOrigin) {
+        renderer.setRoomCells(mapEditOrigin.roomCells);
+    }
+    if (mapPayload) {
+        logRoomData(mapPayload);
+    }
 
     const context: ToolContext = {
         state: canvasState,
@@ -373,21 +382,23 @@ function initApp() {
     });
 
     // Auto-load art.ans from the public directory on startup if it exists
-    (async () => {
-        try {
-            const res = await fetch('./art.ans');
-            if (!res.ok) return;
-            const text = await res.text();
-            const { width, height } = detectAnsiDimensions(text);
-            const newState = await parseAnsiToState(text, width, height);
-            canvasState = newState;
-            context.state = canvasState;
-            undoStack.setCurrentState(canvasState);
-            renderer.updateState(canvasState);
-            layerManager.updateState(canvasState);
-            syncTextToolDialog();
-        } catch {
-            // No art.ans present or fetch failed — start with a blank canvas
-        }
-    })();
+    if (!grant) {
+        (async () => {
+            try {
+                const res = await fetch('./art.ans');
+                if (!res.ok) return;
+                const text = await res.text();
+                const { width, height } = detectAnsiDimensions(text);
+                const newState = await parseAnsiToState(text, width, height);
+                canvasState = newState;
+                context.state = canvasState;
+                undoStack.setCurrentState(canvasState);
+                renderer.updateState(canvasState);
+                layerManager.updateState(canvasState);
+                syncTextToolDialog();
+            } catch {
+                // No art.ans present or fetch failed — start with a blank canvas
+            }
+        })();
+    }
 }

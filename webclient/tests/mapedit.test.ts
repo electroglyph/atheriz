@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { WebSocketLike } from '../src/webclient/connection';
 import { CanvasState } from '../src/state/CanvasState';
-import { loadMapPayload, MapEditSession, MapEditPayload } from '../src/mapedit';
+import { loadMapPayload, logRoomData, MapEditSession, MapEditPayload } from '../src/mapedit';
 
 class FakeSocket implements WebSocketLike {
     readyState = 0;
@@ -53,7 +53,7 @@ function ack(socket: FakeSocket, seq: number, key: string): void {
 }
 
 describe('loadMapPayload', () => {
-    it('sizes the canvas to the grid bounds and places cells', () => {
+    it('sizes the canvas to twice the grid bounds and places cells with 0,0 at the lower left', () => {
         const canvas = makeCanvas();
         const payload: MapEditPayload = {
             area: 'TestArea',
@@ -61,20 +61,76 @@ describe('loadMapPayload', () => {
             grid: [[-2, 3, 'X'], [5, 3, 'Y']],
         };
         const origin = loadMapPayload(canvas, payload);
-        expect(origin).toEqual({ originX: -2, originY: 3 });
-        expect(canvas.width).toBe(8);
-        expect(canvas.height).toBe(1);
-        expect(canvas.getCompositeCell(0, 0)?.char).toBe('X');
-        expect(canvas.getCompositeCell(7, 0)?.char).toBe('Y');
+        expect(origin.originX).toBe(-2);
+        expect(origin.originY).toBe(3);
+        expect(origin.roomCells).toEqual(new Set());
+        expect(canvas.width).toBe(16);
+        expect(canvas.height).toBe(2);
+        expect(canvas.getCompositeCell(0, 1)?.char).toBe('X');
+        expect(canvas.getCompositeCell(7, 1)?.char).toBe('Y');
+    });
+
+    it('handles negative coordinates with the lower-left corner as the origin', () => {
+        const canvas = makeCanvas();
+        const payload: MapEditPayload = {
+            area: 'TestArea',
+            z: 0,
+            grid: [[-2, -2, 'X']],
+        };
+        const origin = loadMapPayload(canvas, payload);
+        expect(origin.originX).toBe(-2);
+        expect(origin.originY).toBe(-2);
+        expect(canvas.width).toBe(2);
+        expect(canvas.height).toBe(2);
+        expect(canvas.getCompositeCell(0, 1)?.char).toBe('X');
+    });
+
+    it('marks room cells in roomCells using the flipped canvas rows', () => {
+        const canvas = makeCanvas();
+        const payload: MapEditPayload = {
+            area: 'TestArea',
+            z: 0,
+            grid: [[0, 0, '℣'], [1, 0, '℣']],
+            rooms: [
+                { x: 0, y: 0, desc: 'Hall', exits: [] },
+                { x: 1, y: 0, desc: 'Kitchen', exits: [{ name: 'West', aliases: ['w'], coord: ['TestArea', 0, 0, 0] }] },
+            ],
+        };
+        const origin = loadMapPayload(canvas, payload);
+        expect(origin.roomCells).toEqual(new Set(['0,1', '1,1']));
     });
 
     it('handles an empty grid', () => {
         const canvas = makeCanvas();
         const payload: MapEditPayload = { area: 'TestArea', z: 0, grid: [] };
         const origin = loadMapPayload(canvas, payload);
-        expect(origin).toEqual({ originX: 0, originY: 0 });
+        expect(origin).toEqual({ originX: 0, originY: 0, roomCells: new Set() });
         expect(canvas.width).toBe(1);
         expect(canvas.height).toBe(1);
+    });
+});
+
+describe('logRoomData', () => {
+    it('logs room descriptions and exits with destination coords', () => {
+        const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        logRoomData({
+            area: 'TestArea',
+            z: 2,
+            grid: [],
+            rooms: [
+                { x: 3, y: 4, desc: 'A hall.', exits: [{ name: 'North', aliases: ['n'], coord: ['TestArea', 3, 5, 2] }] },
+            ],
+        });
+        expect(spy).toHaveBeenCalledWith('Room data for TestArea (z=2):');
+        expect(spy).toHaveBeenCalledWith('(3, 4): A hall. | exits: North -> 3,5 (TestArea, z=2)');
+        spy.mockRestore();
+    });
+
+    it('logs a placeholder when there are no rooms', () => {
+        const spy = vi.spyOn(console, 'log').mockImplementation(() => {});
+        logRoomData({ area: 'TestArea', z: 0, grid: [] });
+        expect(spy).toHaveBeenCalledWith('No rooms found.');
+        spy.mockRestore();
     });
 });
 

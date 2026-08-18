@@ -6,7 +6,7 @@ from atheriz.commands.loggedin.mapedit import DrawCommand
 from atheriz.globals import mapedit
 from atheriz.globals.map import MapInfo
 from atheriz.inputfuncs import InputFuncs
-from atheriz.objects.nodes import Node
+from atheriz.objects.nodes import Node, NodeLink
 from atheriz.tests.fakes import FakeConnection, FakeSession
 from atheriz.utils import Coord
 
@@ -190,9 +190,68 @@ def test_run_sends_launch_draw_with_payload():
     assert payload["area"] == "TestArea"
     assert payload["z"] == 0
     assert set(tuple(c) for c in payload["grid"]) == {(0, 0, "X"), (5, -2, "Y")}
+    assert payload["rooms"] == []
     assert caller.messages == ["Opening AtheriZ Draw in a new tab."]
     chain = mapedit.consume(key, "10.0.0.1", 0)
     assert chain.status == mapedit.PROCESSED
+
+
+def test_run_sends_room_data():
+    mi = make_mi({(0, 0): settings.ROOM_PLACEHOLDER, (5, -2): "Y"})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    room = Node(coord=Coord("TestArea", 0, 0, 0))
+    room.desc = "A dusty hall."
+    room.links.append(NodeLink(name="North", coord=Coord("TestArea", 0, 1, 0), aliases=["n"]))
+    room.links.append(NodeLink(name="East", coord=Coord("TestArea", 1, 0, 0)))
+    room.links.append(NodeLink(name="Broken", coord=None))
+
+    class MockNodeGrid:
+        def get_node(self, coord):
+            return room if coord == (0, 0) else None
+
+    class MockNodeArea:
+        def get_grid(self, z):
+            return MockNodeGrid()
+
+    class MockNodeHandler:
+        def get_area(self, name):
+            return MockNodeArea()
+
+    node = Node(coord=Coord("TestArea", 3, 7, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh), patch(
+        "atheriz.commands.loggedin.mapedit.get_node_handler", return_value=MockNodeHandler()
+    ):
+        DrawCommand().run(caller, None)
+
+    payload = conn.sent[0][1][1]
+    assert payload["rooms"] == [
+        {
+            "x": 0,
+            "y": 0,
+            "desc": "A dusty hall.",
+            "exits": [
+                {"name": "North", "aliases": ["n"], "coord": ["TestArea", 0, 1, 0]},
+                {"name": "East", "aliases": [], "coord": ["TestArea", 1, 0, 0]},
+            ],
+        }
+    ]
+
+
+def test_run_sends_rendered_symbols():
+    mi = make_mi({(0, 0): settings.SINGLE_WALL_PLACEHOLDER})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    node = Node(coord=Coord("TestArea", 3, 7, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh):
+        DrawCommand().run(caller, None)
+
+    payload = conn.sent[0][1][1]
+    assert payload["grid"] == [[0, 0, "─"]]
 
 
 def test_run_creates_mapinfo_when_missing():

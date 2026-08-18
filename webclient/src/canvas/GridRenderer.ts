@@ -11,6 +11,7 @@ export class GridRenderer {
     // Optional overlays for previewing tool actions
     private previewCells: Map<string, Cell> = new Map();
     private selectedCells: Set<string> = new Set();
+    private roomCells: Set<string> = new Set();
 
     private renderBound = () => this.render();
 
@@ -82,6 +83,11 @@ export class GridRenderer {
             this.selectedCells = new Set();
             this.render();
         }
+    }
+
+    public setRoomCells(cells: Set<string>) {
+        this.roomCells = cells;
+        this.render();
     }
 
     public render() {
@@ -157,11 +163,9 @@ export class GridRenderer {
         }
         this.ctx.stroke();
 
-        if (this.selectedCells.size > 0) {
-            this.ctx.strokeStyle = '#FFCC00';
-            this.ctx.lineWidth = 2;
+        const strokeCellOutlines = (cells: Set<string>) => {
             this.ctx.beginPath();
-            for (const key of this.selectedCells) {
+            for (const key of cells) {
                 const parts = key.split(',');
                 const col = parseInt(parts[0]);
                 const row = parseInt(parts[1]);
@@ -177,6 +181,18 @@ export class GridRenderer {
                 this.ctx.lineTo(x, y);
             }
             this.ctx.stroke();
+        };
+
+        if (this.roomCells.size > 0) {
+            this.ctx.strokeStyle = '#00CCCC';
+            this.ctx.lineWidth = 2;
+            strokeCellOutlines(this.roomCells);
+        }
+
+        if (this.selectedCells.size > 0) {
+            this.ctx.strokeStyle = '#FFCC00';
+            this.ctx.lineWidth = 2;
+            strokeCellOutlines(this.selectedCells);
         }
 
         const baseFont = this.metrics.font;

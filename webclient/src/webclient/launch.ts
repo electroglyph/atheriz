@@ -1,5 +1,7 @@
 const DRAW_PATH = '/atheriz_draw/';
 const GRANT_KEY = 'atheriz_draw_grant';
+const GRANT_TS_KEY = 'atheriz_draw_grant_ts';
+const GRANT_TTL_MS = 60000;
 
 let lastLaunchAt = 0;
 
@@ -14,13 +16,14 @@ export function launchDraw(key?: string, payload?: unknown): boolean {
     lastLaunchAt = now;
 
     if (key && payload) {
-        sessionStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
+        localStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
+        localStorage.setItem(GRANT_TS_KEY, String(now));
     }
 
     const drawUrl = new URL(DRAW_PATH, window.location.origin).href;
     const opened = window.open(drawUrl, '_blank', 'noopener,noreferrer');
     if (opened) {
-        sessionStorage.removeItem(GRANT_KEY);
+        clearDrawGrant();
         return true;
     }
 
@@ -39,8 +42,13 @@ export function launchDraw(key?: string, payload?: unknown): boolean {
 }
 
 export function readDrawGrant(): DrawGrant | null {
-    const raw = sessionStorage.getItem(GRANT_KEY);
+    const raw = localStorage.getItem(GRANT_KEY);
     if (!raw) return null;
+    const tsRaw = localStorage.getItem(GRANT_TS_KEY);
+    if (tsRaw !== null && Date.now() - Number(tsRaw) > GRANT_TTL_MS) {
+        clearDrawGrant();
+        return null;
+    }
     try {
         const parsed = JSON.parse(raw) as unknown;
         if (!isDrawGrant(parsed)) return null;
@@ -51,7 +59,8 @@ export function readDrawGrant(): DrawGrant | null {
 }
 
 export function clearDrawGrant(): void {
-    sessionStorage.removeItem(GRANT_KEY);
+    localStorage.removeItem(GRANT_KEY);
+    localStorage.removeItem(GRANT_TS_KEY);
 }
 
 function isDrawGrant(value: unknown): value is DrawGrant {

@@ -3,15 +3,30 @@ import { ConnectionState, WireMessage } from './webclient/types';
 import { CanvasState } from './state/CanvasState';
 import { Cell } from './types';
 
+export interface MapEditExit {
+    name: string;
+    aliases: string[];
+    coord: [string, number, number, number];
+}
+
+export interface MapRoom {
+    x: number;
+    y: number;
+    desc?: string;
+    exits: MapEditExit[];
+}
+
 export interface MapEditPayload {
     area: string;
     z: number;
     grid: [number, number, string][];
+    rooms?: MapRoom[];
 }
 
 export interface MapEditOrigin {
     originX: number;
     originY: number;
+    roomCells: Set<string>;
 }
 
 export type MapEditEvent =
@@ -26,7 +41,7 @@ const SYNC_DELAY_MS = 200;
 export function loadMapPayload(canvas: CanvasState, payload: MapEditPayload): MapEditOrigin {
     if (payload.grid.length === 0) {
         canvas.resize(1, 1);
-        return { originX: 0, originY: 0 };
+        return { originX: 0, originY: 0, roomCells: new Set() };
     }
     let minX = payload.grid[0][0];
     let minY = payload.grid[0][1];
@@ -38,16 +53,36 @@ export function loadMapPayload(canvas: CanvasState, payload: MapEditPayload): Ma
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
     }
-    const width = Math.max(1, maxX - minX + 1);
-    const height = Math.max(1, maxY - minY + 1);
-    canvas.resize(width, height);
+    const mapWidth = Math.max(1, maxX - minX + 1);
+    const mapHeight = Math.max(1, maxY - minY + 1);
+    canvas.resize(mapWidth * 2, mapHeight * 2);
+    const toRow = (y: number) => canvas.height - 1 - (y - minY);
     const batch: { col: number; row: number; cell: Cell }[] = [];
     for (const [x, y, symbol] of payload.grid) {
         if (symbol === '') continue;
-        batch.push({ col: x - minX, row: y - minY, cell: { char: symbol, fg: [204, 204, 204], bg: [-1, -1, -1] } });
+        batch.push({ col: x - minX, row: toRow(y), cell: { char: symbol, fg: [204, 204, 204], bg: [-1, -1, -1] } });
     }
     canvas.applyBatch(batch);
-    return { originX: minX, originY: minY };
+    const roomCells = new Set<string>();
+    for (const room of payload.rooms ?? []) {
+        roomCells.add(`${room.x - minX},${toRow(room.y)}`);
+    }
+    return { originX: minX, originY: minY, roomCells };
+}
+
+export function logRoomData(payload: MapEditPayload): void {
+    console.log(`Room data for ${payload.area} (z=${payload.z}):`);
+    const rooms = payload.rooms ?? [];
+    if (rooms.length === 0) {
+        console.log('No rooms found.');
+        return;
+    }
+    for (const room of rooms) {
+        const exits = room.exits
+            .map((e) => `${e.name} -> ${e.coord[1]},${e.coord[2]} (${e.coord[0]}, z=${e.coord[3]})`)
+            .join(', ');
+        console.log(`(${room.x}, ${room.y}): ${room.desc ?? '(no description)'} | exits: ${exits || 'none'}`);
+    }
 }
 
 export class MapEditSession {
@@ -122,7 +157,7 @@ export class MapEditSession {
                 const char = composite?.char ?? '';
                 const key = `${col},${row}`;
                 if (this.baseline.get(key) !== char) {
-                    cells.push([col + this.originX, row + this.originY, char]);
+                    cells.push([col + this.originX, this.canvas.height - 1 - row + this.originY, char]);
                     this.baseline.set(key, char);
                 }
             }

@@ -5,7 +5,7 @@ import { clearDrawGrant, launchDraw, readDrawGrant } from '../src/webclient/laun
 describe('draw launch command', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div id="left-terminal"></div>';
-        sessionStorage.clear();
+        localStorage.clear();
         vi.restoreAllMocks();
         vi.useFakeTimers();
     });
@@ -70,15 +70,25 @@ describe('draw launch command', () => {
     });
 
     it('round-trips grants and rejects malformed ones', () => {
-        sessionStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: { area: 'a' } }));
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: { area: 'a' } }));
         expect(readDrawGrant()).toEqual({ key: 'k', payload: { area: 'a' } });
-        sessionStorage.setItem('atheriz_draw_grant', 'not json');
+        localStorage.setItem('atheriz_draw_grant', 'not json');
         expect(readDrawGrant()).toBeNull();
-        sessionStorage.setItem('atheriz_draw_grant', JSON.stringify({ payload: { area: 'a' } }));
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ payload: { area: 'a' } }));
         expect(readDrawGrant()).toBeNull();
-        sessionStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: null }));
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: null }));
         expect(readDrawGrant()).toBeNull();
         clearDrawGrant();
         expect(readDrawGrant()).toBeNull();
+    });
+
+    it('expires stale grants after a minute', () => {
+        vi.setSystemTime(1000);
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: { area: 'a' } }));
+        localStorage.setItem('atheriz_draw_grant_ts', '100');
+        expect(readDrawGrant()).toEqual({ key: 'k', payload: { area: 'a' } });
+        vi.setSystemTime(61000);
+        expect(readDrawGrant()).toBeNull();
+        expect(localStorage.getItem('atheriz_draw_grant')).toBeNull();
     });
 });
