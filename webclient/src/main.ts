@@ -20,6 +20,8 @@ import { RotateTool } from './tools/RotateTool';
 
 import { CharPalette } from './ui/CharPalette';
 import { ColorPicker } from './ui/ColorPicker';
+import { ColorPickerModal } from './ui/ColorPickerModal';
+import { cssColor } from './utils/colors';
 import { Toolbar } from './ui/Toolbar';
 import { SidebarResizer } from './ui/SidebarResizer';
 import { NewCanvasDialog } from './ui/NewCanvasDialog';
@@ -211,6 +213,29 @@ function initApp() {
     document.getElementById('btn-preview')?.addEventListener('click', () => {
         previewWindow.open();
     });
+
+    let roomVisible = true;
+    let roomColor: [number, number, number] = [0, 204, 204];
+    const btnRoomToggle = document.getElementById('btn-room-toggle');
+    const roomColorSwatch = document.getElementById('room-color-swatch');
+    const applyRoomColor = () => {
+        if (roomColorSwatch) roomColorSwatch.style.backgroundColor = cssColor(roomColor);
+        renderer.setRoomColor(cssColor(roomColor));
+    };
+    btnRoomToggle?.addEventListener('click', () => {
+        roomVisible = !roomVisible;
+        renderer.setRoomVisible(roomVisible);
+        btnRoomToggle.textContent = roomVisible ? 'Hide Room Color' : 'Show Room Color';
+    });
+    document.getElementById('btn-room-color')?.addEventListener('click', () => {
+        ColorPickerModal.getInstance().open(roomColor).then((result) => {
+            if (result) {
+                roomColor = result;
+                applyRoomColor();
+            }
+        });
+    });
+    applyRoomColor();
 
     new NewCanvasDialog((w, h) => {
         undoStack.push(canvasState);

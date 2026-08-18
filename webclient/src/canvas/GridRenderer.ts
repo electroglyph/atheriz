@@ -12,6 +12,8 @@ export class GridRenderer {
     private previewCells: Map<string, Cell> = new Map();
     private selectedCells: Set<string> = new Set();
     private roomCells: Set<string> = new Set();
+    private roomColor: string = '#00CCCC';
+    private roomVisible: boolean = true;
 
     private renderBound = () => this.render();
 
@@ -87,6 +89,16 @@ export class GridRenderer {
 
     public setRoomCells(cells: Set<string>) {
         this.roomCells = cells;
+        this.render();
+    }
+
+    public setRoomColor(color: string) {
+        this.roomColor = color;
+        this.render();
+    }
+
+    public setRoomVisible(visible: boolean) {
+        this.roomVisible = visible;
         this.render();
     }
 
@@ -183,8 +195,8 @@ export class GridRenderer {
             this.ctx.stroke();
         };
 
-        if (this.roomCells.size > 0) {
-            this.ctx.strokeStyle = '#00CCCC';
+        if (this.roomVisible && this.roomCells.size > 0) {
+            this.ctx.strokeStyle = this.roomColor;
             this.ctx.lineWidth = 2;
             strokeCellOutlines(this.roomCells);
         }
