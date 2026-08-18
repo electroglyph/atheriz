@@ -57,8 +57,8 @@ class MazeCommand(Command):
         # wrap_xterm256("!",fg=9)
         mi1 = MapInfo(
             "maze1",
-            None,
             map1,
+            None,
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze2", (maze1_exit.coord.x, maze1_exit.coord.y)
@@ -67,8 +67,8 @@ class MazeCommand(Command):
         )
         mi2 = MapInfo(
             "maze2",
-            None,
             map2,
+            None,
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze3", (maze2_exit.coord.x, maze2_exit.coord.y)
@@ -77,8 +77,8 @@ class MazeCommand(Command):
         )
         mi3 = MapInfo(
             "maze3",
-            None,
             map3,
+            None,
             [
                 LegendEntry(
                     wrap_xterm256("!", fg=9), "to maze1", (maze3_exit.coord.x, maze3_exit.coord.y)

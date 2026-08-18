@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import '@xterm/xterm/css/xterm.css';
 import '../../fonts/FiraCode.css';
+import '../../fonts/KreativeSquare.css';
 import { WebSocketConnection } from './connection';
 import { CommandHistory } from './history';
 import { launchDraw } from './launch';
@@ -42,7 +43,7 @@ const terminalOptions = {
 };
 
 const left = new Terminal(terminalOptions);
-const right = new Terminal({ ...terminalOptions, cursorBlink: false, cursorStyle: 'bar', screenReaderMode: screenReaderEnabled });
+const right = new Terminal({ ...terminalOptions, cursorBlink: false, cursorStyle: 'bar', screenReaderMode: screenReaderEnabled, fontFamily: 'KreativeSquare' });
 const leftFit = new FitAddon();
 const rightFit = new FitAddon();
 let mapEnabled = false;
@@ -503,7 +504,6 @@ function handleInternalCommand(command: string): boolean {
         case ':fontfamily':
             if (!args[0]) return reportInvalidCommand(':fontfamily <family>');
             left.options.fontFamily = args.join(' ');
-            right.options.fontFamily = args.join(' ');
             safeSet('font', args.join(' '));
             fitAndReportSize();
             write(settingFeedback('fontfamily', args.join(' ')));

@@ -58,7 +58,7 @@ function initApp() {
         selectedChar: '█',
         fgColor: [204, 204, 204],
         bgColor: [0, 0, 0],
-        fontFamily: 'Unifont',
+        fontFamily: 'KreativeSquare',
         gradientStops: [[0, 0, 0] as any, [255, 255, 255] as any],
         selectMode: 'rectangle',
         rotateMode: 'cw90',
@@ -93,7 +93,7 @@ function initApp() {
     undoStack.setCurrentState(canvasState);
 
     let currentFontSize = 18;
-    let metrics = measureCellMetrics('Unifont', currentFontSize);
+    let metrics = measureCellMetrics(appState.fontFamily, currentFontSize);
     const renderer = new GridRenderer(canvasEl, canvasState, metrics);
 
     if (mapEditOrigin) {

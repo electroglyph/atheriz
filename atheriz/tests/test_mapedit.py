@@ -254,6 +254,23 @@ def test_run_sends_rendered_symbols():
     assert payload["grid"] == [[0, 0, "─"]]
 
 
+def test_run_preserves_post_grid_when_pre_grid_empty():
+    mi = MapInfo(name="TestArea")
+    mi.post_grid[(0, 0)] = "╬"
+    mi.post_grid[(1, 0)] = "═"
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    node = Node(coord=Coord("TestArea", 3, 7, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh):
+        DrawCommand().run(caller, None)
+
+    payload = conn.sent[0][1][1]
+    assert set(tuple(c) for c in payload["grid"]) == {(0, 0, "╬"), (1, 0, "═")}
+    assert mi.post_grid[(0, 0)] == "╬"
+
+
 def test_run_creates_mapinfo_when_missing():
     mh = MockMapHandler()
     node = Node(coord=Coord("TestArea", 0, 0, 0))

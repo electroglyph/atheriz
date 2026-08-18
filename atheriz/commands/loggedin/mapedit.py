@@ -35,7 +35,8 @@ class DrawCommand(Command):
             mh.set_mapinfo(area, z, mi)
         key = mapedit.grant(getattr(conn, "client_host", "?"), area, z)
         payload = {"area": area, "z": z, "grid": [], "rooms": []}
-        mi.pre_render()
+        if mi.pre_grid:
+            mi.pre_render()
         with mi.lock:
             grid = list(mi.post_grid.items())
         area_obj = get_node_handler().get_area(area)

@@ -78,6 +78,23 @@ class TestMazeCommand:
         # Map enabled
         assert c.map_enabled is True
 
+    def test_maps_stored_in_pre_grid(self):
+        # INTENT: maze glyphs live in pre_grid (the source grid), so pre_render
+        # and mapedit (which snapshots post_grid after pre_render) see them.
+        c = _make_caller(builder=True)
+        with patch("atheriz.commands.loggedin.maze.get_async_threadpool") as mock_pool, \
+             patch("atheriz.commands.loggedin.maze.get_map_handler") as mock_mh, \
+             patch("atheriz.commands.loggedin.maze.astar", return_value=(True, [], [])):
+            mh = MagicMock()
+            mock_mh.return_value = mh
+            mock_pool.return_value = MagicMock()
+            MazeCommand().run(c, None)
+        for area in ("maze1", "maze2", "maze3"):
+            call = [call for call in mh.set_mapinfo.call_args_list if call.args[0] == area][0]
+            mi = call.args[2]
+            assert mi.pre_grid
+            assert not mi.post_grid
+
     def test_no_node_at_origin_skips_move(self):
         # INTENT: when maze1 has no node at (0,0,0) the moving-to message and move_to are skipped.
         # We test this by mocking nh.get_node(Coord("maze1",0,0,0)) to return None.
