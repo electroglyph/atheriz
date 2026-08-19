@@ -231,4 +231,34 @@ describe('webclient map renderer', () => {
         }, 12, 10);
         expect(output).not.toContain('This description is much too long');
     });
+
+    it('keeps a legend with astral symbols rectangular (one cell per codepoint)', () => {
+        const output = renderMap({
+            map: '#'.repeat(30) + '\n' + '#'.repeat(30),
+            max_y: 1,
+            pos: [1, 1],
+            symbol: '🯅',
+            area: 'Town',
+            legend: [
+                { symbol: '𜸂', desc: 'shrine of light' },
+                { symbol: '󿀎', desc: 'shadow guild' },
+                { symbol: '󿳤', desc: 'general store' },
+            ],
+        }, 40, 12);
+        const lines = output.split(/\x1b\[\d+;\d+H/).map((line) => line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, ''));
+        const legendLines = lines.filter((line) => line.includes('╭') || line.includes('│') || line.includes('╰'));
+        const widths = [...new Set(legendLines.map((line) => [...line.trimEnd()].length))];
+        expect(widths).toHaveLength(1);
+    });
+
+    it('places the player symbol at the correct column after astral symbols', () => {
+        const output = renderMap({
+            map: 'ab🯅cd',
+            max_y: 0,
+            pos: [3, 0],
+            symbol: '@',
+            show_legend: false,
+        }, 20, 5);
+        expect(output).toContain('🯅\x1b[38;2;255;255;255m@\x1b[0md');
+    });
 });

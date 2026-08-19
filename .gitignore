@@ -232,3 +232,4 @@ save/
 *.md
 !README.md
 !readme.md
+.vscode/

@@ -166,8 +166,9 @@ function processLegend(entries: MapLegendEntry[], columns: number): MapLegendEnt
             .map(([desc, count]) => (count > 1 ? `${desc} (${count})` : desc))
             .join(', ');
         const maxDescLen = Math.floor(columns / 2);
-        if (combinedDesc.length > maxDescLen) {
-            combinedDesc = `${combinedDesc.substring(0, Math.max(0, maxDescLen - 3))}...`;
+        const descChars = [...combinedDesc];
+        if (descChars.length > maxDescLen) {
+            combinedDesc = `${descChars.slice(0, Math.max(0, maxDescLen - 3)).join('')}...`;
         }
         let bgColor: [number, number, number] | undefined;
         let fgColor: [number, number, number] | undefined;
@@ -310,7 +311,7 @@ function visualRawIndex(value: string, target: number, skipLeadingCodes: boolean
             index = ansiEnd(value, index);
         } else {
             visible += 1;
-            index += 1;
+            index = nextCharIndex(value, index);
         }
     }
     if (skipLeadingCodes) {
@@ -319,13 +320,22 @@ function visualRawIndex(value: string, target: number, skipLeadingCodes: boolean
     return index;
 }
 
+function nextCharIndex(value: string, index: number): number {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+        const next = value.charCodeAt(index + 1);
+        if (next >= 0xdc00 && next <= 0xdfff) return index + 2;
+    }
+    return index + 1;
+}
+
 function ansiEnd(value: string, start: number): number {
     const match = value.slice(start).match(/^\x1b\[[0-?]*[ -/]*[@-~]/);
     return match ? start + match[0].length : value.length;
 }
 
 function visibleLength(value: string): number {
-    return value.replace(ANSI, '').length;
+    return [...value.replace(ANSI, '')].length;
 }
 
 function withReset(value: string): string {
