@@ -108,6 +108,19 @@ describe('loadMapPayload', () => {
         expect(canvas.width).toBe(1);
         expect(canvas.height).toBe(1);
     });
+
+    it('parses ANSI-wrapped symbols into colored cells', () => {
+        const canvas = makeCanvas();
+        const payload: MapEditPayload = {
+            area: 'TestArea',
+            z: 0,
+            grid: [[0, 0, '\x1b[48;2;0;0;0m\x1b[38;2;255;0;0mX\x1b[0m']],
+        };
+        loadMapPayload(canvas, payload);
+        const cell = canvas.getCompositeCell(0, 1);
+        expect(cell?.char).toBe('X');
+        expect(cell?.fg).toEqual([255, 0, 0]);
+    });
 });
 
 describe('logRoomData', () => {
@@ -143,6 +156,42 @@ describe('MapEditSession', () => {
         session.dispose();
     });
 
+    it('preserves cell colors when only the character is edited', () => {
+        vi.useFakeTimers();
+        const holder = makeSocketHolder();
+        const canvas = new CanvasState(1, 1, false);
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        canvas.setCell(0, 0, { char: 'X', fg: [255, 0, 0], bg: [0, 0, 255], bold: true });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(holder.socket.sent[1]).toBe('["map_edit",["K1",1,[[0,0,"X",[255,0,0],[0,0,255],["bold"]]]],{}]');
+        session.dispose();
+        vi.useRealTimers();
+    });
+
+    it('emits a diff when only the color changes', () => {
+        vi.useFakeTimers();
+        const holder = makeSocketHolder();
+        const canvas = new CanvasState(1, 1, false);
+        const session = new MapEditSession('K0', canvas, { originX: 0, originY: 0 }, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        canvas.setCell(0, 0, { char: 'X', fg: [255, 0, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        ack(holder.socket, 1, 'K2');
+        canvas.setCell(0, 0, { char: 'X', fg: [0, 255, 0], bg: [-1, -1, -1] });
+        session.scheduleSync();
+        vi.advanceTimersByTime(200);
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[0,0,"X",[0,255,0],[0,0,0],[]]]],{}]');
+        session.dispose();
+        vi.useRealTimers();
+    });
+
     it('sends edits with the rotated key and advances seq on ack', () => {
         vi.useFakeTimers();
         const holder = makeSocketHolder();
@@ -156,13 +205,13 @@ describe('MapEditSession', () => {
         session.scheduleSync();
         vi.advanceTimersByTime(200);
 
-        expect(holder.socket.sent[1]).toBe('["map_edit",["K1",1,[[10,-5,"X"],[11,-5,"Y"]]],{}]');
+        expect(holder.socket.sent[1]).toBe('["map_edit",["K1",1,[[10,-5,"X",[0,0,0],[0,0,0],[]],[11,-5,"Y",[0,0,0],[0,0,0],[]]]],{}]');
         ack(holder.socket, 1, 'K2');
 
         canvas.setCell(0, 0, { char: 'Z', fg: [0, 0, 0], bg: [-1, -1, -1] });
         session.scheduleSync();
         vi.advanceTimersByTime(200);
-        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[10,-5,"Z"]]],{}]');
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[10,-5,"Z",[0,0,0],[0,0,0],[]]]],{}]');
         session.dispose();
         vi.useRealTimers();
     });
@@ -185,7 +234,7 @@ describe('MapEditSession', () => {
 
         ack(holder.socket, 1, 'K2');
         expect(holder.socket.sent.length).toBe(3);
-        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[1,0,"B"]]],{}]');
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[[1,0,"B",[0,0,0],[0,0,0],[]]]],{}]');
         session.dispose();
         vi.useRealTimers();
     });
@@ -211,13 +260,13 @@ describe('MapEditSession', () => {
         vi.advanceTimersByTime(600);
         expect(sockets.length).toBe(2);
         sockets[1].open();
-        expect(sockets[1].sent).toEqual(['["map_edit",["K1",1,[[0,0,"A"]]],{}]']);
+        expect(sockets[1].sent).toEqual(['["map_edit",["K1",1,[[0,0,"A",[0,0,0],[0,0,0],[]]]],{}]']);
 
         ack(sockets[1], 1, 'K2');
         canvas.setCell(0, 0, { char: 'Z', fg: [0, 0, 0], bg: [-1, -1, -1] });
         session.scheduleSync();
         vi.advanceTimersByTime(200);
-        expect(sockets[1].sent[1]).toBe('["map_edit",["K2",2,[[0,0,"Z"]]],{}]');
+        expect(sockets[1].sent[1]).toBe('["map_edit",["K2",2,[[0,0,"Z",[0,0,0],[0,0,0],[]]]],{}]');
         session.dispose();
         vi.useRealTimers();
     });

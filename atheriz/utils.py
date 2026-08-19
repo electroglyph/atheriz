@@ -209,6 +209,43 @@ def wrap_truecolor(
     return f"{input}\x1b[0m"
 
 
+def wrap_rgb(
+    input: str,
+    fg=None,
+    bg=None,
+    bold=False,
+    italic=False,
+    underline=False,
+) -> str:
+    """
+    wrap input string with exact ANSI truecolor RGB codes and a color reset.
+
+    Unlike wrap_truecolor (HSV params), fg/bg are exact (r, g, b) tuples,
+    each component 0-255. Defaults: bg black (0, 0, 0) — the engine's
+    "unset background" convention — and fg gray (204, 204, 204).
+
+    Returns:
+        str: colorized string with color reset at the end
+    """
+    if bg is not None:
+        r, g, b = bg
+        input = f"\x1b[48;2;{r};{g};{b}m{input}"
+    else:
+        input = f"\x1b[48;2;0;0;0m{input}"
+    if fg is not None:
+        r, g, b = fg
+        input = f"\x1b[38;2;{r};{g};{b}m{input}"
+    else:
+        input = f"\x1b[38;2;204;204;204m{input}"
+    if bold:
+        input = f"\x1b[1m{input}"
+    if italic:
+        input = f"\x1b[3m{input}"
+    if underline:
+        input = f"\x1b[4m{input}"
+    return f"{input}\x1b[0m"
+
+
 def strip_ansi(input: str) -> str:
     return _COLOR_REGEX.sub("", input)
 

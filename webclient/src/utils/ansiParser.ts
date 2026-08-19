@@ -70,6 +70,112 @@ export function detectAnsiDimensions(ansiString: string): { width: number; heigh
     return { width, height };
 }
 
+const DEFAULT_FG: Color = [204, 204, 204];
+const TRANSPARENT: Color = [-1, -1, -1];
+
+/**
+ * Parses a single ANSI-wrapped symbol (one map-editor cell) into a Cell.
+ * Handles the engine's wrap_truecolor() output: always a background
+ * (`48;2;r;g;b`, black `0;0;0` when unset), always a truecolor foreground,
+ * optional style SGRs, and a final reset. Inverse (`7`) and strikethrough
+ * (`9`) are parsed and dropped — the editor Cell model has no fields for
+ * them, so those attributes cannot round-trip.
+ */
+export function parseAnsiSymbol(symbol: string): Cell {
+    let fg: Color = [...DEFAULT_FG];
+    let bg: Color = [...TRANSPARENT];
+    let bold: boolean | undefined;
+    let italic: boolean | undefined;
+    let underline: boolean | undefined;
+    let char = '';
+    let cellFg: Color = [...DEFAULT_FG];
+    let cellBg: Color = [...TRANSPARENT];
+    let cellBold: boolean | undefined;
+    let cellItalic: boolean | undefined;
+    let cellUnderline: boolean | undefined;
+
+    // Walk the string in order: SGR sequences update the running state; the
+    // first visible character snapshots it. The engine's wrap_* output places
+    // the reset AFTER the glyph, so a naive last-wins scan would wipe the
+    // cell's colors; capturing at the char avoids that.
+    const re = /\x1b\[[0-9;]*m|[^\x1b]/g;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(symbol)) !== null) {
+        const token = m[0];
+        if (token.startsWith('\x1b')) {
+            const raw = token.slice(2, -1);
+            const parts = raw ? raw.split(';') : ['0'];
+            let i = 0;
+            while (i < parts.length) {
+                const code = Number(parts[i]);
+                if (code === 0) {
+                    fg = [...DEFAULT_FG];
+                    bg = [...TRANSPARENT];
+                    bold = undefined;
+                    italic = undefined;
+                    underline = undefined;
+                    i += 1;
+                } else if (code === 1) {
+                    bold = true;
+                    i += 1;
+                } else if (code === 22) {
+                    bold = false;
+                    i += 1;
+                } else if (code === 3) {
+                    italic = true;
+                    i += 1;
+                } else if (code === 23) {
+                    italic = false;
+                    i += 1;
+                } else if (code === 4) {
+                    underline = true;
+                    i += 1;
+                } else if (code === 24) {
+                    underline = false;
+                    i += 1;
+                } else if (code === 38 || code === 48) {
+                    const isFg = code === 38;
+                    const mode = Number(parts[i + 1]);
+                    if (mode === 2 && i + 4 < parts.length) {
+                        const rgb: Color = [Number(parts[i + 2]), Number(parts[i + 3]), Number(parts[i + 4])];
+                        if (isFg) {
+                            fg = rgb;
+                        } else {
+                            // Engine convention: black background == unset/transparent.
+                            bg = rgb[0] === 0 && rgb[1] === 0 && rgb[2] === 0 ? [...TRANSPARENT] : rgb;
+                        }
+                        i += 5;
+                    } else if (mode === 5 && i + 2 < parts.length) {
+                        const rgb = ansi256ToRgb(Number(parts[i + 2]));
+                        if (isFg) {
+                            fg = rgb;
+                        } else {
+                            bg = rgb[0] === 0 && rgb[1] === 0 && rgb[2] === 0 ? [...TRANSPARENT] : rgb;
+                        }
+                        i += 3;
+                    } else {
+                        i += 2;
+                    }
+                } else {
+                    // 7 (inverse) and 9 (strikethrough) deliberately ignored.
+                    i += 1;
+                }
+            }
+        } else if (!char) {
+            char = token;
+            cellFg = [...fg];
+            cellBg = [...bg];
+            cellBold = bold;
+            cellItalic = italic;
+            cellUnderline = underline;
+        } else {
+            char += token;
+        }
+    }
+
+    return { char, fg: cellFg, bg: cellBg, bold: cellBold, italic: cellItalic, underline: cellUnderline };
+}
+
 export async function parseAnsiToCells(ansiString: string, canvasWidth: number, canvasHeight?: number): Promise<Cell[]> {
     const rows = canvasHeight ?? Math.max(1, Math.ceil(ansiString.length / canvasWidth));
     const term = new Terminal({ cols: canvasWidth, rows, scrollback: 0, allowProposedApi: true });

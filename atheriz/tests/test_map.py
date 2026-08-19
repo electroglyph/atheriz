@@ -347,6 +347,20 @@ class TestPreRender:
         mi.pre_render()
         assert mi.post_grid[(0, 0)] == "X"
 
+    def test_resolves_junction_with_ansi_wrapped_neighbors(self, global_test_env):
+        mi = MapInfo()
+        ansi_wall = "\x1b[48;2;0;0;0m\x1b[38;2;255;255;255m{}\x1b[0m".format(
+            settings.SINGLE_WALL_PLACEHOLDER
+        )
+        mi.pre_grid[(0, 0)] = settings.SINGLE_WALL_PLACEHOLDER
+        mi.pre_grid[(1, 0)] = ansi_wall
+        mi.pre_grid[(-1, 0)] = ansi_wall
+        mi.pre_grid[(0, 1)] = ansi_wall
+        mi.pre_grid[(0, -1)] = ansi_wall
+        mi.pre_render()
+        assert mi.post_grid[(0, 0)] == "┼"
+        assert mi.post_grid[(1, 0)] == ansi_wall
+
 
 class TestUpdateGrid:
     def test_updates_pre_grid(self, global_test_env):

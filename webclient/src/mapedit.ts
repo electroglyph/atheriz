@@ -1,7 +1,8 @@
 import { WebSocketConnection, WebSocketLike } from './webclient/connection';
 import { ConnectionState, WireMessage } from './webclient/types';
 import { CanvasState } from './state/CanvasState';
-import { Cell } from './types';
+import { Cell, Color } from './types';
+import { parseAnsiSymbol } from './utils/ansiParser';
 
 export interface MapEditExit {
     name: string;
@@ -22,6 +23,11 @@ export interface MapEditPayload {
     grid: [number, number, string][];
     rooms?: MapRoom[];
 }
+
+/** One edited cell sent back to the engine:
+ * `[x, y, char, fg, bg, attrs]` with fg/bg as [r,g,b] or [-1,-1,-1] (transparent)
+ * and attrs a subset of ["bold", "italic", "underline"]. */
+export type MapEditCell = [number, number, string, Color, Color, string[]];
 
 export interface MapEditOrigin {
     originX: number;
@@ -60,7 +66,7 @@ export function loadMapPayload(canvas: CanvasState, payload: MapEditPayload): Ma
     const batch: { col: number; row: number; cell: Cell }[] = [];
     for (const [x, y, symbol] of payload.grid) {
         if (symbol === '') continue;
-        batch.push({ col: x - minX, row: toRow(y), cell: { char: symbol, fg: [204, 204, 204], bg: [-1, -1, -1] } });
+        batch.push({ col: x - minX, row: toRow(y), cell: parseAnsiSymbol(symbol) });
     }
     canvas.applyBatch(batch);
     const roomCells = new Set<string>();
@@ -85,6 +91,27 @@ export function logRoomData(payload: MapEditPayload): void {
     }
 }
 
+function serializeCell(cell: Cell | null): string {
+    if (!cell) return '';
+    return [
+        cell.char,
+        cell.fg.join(','),
+        cell.bg.join(','),
+        cell.bold ?? false,
+        cell.italic ?? false,
+        cell.underline ?? false,
+    ].join('|');
+}
+
+function cellAttrs(cell: Cell | null): string[] {
+    const attrs: string[] = [];
+    if (!cell) return attrs;
+    if (cell.bold) attrs.push('bold');
+    if (cell.italic) attrs.push('italic');
+    if (cell.underline) attrs.push('underline');
+    return attrs;
+}
+
 export class MapEditSession {
     private conn: WebSocketConnection;
     private key: string;
@@ -93,8 +120,8 @@ export class MapEditSession {
     private originX: number;
     private originY: number;
     private baseline = new Map<string, string>();
-    private queue: [number, number, string][][] = [];
-    private inFlight: { seq: number; cells: [number, number, string][] } | null = null;
+    private queue: MapEditCell[][] = [];
+    private inFlight: { seq: number; cells: MapEditCell[] } | null = null;
     private handshakeSent = false;
     private syncTimer: ReturnType<typeof setTimeout> | null = null;
     private stopped = false;
@@ -144,21 +171,28 @@ export class MapEditSession {
         for (let row = 0; row < this.canvas.height; row++) {
             for (let col = 0; col < this.canvas.width; col++) {
                 const composite = this.canvas.getCompositeCell(col, row);
-                this.baseline.set(`${col},${row}`, composite?.char ?? '');
+                this.baseline.set(`${col},${row}`, serializeCell(composite));
             }
         }
     }
 
-    private computeDiff(): [number, number, string][] {
-        const cells: [number, number, string][] = [];
+    private computeDiff(): MapEditCell[] {
+        const cells: MapEditCell[] = [];
         for (let row = 0; row < this.canvas.height; row++) {
             for (let col = 0; col < this.canvas.width; col++) {
                 const composite = this.canvas.getCompositeCell(col, row);
-                const char = composite?.char ?? '';
                 const key = `${col},${row}`;
-                if (this.baseline.get(key) !== char) {
-                    cells.push([col + this.originX, this.canvas.height - 1 - row + this.originY, char]);
-                    this.baseline.set(key, char);
+                const serialized = serializeCell(composite);
+                if (this.baseline.get(key) !== serialized) {
+                    cells.push([
+                        col + this.originX,
+                        this.canvas.height - 1 - row + this.originY,
+                        composite?.char ?? '',
+                        composite ? [...composite.fg] : [204, 204, 204],
+                        composite ? [...composite.bg] : [0, 0, 0],
+                        cellAttrs(composite),
+                    ]);
+                    this.baseline.set(key, serialized);
                 }
             }
         }

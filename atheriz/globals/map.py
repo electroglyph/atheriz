@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from atheriz.globals.node import Node
 from atheriz.logger import logger
 import atheriz.settings as settings
-from atheriz.utils import Coord, detach
+from atheriz.utils import Coord, detach, strip_ansi
 import dill
 import time
 import copy
@@ -159,13 +159,17 @@ class MapInfo:
         e = False
         w = False
         cx, cy = coord
-        if grid.get((cx, cy + 1), None) in chars:
+        value = grid.get((cx, cy + 1), None)
+        if value is not None and strip_ansi(value) in chars:
             n = True
-        if grid.get((cx, cy - 1), None) in chars:
+        value = grid.get((cx, cy - 1), None)
+        if value is not None and strip_ansi(value) in chars:
             s = True
-        if grid.get((cx + 1, cy), None) in chars:
+        value = grid.get((cx + 1, cy), None)
+        if value is not None and strip_ansi(value) in chars:
             e = True
-        if grid.get((cx - 1, cy), None) in chars:
+        value = grid.get((cx - 1, cy), None)
+        if value is not None and strip_ansi(value) in chars:
             w = True
         return n, s, e, w
 

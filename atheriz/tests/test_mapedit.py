@@ -296,6 +296,34 @@ def test_map_edit_handshake():
     assert mapedit._chains[args[1]].key == args[1]
 
 
+def test_map_edit_applies_color_cells():
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit(conn, [key, 0, []], {})
+        handshake_key = conn.sent[0][1][1]
+        InputFuncs().map_edit(
+            conn,
+            [
+                handshake_key,
+                1,
+                [
+                    [2, 3, "B", [255, 0, 0], [-1, -1, -1], ["bold"]],
+                    [4, 4, "C", [10, 20, 30], [1, 2, 3], ["italic", "underline"]],
+                ],
+            ],
+            {},
+        )
+    assert mi.pre_grid[(2, 3)] == "\x1b[1m\x1b[38;2;255;0;0m\x1b[48;2;0;0;0mB\x1b[0m"
+    assert mi.pre_grid[(4, 4)] == "\x1b[4m\x1b[3m\x1b[38;2;10;20;30m\x1b[48;2;1;2;3mC\x1b[0m"
+    assert len(conn.sent) == 2
+    assert conn.sent[1][0] == "map_ack"
+    assert conn.sent[1][1][0] == 1
+
+
 def test_map_edit_applies_cells():
     mi = make_mi({(2, 3): "A"})
     mh = MockMapHandler()

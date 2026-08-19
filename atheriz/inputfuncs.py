@@ -5,6 +5,7 @@ from atheriz.logger import logger
 import atheriz.settings as settings
 import atheriz.globals.mapedit as mapedit
 from atheriz.connection_screen import render
+from atheriz.utils import wrap_rgb
 
 if TYPE_CHECKING:
     from atheriz.network.connection import BaseConnection as Connection
@@ -13,6 +14,23 @@ if TYPE_CHECKING:
     
 _IGNORE_KEYS = list(settings.AUTO_ALIAS_IGNORED_KEYS)
 _NO_ALIAS_COMMANDS = ["n", "s", "e", "w", "u", "d"]
+
+def _is_color(value) -> bool:
+    """True for an [r, g, b] color or the [-1, -1, -1] transparent marker."""
+    if not isinstance(value, list) or len(value) != 3:
+        return False
+    if not all(isinstance(v, int) for v in value):
+        return False
+    if value == [-1, -1, -1]:
+        return True
+    return all(0 <= v <= 255 for v in value)
+
+
+def _is_attrs(value) -> bool:
+    """True for a list of the three known style flags (no duplicates)."""
+    if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
+        return False
+    return set(value) <= {"bold", "italic", "underline"}
 
 def inputfunc(name: str | None = None) -> Callable:
     """
@@ -314,7 +332,10 @@ class InputFuncs:
 
         Args:
             connection (Connection): The connection sending the edit.
-            args (list): Expects `[key (str), seq (int), cells (list of [x, y, symbol])]`.
+            args (list): Expects `[key (str), seq (int), cells]` where each cell
+                is `[x, y, symbol]` (legacy plain char) or
+                `[x, y, char, fg, bg, attrs]` (fg/bg: [r,g,b] or [-1,-1,-1]
+                for transparent; attrs: subset of "bold"/"italic"/"underline").
             kwargs (dict): Unused.
         """
         if len(args) < 3:
@@ -325,12 +346,15 @@ class InputFuncs:
         for cell in cells:
             if not (
                 isinstance(cell, list)
-                and len(cell) == 3
+                and len(cell) in (3, 6)
                 and isinstance(cell[0], int)
                 and isinstance(cell[1], int)
                 and isinstance(cell[2], str)
             ):
                 return
+            if len(cell) == 6:
+                if not _is_color(cell[3]) or not _is_color(cell[4]) or not _is_attrs(cell[5]):
+                    return
         ip = getattr(connection, "client_host", "?")
         result = mapedit.consume(key, ip, seq)
         if result.status == mapedit.REJECT:
@@ -343,10 +367,21 @@ class InputFuncs:
         if mi:
             with mi.batch_update():
                 with mi.lock:
-                    for x, y, symbol in cells:
+                    for cell in cells:
+                        x, y, symbol = cell[0], cell[1], cell[2]
                         if symbol == "":
                             mi.pre_grid.pop((x, y), None)
-                        else:
+                        elif len(cell) == 3:
                             mi.pre_grid[(x, y)] = symbol
+                        else:
+                            fg, bg, attrs = cell[3], cell[4], cell[5]
+                            mi.pre_grid[(x, y)] = wrap_rgb(
+                                symbol,
+                                fg=None if fg == [-1, -1, -1] else tuple(fg),
+                                bg=None if bg == [-1, -1, -1] else tuple(bg),
+                                bold="bold" in attrs,
+                                italic="italic" in attrs,
+                                underline="underline" in attrs,
+                            )
                     mi.map_changed = True
         connection.send_command("map_ack", seq, result.new_key)
