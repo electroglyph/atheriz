@@ -41,13 +41,8 @@ class DrawCommand(Command):
             grid = list(mi.post_grid.items())
         area_obj = get_node_handler().get_area(area)
         node_grid = area_obj.get_grid(z) if area_obj else None
-        for (x, y), symbol in grid:
-            payload["grid"].append([x, y, symbol])
-            if not node_grid:
-                continue
-            node = node_grid.get_node((x, y))
-            if not node:
-                continue
+
+        def room_payload(node) -> dict:
             exits = []
             for link in node.get_links():
                 if link.coord is None:
@@ -59,6 +54,29 @@ class DrawCommand(Command):
                         "coord": [link.coord.area, link.coord.x, link.coord.y, link.coord.z],
                     }
                 )
-            payload["rooms"].append({"x": x, "y": y, "desc": node.desc, "exits": exits})
+            return {"x": node.coord.x, "y": node.coord.y, "desc": node.desc, "exits": exits}
+
+        seen: set[tuple[int, int]] = set()
+        for (x, y), symbol in grid:
+            payload["grid"].append([x, y, symbol])
+            if not node_grid:
+                continue
+            node = node_grid.get_node((x, y))
+            if not node:
+                continue
+            seen.add((x, y))
+            payload["rooms"].append(room_payload(node))
+        # Rooms whose coordinate has no glyph in post_grid (e.g. building
+        # interiors) would otherwise never be sent, leaving the editor
+        # without highlights for them.
+        if node_grid:
+            with node_grid.lock:
+                extra_nodes = [
+                    ((x, y), node)
+                    for (x, y), node in node_grid.nodes.items()
+                    if (x, y) not in seen
+                ]
+            for coord, node in extra_nodes:
+                payload["rooms"].append(room_payload(node))
         conn.send_command("launch_draw", key, payload)
         caller.msg("Opening AtheriZ Draw in a new tab.")

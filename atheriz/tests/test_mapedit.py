@@ -1,4 +1,5 @@
 import pytest
+from threading import RLock
 from unittest.mock import patch
 
 from atheriz import settings
@@ -196,6 +197,9 @@ def test_run_sends_room_data():
     room.links.append(NodeLink(name="Broken", coord=None))
 
     class MockNodeGrid:
+        lock = RLock()
+        nodes = {(0, 0): room}
+
         def get_node(self, coord):
             return room if coord == (0, 0) else None
 
@@ -227,6 +231,45 @@ def test_run_sends_room_data():
             ],
         }
     ]
+
+
+def test_run_sends_rooms_without_glyphs():
+    """Rooms whose coordinate has no post_grid glyph (e.g. building
+    interiors) must still be sent so the editor can highlight them."""
+    mi = make_mi({(0, 0): "│", (2, 0): "│"})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    wall_node = Node(coord=Coord("TestArea", 0, 0, 0))
+    interior = Node(coord=Coord("TestArea", 1, 0, 0))
+    interior.desc = "A cozy room."
+
+    class MockNodeGrid:
+        lock = RLock()
+        nodes = {(0, 0): wall_node, (1, 0): interior}
+
+        def get_node(self, coord):
+            return self.nodes.get(coord)
+
+    class MockNodeArea:
+        def get_grid(self, z):
+            return MockNodeGrid()
+
+    class MockNodeHandler:
+        def get_area(self, name):
+            return MockNodeArea()
+
+    node = Node(coord=Coord("TestArea", 1, 0, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh), patch(
+        "atheriz.commands.loggedin.mapedit.get_node_handler", return_value=MockNodeHandler()
+    ):
+        DrawCommand().run(caller, None)
+
+    payload = conn.sent[0][1][1]
+    assert payload["grid"] == [[0, 0, "│"], [2, 0, "│"]]
+    assert [(r["x"], r["y"]) for r in payload["rooms"]] == [(0, 0), (1, 0)]
+    assert payload["rooms"][1]["desc"] == "A cozy room."
 
 
 def test_run_sends_rendered_symbols():

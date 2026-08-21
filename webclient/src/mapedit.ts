@@ -59,6 +59,12 @@ export function loadMapPayload(canvas: CanvasState, payload: MapEditPayload): Ma
         maxX = Math.max(maxX, x);
         maxY = Math.max(maxY, y);
     }
+    for (const room of payload.rooms ?? []) {
+        minX = Math.min(minX, room.x);
+        minY = Math.min(minY, room.y);
+        maxX = Math.max(maxX, room.x);
+        maxY = Math.max(maxY, room.y);
+    }
     const mapWidth = Math.max(1, maxX - minX + 1);
     const mapHeight = Math.max(1, maxY - minY + 1);
     canvas.resize(mapWidth * 2, mapHeight * 2);
