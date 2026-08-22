@@ -32,8 +32,12 @@ def build_telnet_ssl_context() -> ssl.SSLContext | None:
     return context
 
 
-def _clamp_naws(rows: int, cols: int) -> tuple[int, int]:
-    """Clamp terminal dimensions to reasonable bounds."""
+def _clamp_naws(rows, cols) -> tuple[int, int]:
+    try:
+        rows = int(rows)
+        cols = int(cols)
+    except (TypeError, ValueError):
+        return (settings.TELNET_NAWS_MIN_ROWS, settings.TELNET_NAWS_MIN_COLS)
     return (
         max(settings.TELNET_NAWS_MIN_ROWS, min(rows, settings.TELNET_NAWS_MAX_ROWS)),
         max(settings.TELNET_NAWS_MIN_COLS, min(cols, settings.TELNET_NAWS_MAX_COLS)),
@@ -184,6 +188,8 @@ class TelnetProtocol(BaseProtocol):
             writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen
 
             def on_naws(rows, cols):
+                if type(rows) is not int or type(cols) is not int:
+                    return
                 if connection.session:
                     rows, cols = _clamp_naws(rows, cols)
                     connection.session.term_width = cols
