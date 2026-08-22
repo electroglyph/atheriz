@@ -2,7 +2,7 @@ from __future__ import annotations
 import time
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
-from atheriz.globals.objects import filter_by, TEMP_BANNED_IPS, TEMP_BANNED_LOCK, get
+from atheriz.globals.objects import ban_ip, filter_by, get
 from atheriz.objects.base_account import Account
 import atheriz.settings as settings
 from atheriz.logger import logger
@@ -108,8 +108,7 @@ class ConnectCommand(Command):
                 )
                 caller.msg("Too many failed login attempts. Please try again later.")
                 caller.close()
-                with TEMP_BANNED_LOCK:
-                    TEMP_BANNED_IPS[host] = time.time() + settings.LOGIN_ATTEMPT_COOLDOWN
+                ban_ip(host, time.time() + settings.LOGIN_ATTEMPT_COOLDOWN)
             return
 
         if account.is_banned:

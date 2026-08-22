@@ -1,7 +1,8 @@
 from __future__ import annotations
 from atheriz.commands.base_cmd import Command
-from atheriz.globals.objects import filter_by, get, TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.globals.objects import ban_ip, filter_by, get, unban_ip
 from atheriz import settings
+from atheriz.logger import logger
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -61,32 +62,34 @@ def _target_ip(target: "Object") -> str | None:
     return host
 
 
-def _kick(target: "Object", reason: str | None, banned: bool) -> None:
-    """Disconnect a connected target with a ban/unban notice."""
+def _kick(target: "Object", reason: str | None, banned: bool) -> bool:
     sess = getattr(target, "session", None)
     conn = getattr(sess, "connection", None) if sess else None
     if conn is None:
-        return
+        return True
     verb = "banned" if banned else "unbanned"
     msg = f"You have been {verb}."
     if reason:
         msg += f" Reason: {reason}"
     try:
         conn.msg(msg)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"[Ban] Failed to message {getattr(target, 'name', '?')} ({getattr(target, 'id', '?')}): {e}")
     try:
         conn.close()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Ban] Failed to close connection for {getattr(target, 'name', '?')} ({getattr(target, 'id', '?')}): {e}")
+        return False
+    return True
 
 
 def _clear_char_reason(char: "Object") -> None:
-    if "ban_reason" in vars(char):
-        try:
-            delattr(char, "ban_reason")
-        except AttributeError:
-            pass
+    with char.lock:
+        if "ban_reason" in vars(char):
+            try:
+                delattr(char, "ban_reason")
+            except AttributeError:
+                pass
 
 
 class BanCommand(Command):
@@ -129,41 +132,49 @@ class BanCommand(Command):
 
         reason = args.reason
         scope = "account" if args.account else "character"
-
+        account = None
         if args.account:
             account = _find_account(target)
             if account is None:
                 caller.msg(f"Could not find the account owning {target.name}; banning character only.")
                 scope = "character"
-            else:
-                account.is_banned = True
-                account.ban_reason = reason or ""
-                for c in get(account.characters):
-                    c.is_banned = True
-                    if reason:
-                        setattr(c, "ban_reason", reason)
 
-        if not args.account or scope == "character":
-            target.is_banned = True
-            if reason:
-                setattr(target, "ban_reason", reason)
-
-        kicked_ip = None
+        ip_host = None
         if args.ip:
-            host = _target_ip(target)
-            if host is None:
-                caller.msg("Target is not online; cannot ban IP.")
-            else:
-                with TEMP_BANNED_LOCK:
-                    TEMP_BANNED_IPS[host] = float("inf")
-                kicked_ip = host
+            ip_host = _target_ip(target)
 
-        if args.account and scope == "account":
+        if scope == "account" and account is not None:
             kick_targets = get(account.characters)
         else:
             kick_targets = [target]
+
+        if scope == "account" and account is not None:
+            with account.lock:
+                account.is_banned = True
+                account.ban_reason = reason or ""
+            for c in kick_targets:
+                with c.lock:
+                    c.is_banned = True
+                    if reason:
+                        setattr(c, "ban_reason", reason)
+        else:
+            with target.lock:
+                target.is_banned = True
+                if reason:
+                    setattr(target, "ban_reason", reason)
+
+        kicked_ip = None
+        if args.ip:
+            if ip_host is None:
+                caller.msg("Target is not online; cannot ban IP.")
+            else:
+                ban_ip(ip_host)
+                kicked_ip = ip_host
+
+        failed = []
         for t in kick_targets:
-            _kick(t, reason, banned=True)
+            if not _kick(t, reason, banned=True):
+                failed.append(t.name)
 
         msg = f"Banned {target.name} ({scope}"
         if reason:
@@ -171,6 +182,8 @@ class BanCommand(Command):
         msg += ")."
         if kicked_ip:
             msg += f" IP {kicked_ip} banned until server restart."
+        if failed:
+            msg += f" Kick failed for: {', '.join(failed)}."
         caller.msg(msg)
 
 
@@ -212,29 +225,36 @@ class UnbanCommand(Command):
             return
 
         scope = "account" if args.account else "character"
-
+        account = None
         if args.account:
             account = _find_account(target)
             if account is None:
                 caller.msg(f"Could not find the account owning {target.name}; unbanning character only.")
                 scope = "character"
-            else:
+
+        ip_host = None
+        if args.ip:
+            ip_host = _target_ip(target)
+
+        account_chars = get(account.characters) if scope == "account" and account is not None else None
+
+        if scope == "account" and account is not None:
+            with account.lock:
                 account.is_banned = False
                 account.ban_reason = ""
-                for c in get(account.characters):
+            for c in account_chars:
+                with c.lock:
                     c.is_banned = False
-                    _clear_char_reason(c)
-
-        if not args.account or scope == "character":
-            target.is_banned = False
+                _clear_char_reason(c)
+        else:
+            with target.lock:
+                target.is_banned = False
             _clear_char_reason(target)
 
         if args.ip:
-            host = _target_ip(target)
-            if host is None:
+            if ip_host is None:
                 caller.msg("Target is not online; cannot clear IP ban by reference.")
             else:
-                with TEMP_BANNED_LOCK:
-                    TEMP_BANNED_IPS.pop(host, None)
+                unban_ip(ip_host)
 
         caller.msg(f"Unbanned {target.name} ({scope}).")

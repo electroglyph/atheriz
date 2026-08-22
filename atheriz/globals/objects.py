@@ -1,4 +1,6 @@
 from __future__ import annotations
+import time
+
 from atheriz.globals.get import set_id
 from threading import RLock
 from atheriz.database_setup import get_database
@@ -27,6 +29,33 @@ _IGNORE_FILES = [
 # not persisted
 TEMP_BANNED_IPS = {}
 TEMP_BANNED_LOCK = RLock()
+
+
+def is_ip_banned(host: str, now: float | None = None) -> bool:
+    if now is None:
+        now = time.time()
+    with TEMP_BANNED_LOCK:
+        expires = TEMP_BANNED_IPS.get(host)
+        if expires is None:
+            return False
+        if now < expires:
+            return True
+        TEMP_BANNED_IPS.pop(host, None)
+        return False
+
+
+def ban_ip(host: str, expires: float | None = None) -> None:
+    if expires is None:
+        expires = float("inf")
+    with TEMP_BANNED_LOCK:
+        TEMP_BANNED_IPS[host] = expires
+
+
+def unban_ip(host: str) -> None:
+    with TEMP_BANNED_LOCK:
+        TEMP_BANNED_IPS.pop(host, None)
+
+
 CREATION_COOLDOWNS = {}
 CREATION_COOLDOWN_LOCK = RLock()
 

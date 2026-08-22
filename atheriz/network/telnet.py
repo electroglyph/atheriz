@@ -9,10 +9,9 @@ from .protocol import BaseProtocol
 from .connection import BaseConnection
 from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
-from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK, is_ip_banned
 from pathlib import Path
 import atheriz.settings as settings
-import time
 
 
 def build_telnet_ssl_context() -> ssl.SSLContext | None:
@@ -170,19 +169,15 @@ class TelnetProtocol(BaseProtocol):
             except Exception:
                 pass
 
-            with TEMP_BANNED_LOCK:
-                if host in TEMP_BANNED_IPS:
-                    if time.time() < TEMP_BANNED_IPS[host]:
-                        logger.warning(f"Host {host} in temp ban list has tried to connect.")
-                        writer.close()
-                        return
-                    else:
-                        del TEMP_BANNED_IPS[host]
+            if is_ip_banned(host):
+                logger.warning(f"Host {host} in temp ban list has tried to connect.")
+                writer.close()
+                return
 
-                conn_id = get_connection_manager().generate_connection_id()
-                connection = TelnetConnection(reader, writer, session_id=conn_id)
-                if not get_connection_manager().register_connection(conn_id, connection):
-                    return
+            conn_id = get_connection_manager().generate_connection_id()
+            connection = TelnetConnection(reader, writer, session_id=conn_id)
+            if not get_connection_manager().register_connection(conn_id, connection):
+                return
 
             # Initialize terminal size if possible
             writer.write("\r\n\x1b[1;1H\x1b[2J")  # Clear screen

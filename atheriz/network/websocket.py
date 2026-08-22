@@ -8,7 +8,7 @@ from .protocol import BaseProtocol
 from .connection import BaseConnection
 from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
-from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK, is_ip_banned
 import time
 import atheriz.settings as settings
 
@@ -124,14 +124,10 @@ class WebSocketProtocol(BaseProtocol):
         @app.websocket("/ws")
         async def websocket_endpoint(websocket: WebSocket):
             client_host = websocket.client.host if websocket.client else "?"
-            with TEMP_BANNED_LOCK:
-                if client_host in TEMP_BANNED_IPS:
-                    if time.time() < TEMP_BANNED_IPS[client_host]:
-                        logger.warning(f"Host {client_host} in temp ban list has tried to connect.")
-                        await websocket.close()
-                        return
-                    else:
-                        del TEMP_BANNED_IPS[client_host]
+            if is_ip_banned(client_host):
+                logger.warning(f"Host {client_host} in temp ban list has tried to connect.")
+                await websocket.close()
+                return
 
             await websocket.accept()
 
