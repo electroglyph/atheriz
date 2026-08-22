@@ -1,10 +1,27 @@
 import threading
 import json
+import time
 from typing import Callable, TYPE_CHECKING
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 import atheriz.settings as settings
 from atheriz.utils import strip_terminal_escapes
+
+_malformed_lock = threading.Lock()
+_malformed_last: dict[str, float] = {}
+_MALFORMED_WINDOW = 5.0
+
+def _summarize_raw(raw_message: str, limit: int = 80) -> str:
+    return repr(raw_message[:limit])
+
+def _should_log_malformed(host: str) -> bool:
+    now = time.monotonic()
+    with _malformed_lock:
+        last = _malformed_last.get(host, 0)
+        if now - last < _MALFORMED_WINDOW:
+            return False
+        _malformed_last[host] = now
+        return True
 
 if TYPE_CHECKING:
     from .connection import BaseConnection
@@ -141,7 +158,11 @@ class ConnectionManager:
             data = json.loads(raw_message)
 
             if not isinstance(data, list) or len(data) < 1:
-                logger.warning(f"[Network] Invalid message format (not list or empty): {raw_message}")
+                host = getattr(connection, "client_host", "?")
+                if _should_log_malformed(host):
+                    logger.warning(
+                        f"[Network] Invalid message format from {host} ({len(raw_message)} bytes): {_summarize_raw(raw_message)}"
+                    )
                 return
 
             cmd = data[0]
@@ -150,8 +171,12 @@ class ConnectionManager:
 
             self.dispatch(connection, cmd, args, kwargs)
 
-        except json.JSONDecodeError:
-            logger.warning(f"[Network] Error decoding JSON: {raw_message}")
+        except json.JSONDecodeError as exc:
+            host = getattr(connection, "client_host", "?")
+            if _should_log_malformed(host):
+                logger.warning(
+                    f"[Network] Error decoding JSON from {host} ({len(raw_message)} bytes): {exc.msg} at position {exc.pos}: {_summarize_raw(raw_message)}"
+                )
         except Exception as e:
             logger.error(f"[Network] Error handling message: {e}", exc_info=True)
 
