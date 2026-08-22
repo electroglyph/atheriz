@@ -35,6 +35,17 @@ def reset_all_singletons(global_test_env):
     get_singleton._UNLOGGEDIN_CMDSET = None
     get_singleton._CONNECTION_MANAGER = None
     yield
+    # teardown too: a test that leaves a MagicMock in _ASYNC_THREAD_POOL
+    # otherwise poisons every later global-pool user in filtered (-k) runs
+    get_singleton._GAME_TIME = None
+    get_singleton._SERVER_CHANNEL = None
+    get_singleton._ASYNC_THREAD_POOL = None
+    get_singleton._ASYNC_TICKER = None
+    get_singleton._MAP_HANDLER = None
+    get_singleton._NODE_HANDLER = None
+    get_singleton._LOGGEDIN_CMDSET = None
+    get_singleton._UNLOGGEDIN_CMDSET = None
+    get_singleton._CONNECTION_MANAGER = None
 
 
 class TestUniqueId:

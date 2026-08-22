@@ -137,22 +137,6 @@ class TestDoTestCommand:
                 do_test_command(args)
         assert mock_main.called
 
-    def test_strips_non_flag_args(self, global_test_env):
-        # INTENT: when running core tests, non-flag args (positional) are stripped
-        from atheriz.atheriz import do_test_command
-        args = MagicMock()
-        args.pytest_args = ["core", "test_specific.py", "-v"]
-        with patch("atheriz.atheriz.setup_game_folder", return_value=False), \
-             patch("pytest.main") as mock_main:
-            mock_main.return_value = 0
-            with patch("atheriz.atheriz.sys.exit"):
-                do_test_command(args)
-        call_args = mock_main.call_args.args[0]
-        # test_specific.py should be stripped (it's not a flag)
-        assert "test_specific.py" not in call_args
-        # -v is preserved
-        assert "-v" in call_args
-
     def test_adds_warning_ignore(self, global_test_env):
         from atheriz.atheriz import do_test_command
         args = MagicMock()

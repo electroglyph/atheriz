@@ -51,9 +51,11 @@ class TestAsyncThreadPool:
         finally:
             atp.stop(True, 10)
 
-    def test_add_task_rejects_fast_when_full(self, global_test_env):
+    def test_add_task_rejects_fast_when_full(self, global_test_env, monkeypatch):
         """INTENT: when the queue is full, add_task returns False quickly
-        rather than blocking the producing thread."""
+        rather than blocking the producing thread. Elasticity is disabled so
+        the zero-relief backpressure contract is isolated."""
+        monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
         atp = AsyncThreadPool()
         block = threading.Event()
         try:
@@ -68,9 +70,11 @@ class TestAsyncThreadPool:
             block.set()
             atp.stop(False, 5)
 
-    def test_accepted_tasks_run_rejected_do_not(self, global_test_env):
+    def test_accepted_tasks_run_rejected_do_not(self, global_test_env, monkeypatch):
         """INTENT: already accepted tasks still execute (FIFO); only the
-        rejected newest tasks never run."""
+        rejected newest tasks never run. Elasticity is disabled so the queue
+        fills deterministically."""
+        monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
         atp = AsyncThreadPool()
         block = threading.Event()
         ran = []

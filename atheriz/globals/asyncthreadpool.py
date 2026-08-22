@@ -3,6 +3,7 @@ from asyncio import AbstractEventLoop
 import inspect
 import os
 from threading import Thread, RLock, Event
+import threading
 import time
 from typing import Optional
 import traceback
@@ -45,6 +46,7 @@ class AsyncThread(Thread):
                     self.loop.run_until_complete(
                         asyncio.gather(*not_done, return_exceptions=True)
                     )
+        self.loop.close()
 
     async def do_stop(self):
         self.stop_event.set()
@@ -56,6 +58,25 @@ class AsyncThread(Thread):
 
 
 class AsyncThreadPool:
+    """Bounded worker pool for sync tasks (coroutines go to the event loop).
+
+    Concurrency contract: a task must NEVER block waiting for another task
+    queued on this pool. Workers are fixed and execute tasks inline, so
+    wait-for-result patterns across pool tasks can starve the pool (every
+    worker blocked on work that is still queued = permanent deadlock). Use
+    coroutines on the shared loop when one unit of work needs another's
+    result. Elastic relief workers (below) soften transient saturation but do
+    not make blocking-on-pool safe.
+
+    Starvation mitigations:
+    - Relief workers: temporary daemon threads spawned when the queue holds
+      work while every fixed worker is busy; they exit once the queue drains.
+    - Watchdog: logs a throttled starvation warning with diagnostics when the
+      pool stays saturated past settings.THREADPOOL_WATCHDOG_SECONDS.
+    """
+
+    RELIEF_SPAWN_COOLDOWN = 1.0
+
     def __init__(self, max_threads: Optional[int] = None, default_timeout=None):
         if max_threads == None:
             max_threads = os.cpu_count() or 4
@@ -68,6 +89,21 @@ class AsyncThreadPool:
         self.task_queue = queue.Queue(maxsize=settings.THREADPOOL_QUEUE_LIMIT)
         self._last_full_log = 0.0
         self._stopped = False
+        self._busy = 0
+        self._busy_lock = RLock()
+        self._relief_count = 0
+        self._last_relief_spawn = 0.0
+        self._current_tasks = {}
+        self._saturated_since: Optional[float] = None
+        self._last_starvation_log = 0.0
+        self._relief_seq = 0
+        self._relief_threads = []
+        self._watchdog = Thread(
+            daemon=True,
+            target=self._watchdog_loop,
+            name="AsyncThreadPoolWatchdog",
+        )
+        self._watchdog.start()
         for _ in range(max_threads - 1):  # rest of the threads for sync
             t = Thread(daemon=True, target=self._work_loop)
             t.start()
@@ -102,18 +138,131 @@ class AsyncThreadPool:
             except Exception:
                 self._log_task_error(args)
 
-    def _work_loop(self):
+    def _work_loop(self, relief: bool = False):
+        """Worker body. Fixed workers (relief=False) run until a sentinel;
+        relief workers re-queue any sentinel they pull so fixed workers always
+        receive theirs, retiring on a sentinel once stopped or when the queue
+        drains."""
         while True:
-            task = self.task_queue.get()
+            if relief:
+                with self._busy_lock:
+                    stopped = self._stopped
+                if stopped and self.task_queue.qsize() == 0:
+                    with self._busy_lock:
+                        self._relief_count -= 1
+                    return
+                try:
+                    task = self.task_queue.get(timeout=0.5)
+                except queue.Empty:
+                    if self.task_queue.qsize() == 0:
+                        # queue drained; temporary worker retires
+                        with self._busy_lock:
+                            self._relief_count -= 1
+                        return
+                    continue
+            else:
+                task = self.task_queue.get()
             if task is None:  # kill signal
+                if relief:
+                    # always re-queue the sentinel: stop() pushes exactly one
+                    # spare, so consuming one here can starve a fixed worker
+                    # of its kill signal. put_nowait cannot fail — the get()
+                    # above freed the slot.
+                    self.task_queue.put_nowait(None)
+                    if self._stopped:
+                        with self._busy_lock:
+                            self._relief_count -= 1
+                        return
+                    time.sleep(0.05)
+                    continue
                 break
             try:
                 func, args, kwargs = task
-                self.run(func, *args, **kwargs)
+                name = getattr(func, "__name__", repr(func))
+                ident = threading.get_ident()
+                started = time.monotonic()
+                with self._busy_lock:
+                    self._busy += 1
+                    self._current_tasks[ident] = (name, started)
+                try:
+                    self.run(func, *args, **kwargs)
+                finally:
+                    with self._busy_lock:
+                        self._busy -= 1
+                        self._current_tasks.pop(ident, None)
             except Exception:
                 logger.error(
                     f"[AsyncThreadPool] worker dispatch failed:\n{traceback.format_exc()}"
                 )
+
+    def _maybe_spawn_relief_worker(self):
+        now = time.monotonic()
+        spawn = False
+        limit = getattr(settings, "THREADPOOL_RELIEF_LIMIT", 0) or 0
+        with self._busy_lock:
+            if (
+                not self._stopped
+                and limit > 0
+                and self._relief_count < limit
+                and self._busy >= self.max_threads - 1
+                and self.task_queue.qsize() > 0
+                and now - self._last_relief_spawn >= self.RELIEF_SPAWN_COOLDOWN
+            ):
+                self._relief_count += 1
+                self._relief_seq += 1
+                self._last_relief_spawn = now
+                seq = self._relief_seq
+                spawn = True
+        if spawn:
+            t = Thread(
+                daemon=True,
+                target=self._work_loop,
+                kwargs={"relief": True},
+                name=f"AsyncThreadPoolRelief-{seq}",
+            )
+            t.start()
+            self._relief_threads.append(t)
+
+    def _watchdog_loop(self):
+        interval = getattr(settings, "THREADPOOL_WATCHDOG_INTERVAL", 5.0) or 5.0
+        threshold = getattr(settings, "THREADPOOL_WATCHDOG_SECONDS", 30.0) or 30.0
+        while True:
+            time.sleep(interval)
+            with self._busy_lock:
+                stopped = self._stopped
+                busy = self._busy
+            if stopped:
+                return
+            qsize = self.task_queue.qsize()
+            saturated = qsize > 0 and (
+                busy >= self.max_threads - 1 or qsize >= self.task_queue.maxsize
+            )
+            now = time.monotonic()
+            if saturated:
+                if self._saturated_since is None:
+                    self._saturated_since = now
+                elif (
+                    now - self._saturated_since >= threshold
+                    and now - self._last_starvation_log >= threshold
+                ):
+                    self._log_starvation(qsize, busy, now - self._saturated_since)
+                    self._last_starvation_log = now
+            else:
+                self._saturated_since = None
+
+    def _log_starvation(self, qsize: int, busy: int, duration: float):
+        with self._busy_lock:
+            tasks = dict(self._current_tasks)
+        now = time.monotonic()
+        detail = ", ".join(
+            f"{name} running {now - started:.1f}s"
+            for _ident, (name, started) in sorted(tasks.items())
+        )
+        logger.error(
+            f"[AsyncThreadPool] starvation suspected: {qsize} task(s) queued, "
+            f"{busy}/{self.max_threads - 1} workers busy for {duration:.1f}s; "
+            f"running: [{detail}]"
+        )
 
     def stop(self, wait=True, timeout=10):
         """
@@ -124,7 +273,14 @@ class AsyncThreadPool:
         """
         self._stopped = True
         logger.info("at AsyncThreadPool.stop() ...")
-        self.threads[0].stop(wait)
+        try:
+            self.threads[0].stop(wait)
+        except Exception:
+            # dead or closed loop: keep going so sync workers still get
+            # their sentinels instead of aborting the whole shutdown
+            logger.warning(
+                f"[AsyncThreadPool] async thread stop failed:\n{traceback.format_exc()}"
+            )
         for _ in range(self.max_threads):
             while True:
                 try:
@@ -142,6 +298,14 @@ class AsyncThreadPool:
                 t.join(timeout=timeout)
                 if t.is_alive():
                     logger.warning(f"Thread {t.name} did not stop within {timeout}s")
+            for t in self._relief_threads:
+                t.join(timeout=1)
+            self._relief_threads = [t for t in self._relief_threads if t.is_alive()]
+            self.threads[0].join(timeout=timeout)
+            if self.threads[0].is_alive():
+                logger.warning(
+                    f"Thread {self.threads[0].name} did not stop within {timeout}s"
+                )
 
     def add_task(self, func, *args, **kwargs):
         """
@@ -170,6 +334,7 @@ class AsyncThreadPool:
                     f"[AsyncThreadPool] task queue full ({self.task_queue.maxsize}); dropping task"
                 )
             return False
+        self._maybe_spawn_relief_worker()
         return True
         
     def delay(self, delay: float, func, *args, **kwargs):
@@ -255,6 +420,11 @@ class AsyncTicker:
                         batch = [c for c in self.coros if c not in self.pending]
                         self.pending.update(batch)
                     for c in batch:
+                        with self.lock:
+                            if c not in self.coros:
+                                # removed between snapshot and dispatch
+                                self.pending.discard(c)
+                                continue
                         if not atp.add_task(self._tick_once, c):
                             self._release(c)
                     next_tick += self.interval
@@ -266,7 +436,13 @@ class AsyncTicker:
             with self.lock:
                 if not self.running:
                     self.running = True
-                    self._future = _submit(self.timer(), atp.loop)
+                    try:
+                        self._future = _submit(self.timer(), atp.loop)
+                    except Exception:
+                        # submission failed (dead loop); don't leave the slot
+                        # claiming to run with no timer behind it
+                        self.running = False
+                        raise
 
     def __init__(self) -> None:
         self.lock = RLock()

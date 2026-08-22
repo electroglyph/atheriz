@@ -43,6 +43,9 @@ SSL_KEYFILE = os.getenv("ATHERIZ_SSL_KEYFILE")
 # Warn at startup when the game folder's webclient differs from the engine's
 WEBCLIENT_SYNC_CHECK = True
 THREADPOOL_LIMIT = os.cpu_count()
+THREADPOOL_RELIEF_LIMIT = os.cpu_count() or 4
+THREADPOOL_WATCHDOG_SECONDS = 30.0
+THREADPOOL_WATCHDOG_INTERVAL = 5.0
 # maximum pending threadpool tasks; add_task returns False when full
 THREADPOOL_QUEUE_LIMIT = 10000
 # maximum pending input messages per connection; newest input is dropped beyond this
