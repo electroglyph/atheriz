@@ -5,8 +5,9 @@ from atheriz.objects.base_account import Account
 from atheriz.commands.unloggedin.connect import char_selection
 from atheriz.globals.objects import (
     apply_creation_cooldown,
-    creation_cooldown_active,
+    try_reserve_creation_cooldown,
 )
+from atheriz.commands.unloggedin.validation import validate_account_name, validate_password
 from typing import TYPE_CHECKING
 import atheriz.settings as settings
 
@@ -27,24 +28,21 @@ class CreateCommand(Command):
 
         host = getattr(caller, "client_host", None)
         rate_key = host if isinstance(host, str) and host else id(caller)
-        if creation_cooldown_active("account", rate_key, time.monotonic()):
+        if not try_reserve_creation_cooldown("account", rate_key, time.monotonic(), settings.CREATION_COOLDOWN):
             caller.msg("Creation is temporarily rate-limited. Please try again later.")
             return
 
         name = await caller.session.prompt("Enter an account name:")
         name = name.strip()
-        if not name:
-            caller.msg("Name cannot be empty.")
+        if err := validate_account_name(name):
+            caller.msg(err)
             return
 
         password = await caller.session.prompt("Enter a password:")
-        if not password:
-            caller.msg("Password cannot be empty.")
+        if err := validate_password(password):
+            caller.msg(err)
             return
 
-        if creation_cooldown_active("account", rate_key, time.monotonic()):
-            caller.msg("Creation is temporarily rate-limited. Please try again later.")
-            return
         try:
             account = Account.create(name, password)
         except ValueError as e:

@@ -105,6 +105,10 @@ MAX_CONNECTIONS_PER_IP = 2
 MENU_PROMPT_TIMEOUT = 60
 # Minimum time in seconds between successful guest/account/character creations from one host
 CREATION_COOLDOWN = 60
+MAX_ACCOUNT_NAME_LENGTH = 20
+MAX_CHARACTER_NAME_LENGTH = 20
+MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 1024
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False
 DEFAULT_HOME = Coord("limbo", 4, 4, 4)

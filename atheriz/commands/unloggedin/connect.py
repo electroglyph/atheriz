@@ -31,6 +31,10 @@ async def char_selection(caller: Connection, account: Account) -> None:
         if not chars and not settings.CHAR_CREATION_ENABLED:
             caller.msg("This account has no characters to play.")
             return
+        playable = [c for c in chars if not getattr(c, "is_banned", False)]
+        if not playable and not settings.CHAR_CREATION_ENABLED:
+            caller.msg("All characters are banned.")
+            return
         caller.msg(text)
         choice = await caller.session.prompt("Enter your choice:")
         if settings.CHAR_CREATION_ENABLED and choice.strip().lower() == "new":

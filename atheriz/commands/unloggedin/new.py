@@ -7,8 +7,9 @@ from atheriz.globals.get import get_node_handler
 from atheriz.commands.unloggedin.guest import _gender_menu
 from atheriz.globals.objects import (
     apply_creation_cooldown,
-    creation_cooldown_active,
+    try_reserve_creation_cooldown,
 )
+from atheriz.commands.unloggedin.validation import validate_character_name
 from typing import TYPE_CHECKING
 import atheriz.settings as settings
 
@@ -37,14 +38,14 @@ class NewCharacterCommand(Command):
 
         host = getattr(caller, "client_host", None)
         rate_key = host if isinstance(host, str) and host else id(caller)
-        if creation_cooldown_active("character", rate_key, time.monotonic()):
+        if not try_reserve_creation_cooldown("character", rate_key, time.monotonic(), settings.CREATION_COOLDOWN):
             caller.msg("Creation is temporarily rate-limited. Please try again later.")
             return
 
         name = await caller.session.prompt("Enter a name for your character:")
         name = name.strip()
-        if not name:
-            caller.msg("Name cannot be empty.")
+        if err := validate_character_name(name):
+            caller.msg(err)
             return
 
         engine = MenuEngine(caller, _gender_menu)
@@ -74,9 +75,6 @@ class NewCharacterCommand(Command):
         )
         desc = desc.strip()
 
-        if creation_cooldown_active("character", rate_key, time.monotonic()):
-            caller.msg("Creation is temporarily rate-limited. Please try again later.")
-            return
         character = Object.create(None, name, desc=desc, is_pc=True)
         apply_creation_cooldown(
             "character", rate_key, time.monotonic(), settings.CREATION_COOLDOWN

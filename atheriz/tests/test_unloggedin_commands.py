@@ -302,7 +302,7 @@ class TestCreateAccountCommand:
     def test_duplicate_account(self, global_test_env, fixed_salt):
         Account.create("alice", "secret")
         caller = self._make_caller()
-        caller.session.prompt = AsyncMock(side_effect=["alice", "pw"])
+        caller.session.prompt = AsyncMock(side_effect=["alice", "password123"])
         asyncio.run(CreateCommand().run(caller, None))
         # ValueError caught -> error message, no new account
         caller.msg.assert_called_once()
@@ -315,7 +315,7 @@ class TestCreateAccountCommand:
         settings.CHAR_CREATION_ENABLED = True
         try:
             caller = self._make_caller()
-            caller.session.prompt = AsyncMock(side_effect=["bob", "hunter2"])
+            caller.session.prompt = AsyncMock(side_effect=["bob", "hunter22"])
             with patch("atheriz.commands.unloggedin.create.char_selection", new=AsyncMock()) as sel:
                 asyncio.run(CreateCommand().run(caller, None))
             # auto-login
@@ -342,7 +342,7 @@ class TestCreateAccountCommand:
         try:
             caller = self._make_caller()
             caller.client_host = "198.51.100.10"
-            caller.session.prompt = AsyncMock(side_effect=["bob", "hunter2"])
+            caller.session.prompt = AsyncMock(side_effect=["bob", "hunter22"])
             with patch("atheriz.commands.unloggedin.create.Account.create") as account, \
                  patch("atheriz.commands.unloggedin.create.char_selection", new=AsyncMock()):
                 asyncio.run(CreateCommand().run(caller, None))

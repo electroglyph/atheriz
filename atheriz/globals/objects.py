@@ -50,6 +50,17 @@ def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> 
         with CREATION_COOLDOWN_LOCK:
             CREATION_COOLDOWNS[f"{op}:{host}"] = now + cooldown
 
+
+def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> bool:
+    key = f"{op}:{host}"
+    with CREATION_COOLDOWN_LOCK:
+        expires = CREATION_COOLDOWNS.get(key)
+        if expires is not None and expires > now:
+            return False
+        if cooldown > 0:
+            CREATION_COOLDOWNS[key] = now + cooldown
+        return True
+
 # key = id, value = object
 # only access via the lock
 _ALL_OBJECTS = {}
