@@ -56,10 +56,16 @@ async def char_selection(caller: Connection, account: Account) -> None:
         if not account.at_pre_puppet(chars[choice]):
             caller.msg("This character is not available.")
             continue
-        caller.session.puppet = chars[choice]
-        caller.session.puppet.session = caller.session
-        caller.session.conn_time = time.time()
-        caller.session.puppet.at_post_puppet()
+        char = chars[choice]
+        with char.lock:
+            if getattr(char, "session", None) is not None or getattr(char, "is_deleted", False):
+                caller.msg("This character is not available.")
+                continue
+            with caller.session.lock:
+                caller.session.puppet = char
+                char.session = caller.session
+                caller.session.conn_time = time.time()
+        char.at_post_puppet()
 
 
 class ConnectCommand(Command):

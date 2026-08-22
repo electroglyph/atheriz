@@ -1,4 +1,5 @@
 from __future__ import annotations
+from contextlib import nullcontext
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.objects import get
 from typing import TYPE_CHECKING
@@ -90,29 +91,23 @@ class PuppetCommand(Command):
         if not target.access(caller, "puppet"):
             caller.msg(f"You cannot puppet {target.name}.")
             return
-        if target.session is not None and target.session is not session:
-            caller.msg(f"{target.name} is already being puppeted.")
-            return
-
-        # state off pickled objects; chain-safe (A->B->C unwinds B then A).
-        # The target's pre-puppet state lives on the object itself as
-        # `_puppet_restore`, which __getstate__ persists instead of the mutated
-        # values, so a crash or mid-puppet autosave can never corrupt it.
-        # session.lock keeps stack/puppet mutations atomic vs the input drain
-        # and disconnect cleanup (#31).
-        with session.lock:
-            session.puppet_stack.append((caller, target))
-        target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
-
-        caller_priv = caller.privilege_level
-        caller.at_disconnect()
-
-        target.is_pc = True
-        target.privilege_level = caller_priv
-
-        with session.lock:
-            session.puppet = target
-        target.session = session
+        with (target.lock if hasattr(target, "lock") else nullcontext()):
+            if getattr(target, "session", None) is not None and target.session is not session:
+                caller.msg(f"{target.name} is already being puppeted.")
+                return
+            if getattr(target, "is_deleted", False):
+                caller.msg(f"{target.name} is not available.")
+                return
+            with session.lock:
+                session.puppet_stack.append((caller, target))
+            target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
+            caller_priv = caller.privilege_level
+            caller.at_disconnect()
+            target.is_pc = True
+            target.privilege_level = caller_priv
+            with session.lock:
+                session.puppet = target
+                target.session = session
         target.at_puppet(caller=caller)
         target.at_post_puppet()
 
@@ -145,13 +140,12 @@ class UnpuppetCommand(Command):
                 return
             prev, target = session.puppet_stack.pop()
         target.at_unpuppet(caller=prev)
-        # restore BEFORE at_disconnect so any autosave persists the original state
         if restore := getattr(target, "_puppet_restore", None):
             target.__dict__.update(restore)
             del target._puppet_restore
         target.at_disconnect()
-
-        with session.lock:
-            session.puppet = prev
-        prev.session = session
+        with (prev.lock if hasattr(prev, "lock") else nullcontext()):
+            with session.lock:
+                session.puppet = prev
+                prev.session = session
         prev.at_post_puppet()

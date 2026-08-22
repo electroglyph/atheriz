@@ -91,9 +91,14 @@ class GuestCommand(Command):
         apply_creation_cooldown("guest", rate_key, time.monotonic(), settings.CREATION_COOLDOWN)
         character.is_temporary = True
         character.gender = gender
-        caller.session.puppet = character
-        character.session = caller.session
-        caller.session.conn_time = time.time()
+        with character.lock:
+            if getattr(character, "session", None) is not None or getattr(character, "is_deleted", False):
+                caller.msg("This character is not available.")
+                return
+            with caller.session.lock:
+                caller.session.puppet = character
+                character.session = caller.session
+                caller.session.conn_time = time.time()
 
         nh = get_node_handler()
         home = nh.get_node(settings.DEFAULT_HOME)

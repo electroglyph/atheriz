@@ -87,9 +87,14 @@ class NewCharacterCommand(Command):
         else:
             character.gender = gender
         account.add_character(character)
-        caller.session.puppet = character
-        character.session = caller.session
-        caller.session.conn_time = time.time()
+        with character.lock:
+            if getattr(character, "session", None) is not None or getattr(character, "is_deleted", False):
+                caller.msg("This character is not available.")
+                return
+            with caller.session.lock:
+                caller.session.puppet = character
+                character.session = caller.session
+                caller.session.conn_time = time.time()
 
         nh = get_node_handler()
         home = nh.get_node(settings.DEFAULT_HOME)
