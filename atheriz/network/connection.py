@@ -56,32 +56,42 @@ class BaseConnection:
 
         When this connection already has CONNECTION_INPUT_QUEUE_LIMIT pending
         messages, the newest message is dropped and the client gets a
-        throttled busy reply (#32)."""
+        throttled busy reply (#32).
+
+        Invariant: _input_running == True implies a submitted-but-not-yet-
+        running or actively running drain worker. The worker-slot reservation
+        and the threadpool submission share one critical section, so a rejected
+        submission can never coexist with a live worker; on rejection the
+        queue is kept intact and retried by the next enqueue."""
         from atheriz.globals.get import get_async_threadpool
-        busy = False
+        notify_busy = False
         with self.lock:
             if len(self._input_queue) >= settings.CONNECTION_INPUT_QUEUE_LIMIT:
                 now = time.monotonic()
                 if now - self._last_input_busy < 1.0:
                     return
                 self._last_input_busy = now
-                busy = True
-                start = False
+                notify_busy = True
             else:
                 self._input_queue.append((handler, args, kwargs))
-                start = not self._input_running
-                if start:
-                    self._input_running = True
-        if busy:
-            self.msg("Server busy; input dropped.")
-            return
-        if not start:
-            return
-        if not get_async_threadpool().add_task(self._drain_input):
-            # queue full (#32): drop pending input for this connection
-            with self.lock:
-                self._input_queue.clear()
+                if self._input_running:
+                    return
+                self._input_running = True
+                if get_async_threadpool().add_task(self._drain_input):
+                    return
+                # No worker was started and none can be running (we held the
+                # reservation), so reverting the flag is safe; keep queued input.
                 self._input_running = False
+                now = time.monotonic()
+                if now - self._last_input_busy >= 1.0:
+                    self._last_input_busy = now
+                    notify_busy = True
+        if notify_busy:
+            logger.warning(
+                f"[Network] Input queue submission rejected (pool full); "
+                f"{len(self._input_queue)} message(s) pending retry"
+            )
+            self.msg("Server busy; input dropped.")
 
     def _drain_input(self):
         """Worker-side: run queued input handlers FIFO until the queue empties."""
