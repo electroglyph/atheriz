@@ -40,6 +40,10 @@ class WebSocketConnection(BaseConnection):
             logger.debug(f"[WebSocket] Async task failed: {e}")
 
     def send_command(self, cmd: str, *args, **kwargs):
+        if cmd == "echo_on":
+            return
+        if cmd == "prompt_masked":
+            cmd = "prompt"
         if args is None:
             args = []
         if kwargs is None:

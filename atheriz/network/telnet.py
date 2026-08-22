@@ -113,6 +113,28 @@ class TelnetConnection(BaseConnection):
                     self._resolve_loop().call_soon_threadsafe(self.writer.write, text)
             except Exception:
                 pass
+        elif cmd == "prompt_masked":
+            text = args[0] if args else ""
+            try:
+                if threading.get_ident() == self.thread_id:
+                    self.writer.iac(telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
+                    self.writer.write(text)
+                else:
+                    loop = self._resolve_loop()
+                    loop.call_soon_threadsafe(self.writer.iac, telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
+                    loop.call_soon_threadsafe(self.writer.write, text)
+            except Exception:
+                pass
+        elif cmd == "echo_on":
+            try:
+                if threading.get_ident() == self.thread_id:
+                    self.writer.iac(telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
+                else:
+                    self._resolve_loop().call_soon_threadsafe(
+                        self.writer.iac, telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO
+                    )
+            except Exception:
+                pass
 
 
     def close(self):

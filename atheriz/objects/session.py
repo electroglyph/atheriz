@@ -34,6 +34,7 @@ class Session:
         self.screenreader: bool = False
         self.conn_time = 0.0
         self.input_future: asyncio.Future | None = None
+        self._input_masked: bool = False
 
     def at_connect(self):
         self.conn_time = time.time()
@@ -41,8 +42,15 @@ class Session:
     def at_disconnect(self):
         with self.lock:
             future = self.input_future
+            masked = self._input_masked
+            self._input_masked = False
             stack, self.puppet_stack = self.puppet_stack, []
             puppet = self.puppet
+        if masked and self.connection is not None:
+            try:
+                self.connection.send_command("echo_on")
+            except Exception:
+                pass
         if future and not future.done():
             try:
                 future.get_loop().call_soon_threadsafe(future.cancel)
@@ -70,17 +78,33 @@ class Session:
     def msg(self, *args, **kwargs):
         self.connection.msg(*args, **kwargs)
 
-    async def prompt(self, text: str) -> str:
+    async def prompt(self, text: str, mask: bool = False) -> str:
         """
         Send a prompt to the user and await their response.
         """
-        self.msg(text)
+        prev_masked = False
+        prev = None
+        need_restore = False
         with self.lock:
             prev = self.input_future
+            prev_masked = self._input_masked
             future = asyncio.Future()
             if prev and not prev.done():
-                # a prior prompt was never resolved (superseded by this one):
-                # resolve it now so it can't hang forever
                 prev.set_result("")
+                if prev_masked and not mask:
+                    need_restore = True
             self.input_future = future
+            self._input_masked = mask
+        if need_restore:
+            try:
+                self.connection.send_command("echo_on")
+            except Exception:
+                pass
+        if mask:
+            try:
+                self.connection.send_command("prompt_masked", text)
+            except Exception:
+                pass
+        else:
+            self.msg(text)
         return await future

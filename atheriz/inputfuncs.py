@@ -221,11 +221,19 @@ class InputFuncs:
             # and disconnect cleanup (protocol thread) also touch input_future.
             with session.lock:
                 future = session.input_future
+                masked = getattr(session, "_input_masked", False)
                 if future and not future.done():
                     session.input_future = None
+                    session._input_masked = False
                 else:
                     future = None
+                    masked = False
             if future:
+                if masked:
+                    try:
+                        connection.send_command("echo_on")
+                    except Exception:
+                        pass
                 atp.loop.call_soon_threadsafe(future.set_result, text)
                 return
 
