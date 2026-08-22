@@ -385,8 +385,12 @@ class Node(Flags, AccessLock):
 
         def _delete_recursive(obj: Node) -> list:
             all_ops = []
+            seen: set[int] = set()
             if obj.contents:
                 for content in list(obj.contents):
+                    if content.id in seen:
+                        continue
+                    seen.add(content.id)
                     res = content.delete(caller, True)
                     if res is None:
                         continue
@@ -394,17 +398,33 @@ class Node(Flags, AccessLock):
             return all_ops
 
         def _move_contents(obj: Node) -> list:
+            all_ops = []
             if obj.contents:
                 fallback = caller.location
                 if fallback is obj:
                     fallback = None
                 for content in list(obj.contents):
-                    home = content.home
+                    moved = False
+                    home = getattr(content, "home", None)
                     if home is not None:
-                        content.move_to(home)
+                        if content.move_to(home):
+                            moved = True
+                        elif fallback is not None and content.move_to(fallback, force=True, announce=False):
+                            moved = True
                     elif fallback is not None:
-                        content.move_to(fallback, force=True, announce=False)
-            return []
+                        if content.move_to(fallback, force=True, announce=False):
+                            moved = True
+                    if not moved:
+                        if content.location is obj:
+                            try:
+                                obj.remove_object(content)
+                            except Exception:
+                                pass
+                            content.location = None
+                        res = content.delete(caller, True)
+                        if res:
+                            all_ops.extend(res)
+            return all_ops
 
         def _self_delete():
             if getattr(self, "_is_tickable", False):

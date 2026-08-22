@@ -299,16 +299,37 @@ class Object(Flags, DbOps, AccessLock):
                 ops.append(obj.get_del_ops())
             remove_object(obj)
 
-        def _delete_recursive(obj: Object):
-            if obj.contents:
-                for content in list(obj.contents):
-                    _delete_recursive(content)
-            _delete_object(obj)
+        def _delete_recursive(root: Object):
+            seen: set[int] = set()
+            stack: list[tuple[Object, int]] = [(root, 0)]
+            order: list[Object] = []
+            while stack:
+                obj, depth = stack.pop()
+                if obj.id in seen:
+                    continue
+                seen.add(obj.id)
+                order.append(obj)
+                if obj.contents:
+                    for content in list(obj.contents):
+                        if content.id not in seen:
+                            if depth + 1 >= settings.MAX_SEARCH_DEPTH:
+                                stack.append((content, depth + 1))
+                            else:
+                                stack.append((content, depth + 1))
+            for obj in reversed(order):
+                _delete_object(obj)
 
         def _move_contents(obj: Object, loc: Object | Node | None):
             if obj.contents:
                 for content in list(obj.contents):
-                    content.move_to(loc)
+                    if not content.move_to(loc):
+                        if content.location is obj:
+                            try:
+                                obj.remove_object(content)
+                            except Exception:
+                                pass
+                            content.location = None
+                        _delete_recursive(content)
             _delete_object(obj)
 
         if recursive:
