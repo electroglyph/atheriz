@@ -1,6 +1,6 @@
 from .objects import load_objects
 from .get import get_async_threadpool, get_map_handler, get_node_handler, get_server_channel, get_async_ticker, get_game_time
-from atheriz.globals.objects import save_objects, load_objects
+from atheriz.globals.objects import save_objects, load_objects, filter_by
 from atheriz.globals.autosave import start_autosave, stop_autosave
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
@@ -82,6 +82,46 @@ def do_shutdown():
     _shutdown_step("db_close", get_database().close)
 
 
+def _reregister_ticks():
+    """Re-add every tickable object/node to the async ticker after a reload.
+
+    do_reload() clears all ticker slots to drop stale bound methods of
+    pre-reload classes, but only engine coros (GameTime, autosave) manage
+    their own lifecycles — every tickable Object and Node would stay
+    unregistered forever. Re-registration is idempotent: equal bound methods
+    collapse in a TimeSlot's coro set.
+    """
+    ticker = get_async_ticker()
+    for obj in filter_by(lambda o: getattr(o, "_is_tickable", False)):
+        at_tick = getattr(obj, "at_tick", None)
+        if at_tick is None:
+            continue
+        try:
+            ticker.add_coro(at_tick, obj._tick_seconds)
+        except Exception:
+            logger.error(f"Failed to re-register tick for object {getattr(obj, 'id', '?')}:\n{traceback.format_exc()}")
+    try:
+        nh = get_node_handler()
+        with nh.lock:
+            areas = list(nh.areas.values())
+        for area in areas:
+            with area.lock:
+                grids = list(area.grids.values())
+            for grid in grids:
+                with grid.lock:
+                    nodes = [n for n in grid.nodes.values() if getattr(n, "_is_tickable", False)]
+                for node in nodes:
+                    at_tick = getattr(node, "at_tick", None)
+                    if at_tick is None:
+                        continue
+                    try:
+                        ticker.add_coro(at_tick, node._tick_seconds)
+                    except Exception:
+                        logger.error(f"Failed to re-register tick for node {getattr(node, 'id', '?')}:\n{traceback.format_exc()}")
+    except Exception:
+        logger.error(f"Node tick re-registration failed:\n{traceback.format_exc()}")
+
+
 def do_reload():
     channel: Channel | None = get_server_channel()
     if channel:
@@ -98,6 +138,7 @@ def do_reload():
         get_game_time().stop()
     stop_autosave()
     get_async_ticker().clear()
+    _reregister_ticks()
     if settings.TIME_SYSTEM_ENABLED:
         get_game_time().start()
     if settings.AUTOSAVE_ON_RELOAD:

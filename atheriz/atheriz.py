@@ -1270,8 +1270,22 @@ def do_test_command(args):
     if run_core:
         # For core tests, we MUST point to the core tests directory
         test_path = Path(__file__).parent / "tests"
-        pytest_args = [arg for arg in pytest_args if arg.startswith("-")]
-        pytest_args.extend(["--rootdir", str(test_path), str(test_path)])
+        passthrough: list[str] = []
+        targets: list[str] = []
+        for arg in pytest_args:
+            p = Path(arg)
+            if p.exists():
+                targets.append(str(p))
+                continue
+            if not arg.startswith("-"):
+                alt = test_path / arg
+                if alt.exists():
+                    targets.append(str(alt))
+                    continue
+            passthrough.append(arg)
+        pytest_args = passthrough
+        pytest_args.extend(["--rootdir", str(test_path)])
+        pytest_args.extend(targets if targets else [str(test_path)])
         print(f"Running core tests from {test_path}...")
     else:
         print("Running game tests...")
