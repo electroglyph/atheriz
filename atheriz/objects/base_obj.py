@@ -375,20 +375,47 @@ class Object(Flags, DbOps, AccessLock):
                 excludes = getattr(cls, "_pickle_excludes", ())
                 for key in excludes:
                     state.pop(key, None)
-            # Object-specific exclusions here:
             state.pop("session", None)
             state.pop("lock", None)
-            state.pop("hooks")
-            if loc := state.get("location"):
-                if loc.is_node:
-                    state["location"] = loc.coord
+            state.pop("hooks", None)
+            try:
+                loc = object.__getattribute__(self, "location")
+            except AttributeError:
+                loc = None
+            if loc is not None:
+                try:
+                    is_node = object.__getattribute__(loc, "is_node")
+                except AttributeError:
+                    is_node = False
+                if is_node:
+                    try:
+                        state["location"] = object.__getattribute__(loc, "coord")
+                    except AttributeError:
+                        state["location"] = None
                 else:
-                    state["location"] = loc.id
-            if home := state.get("home"):
-                if home.is_node:
-                    state["home"] = home.coord
+                    try:
+                        state["location"] = object.__getattribute__(loc, "id")
+                    except AttributeError:
+                        state["location"] = None
+            try:
+                home = object.__getattribute__(self, "home")
+            except AttributeError:
+                home = None
+            if home is not None:
+                try:
+                    is_node = object.__getattribute__(home, "is_node")
+                except AttributeError:
+                    is_node = False
+                if is_node:
+                    try:
+                        state["home"] = object.__getattribute__(home, "coord")
+                    except AttributeError:
+                        state["home"] = None
                 else:
-                    state["home"] = home.id
+                    try:
+                        state["home"] = object.__getattribute__(home, "id")
+                    except AttributeError:
+                        state["home"] = None
             # Store as plain int to avoid dill recursion on IntEnum metaclass
             state["privilege_level"] = int(state["privilege_level"])
             # While an object is being puppeted its is_pc/privilege_level (and

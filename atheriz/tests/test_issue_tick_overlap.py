@@ -83,6 +83,8 @@ class TestWorkerResilience:
         """INTENT: a task whose dispatch raises (coroutine handed to a dead
         loop) must be logged and the worker must keep processing; the old code
         let the worker thread die."""
+        import atheriz.globals.asyncthreadpool as atp_module
+
         atp = AsyncThreadPool()
         ran = threading.Event()
 
@@ -90,10 +92,11 @@ class TestWorkerResilience:
             pass
 
         try:
-            with patch(
-                "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
-                side_effect=RuntimeError("event loop is closed"),
-            ):
+            with patch.object(atp_module.logger, "error"), \
+                 patch(
+                     "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
+                     side_effect=RuntimeError("event loop is closed"),
+                 ):
                 assert atp.add_task(coro_task) is True
                 assert atp.add_task(ran.set) is True
                 assert ran.wait(5), "worker died instead of surviving dispatch error"
@@ -120,6 +123,8 @@ class TestNoLeakedCoroutines:
         import gc
         import warnings
 
+        import atheriz.globals.asyncthreadpool as atp_module
+
         atp = AsyncThreadPool()
 
         async def coro_task():
@@ -128,10 +133,11 @@ class TestNoLeakedCoroutines:
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                with patch(
-                    "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
-                    side_effect=RuntimeError("event loop is closed"),
-                ):
+                with patch.object(atp_module.logger, "error"), \
+                     patch(
+                         "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
+                         side_effect=RuntimeError("event loop is closed"),
+                     ):
                     assert atp.add_task(coro_task) is True
                     done = threading.Event()
                     assert atp.add_task(done.set) is True
@@ -150,6 +156,8 @@ class TestNoLeakedCoroutines:
 
         import pytest
 
+        import atheriz.globals.asyncthreadpool as atp_module
+
         atp = AsyncThreadPool()
 
         async def task():
@@ -158,10 +166,11 @@ class TestNoLeakedCoroutines:
         try:
             with warnings.catch_warnings(record=True) as caught:
                 warnings.simplefilter("always")
-                with patch(
-                    "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
-                    side_effect=RuntimeError("event loop is closed"),
-                ):
+                with patch.object(atp_module.logger, "error"), \
+                     patch(
+                         "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
+                         side_effect=RuntimeError("event loop is closed"),
+                     ):
                     with pytest.raises(RuntimeError):
                         atp.delay(0.1, task)
                 gc.collect()

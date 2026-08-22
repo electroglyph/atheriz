@@ -4,6 +4,11 @@ class DbOps:
     def get_save_ops(self) -> tuple[str, tuple]:
         """
         Returns a tuple of (sql, params) for saving this object.
+
+        Contract: serialization must acquire only self.lock; foreign objects
+        must never be locked during dill.dumps (see Object.__getstate__
+        lock-free snapshot of location/home). This avoids AB-BA cycles with
+        Object.move_to's loc→dest→mover lock order.
         """
         sql = "INSERT OR REPLACE INTO objects (id, data) VALUES (?, ?)"
         with self.lock:
