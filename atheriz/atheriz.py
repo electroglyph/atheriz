@@ -2,6 +2,8 @@ from __future__ import annotations
 from atheriz.globals.objects import filter_by
 from atheriz.logger import logger
 import argparse
+import asyncio
+import hmac
 import signal
 import time
 from pathlib import Path
@@ -37,8 +39,25 @@ class ServerState:
 
 
 server_state = ServerState()
+_reload_lock = asyncio.Lock()
 
 app = FastAPI(title=settings.SERVERNAME)
+
+
+def _check_admin(request: Request, action: str) -> str | None:
+    secret_path = Path(settings.SECRET_PATH)
+    token_file = secret_path / "admin.token"
+    if not token_file.exists():
+        return "Token file not found."
+    with open(token_file, "r") as f:
+        expected_token = f.read().strip()
+    client = request.client
+    if client is None or client.host not in ["127.0.0.1", "::1"]:
+        return f"Remote {action} not allowed."
+    token = request.headers.get("X-Admin-Token")
+    if not hmac.compare_digest((token or "").encode(), expected_token.encode()):
+        return "Invalid token."
+    return None
 
 
 def setup_protocols():
@@ -300,78 +319,53 @@ async def read_webclient(request: Request):
 
 @app.post("/_internal/hot_reload")
 async def hot_reload_endpoint(request: Request):
-    token = request.headers.get("X-Admin-Token")
-
-    secret_path = Path(settings.SECRET_PATH)
-    token_file = secret_path / "admin.token"
-
-    if not token_file.exists():
-        return {"status": "error", "message": "Token file not found."}
-
-    with open(token_file, "r") as f:
-        expected_token = f.read().strip()
-
-    if request.client.host not in ["127.0.0.1", "::1"]:
-        return {"status": "error", "message": "Remote reload not allowed."}
-
-    if token != expected_token:
-        return {"status": "error", "message": "Invalid token."}
-
-    await run_in_threadpool(do_reload)
-    msg = await run_in_threadpool(reloader.reload_game_logic)
+    err = _check_admin(request, "reload")
+    if err:
+        return {"status": "error", "message": err}
+    async with _reload_lock:
+        await run_in_threadpool(do_reload)
+        msg = await run_in_threadpool(reloader.reload_game_logic)
     return {"status": "ok", "message": msg}
 
 
 @app.post("/_internal/shutdown")
 async def shutdown_endpoint(request: Request, background_tasks: BackgroundTasks):
-    token = request.headers.get("X-Admin-Token")
-
-    secret_path = Path(settings.SECRET_PATH)
-    token_file = secret_path / "admin.token"
-
-    if not token_file.exists():
-        return {"status": "error", "message": "Token file not found."}
-
-    with open(token_file, "r") as f:
-        expected_token = f.read().strip()
-
-    if request.client.host not in ["127.0.0.1", "::1"]:
-        return {"status": "error", "message": "Remote shutdown not allowed."}
-
-    if token != expected_token:
-        return {"status": "error", "message": "Invalid token."}
-
+    err = _check_admin(request, "shutdown")
+    if err:
+        return {"status": "error", "message": err}
     logger.info("Internal shutdown request received. Running shutdown tasks...")
-    # Run shutdown work after the response is sent so the admin client never
-    # blocks on saves/locks held by stuck game threads (background tasks run
-    # on the threadpool executor after the reply).
-    background_tasks.add_task(do_shutdown)
-
     server_state.running = False
-    if server_state.uvicorn_server:
-        server_state.uvicorn_server.should_exit = True
 
+    async def _watchdog():
+        try:
+            await asyncio.sleep(60)
+            if server_state.uvicorn_server:
+                server_state.uvicorn_server.should_exit = True
+        except asyncio.CancelledError:
+            pass
+
+    watchdog = asyncio.create_task(_watchdog())
+
+    async def _deferred_shutdown():
+        try:
+            await run_in_threadpool(do_shutdown)
+        finally:
+            try:
+                watchdog.cancel()
+            except Exception:
+                pass
+            if server_state.uvicorn_server:
+                server_state.uvicorn_server.should_exit = True
+
+    background_tasks.add_task(_deferred_shutdown)
     return {"status": "ok", "message": "Shutdown tasks queued."}
 
 
 @app.post("/_internal/create_account")
 async def create_account_endpoint(request: Request):
-    token = request.headers.get("X-Admin-Token")
-
-    secret_path = Path(settings.SECRET_PATH)
-    token_file = secret_path / "admin.token"
-
-    if not token_file.exists():
-        return {"status": "error", "message": "Token file not found."}
-
-    with open(token_file, "r") as f:
-        expected_token = f.read().strip()
-
-    if request.client.host not in ["127.0.0.1", "::1"]:
-        return {"status": "error", "message": "Remote account creation not allowed."}
-
-    if token != expected_token:
-        return {"status": "error", "message": "Invalid token."}
+    err = _check_admin(request, "account creation")
+    if err:
+        return {"status": "error", "message": err}
 
     try:
         body = await request.json()
