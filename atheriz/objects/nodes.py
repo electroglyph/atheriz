@@ -414,7 +414,7 @@ class Node(Flags, AccessLock):
                     elif fallback is not None:
                         if content.move_to(fallback, force=True, announce=False):
                             moved = True
-                    if not moved:
+                    if not moved and (home is not None or fallback is not None):
                         if content.location is obj:
                             try:
                                 obj.remove_object(content)
