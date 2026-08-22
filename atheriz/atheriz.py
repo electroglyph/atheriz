@@ -510,6 +510,7 @@ def start_server():
         timeout_graceful_shutdown=5,
         **tls_kwargs,
     )
+    logger.info(f"[Network] WebSocket max message size: {settings.WEBSOCKET_MAX_MESSAGE_SIZE} bytes")
 
     server_state.uvicorn_server = uvicorn.Server(config)
 

@@ -10,6 +10,21 @@ from atheriz.globals.get import get_connection_manager
 from atheriz.logger import logger
 from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
 import time
+import atheriz.settings as settings
+
+_oversize_lock = threading.Lock()
+_oversize_last: dict[str, float] = {}
+_OVERSIZE_WINDOW = 5.0
+
+
+def _should_log_oversize(host: str) -> bool:
+    now = time.monotonic()
+    with _oversize_lock:
+        last = _oversize_last.get(host, 0)
+        if now - last < _OVERSIZE_WINDOW:
+            return False
+        _oversize_last[host] = now
+        return True
 
 class WebSocketConnection(BaseConnection):
     """
@@ -129,9 +144,14 @@ class WebSocketProtocol(BaseProtocol):
                 while True:
                     raw_message = await websocket.receive_text()
                     if len(raw_message) > settings.WEBSOCKET_MAX_MESSAGE_SIZE:
-                        await websocket.close(code=1009, reason="Message too large")
-                        # protocol already closed the socket; disconnect()'s
-                        # connection.close() must not close it a second time
+                        if _should_log_oversize(client_host):
+                            logger.warning(
+                                f"[WebSocket] Message too large from {client_host} ({len(raw_message)} bytes > {settings.WEBSOCKET_MAX_MESSAGE_SIZE} bytes)"
+                            )
+                        try:
+                            await websocket.close(code=1009, reason="Message too large")
+                        except Exception:
+                            pass
                         connection._closing = True
                         break
                     get_connection_manager().handle_command(connection, raw_message)
