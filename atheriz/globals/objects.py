@@ -190,17 +190,19 @@ def save_objects(force: bool = False):
     with db.lock:
         cursor = db.connection.cursor()
         cursor.execute("BEGIN TRANSACTION")
+        attempted = []
         try:
             for obj in to_save:
-                ops = obj.get_save_ops()
+                attempted.append(obj)
+                ops = obj.get_save_ops_clearing()
                 cursor.execute(ops[0], ops[1])
             cursor.execute("COMMIT")
         except Exception:
             cursor.execute("ROLLBACK")
+            for obj in attempted:
+                with obj.lock:
+                    object.__setattr__(obj, "is_modified", True)
             raise
-    for obj in to_save:
-        with obj.lock:
-            object.__setattr__(obj, "is_modified", False)
 
 
 def delete_objects(ops: list[tuple[str, tuple]]):

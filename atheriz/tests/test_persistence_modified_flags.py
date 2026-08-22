@@ -23,11 +23,12 @@ from atheriz.globals.objects import _ALL_OBJECTS, get, load_objects, save_object
 def test_rollback_save_preserves_dirty_flags(global_test_env, monkeypatch):
     """A failed save must leave every not-persisted object marked dirty.
 
-    save_objects() clears ``is_modified`` inside ``get_save_ops()`` *before*
-    the transaction COMMITs. When a later object in the same run fails, the
-    ROLLBACK leaves earlier objects with ``is_modified=False`` despite their
-    data never having been committed -- those changes are silently lost on the
-    next save.
+    save_objects() clears ``is_modified`` inside ``get_save_ops_clearing()``
+    *before* the transaction COMMITs. When a later object in the same run
+    fails, the ROLLBACK leaves earlier objects with ``is_modified=False``
+    despite their data never having been committed -- those changes would be
+    silently lost on the next save, so save_objects() re-marks every attempted
+    object dirty on the rollback path.
     """
     obj1 = Object.create(None, "one")
     obj2 = Object.create(None, "two")
@@ -43,7 +44,7 @@ def test_rollback_save_preserves_dirty_flags(global_test_env, monkeypatch):
     def boom():
         raise RuntimeError("injected serialization failure")
 
-    monkeypatch.setattr(obj2, "get_save_ops", boom)
+    monkeypatch.setattr(obj2, "get_save_ops_clearing", boom)
 
     with pytest.raises(RuntimeError):
         save_objects()
