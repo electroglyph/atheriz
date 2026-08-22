@@ -417,20 +417,22 @@ class MapHandler:
         with self.lock:
             return self.data.get((area, z))
 
+    def _get_or_create(self, area: str, z: int) -> MapInfo:
+        with self.lock:
+            mi = self.data.get((area, z))
+            if mi is None:
+                mi = MapInfo(name=area)
+                self.data[(area, z)] = mi
+            return mi
+
     def add_mapable(self, mapable: Object, notify: bool = False):
         """
         helper to add mapable to their current location's mapinfo
         """
         loc: Node | None = mapable.location
         if loc:
-            with self.lock:
-                mi = self.data.get((loc.coord.area, loc.coord.z))
-            if mi:
-                mi.add_mapable(mapable, notify=notify)
-            else:
-                mi = MapInfo(name=loc.coord.area)
-                mi.add_mapable(mapable, notify=notify)
-                self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
+            mi = self._get_or_create(loc.coord.area, loc.coord.z)
+            mi.add_mapable(mapable, notify=notify)
 
     def add_listener(self, listener: Object, notify: bool = False):
         """
@@ -438,14 +440,8 @@ class MapHandler:
         """
         loc: Node | None = listener.location
         if loc:
-            with self.lock:
-                mi = self.data.get((loc.coord.area, loc.coord.z))
-            if mi:
-                mi.add_listener(listener, notify=notify)
-            else:
-                mi = MapInfo(name=loc.coord.area)
-                mi.add_listener(listener, notify=notify)
-                self.set_mapinfo(loc.coord.area, loc.coord.z, mi)
+            mi = self._get_or_create(loc.coord.area, loc.coord.z)
+            mi.add_listener(listener, notify=notify)
 
     def remove_listener(self, listener: Object):
         """
@@ -472,8 +468,7 @@ class MapHandler:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
-            to_map = MapInfo(name=to_coord.area)
-            self.set_mapinfo(to_coord.area, to_coord.z, to_map)
+            to_map = self._get_or_create(to_coord.area, to_coord.z)
         if from_map:
             from_map.remove_listener(listener)
             from_map.render(False)
@@ -488,16 +483,9 @@ class MapHandler:
         from_coord: Coord | None = None,
     ):
         if from_coord and from_coord.area == to_coord.area and from_coord.z == to_coord.z:
-            with self.lock:
-                current_map = self.data.get((to_coord.area, to_coord.z))
-            if current_map:
-                current_map.add_mapable(mapable)
-                current_map.render(True)
-            else:
-                current_map = MapInfo(name=to_coord.area)
-                self.set_mapinfo(to_coord.area, to_coord.z, current_map)
-                current_map.add_mapable(mapable)
-                current_map.render(True)
+            current_map = self._get_or_create(to_coord.area, to_coord.z)
+            current_map.add_mapable(mapable)
+            current_map.render(True)
             return
         from_map = None
         with self.lock:
@@ -505,8 +493,7 @@ class MapHandler:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
         if not to_map:
-            to_map = MapInfo(name=to_coord.area)
-            self.set_mapinfo(to_coord.area, to_coord.z, to_map)
+            to_map = self._get_or_create(to_coord.area, to_coord.z)
         if from_map:
             from_map.remove_mapable(mapable)
             from_map.render(False)
