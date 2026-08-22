@@ -105,9 +105,17 @@ MAX_CONNECTIONS_PER_IP = 2
 MENU_PROMPT_TIMEOUT = 60
 # Minimum time in seconds between successful guest/account/character creations from one host
 CREATION_COOLDOWN = 60
+# minutes before a mapedit chain expires and is evicted; 0 disables eviction
+MAPEDIT_CHAIN_TTL = 180.0
+# maximum number of live mapedit chains; oldest evicted first
+MAPEDIT_MAX_CHAINS = 256
+# maximum length for account names
 MAX_ACCOUNT_NAME_LENGTH = 20
+# maximum length for character names
 MAX_CHARACTER_NAME_LENGTH = 20
+# minimum length for passwords
 MIN_PASSWORD_LENGTH = 8
+# maximum length for passwords — bounds hashing cost
 MAX_PASSWORD_LENGTH = 1024
 # if true, save all objects instead of only modified ones
 ALWAYS_SAVE_ALL = False

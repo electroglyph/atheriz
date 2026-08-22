@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import secrets
 import threading
+import time
 
 import atheriz.settings as settings
 
@@ -18,10 +19,8 @@ class MapEditChain:
         self.ip = ip
         self.area = area
         self.z = z
-        # outcome of the last processed map_validate_moves (list of denied
-        # move indices, empty when all were allowed) so a lost ack can be
-        # replayed verbatim
         self.validation: list[int] | None = None
+        self.created = time.monotonic()
 
 
 class MapEditResult:
@@ -35,32 +34,56 @@ class MapEditResult:
 
 
 _chains: dict[str, MapEditChain] = {}
+_previous: dict[str, str] = {}
 _lock = threading.RLock()
 
 
+def _evict(now: float) -> None:
+    ttl = getattr(settings, "MAPEDIT_CHAIN_TTL", 60.0) * 60.0
+    cap = getattr(settings, "MAPEDIT_MAX_CHAINS", 256)
+    if ttl > 0:
+        expired = [k for k, c in list(_chains.items()) if now - getattr(c, "created", now) > ttl]
+        for k in expired:
+            c = _chains.pop(k, None)
+            if c is not None:
+                _previous.pop(c.previous_key, None)
+    stale = [p for p, cur in list(_previous.items()) if cur not in _chains]
+    for p in stale:
+        _previous.pop(p, None)
+    while len(_chains) > cap:
+        oldest = min(_chains, key=lambda k: getattr(_chains[k], "created", 0))
+        c = _chains.pop(oldest, None)
+        if c is not None:
+            _previous.pop(c.previous_key, None)
+        stale = [p for p, cur in list(_previous.items()) if cur not in _chains]
+        for p in stale:
+            _previous.pop(p, None)
+
+
 def grant(ip: str, area: str, z: int) -> str:
-    """Create a new edit chain and return its initial key."""
     with _lock:
+        _evict(time.monotonic())
         key = secrets.token_urlsafe(32)
         _chains[key] = MapEditChain(key, ip, area, z)
+        if len(_chains) > getattr(settings, "MAPEDIT_MAX_CHAINS", 256):
+            _evict(time.monotonic())
         return key
 
 
 def consume(key: str, ip: str, seq: int) -> MapEditResult:
-    """Validate one editor message against the key chain.
-
-    Returns PROCESSED with a new key when the message is accepted,
-    RETRY with the current key when the message was already accepted
-    (ack lost), or REJECT with a reason."""
     with _lock:
+        _evict(time.monotonic())
         chain = _chains.get(key)
         previous_hit = False
         if chain is None:
-            for c in _chains.values():
-                if c.previous_key == key:
+            cur = _previous.get(key)
+            if cur is not None:
+                c = _chains.get(cur)
+                if c is not None:
                     chain = c
                     previous_hit = True
-                    break
+                else:
+                    _previous.pop(key, None)
         if chain is None:
             return MapEditResult(REJECT, reason="unknown_key")
         if chain.ip != ip:
@@ -71,11 +94,14 @@ def consume(key: str, ip: str, seq: int) -> MapEditResult:
             return MapEditResult(REJECT, reason="replay")
         if seq == chain.seq + 1:
             new_key = secrets.token_urlsafe(32)
-            del _chains[chain.key]
-            chain.previous_key = chain.key
+            old_key = chain.key
+            del _chains[old_key]
+            _previous.pop(old_key, None)
+            chain.previous_key = old_key
             chain.key = new_key
             chain.seq = seq
             _chains[new_key] = chain
+            _previous[old_key] = new_key
             return MapEditResult(PROCESSED, new_key=new_key, chain=chain)
         if seq <= chain.seq:
             return MapEditResult(REJECT, reason="replay")

@@ -15,8 +15,12 @@ from atheriz.utils import Coord
 @pytest.fixture(autouse=True)
 def clear_chains():
     mapedit._chains.clear()
+    if hasattr(mapedit, "_previous"):
+        mapedit._previous.clear()
     yield
     mapedit._chains.clear()
+    if hasattr(mapedit, "_previous"):
+        mapedit._previous.clear()
 
 
 class MockMapHandler:
