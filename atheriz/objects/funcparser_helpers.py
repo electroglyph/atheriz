@@ -175,10 +175,14 @@ def crop(text, width=None, suffix="[...]"):
 def justify(text, width=None, align="l", indent=0, fillchar=" "):
     """
     Justify text to a width with alignment l/c/r/f.
+
+    `width` is clamped to _MAX_TEXT_WIDTH; `indent` is clamped to
+    [0, width] so per-line padding can never amplify output size.
     """
     from atheriz.settings import CLIENT_DEFAULT_WIDTH
     width = width if width is not None else CLIENT_DEFAULT_WIDTH
     width = min(width, _MAX_TEXT_WIDTH)
+    indent = max(0, min(indent, width))
     sp = fillchar
 
     if align == "a":

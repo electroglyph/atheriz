@@ -1012,6 +1012,7 @@ def funcparser_callable_justify(*args, **kwargs):
         indent = int(kwargs.get("indent", rest[2] if lrest > 2 else 0))
     except (TypeError, ValueError):
         indent = 0
+    indent = max(0, min(indent, width))
     return justify(str(text), width=width, align=align, indent=indent)
 
 
