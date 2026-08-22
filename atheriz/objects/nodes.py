@@ -616,6 +616,13 @@ class Node(Flags, AccessLock):
                 nh = get_node_handler()
                 nh.add_transition(Transition(self.coord, link.coord, link.name))
 
+    def add_link_if_absent(self, name: str, factory) -> bool:
+        with self.lock:
+            if any(link.name == name for link in self.links):
+                return False
+            self.add_link(factory())
+            return True
+
     def remove_link(self, name: str):
         """
         Remove an exit from this node. Also alerts the map handler if it crosses areas.

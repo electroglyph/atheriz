@@ -153,64 +153,32 @@ class BuildCommand(Command):
         ):
 
             if n:
-                if not node.has_link_name("north"):
-                    link = NodeLink(
-                        "north",
-                        Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z),
-                        ["n"],
-                    )
-                    node.add_link(link)
+                node.add_link_if_absent("north", lambda: NodeLink("north", Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z), ["n"]))
                 to_coord = Coord(node.coord.area, node.coord.x, node.coord.y + 1, node.coord.z)
                 to_node = nh.get_node(to_coord)
                 if to_node:
-                    if not to_node.has_link_name("south"):
-                        link = NodeLink("south", node.coord, ["s"])
-                        to_node.add_link(link)
+                    to_node.add_link_if_absent("south", lambda: NodeLink("south", node.coord, ["s"]))
 
             if s:
-                if not node.has_link_name("south"):
-                    link = NodeLink(
-                        "south",
-                        Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z),
-                        ["s"],
-                    )
-                    node.add_link(link)
+                node.add_link_if_absent("south", lambda: NodeLink("south", Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z), ["s"]))
                 to_coord = Coord(node.coord.area, node.coord.x, node.coord.y - 1, node.coord.z)
                 to_node = nh.get_node(to_coord)
                 if to_node:
-                    if not to_node.has_link_name("north"):
-                        link = NodeLink("north", node.coord, ["n"])
-                        to_node.add_link(link)
+                    to_node.add_link_if_absent("north", lambda: NodeLink("north", node.coord, ["n"]))
 
             if e:
-                if not node.has_link_name("east"):
-                    link = NodeLink(
-                        "east",
-                        Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z),
-                        ["e"],
-                    )
-                    node.add_link(link)
+                node.add_link_if_absent("east", lambda: NodeLink("east", Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z), ["e"]))
                 to_coord = Coord(node.coord.area, node.coord.x + 1, node.coord.y, node.coord.z)
                 to_node = nh.get_node(to_coord)
                 if to_node:
-                    if not to_node.has_link_name("west"):
-                        link = NodeLink("west", node.coord, ["w"])
-                        to_node.add_link(link)
+                    to_node.add_link_if_absent("west", lambda: NodeLink("west", node.coord, ["w"]))
 
             if w:
-                if not node.has_link_name("west"):
-                    link = NodeLink(
-                        "west",
-                        Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z),
-                        ["w"],
-                    )
-                    node.add_link(link)
+                node.add_link_if_absent("west", lambda: NodeLink("west", Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z), ["w"]))
                 to_coord = Coord(node.coord.area, node.coord.x - 1, node.coord.y, node.coord.z)
                 to_node = nh.get_node(to_coord)
                 if to_node:
-                    if not to_node.has_link_name("east"):
-                        link = NodeLink("east", node.coord, ["e"])
-                        to_node.add_link(link)
+                    to_node.add_link_if_absent("east", lambda: NodeLink("east", node.coord, ["e"]))
 
         for d_key in targets:
             d_data = DIRECTIONS[d_key]
@@ -225,20 +193,27 @@ class BuildCommand(Command):
 
             if not new_node:
                 desc = args.desc if args.desc else "Placeholder desc, use desc command to change"
-                new_node = Node(new_coord, desc=desc)
-
                 area = nh.get_area(c.area)
                 if not area:
                     caller.msg("Error: Current area not found.")
                     return
-
-                grid = area.get_grid(new_coord.z)
-                if not grid:
-                    grid = NodeGrid(c.area, new_coord.z)
-                    area.add_grid(grid)
-
-                grid.add_node(new_node)
-                caller.msg(f"Created new node at {new_coord}.")
+                with area.lock:
+                    grid = area.get_grid(new_coord.z)
+                    if not grid:
+                        grid = NodeGrid(c.area, new_coord.z)
+                        area.add_grid(grid)
+                with grid.lock:
+                    existing = grid.nodes.get((new_coord.x, new_coord.y))
+                    if existing is not None:
+                        new_node = existing
+                        if args.desc:
+                            with new_node.lock:
+                                new_node.desc = args.desc
+                        caller.msg(f"Updating node at {new_coord}.")
+                    else:
+                        new_node = Node(new_coord, desc=desc)
+                        grid.add_node(new_node)
+                        caller.msg(f"Created new node at {new_coord}.")
             else:
                 caller.msg(f"Updating node at {new_coord}.")
                 if args.desc:
@@ -246,13 +221,10 @@ class BuildCommand(Command):
                         new_node.desc = args.desc
 
             if d_key != "x":
-                if not self._has_link(loc, link_name):
-                    loc.add_link(NodeLink(link_name, new_coord, [d_key]))
-
-                if not self._has_link(new_node, back_link_name):
-                    alias = self._get_alias(back_link_name)
-                    aliases = [alias] if alias else []
-                    new_node.add_link(NodeLink(back_link_name, loc.coord, aliases))
+                loc.add_link_if_absent(link_name, lambda: NodeLink(link_name, new_coord, [d_key]))
+                alias = self._get_alias(back_link_name)
+                aliases = [alias] if alias else []
+                new_node.add_link_if_absent(back_link_name, lambda: NodeLink(back_link_name, loc.coord, aliases))
 
             mi = mh.get_mapinfo(new_coord.area, new_coord.z)
             if not mi:
