@@ -100,6 +100,59 @@ class TelnetConnection(BaseConnection):
             self.client_host = writer.get_extra_info("peername")[0]
         except Exception:
             pass
+        self._pending_bytes = 0
+        self._pending_lock = threading.Lock()
+        self._closing = False
+
+    def _get_write_buffer_size(self) -> int | None:
+        try:
+            tr = getattr(self.writer, "transport", None)
+            if tr is not None and hasattr(tr, "get_write_buffer_size"):
+                buf = tr.get_write_buffer_size()
+                if isinstance(buf, int):
+                    return buf
+            if hasattr(self.writer, "get_write_buffer_size"):
+                buf = self.writer.get_write_buffer_size()
+                if isinstance(buf, int):
+                    return buf
+            tr2 = getattr(self.writer, "_transport", None)
+            if tr2 is not None and hasattr(tr2, "get_write_buffer_size"):
+                buf = tr2.get_write_buffer_size()
+                if isinstance(buf, int):
+                    return buf
+        except Exception:
+            return None
+        return None
+
+    def _offloop_write(self, text: str, nb: int):
+        try:
+            buf = self._get_write_buffer_size()
+            if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
+                logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf} > {settings.TELNET_MAX_PENDING_BYTES}")
+                self.close()
+                return
+            self.writer.write(text)
+            buf2 = self._get_write_buffer_size()
+            if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
+                logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")
+                self.close()
+        except Exception as e:
+            logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
+            self.close()
+        finally:
+            with self._pending_lock:
+                self._pending_bytes = max(0, self._pending_bytes - nb)
+
+    def _offloop_iac(self, telopt_cmd, telopt_opt, nb: int = 0):
+        try:
+            self.writer.iac(telopt_cmd, telopt_opt)
+        except Exception as e:
+            logger.debug(f"[Telnet] iac failed for {self.client_host}: {e}")
+            self.close()
+        finally:
+            if nb:
+                with self._pending_lock:
+                    self._pending_bytes = max(0, self._pending_bytes - nb)
 
     def send_command(self, cmd: str, *args, **kwargs):
         """
@@ -107,40 +160,106 @@ class TelnetConnection(BaseConnection):
         They just read raw text.
         We will translate simple commands and log/ignore unsupported UI functions.
         """
+        if self._closing:
+            return
         if cmd in ("text", "prompt"):
             text = args[0] if args else ""
-            try:
-                if threading.get_ident() == self.thread_id:
+            if not text:
+                return
+            nb = len(text.encode("utf-8"))
+            if threading.get_ident() == self.thread_id:
+                try:
+                    buf = self._get_write_buffer_size()
+                    if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
+                        logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf} > {settings.TELNET_MAX_PENDING_BYTES}")
+                        self.close()
+                        return
                     self.writer.write(text)
-                else:
-                    self._resolve_loop().call_soon_threadsafe(self.writer.write, text)
-            except Exception:
-                pass
+                    buf2 = self._get_write_buffer_size()
+                    if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
+                        logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")
+                        self.close()
+                except Exception as e:
+                    logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
+                    self.close()
+            else:
+                should_close = False
+                with self._pending_lock:
+                    if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
+                        should_close = True
+                    else:
+                        self._pending_bytes += nb
+                if should_close:
+                    logger.debug(f"[Telnet] closing {self.client_host}: pending {self._pending_bytes} + {nb} bytes exceeds {settings.TELNET_MAX_PENDING_BYTES}")
+                    self.close()
+                    return
+                try:
+                    self._resolve_loop().call_soon_threadsafe(self._offloop_write, text, nb)
+                except Exception as e:
+                    with self._pending_lock:
+                        self._pending_bytes = max(0, self._pending_bytes - nb)
+                    logger.debug(f"[Telnet] Error scheduling write for {self.client_host}: {e}")
+                    self.close()
         elif cmd == "prompt_masked":
             text = args[0] if args else ""
-            try:
-                if threading.get_ident() == self.thread_id:
+            nb = len(text.encode("utf-8")) if text else 0
+            if threading.get_ident() == self.thread_id:
+                try:
+                    buf = self._get_write_buffer_size()
+                    if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
+                        logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf} > {settings.TELNET_MAX_PENDING_BYTES}")
+                        self.close()
+                        return
                     self.writer.iac(telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
-                    self.writer.write(text)
-                else:
+                    if text:
+                        self.writer.write(text)
+                    buf2 = self._get_write_buffer_size()
+                    if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
+                        logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")
+                        self.close()
+                except Exception as e:
+                    logger.debug(f"[Telnet] write/iac failed for {self.client_host}: {e}")
+                    self.close()
+            else:
+                if nb:
+                    should_close = False
+                    with self._pending_lock:
+                        if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
+                            should_close = True
+                        else:
+                            self._pending_bytes += nb
+                    if should_close:
+                        logger.debug(f"[Telnet] closing {self.client_host}: pending {self._pending_bytes} + {nb} bytes exceeds {settings.TELNET_MAX_PENDING_BYTES}")
+                        self.close()
+                        return
+                try:
                     loop = self._resolve_loop()
-                    loop.call_soon_threadsafe(self.writer.iac, telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
-                    loop.call_soon_threadsafe(self.writer.write, text)
-            except Exception:
-                pass
+                    loop.call_soon_threadsafe(self._offloop_iac, telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
+                    if text:
+                        loop.call_soon_threadsafe(self._offloop_write, text, nb)
+                    elif nb == 0:
+                        pass
+                except Exception as e:
+                    if nb:
+                        with self._pending_lock:
+                            self._pending_bytes = max(0, self._pending_bytes - nb)
+                    logger.debug(f"[Telnet] Error scheduling prompt_masked for {self.client_host}: {e}")
+                    self.close()
         elif cmd == "echo_on":
             try:
                 if threading.get_ident() == self.thread_id:
                     self.writer.iac(telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
                 else:
-                    self._resolve_loop().call_soon_threadsafe(
-                        self.writer.iac, telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO
-                    )
-            except Exception:
-                pass
+                    self._resolve_loop().call_soon_threadsafe(self._offloop_iac, telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
+            except Exception as e:
+                logger.debug(f"[Telnet] iac failed for {self.client_host}: {e}")
+                self.close()
 
 
     def close(self):
+        if self._closing:
+            return
+        self._closing = True
         try:
             if threading.get_ident() == self.thread_id:
                 self.writer.close()

@@ -36,17 +36,27 @@ class WebSocketConnection(BaseConnection):
         self.client_host = websocket.client.host if websocket.client else "?"
         self._pending_tasks = set()
         self._pending_tasks_lock = threading.Lock()
+        self._pending_count = 0
+        self._pending_bytes = 0
+        self._pending_bytes_by_task: dict[object, int] = {}
         self._closing = False
         self._close_task = None
 
-    def _track_task(self, task):
+    def _track_task(self, task, nb: int):
         with self._pending_tasks_lock:
             self._pending_tasks.add(task)
-        task.add_done_callback(self._task_done)
+            self._pending_bytes_by_task[task] = nb
+        try:
+            task.add_done_callback(self._task_done)
+        except Exception:
+            pass
 
     def _task_done(self, task):
         with self._pending_tasks_lock:
             self._pending_tasks.discard(task)
+            nb = self._pending_bytes_by_task.pop(task, 0)
+            self._pending_count = max(0, self._pending_count - 1)
+            self._pending_bytes = max(0, self._pending_bytes - nb)
         try:
             task.result()
         except asyncio.CancelledError:
@@ -55,6 +65,8 @@ class WebSocketConnection(BaseConnection):
             logger.debug(f"[WebSocket] Async task failed: {e}")
 
     def send_command(self, cmd: str, *args, **kwargs):
+        if self._closing:
+            return
         if cmd == "echo_on":
             return
         if cmd == "prompt_masked":
@@ -64,6 +76,20 @@ class WebSocketConnection(BaseConnection):
         if kwargs is None:
             kwargs = {}
         data = json.dumps([cmd, args, kwargs])
+        nb = len(data.encode("utf-8"))
+        should_close = False
+        with self._pending_tasks_lock:
+            if self._closing:
+                return
+            if self._pending_count >= settings.WEBSOCKET_MAX_PENDING_SENDS or self._pending_bytes + nb > settings.WEBSOCKET_MAX_PENDING_BYTES:
+                should_close = True
+            else:
+                self._pending_count += 1
+                self._pending_bytes += nb
+        if should_close:
+            logger.debug(f"[WebSocket] closing {self.client_host}: pending {self._pending_count} msgs {self._pending_bytes} bytes exceeds limit")
+            self.close()
+            return
         try:
             if threading.get_ident() == self.thread_id:
                 task = self.loop.create_task(self.websocket.send_text(data))
@@ -71,8 +97,11 @@ class WebSocketConnection(BaseConnection):
                 task = asyncio.run_coroutine_threadsafe(
                     self.websocket.send_text(data), self._resolve_loop()
                 )
-            self._track_task(task)
+            self._track_task(task, nb)
         except Exception as e:
+            with self._pending_tasks_lock:
+                self._pending_count = max(0, self._pending_count - 1)
+                self._pending_bytes = max(0, self._pending_bytes - nb)
             logger.debug(f"[WebSocket] Error sending command: {e}")
 
     async def _close_websocket(self):

@@ -14,6 +14,9 @@ SERVER_HOSTNAME = "localhost"
 WEBSOCKET_ENABLED = True
 # maximum websocket message size in bytes
 WEBSOCKET_MAX_MESSAGE_SIZE = 65536
+WEBSOCKET_MAX_PENDING_SENDS = 256
+WEBSOCKET_MAX_PENDING_BYTES = 4 * 1024 * 1024
+TELNET_MAX_PENDING_BYTES = 1 * 1024 * 1024
 # enable telnet protocol
 TELNET_ENABLED = True
 # telnet listen port
