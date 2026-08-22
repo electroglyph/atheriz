@@ -969,6 +969,7 @@ def main():
         if args.foreground:
             start_server()
         else:
+            do_shutdown()
             spawn_daemon(args)
             print(f"Restart took {(time.time() - t0) * 1000:.2f}ms")
     elif args.command == "stop":
