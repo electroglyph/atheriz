@@ -22,10 +22,16 @@ class ChannelCommand(Command):
 
     @property
     def channel(self) -> Channel:
+        if self._channel is not None and getattr(self._channel, "is_deleted", False):
+            self._channel = None
+            raise ValueError(f"Channel {self.id} not found.")
         if self._channel is None:
             c = get(self.id)
             if c:
-                self._channel = c[0]
+                chan = c[0]
+                if getattr(chan, "is_deleted", False):
+                    raise ValueError(f"Channel {self.id} not found.")
+                self._channel = chan
             else:
                 raise ValueError(f"Channel {self.id} not found.")
         return self._channel

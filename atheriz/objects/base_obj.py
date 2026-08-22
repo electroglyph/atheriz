@@ -557,6 +557,8 @@ class Object(Flags, DbOps, AccessLock):
 
     def subscribe(self, channel: Channel):
         """Subscribe to a channel."""
+        if getattr(channel, "is_deleted", False):
+            return
         with self.lock:
             if channel.id not in self.channels:
                 self.channels.append(channel.id)

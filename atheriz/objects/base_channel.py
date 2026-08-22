@@ -2,6 +2,7 @@ from __future__ import annotations
 from collections import deque
 from threading import RLock
 import atheriz.settings as settings
+from atheriz.logger import logger
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
 from atheriz.globals.objects import get, add_object_unique, remove_object, delete_objects
 from atheriz.globals.get import get_unique_id
@@ -28,10 +29,16 @@ class BaseChannelCommand(Command):
     @property
     def channel(self) -> Channel:
         """Channel: The channel object this command communicates through."""
+        if self._channel is not None and getattr(self._channel, "is_deleted", False):
+            self._channel = None
+            raise ValueError(f"Channel {self.id} not found.")
         if self._channel is None:
             c = get(self.id)
             if c:
-                self._channel = c[0]
+                chan = c[0]
+                if getattr(chan, "is_deleted", False):
+                    raise ValueError(f"Channel {self.id} not found.")
+                self._channel = chan
             else:
                 raise ValueError(f"Channel {self.id} not found.")
         return self._channel
@@ -52,24 +59,32 @@ class BaseChannelCommand(Command):
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
+        try:
+            ch = self.channel
+        except ValueError:
+            caller.msg("That channel no longer exists.")
+            return
+        if getattr(ch, "is_deleted", False):
+            caller.msg("That channel no longer exists.")
+            return
         if args.unsubscribe:
-            caller.unsubscribe(self.channel)
+            caller.unsubscribe(ch)
         # elif args.subscribe:
-        #     caller.subscribe(self.channel)
+        #     caller.subscribe(ch)
         elif args.replay:
-            if not self.channel.access(caller, "view"):
+            if not ch.access(caller, "view"):
                 caller.msg("You do not have permission to view this channel.")
                 return
-            h = self.channel.get_history()
+            h = ch.get_history()
             if h:
                 caller.msg(h)
             else:
                 caller.msg("No history available.")
         elif args.message:
-            if not self.channel.access(caller, "send"):
+            if not ch.access(caller, "send"):
                 caller.msg("You do not have permission to send to this channel.")
                 return
-            self.channel.msg(args.message, caller)
+            ch.msg(args.message, caller)
         else:
             caller.msg(self.parser.format_help())
 
@@ -131,9 +146,31 @@ class Channel(Flags, DbOps, AccessLock):
         if not self.is_temporary:
             ops = [self.get_del_ops()]
             delete_objects(ops)
+        with self.lock:
+            listeners = list(self.listeners.values())
+            self.listeners.clear()
+        for listener in listeners:
+            try:
+                self._detach_subscriber(listener)
+            except Exception:
+                logger.error(f"Error detaching subscriber {getattr(listener, 'id', '?')} from channel {self.name}", exc_info=True)
         remove_object(self)
         self.is_deleted = True
         return True
+
+    def _detach_subscriber(self, obj: Object) -> None:
+        with obj.lock:
+            if self.id in getattr(obj, "channels", []):
+                try:
+                    obj.channels.remove(self.id)
+                except ValueError:
+                    pass
+                object.__setattr__(obj, "is_modified", True)
+            try:
+                if getattr(obj, "internal_cmdset", None) is not None:
+                    obj.internal_cmdset.remove(self.get_command())
+            except Exception:
+                pass
 
     def at_delete(self, caller: Object | None = None) -> bool:
         """
@@ -160,6 +197,8 @@ class Channel(Flags, DbOps, AccessLock):
         Args:
             listener (Object): The object to subscribe to this channel.
         """
+        if getattr(self, "is_deleted", False):
+            return
         with self.lock:
             self.listeners[listener.id] = listener
 
