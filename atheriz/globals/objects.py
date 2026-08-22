@@ -177,14 +177,35 @@ def load_objects():
             obj.resolve_relations()
 
 
+def _is_still_saveable(obj: Any) -> bool:
+    """Return True unless obj has been deleted or removed from the registry.
+
+    Checked at execute time inside the save transaction so a delete racing the
+    checkpoint cannot be resurrected by INSERT OR REPLACE.
+    """
+    with obj.lock:
+        if getattr(obj, "is_deleted", False):
+            return False
+        obj_id = obj.id
+    with _ALL_OBJECTS_LOCK:
+        return _ALL_OBJECTS.get(obj_id) is obj
+
+
 def save_objects(force: bool = False):
-    """Save modified objects to the database."""
+    """Save modified objects to the database.
+
+    Deleted objects (flagged or already removed from the registry) are skipped,
+    both at snapshot time and again immediately before each row is written, so
+    a concurrent delete can never be resurrected by a checkpoint.
+    """
     db = get_database()
     with _ALL_OBJECTS_LOCK:
         snapshot = list(
             o
             for o in _ALL_OBJECTS.values()
-            if not getattr(o, "is_temporary", False) and not getattr(o, "is_node", False)
+            if not getattr(o, "is_temporary", False)
+            and not getattr(o, "is_node", False)
+            and not getattr(o, "is_deleted", False)
         )
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
@@ -193,6 +214,8 @@ def save_objects(force: bool = False):
         attempted = []
         try:
             for obj in to_save:
+                if not _is_still_saveable(obj):
+                    continue
                 attempted.append(obj)
                 ops = obj.get_save_ops_clearing()
                 cursor.execute(ops[0], ops[1])
