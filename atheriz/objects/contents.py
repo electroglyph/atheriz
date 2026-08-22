@@ -30,6 +30,12 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import Node
 
 
+def _term_matches(obj, term: str) -> bool:
+    if term in obj.name.lower():
+        return True
+    return any(term in alias.lower() for alias in obj.aliases)
+
+
 def filter_visible(obj_list: list[Object], looker: Object | None = None) -> list[Object]:
     """Filter objects by visibility.
 
@@ -201,7 +207,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
     for x in range(len(objs)):
         found = False
         for s in required:
-            if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
+            if _term_matches(objs[x], s):
                 found = True
             else:
                 found = False
@@ -215,7 +221,7 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
                     return matches
                 continue
         for s in optional:
-            if s in "".join(objs[x].aliases) + "".join(objs[x].name.lower()):
+            if _term_matches(objs[x], s):
                 if count == 1 and index == 0:
                     return [objs[x]]
                 else:
