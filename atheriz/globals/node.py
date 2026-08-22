@@ -258,24 +258,24 @@ class NodeHandler:
     ) -> list[Transition]:
         result = []
         required_matches = 0
-        if from_z:
+        if from_z is not None:
             required_matches += 1
-        if to_z:
+        if to_z is not None:
             required_matches += 1
-        if from_area:
+        if from_area is not None:
             required_matches += 1
-        if to_area:
+        if to_area is not None:
             required_matches += 1
         with self.lock2:
             for t in self.transitions.values():
                 matches = 0
-                if from_z and t.from_coord.z == from_z:
+                if from_z is not None and t.from_coord.z == from_z:
                     matches += 1
-                if to_z and t.to_coord.z == to_z:
+                if to_z is not None and t.to_coord.z == to_z:
                     matches += 1
-                if from_area and t.from_coord.area == from_area:
+                if from_area is not None and t.from_coord.area == from_area:
                     matches += 1
-                if to_area and t.to_coord.area == to_area:
+                if to_area is not None and t.to_coord.area == to_area:
                     matches += 1
                 if matches == required_matches:
                     result.append(t)
