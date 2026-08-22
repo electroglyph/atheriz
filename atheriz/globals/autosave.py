@@ -7,9 +7,12 @@ from atheriz.globals.get import (
 )
 from atheriz.globals.objects import save_objects
 import atheriz.settings as settings
+import threading
 import traceback
 
 _autosave_started = False
+_registered_interval: float | None = None
+_autosave_lock = threading.Lock()
 
 
 def _interval_seconds() -> float:
@@ -47,19 +50,29 @@ def autosave_tick() -> None:
 
 
 def start_autosave() -> None:
-    global _autosave_started
-    if not settings.AUTOSAVE_MINUTES or _autosave_started:
-        return
-    interval = _interval_seconds()
-    get_async_ticker().add_coro(autosave_tick, interval)
-    _autosave_started = True
+    global _autosave_started, _registered_interval
+    with _autosave_lock:
+        if not settings.AUTOSAVE_MINUTES or _autosave_started:
+            return
+        interval = _interval_seconds()
+        get_async_ticker().add_coro(autosave_tick, interval)
+        _registered_interval = interval
+        _autosave_started = True
     logger.info(f"Autosave enabled: every {settings.AUTOSAVE_MINUTES} minutes.")
 
 
 def stop_autosave() -> None:
-    global _autosave_started
-    if not _autosave_started:
-        return
-    interval = _interval_seconds()
-    get_async_ticker().remove_coro(autosave_tick, interval)
-    _autosave_started = False
+    global _autosave_started, _registered_interval
+    with _autosave_lock:
+        if not _autosave_started:
+            return
+        interval = _registered_interval
+        if interval is None:
+            logger.error(
+                "Autosave was started but no registered interval is known; "
+                "the tick cannot be removed."
+            )
+        else:
+            get_async_ticker().remove_coro(autosave_tick, interval)
+            _registered_interval = None
+        _autosave_started = False
