@@ -86,11 +86,13 @@ def run_menu(caller, start_node: MenuNode) -> None:
     try:
         while engine.current_node:
             display = engine.get_display()
+            pending = asyncio.run_coroutine_threadsafe(
+                caller.session.prompt(display), atp.loop
+            )
             try:
-                user_input = asyncio.run_coroutine_threadsafe(
-                    caller.session.prompt(display), atp.loop
-                ).result(timeout=settings.MENU_PROMPT_TIMEOUT)
+                user_input = pending.result(timeout=settings.MENU_PROMPT_TIMEOUT)
             except (concurrent.futures.CancelledError, asyncio.CancelledError, concurrent.futures.TimeoutError):
+                pending.cancel()
                 break
             if not engine.handle_input(user_input):
                 break
