@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Atheriz Draw</title>
     <!-- We link the custom font CSS directly, vite will inline it -->
-    <script type="module" crossorigin src="/assets/draw-xQsbtK-S.js"></script>
+    <script type="module" crossorigin src="/assets/draw-BPzfRX_5.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/connection-BOFTfyrJ.js">
     <link rel="stylesheet" crossorigin href="/assets/connection-BPGNQ9ZU.css">
     <link rel="stylesheet" crossorigin href="/assets/draw-CCeMaLLV.css">
@@ -172,6 +172,7 @@
             <button id="btn-color-adjust" title="Color Adjust">🎨 Adjust Color</button>
             <button id="btn-export" title="Export ANSI">💾 Export ANSI</button>
             <button id="btn-load-ansi" title="Load ANSI file">📂 Load ANSI</button>
+            <button id="btn-save-server" title="Save changes to server">💾 Save to server</button>
             <input type="file" id="ansi-upload" accept=".ans,.txt" style="display:none;" />
             <div style="flex: 1;"></div>
             <button id="btn-room-toggle" title="Show or hide room outlines">Hide Room Color</button>
@@ -196,13 +197,13 @@
       <div class="modal-content">
         <h2>New Canvas</h2>
         <div class="preset-buttons">
-          <button data-w="80" data-h="24">Small (80x24)</button>
-          <button data-w="120" data-h="40">Medium (120x40)</button>
-          <button data-w="160" data-h="50">Large (160x50)</button>
+          <button data-w="24" data-h="24">Small (24x24)</button>
+          <button data-w="40" data-h="40">Medium (40x40)</button>
+          <button data-w="50" data-h="50">Large (50x50)</button>
           <button data-w="220" data-h="50">Wide (220x50)</button>
         </div>
         <div class="custom-size">
-          <label>W: <input type="number" id="new-width" value="80" min="1"></label>
+          <label>W: <input type="number" id="new-width" value="24" min="1"></label>
           <label>H: <input type="number" id="new-height" value="24" min="1"></label>
         </div>
         <div class="modal-actions">
@@ -402,6 +403,16 @@
     </div>
 
     <!-- Color Adjust Modal -->
+    <div id="move-denied-modal" class="modal hidden">
+      <div class="modal-content" style="width: 320px;">
+        <h3>Room Move Rejected</h3>
+        <p id="move-denied-modal-message"></p>
+        <div class="modal-actions">
+          <button id="move-denied-modal-ok">OK</button>
+        </div>
+      </div>
+    </div>
+
     <div id="color-adjust-modal" class="modal hidden">
       <div class="modal-content" style="width: 350px;">
         <h2>Adjust Color</h2>
