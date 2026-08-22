@@ -1,6 +1,7 @@
 from __future__ import annotations
 import time
 import threading
+from atheriz.logger import logger
 from atheriz.objects.base_account import Account
 from typing import TYPE_CHECKING
 import asyncio
@@ -43,7 +44,10 @@ class Session:
             stack, self.puppet_stack = self.puppet_stack, []
             puppet = self.puppet
         if future and not future.done():
-            future.get_loop().call_soon_threadsafe(future.cancel)
+            try:
+                future.get_loop().call_soon_threadsafe(future.cancel)
+            except RuntimeError:
+                logger.debug("Input future's loop already closed; skipping cancel.")
         # unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while stack:
