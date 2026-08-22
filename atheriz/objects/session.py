@@ -52,7 +52,13 @@ class Session:
                 target.__dict__.update(restore)
                 del target._puppet_restore
         if puppet:
-            puppet.seconds_played += time.time() - self.conn_time
+            elapsed = time.time() - self.conn_time
+            if self.conn_time > 0.0 and elapsed > 0:
+                # Clear the session link before accruing so the seconds_played
+                # getter stops adding the live delta; otherwise this session's
+                # time is baked in twice.
+                puppet.session = None
+                puppet.seconds_played += elapsed
             puppet.at_disconnect()
         if self.account:
             self.account.at_disconnect()
