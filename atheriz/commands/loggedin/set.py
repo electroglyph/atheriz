@@ -10,13 +10,44 @@ if TYPE_CHECKING:
 
 PROTECTED_ATTRIBUTES = frozenset(
     {
+        "id",
+        "session",
         "lock",
+        "internal_cmdset",
+        "external_cmdset",
+        "scripts",
+        "hooks",
+        "channels",
+        "followers",
+        "following",
+        "is_pc",
+        "is_npc",
+        "is_item",
+        "is_container",
+        "is_mapable",
+        "is_account",
+        "is_channel",
+        "is_node",
+        "is_script",
+        "is_connected",
+        "is_deleted",
+        "is_modified",
+        "is_temporary",
+        "is_tickable",
+        "_is_tickable",
+        "password",
+        "logged_in",
+        "characters",
         "privilege_level",
         "quelled",
         "is_banned",
         "ban_reason",
     }
 )
+
+
+def _is_protected(attr: str) -> bool:
+    return attr.startswith("_") or attr in PROTECTED_ATTRIBUTES
 
 
 class SetCommand(Command):
@@ -86,7 +117,7 @@ class SetCommand(Command):
         if not hasattr(target, attr):
             caller.msg(f"Warning: '{attr}' is a new attribute on {target.name}.")
 
-        if attr in PROTECTED_ATTRIBUTES:
+        if not caller.is_superuser and _is_protected(attr):
             caller.msg(f"'{attr}' is protected and cannot be set.")
             return
 
@@ -154,7 +185,7 @@ class UnsetCommand(Command):
 
         attr = args.attribute
 
-        if attr in PROTECTED_ATTRIBUTES:
+        if not caller.is_superuser and _is_protected(attr):
             caller.msg(f"'{attr}' is protected and cannot be removed.")
             return
 
