@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from atheriz.globals.get import get_node_handler
 import heapq
+import atheriz.settings as settings
 
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
@@ -70,8 +71,8 @@ def astar(
             for l in node.links:
                 if doors:
                     d = doors.get(l.name)
-                    if d and d.closed:
-                        if not d.access(caller, "open"):
+                    if d:
+                        if d.closed and not d.access(caller, "open"):
                             continue
                         if d.locked and not d.access(caller, "unlock"):
                             continue
@@ -91,7 +92,7 @@ def astar(
     grid = start.grid
     if not grid:
         return False, [], []
-    max_iterations = len(grid) * 100
+    max_iterations = settings.MAX_ASTAR_ITERATIONS
     heapq.heapify(open_list)
     heapq.heappush(open_list, start_node)
     current_node = start_node
@@ -101,7 +102,7 @@ def astar(
         if current_node.position == end_node.position:
             return True, get_path(current_node), list(closed_set)
         if iterations > max_iterations:
-            return False, get_path(current_node), list(closed_set)
+            return False, [], list(closed_set)
         children = []
         nodes = (
             get_link_nodes(current_node.position)
@@ -115,13 +116,14 @@ def astar(
             if child.position.coord in closed_set:
                 continue
             child.g = current_node.g + 1
-            child.h = (
-                abs(child.position.coord.x - end_node.position.coord.x)
-                + abs(child.position.coord.y - end_node.position.coord.y)
-                + abs(child.position.coord.z - end_node.position.coord.z)
-            )
-            if child.position.coord.area != end_node.position.coord.area:  # coord = Coord
-                child.h += 50
+            if child.position.coord.area == end_node.position.coord.area:
+                child.h = (
+                    abs(child.position.coord.x - end_node.position.coord.x)
+                    + abs(child.position.coord.y - end_node.position.coord.y)
+                    + abs(child.position.coord.z - end_node.position.coord.z)
+                )
+            else:
+                child.h = 0
             child.f = child.g + child.h
             existing = open_by_pos.get(child.position.coord)
             if existing:
@@ -134,10 +136,10 @@ def astar(
                 heapq.heappush(open_list, child)
                 open_by_pos[child.position.coord] = child
         if len(open_list) == 0:
-            return False, get_path(current_node), list(closed_set)
+            return False, [], list(closed_set)
         current_node = heapq.heappop(open_list)
         while current_node.position.coord not in open_by_pos:
             if not open_list:
-                return False, get_path(current_node), list(closed_set)
+                return False, [], list(closed_set)
             current_node = heapq.heappop(open_list)
         del open_by_pos[current_node.position.coord]

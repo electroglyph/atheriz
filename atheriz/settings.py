@@ -81,6 +81,8 @@ FUNCPARSER_ESCAPE_CHAR = "\\"
 FUNCPARSER_MAX_NESTING = 20
 # max recursion depth when searching nested containers; guards against stack overflow
 MAX_SEARCH_DEPTH = 100
+# maximum iterations for A* pathfinding; aborts with no path if exceeded — guards against CPU exhaustion on large worlds
+MAX_ASTAR_ITERATIONS = 50000
 CLIENT_DEFAULT_WIDTH = 78
 CLIENT_DEFAULT_HEIGHT = 45
 # print exceptions in-game
