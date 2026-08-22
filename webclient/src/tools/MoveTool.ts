@@ -14,21 +14,23 @@ export class MoveTool implements Tool {
         this.movingCells = [];
 
         if (selected && selected.size > 0) {
-            // Move only the cells within selection on the active layer
+            // Move every selected cell on the active layer — including empty
+            // ones — so room coords (which sit on glyph-less interior cells)
+            // are reported to onCellsMoved and their outlines move with them
             for (const key of selected) {
                 const [col, row] = key.split(',').map(Number);
                 const cell = ctx.state.getCell(col, row);
-                if (cell) {
-                    const originCell = { 
-                        char: cell.char, 
-                        fg: [...cell.fg] as [number, number, number], 
+                const originCell = cell
+                    ? {
+                        char: cell.char,
+                        fg: [...cell.fg] as [number, number, number],
                         bg: [...cell.bg] as [number, number, number],
                         bold: cell.bold,
                         italic: cell.italic,
                         underline: cell.underline
-                    };
-                    this.movingCells.push({ col, row, originCell });
-                }
+                    }
+                    : { char: '', fg: [204, 204, 204] as [number, number, number], bg: [-1, -1, -1] as [number, number, number] };
+                this.movingCells.push({ col, row, originCell });
             }
         } else {
             // Move everything on the active layer that is non-empty
@@ -117,6 +119,17 @@ export class MoveTool implements Tool {
         }));
 
         ctx.state.applyBatch([...clearUpdates, ...placeUpdates]);
+
+        if (ctx.onCellsMoved) {
+            ctx.onCellsMoved(
+                this.movingCells.map(mc => ({
+                    fromCol: mc.col,
+                    fromRow: mc.row,
+                    toCol: mc.col + dx,
+                    toRow: mc.row + dy
+                }))
+            );
+        }
 
         // 3. Move the selection outline if any
         let selected = ctx.renderer.getSelectedCells();

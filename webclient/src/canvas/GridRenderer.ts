@@ -92,6 +92,10 @@ export class GridRenderer {
         this.render();
     }
 
+    public getRoomCells(): Set<string> {
+        return this.roomCells;
+    }
+
     public setRoomColor(color: string) {
         this.roomColor = color;
         this.render();

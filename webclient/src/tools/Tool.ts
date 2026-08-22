@@ -3,6 +3,13 @@ import { CanvasState } from '../state/CanvasState';
 import { UndoStack } from '../state/UndoStack';
 import { GridRenderer } from '../canvas/GridRenderer';
 
+export interface CellMove {
+    fromCol: number;
+    fromRow: number;
+    toCol: number;
+    toRow: number;
+}
+
 export interface ToolContext {
     state: CanvasState;
     undoStack: UndoStack;
@@ -13,6 +20,7 @@ export interface ToolContext {
         altKey: boolean;
         ctrlKey: boolean;
     };
+    onCellsMoved?: (moves: CellMove[]) => void;
 }
 
 export interface Tool {

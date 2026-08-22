@@ -222,8 +222,14 @@ export class SelectionTool implements Tool {
     }
 
     private filterNonEmpty(ctx: ToolContext, cells: Set<string>): Set<string> {
+        // room cells are meaningful even without ink — never drop them
+        const roomCells = ctx.renderer.getRoomCells?.() ?? new Set<string>();
         const result = new Set<string>();
         for (const k of cells) {
+            if (roomCells.has(k)) {
+                result.add(k);
+                continue;
+            }
             const [col, row] = k.split(',').map(Number);
             const cell = ctx.state.getCell(col, row);
             if (cell && ((cell.char && cell.char.trim() !== '') || (cell.bg[0] !== -1 && !(cell.bg[0] === 0 && cell.bg[1] === 0 && cell.bg[2] === 0)))) {

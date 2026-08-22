@@ -104,7 +104,7 @@ describe('loadMapPayload', () => {
         const canvas = makeCanvas();
         const payload: MapEditPayload = { area: 'TestArea', z: 0, grid: [] };
         const origin = loadMapPayload(canvas, payload);
-        expect(origin).toEqual({ originX: 0, originY: 0, roomCells: new Set() });
+        expect(origin).toEqual({ originX: 0, originY: 0, roomCells: new Set(), rooms: [] });
         expect(canvas.width).toBe(1);
         expect(canvas.height).toBe(1);
     });
@@ -338,6 +338,155 @@ describe('MapEditSession', () => {
         holder.socket.open();
         ack(holder.socket, 5, 'K99');
         expect(holder.socket.sent).toEqual(['["map_edit",["K0",0,[]],{}]']);
+        session.dispose();
+    });
+});
+
+describe('MapEditSession room moves', () => {
+    interface MoveEvt { type: string; moves?: { fromX: number; fromY: number; toX: number; toY: number }[]; message?: string }
+
+    function makeRoomSession(key = 'K0') {
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const origin = {
+            originX: 0,
+            originY: 0,
+            roomCells: new Set(['3,3']),
+            rooms: [{ x: 3, y: 3, desc: 'Hall', exits: [] }],
+        };
+        const session = new MapEditSession(key, canvas, origin, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+        return { holder, canvas, session };
+    }
+
+    function feed(socket: FakeSocket, wire: string): void {
+        socket.onmessage?.(new MessageEvent('message', { data: wire }));
+    }
+
+    it('validates room moves and folds follow-up drags through pending moves', () => {
+        const { holder, session } = makeRoomSession();
+        session.validateRoomMoves([{ fromX: 3, fromY: 3, toX: 4, toY: 3 }]);
+        expect(holder.socket.sent[1]).toBe('["map_validate_moves",["K1",1,[[3,3,4,3]],[]],{}]');
+
+        feed(holder.socket, '["moves_ok",[1,"K2"],{}]');
+        // the server has not received a save yet, so a second drag of the
+        // same room must be expressed against its original coordinate
+        session.validateRoomMoves([{ fromX: 4, fromY: 3, toX: 5, toY: 3 }]);
+        expect(holder.socket.sent[2]).toBe('["map_validate_moves",["K2",2,[[3,3,5,3]],[[3,3,4,3]]],{}]');
+        session.dispose();
+    });
+
+    it('sends pending moves as context so chains across drags validate', () => {
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const origin = {
+            originX: 0,
+            originY: 0,
+            roomCells: new Set(['3,3']),
+            rooms: [
+                { x: 3, y: 3, desc: 'A', exits: [] },
+                { x: 10, y: 10, desc: 'B', exits: [] },
+            ],
+        };
+        const session = new MapEditSession('K0', canvas, origin, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        // A moves onto free space (pending, unsaved)
+        session.validateRoomMoves([{ fromX: 3, fromY: 3, toX: 4, toY: 3 }]);
+        feed(holder.socket, '["moves_ok",[1,"K2"],{}]');
+        // B then moves onto A's now-vacated origin: context tells the server
+        // A's pending move vacates it, so this must not be denied
+        session.validateRoomMoves([{ fromX: 10, fromY: 10, toX: 3, toY: 3 }]);
+        expect(holder.socket.sent[2]).toBe(
+            '["map_validate_moves",["K2",2,[[10,10,3,3]],[[3,3,4,3]]],{}]'
+        );
+        session.dispose();
+    });
+
+    it('ignores moves that do not start on a known room', () => {
+        const { holder, session } = makeRoomSession();
+        session.validateRoomMoves([{ fromX: 0, fromY: 0, toX: 1, toY: 0 }]);
+        expect(holder.socket.sent.length).toBe(1);
+        session.dispose();
+    });
+
+    it('emits moves_denied with the client moves and drops them from pending', () => {
+        const { holder, session } = makeRoomSession();
+        const events: MoveEvt[] = [];
+        session.onEvent((e) => events.push(e as MoveEvt));
+        session.validateRoomMoves([{ fromX: 3, fromY: 3, toX: 9, toY: 9 }]);
+        feed(holder.socket, '["moves_denied",[1,"K2",[0]],{}]');
+
+        expect(events.filter((e) => e.type === 'moves_denied')).toEqual([
+            { type: 'moves_denied', moves: [{ fromX: 3, fromY: 3, toX: 9, toY: 9 }] },
+        ]);
+
+        // nothing pending and no glyph diff -> saving reports there is nothing
+        session.saveToServer();
+        expect(events.some((e) => e.type === 'error' && e.message === 'Nothing to save.')).toBe(true);
+        expect(holder.socket.sent.length).toBe(2);
+        session.dispose();
+    });
+
+    it('saves glyph diffs and validated room ops in one batch and clears them on ack', () => {
+        const { holder, canvas, session } = makeRoomSession();
+        const events: MoveEvt[] = [];
+        session.onEvent((e) => events.push(e as MoveEvt));
+
+        session.validateRoomMoves([{ fromX: 3, fromY: 3, toX: 4, toY: 3 }]);
+        feed(holder.socket, '["moves_ok",[1,"K2"],{}]');
+
+        // unsynced glyph change + pending move go out in one batch
+        canvas.setCell(0, 0, { char: 'X', fg: [255, 0, 0], bg: [-1, -1, -1] });
+        session.saveToServer();
+        expect(holder.socket.sent[2]).toBe(
+            '["map_edit",["K2",2,[[0,0,"X",[255,0,0],[0,0,0],[]],["room",3,3,4,3]]],{}]'
+        );
+        expect(events.some((e) => e.type === 'saved')).toBe(false);
+
+        ack(holder.socket, 2, 'K3');
+        expect(events.some((e) => e.type === 'saved')).toBe(true);
+
+        // pending moves consumed: another save has nothing to send
+        session.saveToServer();
+        expect(events.some((e) => e.type === 'error' && e.message === 'Nothing to save.')).toBe(true);
+        expect(holder.socket.sent.length).toBe(3);
+        session.dispose();
+    });
+
+    it('keeps allowed moves pending when only some are denied', () => {
+        const holder = makeSocketHolder();
+        const canvas = makeCanvas();
+        const origin = {
+            originX: 0,
+            originY: 0,
+            roomCells: new Set(['3,3', '10,10']),
+            rooms: [
+                { x: 3, y: 3, desc: 'Hall', exits: [] },
+                { x: 10, y: 10, desc: 'Kitchen', exits: [] },
+            ],
+        };
+        const session = new MapEditSession('K0', canvas, origin, holder.createSocket);
+        holder.socket.open();
+        ack(holder.socket, 0, 'K1');
+
+        const events: MoveEvt[] = [];
+        session.onEvent((e) => events.push(e as MoveEvt));
+        session.validateRoomMoves([
+            { fromX: 3, fromY: 3, toX: 4, toY: 3 },
+            { fromX: 10, fromY: 10, toX: 20, toY: 20 },
+        ]);
+        feed(holder.socket, '["moves_denied",[1,"K2",[1]],{}]');
+
+        expect(events.filter((e) => e.type === 'moves_denied')).toEqual([
+            { type: 'moves_denied', moves: [{ fromX: 10, fromY: 10, toX: 20, toY: 20 }] },
+        ]);
+
+        // only the allowed move survives in pending
+        session.saveToServer();
+        expect(holder.socket.sent[2]).toBe('["map_edit",["K2",2,[["room",3,3,4,3]]],{}]');
         session.dispose();
     });
 });

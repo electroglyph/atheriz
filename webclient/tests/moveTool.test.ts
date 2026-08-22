@@ -94,4 +94,74 @@ describe('MoveTool operates on the correct layer', () => {
     // nothing on the active layer moves.
     expect(state.getCompositeCell(1, 1)!.char).toBe('A');
   });
+
+  it('reports moved cells through onCellsMoved', () => {
+    const state = new CanvasState(5, 5);
+    state.addLayer('foreground');
+    state.setCell(1, 1, { char: 'A', fg: [255, 255, 255], bg: [0, 0, 0] });
+    state.setCell(2, 1, { char: 'B', fg: [255, 255, 255], bg: [0, 0, 0] });
+
+    let selection = new Set(['1,1', '2,1']);
+    const renderer = {
+      getSelectedCells: () => selection,
+      setSelection: (s: Set<string>) => { selection = s; },
+      clearSelection: () => { selection = new Set(); },
+      setPreview: () => {},
+      clearPreview: () => {},
+    } as unknown as GridRenderer;
+
+    const moved: { fromCol: number; fromRow: number; toCol: number; toRow: number }[] = [];
+    const ctx: ToolContext = {
+      state,
+      undoStack: new UndoStack(),
+      renderer,
+      appState: makeAppState(),
+      modifiers: { shiftKey: false, altKey: false, ctrlKey: false },
+      onCellsMoved: (m) => moved.push(...m),
+    };
+
+    const tool = new MoveTool();
+    tool.onMouseDown(ctx, { x: 1, y: 1 });
+    tool.onMouseUp(ctx, { x: 3, y: 2 });
+
+    expect(moved).toEqual([
+      { fromCol: 1, fromRow: 1, toCol: 3, toRow: 2 },
+      { fromCol: 2, fromRow: 1, toCol: 4, toRow: 2 },
+    ]);
+  });
+
+  it('reports empty selected cells so glyph-less rooms move with the selection', () => {
+    const state = new CanvasState(5, 5);
+    state.addLayer('foreground');
+    state.setCell(1, 1, { char: '#', fg: [255, 255, 255], bg: [0, 0, 0] });
+    // (2,1) is a selected but completely empty room cell
+
+    let selection = new Set(['1,1', '2,1']);
+    const renderer = {
+      getSelectedCells: () => selection,
+      setSelection: (s: Set<string>) => { selection = s; },
+      clearSelection: () => { selection = new Set(); },
+      setPreview: () => {},
+      clearPreview: () => {},
+    } as unknown as GridRenderer;
+
+    const moved: { fromCol: number; fromRow: number; toCol: number; toRow: number }[] = [];
+    const ctx: ToolContext = {
+      state,
+      undoStack: new UndoStack(),
+      renderer,
+      appState: makeAppState(),
+      modifiers: { shiftKey: false, altKey: false, ctrlKey: false },
+      onCellsMoved: (m) => moved.push(...m),
+    };
+
+    const tool = new MoveTool();
+    tool.onMouseDown(ctx, { x: 1, y: 1 });
+    tool.onMouseUp(ctx, { x: 3, y: 1 });
+
+    expect(moved).toEqual([
+      { fromCol: 1, fromRow: 1, toCol: 3, toRow: 1 },
+      { fromCol: 2, fromRow: 1, toCol: 4, toRow: 1 },
+    ]);
+  });
 });

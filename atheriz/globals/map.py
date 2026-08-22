@@ -254,6 +254,12 @@ class MapInfo:
     def batch_update(self):
         with self.lock:
             self._batch_update += 1
+            # post_grid-only maps (e.g. generated buildings have no
+            # placeholders) must be seeded into pre_grid before the first
+            # edit, or the render on exit would replace post_grid with just
+            # the edited cells and wipe everything untouched.
+            if not self.pre_grid and self.post_grid:
+                self.pre_grid = copy.deepcopy(self.post_grid)
         try:
             yield
         finally:

@@ -18,6 +18,10 @@ class MapEditChain:
         self.ip = ip
         self.area = area
         self.z = z
+        # outcome of the last processed map_validate_moves (list of denied
+        # move indices, empty when all were allowed) so a lost ack can be
+        # replayed verbatim
+        self.validation: list[int] | None = None
 
 
 class MapEditResult:

@@ -16,6 +16,7 @@ import { FillTool } from './tools/FillTool';
 import { SelectionTool } from './tools/SelectionTool';
 import { EyedropperTool } from './tools/EyedropperTool';
 import { MoveTool } from './tools/MoveTool';
+import { MessageDialog } from './ui/MessageDialog';
 import { RotateTool } from './tools/RotateTool';
 
 import { CharPalette } from './ui/CharPalette';
@@ -77,18 +78,13 @@ function initApp() {
     let mapEditSession: MapEditSession | null = null;
     let mapEditOrigin: MapEditOrigin | null = null;
     let mapPayload: MapEditPayload | null = null;
+    let roomCellSet: Set<string> | null = null;
     if (grant) {
         const payload = grant.payload as MapEditPayload;
         mapPayload = payload;
         mapEditOrigin = loadMapPayload(canvasState, payload);
         mapEditSession = new MapEditSession(grant.key, canvasState, mapEditOrigin);
-        mapEditSession.onEvent((event) => {
-            if (event.type === 'reject') {
-                console.warn(`Map edit rejected (${event.reason}). Re-run 'mapedit' in-game.`);
-            } else if (event.type === 'error') {
-                console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
-            }
-        });
+        roomCellSet = new Set(mapEditOrigin.roomCells);
         clearDrawGrant();
     }
 
@@ -99,7 +95,7 @@ function initApp() {
     const renderer = new GridRenderer(canvasEl, canvasState, metrics);
 
     if (mapEditOrigin) {
-        renderer.setRoomCells(mapEditOrigin.roomCells);
+        renderer.setRoomCells(roomCellSet ?? mapEditOrigin.roomCells);
     }
     if (mapPayload) {
         logRoomData(mapPayload);
@@ -112,6 +108,28 @@ function initApp() {
         appState,
         modifiers: { shiftKey: false, altKey: false, ctrlKey: false }
     };
+
+    context.onCellsMoved = (moves) => {
+        if (!mapEditSession || !mapEditOrigin) return;
+        const worldMoves = moves.map((m) => ({
+            fromX: m.fromCol + mapEditOrigin!.originX,
+            fromY: canvasState.height - 1 - m.fromRow + mapEditOrigin!.originY,
+            toX: m.toCol + mapEditOrigin!.originX,
+            toY: canvasState.height - 1 - m.toRow + mapEditOrigin!.originY,
+        }));
+        if (roomCellSet) {
+            for (const m of moves) {
+                const key = `${m.fromCol},${m.fromRow}`;
+                if (roomCellSet.has(key)) {
+                    roomCellSet.delete(key);
+                    roomCellSet.add(`${m.toCol},${m.toRow}`);
+                }
+            }
+            renderer.setRoomCells(roomCellSet);
+        }
+        mapEditSession.validateRoomMoves(worldMoves);
+    };
+
 
     const textToolDialog = new TextToolDialog(appState, canvasState, (newState) => {
         undoStack.push(canvasState);
@@ -176,6 +194,53 @@ function initApp() {
     new GradientPicker('gradient-picker-container', appState);
 
     const layerManager = new LayerManager('layer-manager-container', canvasState, undoStack);
+
+    const moveDeniedDialog = new MessageDialog('move-denied-modal');
+
+    // Safe to register here: websocket events are async and cannot fire
+    // before the synchronous setup below this point has completed.
+    mapEditSession?.onEvent((event) => {
+        if (event.type === 'reject') {
+            console.warn(`Map edit rejected (${event.reason}). Re-run 'mapedit' in-game.`);
+        } else if (event.type === 'error') {
+            console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
+        } else if (event.type === 'saved') {
+            console.log('Saved to server.');
+        } else if (event.type === 'moves_denied') {
+            console.warn('Room move denied by server — snapping back.');
+            const restored = undoStack.undo();
+            if (restored) {
+                canvasState = restored;
+                context.state = restored;
+                renderer.updateState(restored);
+                layerManager.updateState(restored);
+            }
+            if (roomCellSet && mapEditOrigin) {
+                for (const m of event.moves) {
+                    const toCol = m.toX - mapEditOrigin.originX;
+                    const toRow = canvasState.height - 1 - (m.toY - mapEditOrigin.originY);
+                    const fromCol = m.fromX - mapEditOrigin.originX;
+                    const fromRow = canvasState.height - 1 - (m.fromY - mapEditOrigin.originY);
+                    const key = `${toCol},${toRow}`;
+                    if (roomCellSet.has(key)) {
+                        roomCellSet.delete(key);
+                        roomCellSet.add(`${fromCol},${fromRow}`);
+                    }
+                }
+                renderer.setRoomCells(roomCellSet);
+            }
+            const maxListed = 5;
+            const listed = event.moves
+                .slice(0, maxListed)
+                .map((m) => `(${m.toX}, ${m.toY})`)
+                .join(', ');
+            const extra = event.moves.length > maxListed ? ` and ${event.moves.length - maxListed} more` : '';
+            moveDeniedDialog.show(
+                `The server rejected moving ${event.moves.length === 1 ? 'a room' : `${event.moves.length} rooms`} `
+                + `to ${listed}${extra} — destination occupied. Your changes were undone.`
+            );
+        }
+    });
 
     const toolbarInst = new Toolbar(appState, undoStack, () => {
         AnsiExporter.download(canvasState, 'art.ans');
@@ -295,6 +360,16 @@ function initApp() {
     const btnLoadAnsi = document.getElementById('btn-load-ansi');
     const ansiUpload = document.getElementById('ansi-upload') as HTMLInputElement;
     btnLoadAnsi?.addEventListener('click', () => ansiUpload?.click());
+
+    const btnSaveServer = document.getElementById('btn-save-server');
+    btnSaveServer?.addEventListener('click', () => {
+        if (!mapEditSession) {
+            console.warn('No map edit session — re-run mapedit in-game.');
+            return;
+        }
+        mapEditSession.saveToServer();
+    });
+
     ansiUpload?.addEventListener('change', () => {
         const file = ansiUpload.files?.[0];
         if (!file) return;

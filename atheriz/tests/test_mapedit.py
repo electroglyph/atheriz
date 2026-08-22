@@ -7,7 +7,7 @@ from atheriz.commands.loggedin.mapedit import DrawCommand
 from atheriz.globals import mapedit
 from atheriz.globals.map import MapInfo
 from atheriz.inputfuncs import InputFuncs
-from atheriz.objects.nodes import Node, NodeLink
+from atheriz.objects.nodes import Node, NodeGrid, NodeLink
 from atheriz.tests.fakes import FakeConnection, FakeSession
 from atheriz.utils import Coord
 
@@ -427,7 +427,215 @@ def test_map_edit_reject_replay():
 
 def test_map_edit_malformed_args_are_ignored():
     conn = make_conn()
-    for args in ([], ["key"], [123, 0, []], ["key", "0", []], ["key", 0, "cells"], ["key", 0, [[1]]], ["key", 0, [["a", "b", "c"]]], ["key", 0, [[0, 0, 1]]]):
+    for args in ([], ["key"], [123, 0, []], ["key", "0", []], ["key", 0, "cells"], ["key", 0, [[1]]], ["key", 0, [["a", "b", "c"]]], ["key", 0, [[0, 0, 1]]], ["key", 0, [["room", 0, 0]]]):
         with patch("atheriz.inputfuncs.get_map_handler", return_value=MockMapHandler()):
             InputFuncs().map_edit(conn, args, {})
     assert conn.sent == []
+
+
+# ==================== Room move inputfunc tests ====================
+
+
+class FakeNodeHandler:
+    def __init__(self):
+        self.doors = {}
+        self.transitions = {}
+        self.lock3 = RLock()
+        self.lock2 = RLock()
+
+    def add_transition(self, transition):
+        with self.lock2:
+            self.transitions[transition.to_coord] = transition
+
+    def remove_transition(self, destination):
+        with self.lock2:
+            self.transitions.pop(destination, None)
+
+
+def make_node_area(*nodes):
+    grid = NodeGrid("TestArea", 0)
+    for n in nodes:
+        grid.nodes[(n.coord.x, n.coord.y)] = n
+
+    class MockNodeArea:
+        def get_grid(self, z):
+            return grid if z == 0 else None
+
+    area = MockNodeArea()
+
+    class Handler(FakeNodeHandler):
+        def get_area(self, name):
+            return area
+
+    return Handler()
+
+
+def handshake(conn):
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    InputFuncs().map_edit(conn, [key, 0, []], {})
+    return conn.sent[-1][1][1]
+
+
+def test_map_edit_room_op_moves_node():
+    room = Node(coord=Coord("TestArea", 0, 0, 0), desc="A room.")
+    neighbor = Node(coord=Coord("TestArea", 1, 0, 0))
+    neighbor.links.append(NodeLink(name="West", coord=Coord("TestArea", 0, 0, 0)))
+    nh = make_node_area(room, neighbor)
+    conn = make_conn()
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh), patch(
+        "atheriz.inputfuncs.get_node_handler", return_value=nh
+    ), patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+        InputFuncs().map_edit(conn, [key, 1, [["room", 0, 0, 5, 2]]], {})
+    assert len(conn.sent) == 2
+    assert conn.sent[1][0] == "map_ack"
+    assert conn.sent[1][1][0] == 1
+    assert grid_of(nh).get_node((0, 0)) is None
+    moved = grid_of(nh).get_node((5, 2))
+    assert moved is room
+    assert moved.coord == Coord("TestArea", 5, 2, 0)
+    assert neighbor.links[0].coord == Coord("TestArea", 5, 2, 0)
+
+
+def grid_of(nh):
+    return nh.get_area("TestArea").get_grid(0)
+
+
+def test_map_validate_moves_allowed():
+    nh = make_node_area(Node(coord=Coord("TestArea", 3, 3, 0)))
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[3, 3, 4, 3]]], {})
+    assert len(conn.sent) == 2
+    assert conn.sent[1][0] == "moves_ok"
+    seq, new_key = conn.sent[1][1][0], conn.sent[1][1][1]
+    assert seq == 1
+    assert mapedit._chains[new_key].seq == 1
+
+
+def test_map_validate_moves_denied():
+    nh = make_node_area(
+        Node(coord=Coord("TestArea", 3, 3, 0)),
+        Node(coord=Coord("TestArea", 4, 3, 0)),
+    )
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[3, 3, 4, 3]]], {})
+    assert len(conn.sent) == 2
+    assert conn.sent[1][0] == "moves_denied"
+    seq, new_key, denied = conn.sent[1][1]
+    assert (seq, denied) == (1, [0])
+    # nothing was applied
+    assert grid_of(nh).get_node((3, 3)) is not None
+    assert grid_of(nh).get_node((4, 3)) is not None
+
+
+def test_map_validate_moves_retry_resends_verdict():
+    nh = make_node_area(
+        Node(coord=Coord("TestArea", 3, 3, 0)),
+        Node(coord=Coord("TestArea", 4, 3, 0)),
+    )
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[3, 3, 4, 3]]], {})
+        verdict_key = conn.sent[1][1][1]
+        # replaying the same message (ack lost) must resend the same verdict
+        InputFuncs().map_validate_moves(conn, [key, 1, [[3, 3, 4, 3]]], {})
+    assert len(conn.sent) == 3
+    assert conn.sent[2] == conn.sent[1]
+    assert mapedit._chains[verdict_key].validation == [0]
+
+
+def test_map_validate_moves_unknown_area_denies_all():
+    conn = make_conn()
+    key = handshake(conn)
+
+    class EmptyHandler(FakeNodeHandler):
+        def get_area(self, name):
+            return None
+
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=EmptyHandler()):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[0, 0, 1, 0]]], {})
+    assert conn.sent[1][0] == "moves_denied"
+    assert conn.sent[1][1][2] == [0]
+
+
+# ==================== map_validate_moves context tests ====================
+
+
+def test_map_validate_moves_context_frees_vacated_destination():
+    # A at (0,0); editor has pending unsaved A:(0,0)->(5,5); dragging B
+    # (1,0)->(0,0) must be allowed because the context vacates it
+    nh = make_node_area(
+        Node(coord=Coord("TestArea", 0, 0, 0)),
+        Node(coord=Coord("TestArea", 1, 0, 0)),
+    )
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(
+            conn,
+            [key, 1, [[1, 0, 0, 0]], [[0, 0, 5, 5]]],
+            {},
+        )
+    assert len(conn.sent) == 2
+    assert conn.sent[1][0] == "moves_ok"
+    assert conn.sent[1][1][0] == 1
+    # nothing was applied
+    assert grid_of(nh).get_node((0, 0)) is not None
+    assert grid_of(nh).get_node((5, 5)) is None
+
+
+def test_map_validate_moves_without_context_still_denies():
+    nh = make_node_area(
+        Node(coord=Coord("TestArea", 0, 0, 0)),
+        Node(coord=Coord("TestArea", 1, 0, 0)),
+    )
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[1, 0, 0, 0]]], {})
+    assert conn.sent[1][0] == "moves_denied"
+    assert conn.sent[1][1][2] == [0]
+
+
+def test_map_validate_moves_malformed_context_drops_message():
+    nh = make_node_area(Node(coord=Coord("TestArea", 3, 3, 0)))
+    conn = make_conn()
+    key = handshake(conn)
+    for bad_context in ("nope", [["room", 0]], [[0, 0]], ["x"], [[[1, 2, 3, 4]]], [[0, 0, "a", "b"]]):
+        with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+            InputFuncs().map_validate_moves(conn, [key, 1, [[3, 3, 4, 3]], bad_context], {})
+    # only the handshake ever produced output
+    assert len(conn.sent) == 1
+
+
+def test_map_validate_moves_extra_args_dropped():
+    conn = make_conn()
+    key = handshake(conn)
+    InputFuncs().map_validate_moves(conn, [key, 1, [[0, 0, 1, 0]], [], ["extra"]], {})
+    assert len(conn.sent) == 1
+
+
+def test_map_validate_moves_retry_replays_verdict_with_context():
+    nh = make_node_area(
+        Node(coord=Coord("TestArea", 0, 0, 0)),
+        Node(coord=Coord("TestArea", 1, 0, 0)),
+    )
+    conn = make_conn()
+    key = handshake(conn)
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [key, 1, [[1, 0, 0, 0]], [[0, 0, 9, 9]]], {})
+        verdict_key = conn.sent[1][1][1]
+        # ack lost: replay of the same seq must resend the identical verdict
+        InputFuncs().map_validate_moves(conn, [key, 1, [[1, 0, 0, 0]], [[0, 0, 9, 9]]], {})
+    assert len(conn.sent) == 3
+    assert conn.sent[2] == conn.sent[1]
+    chain = mapedit._chains[verdict_key]
+    assert chain.validation == []

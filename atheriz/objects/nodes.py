@@ -29,6 +29,7 @@ from atheriz.utils import Coord
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
+    from atheriz.objects.base_door import Door
 
 _MSG_CONTENTS_PARSER = funcparser.FuncParser(funcparser.ACTOR_STANCE_CALLABLES)
 
@@ -947,6 +948,140 @@ class NodeGrid:
     def get_node(self, coord: tuple[int, int]) -> Node | None:
         with self.lock:
             return self.nodes.get(coord)
+
+    def check_moves(
+        self,
+        moves: list[tuple[tuple[int, int], tuple[int, int]]],
+        context: list[tuple[tuple[int, int], tuple[int, int]]] | None = None,
+    ) -> set[int]:
+        """Validate a batch of room moves against this grid.
+
+        A move is valid when its source holds a node, its source is not
+        used by another move in the batch, and its destination is either
+        empty or itself being vacated by the batch (chains and swaps).
+
+        context lists moves that are pending but not yet applied on the
+        server (the editor's unsaved changes). They are simulated first so
+        destinations vacated by them count as free; genuine collisions with
+        rooms the context does not move are still denied.
+        Returns the indices of invalid moves."""
+        failed: set[int] = set()
+        with self.lock:
+            # virtual occupancy: server state adjusted by the pending context
+            occupied = set(self.nodes.keys())
+            if context:
+                for ctx_src, ctx_dst in context:
+                    occupied.discard(ctx_src)
+                    occupied.add(ctx_dst)
+            sources = [src for src, _ in moves]
+            for i, (src, dst) in enumerate(moves):
+                if src in sources[:i] or sources.count(src) > 1:
+                    failed.add(i)
+                    continue
+                if src not in occupied:
+                    failed.add(i)
+                    continue
+                if dst in occupied and dst not in sources:
+                    failed.add(i)
+        return failed
+
+    def apply_moves(self, moves: list[tuple[tuple[int, int], tuple[int, int]]]) -> list[int]:
+        """Apply a batch of room moves: [(from_xy, to_xy), ...].
+
+        Sources are vacated before destinations are filled so chains and
+        swaps work. Re-keys inbound neighbor links and doors. Returns the
+        indices of moves that could not be applied (nothing is changed
+        for those)."""
+        failed = self.check_moves(moves)
+        applied = [(src, dst) for i, (src, dst) in enumerate(moves) if i not in failed]
+        if not applied:
+            return list(failed)
+        remap: dict[tuple[int, int], tuple[int, int]] = {}
+        with self.lock:
+            moved: list[tuple[Node, tuple[int, int]]] = []
+            for src, dst in applied:
+                node = self.nodes.pop(src)
+                moved.append((node, dst))
+                remap[src] = dst
+            self.is_modified = True
+            old_to_new: dict[Coord, Coord] = {}
+            for node, dst in moved:
+                new_coord = Coord(self.area, dst[0], dst[1], self.z)
+                old_to_new[node.coord] = new_coord
+                node.coord = new_coord
+                self.nodes[dst] = node
+            # rewrite every link in this grid that points at a moved coord
+            # (covers neighbors' inbound links and links between moved rooms)
+            affected: dict[int, Node] = {id(node): node for node, _ in moved}
+            for other in self.nodes.values():
+                with other.lock:
+                    rewritten = False
+                    for i, link in enumerate(other.links):
+                        hit = old_to_new.get(link.coord)
+                        if hit is not None:
+                            other.links[i] = NodeLink(name=link.name, coord=hit, aliases=link.aliases)
+                            rewritten = True
+                    if rewritten:
+                        affected[id(other)] = other
+        # re-key doors registered on the moved coords
+        nh = get_node_handler()
+        with nh.lock3:
+            old_to_new_full = {
+                Coord(self.area, ox, oy, self.z): Coord(self.area, nx, ny, self.z)
+                for (ox, oy), (nx, ny) in remap.items()
+            }
+            relocated: dict[Coord, dict[str, Door]] = {}
+            for old_full in old_to_new_full:
+                doors_dict = nh.doors.pop(old_full, None)
+                if doors_dict:
+                    relocated[old_to_new_full[old_full]] = doors_dict
+            for new_full, doors_dict in relocated.items():
+                existing = nh.doors.get(new_full)
+                if existing is None:
+                    nh.doors[new_full] = doors_dict
+                else:
+                    existing.update(doors_dict)
+            # keep the map glyph anchored to its rooms: a stale symbol_coord
+            # would make the next open/close re-stamp the door glyph at its
+            # pre-move position. The symbol shifts by the same delta as the
+            # remapped endpoint(s).
+            seen_doors: set[int] = set()
+            for doors_dict in relocated.values():
+                for door in doors_dict.values():
+                    if id(door) in seen_doors:
+                        continue
+                    seen_doors.add(id(door))
+                    dx = dy = 0
+                    if door.from_coord in old_to_new_full:
+                        new = old_to_new_full[door.from_coord]
+                        dx, dy = new.x - door.from_coord.x, new.y - door.from_coord.y
+                        door.from_coord = new
+                    if door.to_coord in old_to_new_full:
+                        new = old_to_new_full[door.to_coord]
+                        dx, dy = new.x - door.to_coord.x, new.y - door.to_coord.y
+                        door.to_coord = new
+                    if door.symbol_coord and (dx or dy):
+                        door.symbol_coord = (door.symbol_coord[0] + dx, door.symbol_coord[1] + dy)
+        # refresh cross-area transitions: drop ones keyed on moved coords,
+        # then re-register every cross-area link leaving this grid
+        with self.lock:
+            cross_links = [
+                (node, link)
+                for node in self.nodes.values()
+                for link in node.links
+                if link.coord.area != self.area
+            ]
+        for old_full in old_to_new_full:
+            nh.remove_transition(old_full)
+        for node, link in cross_links:
+            nh.add_transition(Transition(node.coord, link.coord, link.name))
+        # rebuild ExitCommands on occupants of affected rooms so their cached
+        # location/destination coords reflect the move (contents reference the
+        # Node object, so they survive the re-key — only the commands are stale)
+        for node in affected.values():
+            for obj in node.contents:
+                node.add_exits(obj)
+        return list(failed)
 
     def clear(self):
         with self.lock:

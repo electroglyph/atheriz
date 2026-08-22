@@ -1,6 +1,6 @@
 from __future__ import annotations
 from typing import TYPE_CHECKING, Callable
-from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset, get_map_handler
+from atheriz.globals.get import get_async_threadpool, get_unloggedin_cmdset, get_loggedin_cmdset, get_map_handler, get_node_handler
 from atheriz.logger import logger
 import atheriz.settings as settings
 import atheriz.globals.mapedit as mapedit
@@ -333,9 +333,10 @@ class InputFuncs:
         Args:
             connection (Connection): The connection sending the edit.
             args (list): Expects `[key (str), seq (int), cells]` where each cell
-                is `[x, y, symbol]` (legacy plain char) or
+                is `[x, y, symbol]` (legacy plain char),
                 `[x, y, char, fg, bg, attrs]` (fg/bg: [r,g,b] or [-1,-1,-1]
-                for transparent; attrs: subset of "bold"/"italic"/"underline").
+                for transparent; attrs: subset of "bold"/"italic"/"underline"),
+                or `["room", fromX, fromY, toX, toY]` (move a room's node).
             kwargs (dict): Unused.
         """
         if len(args) < 3:
@@ -344,9 +345,14 @@ class InputFuncs:
         if not (isinstance(key, str) and isinstance(seq, int) and isinstance(cells, list)):
             return
         for cell in cells:
+            if not isinstance(cell, list):
+                return
+            if cell and cell[0] == "room":
+                if not (len(cell) == 5 and all(isinstance(v, int) for v in cell[1:])):
+                    return
+                continue
             if not (
-                isinstance(cell, list)
-                and len(cell) in (3, 6)
+                len(cell) in (3, 6)
                 and isinstance(cell[0], int)
                 and isinstance(cell[1], int)
                 and isinstance(cell[2], str)
@@ -368,6 +374,8 @@ class InputFuncs:
             with mi.batch_update():
                 with mi.lock:
                     for cell in cells:
+                        if cell and cell[0] == "room":
+                            continue
                         x, y, symbol = cell[0], cell[1], cell[2]
                         if symbol == "":
                             mi.pre_grid.pop((x, y), None)
@@ -384,4 +392,82 @@ class InputFuncs:
                                 underline="underline" in attrs,
                             )
                     mi.map_changed = True
+        room_moves = [
+            ((cell[1], cell[2]), (cell[3], cell[4])) for cell in cells if cell and cell[0] == "room"
+        ]
+        if room_moves:
+            area_obj = get_node_handler().get_area(result.chain.area)
+            grid = area_obj.get_grid(result.chain.z) if area_obj else None
+            if grid:
+                failed = grid.apply_moves(room_moves)
+                for i in failed:
+                    logger.warning(
+                        f"Map edit room move {room_moves[i]} rejected at save time "
+                        f"(area {result.chain.area} z {result.chain.z})"
+                    )
         connection.send_command("map_ack", seq, result.new_key)
+
+    @inputfunc()
+    def map_validate_moves(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Validate prospective room moves for the map editor without applying them.
+
+        Args:
+            connection (Connection): The connection sending the request.
+            args (list): Expects `[key (str), seq (int), moves]` where each move
+                is `[fromX, fromY, toX, toY]`, plus an optional 4th element
+                `context`: the editor's pending (unsaved) moves in the same
+                shape, simulated first so destinations they vacate count as
+                free.
+            kwargs (dict): Unused.
+        """
+        if len(args) < 3 or len(args) > 4:
+            return
+        key, seq, moves = args[0], args[1], args[2]
+        if not (isinstance(key, str) and isinstance(seq, int) and isinstance(moves, list)):
+            return
+        for move in moves:
+            if not (isinstance(move, list) and len(move) == 4 and all(isinstance(v, int) for v in move)):
+                return
+        context = None
+        if len(args) == 4:
+            context_arg = args[3]
+            if not isinstance(context_arg, list):
+                return
+            context = []
+            for ctx_move in context_arg:
+                if not (
+                    isinstance(ctx_move, list)
+                    and len(ctx_move) == 4
+                    and all(isinstance(v, int) for v in ctx_move)
+                ):
+                    return
+                context.append(((ctx_move[0], ctx_move[1]), (ctx_move[2], ctx_move[3])))
+        ip = getattr(connection, "client_host", "?")
+        result = mapedit.consume(key, ip, seq)
+        if result.status == mapedit.REJECT:
+            connection.send_command("map_edit_reject", result.reason)
+            return
+        if result.status == mapedit.RETRY:
+            self._send_move_verdict(connection, seq, result.new_key, result.chain.validation or [])
+            return
+        area_obj = get_node_handler().get_area(result.chain.area)
+        grid = area_obj.get_grid(result.chain.z) if area_obj else None
+        if grid is None:
+            denied = list(range(len(moves)))
+        else:
+            denied = sorted(
+                grid.check_moves(
+                    [((m[0], m[1]), (m[2], m[3])) for m in moves],
+                    context=context,
+                )
+            )
+        result.chain.validation = denied
+        self._send_move_verdict(connection, seq, result.new_key, denied)
+
+    @staticmethod
+    def _send_move_verdict(connection: Connection, seq: int, new_key: str, denied: list) -> None:
+        if denied:
+            connection.send_command("moves_denied", seq, new_key, denied)
+        else:
+            connection.send_command("moves_ok", seq, new_key)
