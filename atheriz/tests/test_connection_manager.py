@@ -108,6 +108,7 @@ class TestDisconnect:
         manager.register_connection("c1", c)
         c.session.at_disconnect = MagicMock()
         manager.disconnect(c)
+        assert _wait(lambda: c.session.at_disconnect.call_count == 1)
         c.session.at_disconnect.assert_called_once()
 
     def test_decrements_count(self, manager):

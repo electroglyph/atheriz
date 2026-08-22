@@ -84,17 +84,31 @@ class ConnectionManager:
                 if conn is connection:
                     conn_id = cid
                     break
-            
+
             if conn_id:
                 del self._connections[conn_id]
                 connection.clear_pending_input()
-                if connection.session:
-                    connection.session.at_disconnect()
+                session = connection.session
+                if session is not None:
+                    if not self.atp.add_task(self._do_session_disconnect, session):
+                        try:
+                            session.at_disconnect()
+                        except Exception as e:
+                            logger.error(f"[Network] Session teardown failed during disconnect: {e}", exc_info=True)
                 try:
                     connection.close()
                 except Exception as e:
                     logger.debug(f"[Network] Connection cleanup failed: {e}")
                 logger.info(f"[Network] Connection closed: {conn_id} (total: {self.connection_count})")
+
+    def _do_session_disconnect(self, session):
+        """Run session teardown on the game threadpool so puppet unwinding,
+        channel announcements, and the on-disconnect autosave never execute on
+        the network event loop."""
+        try:
+            session.at_disconnect()
+        except Exception as e:
+            logger.error(f"[Network] Session teardown failed: {e}", exc_info=True)
 
     @property
     def connection_count(self) -> int:
