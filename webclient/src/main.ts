@@ -72,7 +72,7 @@ function initApp() {
 
     const undoStack = new UndoStack();
 
-    let canvasState = new CanvasState(80, 24);
+    let canvasState = new CanvasState(24, 24);
 
     const grant = readDrawGrant();
     let mapEditSession: MapEditSession | null = null;
@@ -480,25 +480,4 @@ function initApp() {
             updateFontMetrics();
         }
     });
-
-    // Auto-load art.ans from the public directory on startup if it exists
-    if (!grant) {
-        (async () => {
-            try {
-                const res = await fetch('./art.ans');
-                if (!res.ok) return;
-                const text = await res.text();
-                const { width, height } = detectAnsiDimensions(text);
-                const newState = await parseAnsiToState(text, width, height);
-                canvasState = newState;
-                context.state = canvasState;
-                undoStack.setCurrentState(canvasState);
-                renderer.updateState(canvasState);
-                layerManager.updateState(canvasState);
-                syncTextToolDialog();
-            } catch {
-                // No art.ans present or fetch failed — start with a blank canvas
-            }
-        })();
-    }
 }

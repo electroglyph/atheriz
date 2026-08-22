@@ -84,10 +84,6 @@ def deploy(
     )
     copy_file(DIST_ROOT / "chafa.wasm", static_root / "chafa.wasm")
     copy_tree(DIST_ROOT / "gfonts", static_root / "gfonts")
-    copy_file(
-        DIST_ROOT / "art.ans",
-        static_root / "atheriz_draw" / "art.ans",
-    )
 
     print(f"Deployed frontend artifacts to {static_root}")
     print(f"  webclient: {static_root / 'webclient' / 'index.html'}")

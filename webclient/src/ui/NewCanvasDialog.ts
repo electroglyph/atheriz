@@ -44,7 +44,7 @@ export class NewCanvasDialog {
 
         for (const preset of Array.from(this.inputs)) {
             preset.addEventListener('click', () => {
-                this.inputW.value = preset.dataset['w'] || "80";
+                this.inputW.value = preset.dataset['w'] || "24";
                 this.inputH.value = preset.dataset['h'] || "24";
             });
         }
