@@ -109,3 +109,63 @@ class TestWorkerResilience:
             assert atp.add_task(lambda: None) is False
         finally:
             pass
+
+
+class TestNoLeakedCoroutines:
+    def test_failed_dispatch_closes_coroutine(self, global_test_env):
+        """INTENT: when dispatch raises (coroutine handed to a dead loop), the
+        wrapped coroutine must be closed, not leaked — a leaked coroutine makes
+        GC emit 'coroutine ... was never awaited' at an arbitrary later point
+        (previously surfacing as a warning during unrelated tests)."""
+        import gc
+        import warnings
+
+        atp = AsyncThreadPool()
+
+        async def coro_task():
+            pass
+
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                with patch(
+                    "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
+                    side_effect=RuntimeError("event loop is closed"),
+                ):
+                    assert atp.add_task(coro_task) is True
+                    done = threading.Event()
+                    assert atp.add_task(done.set) is True
+                    assert done.wait(5), "worker died instead of surviving dispatch error"
+                gc.collect()
+            leaked = [w for w in caught if "never awaited" in str(w.message)]
+            assert leaked == [], f"leaked coroutine(s): {[str(w.message) for w in leaked]}"
+        finally:
+            atp.stop(False, 5)
+
+    def test_delay_failure_closes_coroutine_and_propagates(self, global_test_env):
+        """INTENT: delay() must also close its wrapper coroutine when the
+        submit fails; the original error still propagates to the caller."""
+        import gc
+        import warnings
+
+        import pytest
+
+        atp = AsyncThreadPool()
+
+        async def task():
+            pass
+
+        try:
+            with warnings.catch_warnings(record=True) as caught:
+                warnings.simplefilter("always")
+                with patch(
+                    "atheriz.globals.asyncthreadpool.asyncio.run_coroutine_threadsafe",
+                    side_effect=RuntimeError("event loop is closed"),
+                ):
+                    with pytest.raises(RuntimeError):
+                        atp.delay(0.1, task)
+                gc.collect()
+            leaked = [w for w in caught if "never awaited" in str(w.message)]
+            assert leaked == [], f"leaked coroutine(s): {[str(w.message) for w in leaked]}"
+        finally:
+            atp.stop(False, 5)

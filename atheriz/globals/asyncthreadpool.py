@@ -12,6 +12,17 @@ import atheriz.settings as settings
 from atheriz.globals.get import get_async_threadpool
 
 
+def _submit(coro, loop):
+    """Schedule coro on loop and return its future; close it if submission
+    fails (e.g. dead or closed loop) so a failed dispatch never leaks an
+    un-awaited coroutine."""
+    try:
+        return asyncio.run_coroutine_threadsafe(coro, loop)
+    except Exception:
+        coro.close()
+        raise
+
+
 class AsyncThread(Thread):
     def __init__(self, loop: AbstractEventLoop, num: int):
         self.loop = loop
@@ -41,7 +52,7 @@ class AsyncThread(Thread):
     def stop(self, wait):
         if wait:
             self._wait_event.set()
-        asyncio.run_coroutine_threadsafe(self.do_stop(), self.loop)
+        _submit(self.do_stop(), self.loop)
 
 
 class AsyncThreadPool:
@@ -84,7 +95,7 @@ class AsyncThreadPool:
         loop, sync functions run inline on the calling worker. Shared by
         _work_loop and by in-worker dispatch (issue #31)."""
         if inspect.iscoroutinefunction(func):
-            asyncio.run_coroutine_threadsafe(self._do_async(func, *args, **kwargs), self.loop)
+            _submit(self._do_async(func, *args, **kwargs), self.loop)
         else:
             try:
                 func(*args, **kwargs)
@@ -173,7 +184,7 @@ class AsyncThreadPool:
         async def _delayed_task():
             await asyncio.sleep(delay)
             self.add_task(func, *args, **kwargs)
-        asyncio.run_coroutine_threadsafe(_delayed_task(), self.loop)
+        _submit(_delayed_task(), self.loop)
 
 
 class AsyncTicker:
@@ -212,7 +223,14 @@ class AsyncTicker:
         def _tick_once(self, coro):
             atp = get_async_threadpool()
             if inspect.iscoroutinefunction(coro):
-                future = asyncio.run_coroutine_threadsafe(atp._do_async(coro), atp.loop)
+                # submit through the helper so a failed dispatch closes the
+                # wrapped coroutine instead of leaking it; release the pending
+                # guard either way so the coro keeps getting ticked
+                try:
+                    future = _submit(atp._do_async(coro), atp.loop)
+                except Exception:
+                    self._release(coro)
+                    raise
                 future.add_done_callback(lambda _f: self._release(coro))
             else:
                 try:
@@ -248,10 +266,7 @@ class AsyncTicker:
             with self.lock:
                 if not self.running:
                     self.running = True
-                    self._future = asyncio.run_coroutine_threadsafe(
-                        self.timer(),
-                        atp.loop
-                    )
+                    self._future = _submit(self.timer(), atp.loop)
 
     def __init__(self) -> None:
         self.lock = RLock()
