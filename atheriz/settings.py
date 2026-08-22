@@ -235,3 +235,11 @@ PY_OUTPUT_FG = 15
 # seconds a `py` command may run before its thread is force-killed;
 # 0 disables the timeout (commands run to completion)
 KILL_PY_COMMAND_AFTER = 5
+# maximum source size (utf-8 bytes) accepted by the py sandbox
+PY_MAX_CODE_BYTES = 65_536
+# maximum number of AST nodes accepted by the py sandbox
+PY_MAX_AST_NODES = 20_000
+# maximum traced line events before a py run is killed (CPU budget)
+PY_MAX_LINE_EVENTS = 5_000_000
+# when True, py requires superuser instead of builder privileges
+PY_REQUIRE_SUPERUSER = False
