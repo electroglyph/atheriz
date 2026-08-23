@@ -81,8 +81,8 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `LOG_LEVEL`: Determines the severity of logs to process (e.g., `"debug"`, `"info"`, `"warning"`, `"error"`, `"critical"`). Level `"debug"` logs all commands sent and received.
 
 ### 6.2.5 Persistence & Saving
-- `SAVE_PATH`: Directory path for server save data and database storage.
-- `SECRET_PATH`: Directory path for storing sensitive information.
+- `SAVE_PATH`: Directory path for server save data and database storage. See [05 Persistence §5.1.4](./05_persistence.md#514-trust-model) — contents are fully trusted and `dill.loads` on tampered blobs is RCE; protect `save/` like credentials (`chmod 700`).
+- `SECRET_PATH`: Directory path for storing sensitive information. See [05 Persistence §5.1.4](./05_persistence.md#514-trust-model) — `secret/salt.txt` and `secret/admin.token` are trusted secrets; protect `secret/` like credentials (`chmod 700`, `600` for files).
 - `ALWAYS_SAVE_ALL`: If `True`, overrides the standard `is_modified` parameter check, forcing everything to be saved whether it has changed or not.
 - `AUTOSAVE_PLAYERS_ON_DISCONNECT`: If `True`, saves player objects when they log out or disconnect.
 - `AUTOSAVE_ON_SHUTDOWN`: If `True`, saves the game state when the server smoothly shuts down.

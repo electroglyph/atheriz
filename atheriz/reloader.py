@@ -34,6 +34,16 @@ def _get_atheriz_package_dir() -> Path:
     return Path(list(atheriz.__path__)[0]).resolve()
 
 
+def _is_under(path: Path | str, ancestor: Path | str) -> bool:
+    try:
+        Path(path).resolve().relative_to(Path(ancestor).resolve())
+        return True
+    except ValueError:
+        return False
+    except Exception:
+        return False
+
+
 def _discover_new_atheriz_modules():
     """
     Walk the atheriz package directory and import any .py files that
@@ -89,7 +99,7 @@ def _discover_new_game_modules():
             dirs[:] = [d for d in dirs if d != "__pycache__"]
 
         # Don't walk into the atheriz package itself
-        if str(Path(root).resolve()).startswith(atheriz_dir):
+        if _is_under(Path(root), Path(atheriz_dir)):
             continue
 
         for filename in files:
@@ -149,13 +159,13 @@ def _reload_game_folder_modules():
             continue
         mod_path = str(Path(mod_file).resolve())
         # Module is in the game folder (CWD) but NOT part of the atheriz package
-        if mod_path.startswith(cwd_str) and not mod_path.startswith(atheriz_dir):
+        if _is_under(mod_path, cwd_str) and not _is_under(mod_path, atheriz_dir):
             is_valid = False
             # Allow top-level files in the game folder (e.g. account.py)
             if str(Path(mod_path).parent) == cwd_str:
                 is_valid = True
             # Allow inside a top-level directory that has __init__.py
-            elif any(mod_path.startswith(pkg) for pkg in valid_packages):
+            elif any(_is_under(mod_path, pkg) for pkg in valid_packages):
                 is_valid = True
 
             if not is_valid:
@@ -182,7 +192,10 @@ def _reload_game_folder_modules():
         try:
             importlib.reload(module)
         except Exception as e:
-            pass  # errors already captured in first pass
+            msg = f"Failed to reload game module {module_name} (second pass): {e}"
+            logger.error(f"[HotReload] {msg}")
+            if msg not in errors:
+                errors.append(msg)
 
     # Re-run class injections so game folder overrides take effect
     injections = getattr(settings, "CLASS_INJECTIONS", [])
@@ -229,39 +242,56 @@ def _apply_patch(obj, new_class):
     if lock:
         lock.acquire()
     try:
-        state = None
-        if hasattr(obj, "__getstate__"):
-            state = obj.__getstate__()
-        else:
-            state = obj.__dict__.copy()
+        orig_dict = obj.__dict__.copy()
+        orig_class = obj.__class__
+        try:
+            state = None
+            if hasattr(obj, "__getstate__"):
+                state = obj.__getstate__()
+            else:
+                state = obj.__dict__.copy()
 
-        old_class = obj.__class__
-        obj.__class__ = new_class
+            old_class = obj.__class__
+            obj.__class__ = new_class
 
-        old_init = getattr(old_class, "__init__", None)
-        new_init = getattr(new_class, "__init__", None)
-        init_changed = (
-            old_init is None
-            or new_init is None
-            or inspect.signature(old_init) != inspect.signature(new_init)
-        )
-        if init_changed:
+            old_init = getattr(old_class, "__init__", None)
+            new_init = getattr(new_class, "__init__", None)
+            init_changed = (
+                old_init is None
+                or new_init is None
+                or inspect.signature(old_init) != inspect.signature(new_init)
+            )
+            if init_changed:
+                try:
+                    obj.__init__()
+                except TypeError:
+                    pass
+
+            if hasattr(obj, "__setstate__"):
+                obj.__setstate__(state)
+            else:
+                obj.__dict__.update(state)
+
+            if saved_session:
+                obj.session = saved_session
+            if saved_listeners is not None:
+                obj.listeners = saved_listeners
+            if saved_command is not None:
+                obj.command = saved_command
+        except Exception:
             try:
-                obj.__init__()
-            except TypeError:
-                pass
-
-        if hasattr(obj, "__setstate__"):
-            obj.__setstate__(state)
-        else:
-            obj.__dict__.update(state)
-
-        if saved_session:
-            obj.session = saved_session
-        if saved_listeners is not None:
-            obj.listeners = saved_listeners
-        if saved_command is not None:
-            obj.command = saved_command
+                obj.__class__ = orig_class
+                cur_lock = obj.__dict__.get("lock")
+                obj.__dict__.clear()
+                obj.__dict__.update(orig_dict)
+                if cur_lock is not None:
+                    obj.__dict__["lock"] = cur_lock
+            except Exception:
+                try:
+                    obj.__class__ = orig_class
+                except Exception:
+                    pass
+            raise
     finally:
         if lock:
             lock.release()
@@ -311,7 +341,7 @@ def _reload_game_logic() -> str:
 
         modules_to_reload.append((module_name, module))
 
-    modules_to_reload.sort(key=lambda x: (x[0].endswith(".cmdset"), x[0]))
+    modules_to_reload.sort(key=lambda x: (x[0].count("."), x[0].endswith(".cmdset"), x[0]))
 
     reloaded_count = 0
     errors = []
@@ -327,6 +357,16 @@ def _reload_game_logic() -> str:
             msg = f"Failed to reload {module_name}: {e}"
             logger.error(f"[HotReload] {msg}")
             errors.append(msg)
+
+    # second pass for atheriz modules to pick up cross-imports
+    for module_name, module in modules_to_reload:
+        try:
+            importlib.reload(module)
+        except Exception as e:
+            msg = f"Failed to reload {module_name} (second pass): {e}"
+            logger.error(f"[HotReload] {msg}")
+            if msg not in errors:
+                errors.append(msg)
 
     # reload game folder modules and re-run class injections
     game_reloaded, game_errors = _reload_game_folder_modules()

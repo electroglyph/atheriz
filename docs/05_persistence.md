@@ -19,6 +19,10 @@ Persistence toggles are handled in `settings.py`:
 - `AUTOSAVE_ON_RELOAD`
 - `ALWAYS_SAVE_ALL` (Always save all the things, even when they haven't changed)
 
+### 5.1.4 Trust Model
+
+`save/` (`database.sqlite3`, `-wal`, `-shm`, and `mapdata`/`areas`/`transitions`/`doors`/`gametime` BLOBs inside the same database) and `secret/` (`salt.txt`, `admin.token`) are **fully trusted**. Anyone who can write them can execute arbitrary code as the server user on the next `load_objects()` / `MapHandler.__init__` / `NodeHandler.load()` / `GameTime.load()` via `dill.loads` — `dill` serializes code objects and classes by design and has no safe subset. Run the server under a dedicated OS user, `chmod 700 save secret` (and `600` for files inside), do not expose these directories through backups, shared hosting, or HTTP APIs, and treat them like credentials. `atheriz/web` never reads or writes blobs or the database; the engine must never expose `dill` blobs or raw DB rows through network protocols, web endpoints, or player-reachable commands. Revisit this section if any blob import or upload feature is added.
+
 ## 5.2 Custom Serialization
 
 ### 5.2.1 `__getstate__` and `__setstate__`
