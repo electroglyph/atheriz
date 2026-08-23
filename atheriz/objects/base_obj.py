@@ -166,7 +166,7 @@ class Object(Flags, DbOps, AccessLock):
         if is_npc:
             obj.can_hear = True
             obj.add_lock("get", lambda x: x.is_builder)
-        obj.is_tickable = is_tickable
+        object.__setattr__(obj, "_is_tickable", is_tickable)
         obj.name = name
         obj.desc = desc
         obj._tick_seconds = tick_seconds
@@ -174,24 +174,32 @@ class Object(Flags, DbOps, AccessLock):
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
         obj.is_modified = True
-        if is_tickable:
-            get_async_ticker().add_coro(obj.at_tick, tick_seconds)
         add_object(obj)
-        obj.at_create()
-        # prevent you from accidentally deleting yourself (atari teenage riot!)
-        obj.add_lock("delete", lambda caller: caller.id != obj.id)
-        # puppeting is allowed for NPCs (any builder), for a character the
-        # caller's account owns, or for superusers. Games override per-object.
-        obj.add_lock(
-            "puppet",
-            lambda caller: obj.is_npc
-            or caller.is_superuser
-            or (
-                caller.session is not None
-                and caller.session.account is not None
-                and obj.id in caller.session.account.characters
-            ),
-        )
+        coro_added = False
+        try:
+            obj.at_create()
+            if is_tickable:
+                get_async_ticker().add_coro(obj.at_tick, tick_seconds)
+                coro_added = True
+            obj.add_lock("delete", lambda caller: caller.id != obj.id)
+            obj.add_lock(
+                "puppet",
+                lambda caller: obj.is_npc
+                or caller.is_superuser
+                or (
+                    caller.session is not None
+                    and caller.session.account is not None
+                    and obj.id in caller.session.account.characters
+                ),
+            )
+        except Exception:
+            if coro_added:
+                try:
+                    get_async_ticker().remove_coro(obj.at_tick, tick_seconds)
+                except Exception:
+                    pass
+            remove_object(obj)
+            raise
         return obj
 
     def add_script(self, script: Script | int):
