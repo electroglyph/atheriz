@@ -388,13 +388,14 @@ class TestUpdateGrid:
 class TestRenderLegend:
     def test_skips_when_too_many_entries(self, global_test_env):
         mi = MapInfo()
-        # Fill with too many entries
         for i in range(settings.MAX_OBJECTS_PER_LEGEND + 1):
             mi.objects[i] = MagicMock()
         listener = MagicMock()
         mi.add_listener(listener)
         mi.render_legend()
-        # No legend update should be sent
+        listener.at_legend_update.assert_called_once_with([], False, "unknown")
+        listener.at_legend_update.reset_mock()
+        mi.render_legend()
         listener.at_legend_update.assert_not_called()
 
     def test_sends_entries_to_listeners(self, global_test_env):

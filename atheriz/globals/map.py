@@ -83,6 +83,10 @@ class MapInfo:
         self.listeners: dict[int, Object] = {}
         self.lock = RLock()
         self._batch_update = 0
+        self._legend_suppressed = False
+
+    def _is_over_legend_cap(self) -> bool:
+        return len(self.objects) + len(self.legend_entries) > settings.MAX_OBJECTS_PER_LEGEND
     
     def __getstate__(self):
         with self.lock:
@@ -91,6 +95,7 @@ class MapInfo:
             state.pop("objects", None)
             state.pop("listeners", None)
             state.pop("_batch_update", None)
+            state.pop("_legend_suppressed", None)
             return state
     
     def __setstate__(self, state):
@@ -99,6 +104,7 @@ class MapInfo:
         self.objects: dict[int, Object] = {}
         self.listeners: dict[int, Object] = {}
         self._batch_update = 0
+        self._legend_suppressed = False
 
     def __eq__(self, other):
         if not isinstance(other, MapInfo):
@@ -123,7 +129,7 @@ class MapInfo:
                     if self.pre_grid.get((cx + dx, cy + dy), None) == settings.ROOM_PLACEHOLDER:
                         continue
                     self.pre_grid[(cx + dx, cy + dy)] = char
-        self.map_changed = True
+            self.map_changed = True
 
     @staticmethod
     def render_grid(grid: dict[tuple[int, int], str]):
@@ -271,20 +277,31 @@ class MapInfo:
 
     def render_legend(self):
         with self.lock:
-            if len(self.objects) + len(self.legend_entries) > settings.MAX_OBJECTS_PER_LEGEND:
-                return
-            # Pre-compute entries once, tagged with source id for per-listener filtering
-            obj_entries = [
-                (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
-                for o in self.objects.values()
-                if o.location is not None
-            ]
-            static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+            is_over = self._is_over_legend_cap()
             listeners = list(self.listeners.values())
-        for l in listeners:
-            entries = [e for oid, e in obj_entries if oid != l.id]
-            entries.extend(static_entries)
-            l.at_legend_update(entries, True, self.name)
+            was_suppressed = self._legend_suppressed
+            if is_over:
+                if was_suppressed:
+                    return
+                self._legend_suppressed = True
+            else:
+                if was_suppressed:
+                    self._legend_suppressed = False
+                obj_entries = [
+                    (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
+                    for o in self.objects.values()
+                    if o.location is not None
+                ]
+                static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+        if is_over and not was_suppressed:
+            for l in listeners:
+                l.at_legend_update([], False, self.name)
+            return
+        if not is_over:
+            for l in listeners:
+                entries = [e for oid, e in obj_entries if oid != l.id]
+                entries.extend(static_entries)
+                l.at_legend_update(entries, True, self.name)
 
     def render(self, force=False):
         # Atomically read and reset map_changed to prevent a race where
@@ -300,9 +317,7 @@ class MapInfo:
         # work (at_pre_map_render, render_grid, at_map_update) outside it
         # to keep the critical section tight.
         with self.lock:
-            show_legend = (
-                len(self.objects) + len(self.legend_entries) <= settings.MAX_OBJECTS_PER_LEGEND
-            )
+            show_legend = not self._is_over_legend_cap()
             obj_entries = [
                 (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
                 for o in self.objects.values()
