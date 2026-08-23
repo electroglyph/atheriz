@@ -99,10 +99,26 @@ def get_async_ticker() -> AsyncTicker:
 def get_server_channel() -> Channel | None:
     global _SERVER_CHANNEL
     with _SINGLETON_LOCK:
+        if _SERVER_CHANNEL is not None:
+            is_del = getattr(_SERVER_CHANNEL, "is_deleted", False) is True
+            try:
+                _name = _SERVER_CHANNEL.name
+                if isinstance(_name, str):
+                    name_ok = _name.lower() == "server"
+                else:
+                    name_ok = True
+            except Exception:
+                name_ok = False
+            if is_del or not name_ok:
+                _SERVER_CHANNEL = None
         if _SERVER_CHANNEL is None:
             from atheriz.globals.objects import filter_by
 
-            c = filter_by(lambda x: x.is_channel and x.name.lower() == "server")
+            c = filter_by(
+                lambda x: getattr(x, "is_channel", False)
+                and getattr(x, "name", "").lower() == "server"
+                and getattr(x, "is_deleted", False) is not True
+            )
             if c:
                 _SERVER_CHANNEL = c[0]
             else:
