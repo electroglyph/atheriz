@@ -138,16 +138,19 @@ class Command:
         """
         if not self.use_parser:
             return self.run, caller, args_string
-        # Use shlex to split arguments respecting quotes
-        # e.g. 'look "my stuff"' -> ['look', 'my stuff']
         if not args_string:
             arg_list = []
         else:
-            arg_list = shlex.split(args_string, posix=True)
+            try:
+                arg_list = shlex.split(args_string, posix=True)
+            except ValueError:
+                caller.msg("Unbalanced quote in command.")
+                caller.msg(self.print_help())
+                return None, None, None
         try:
             parsed_args = self.parser.parse_args(arg_list)
             parsed_args.cmdstring = cmdstring
-        except:
+        except CommandError:
             help_text = self.print_help()
             caller.msg(help_text)
             return None, None, None
