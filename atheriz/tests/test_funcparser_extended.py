@@ -9,7 +9,7 @@ from atheriz.objects.funcparser_helpers import safe_convert_to_types
 import atheriz.settings as settings
 
 
-class Test54aListsAndJoin:
+class TestParsePerformance:
     def test_ParsedFunc_defaults_are_lists(self, global_test_env):
         pf = _ParsedFunc()
         assert isinstance(pf.fullstr, list)
@@ -117,7 +117,7 @@ class Test54aListsAndJoin:
         assert result == "hello $unknown() world"
 
 
-class Test54bPluralize:
+class TestPluralize:
     def test_non_numeric_fallback_singular(self, global_test_env):
         from atheriz.objects.funcparser import funcparser_callable_pluralize
         assert funcparser_callable_pluralize("cat", "abc") == "cat"
@@ -166,7 +166,7 @@ class Test54bPluralize:
             parser.parse("$pluralize(cat, abc)", raise_errors=True)
 
 
-class Test54cValidateCallables:
+class TestCallableValidation:
     def test_valid_passes(self, global_test_env):
         def ok(*args, **kwargs):
             return ""
@@ -203,7 +203,7 @@ class Test54cValidateCallables:
         assert "ParsingError" in doc
 
 
-class Test54dManualParseContainers:
+class TestContainerParsing:
     def test_flat_containers_still_work(self, global_test_env):
         args, _ = safe_convert_to_types((("py",), {}), "(a, b)", raise_errors=True)
         assert args[0] == ["a", "b"]
