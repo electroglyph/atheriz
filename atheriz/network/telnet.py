@@ -62,18 +62,22 @@ async def read_capped_lines(reader, max_line: int):
     `None` is yielded at its terminator and memory stays bounded."""
     buf = ""
     dropping = False
+    eof = False
     while True:
         chunk = await reader.read(TELNET_INPUT_CHUNK)
         if not chunk:
+            eof = True
             break
         buf += chunk
         while True:
             i = _find_eol(buf)
             if i == -1:
                 break
+            if buf[i] == "\r" and i + 1 >= len(buf) and not eof:
+                break
             line = buf[:i]
             rest = buf[i + 1 :]
-            if buf[i] == "\r" and (rest.startswith("\n") or rest.startswith("\x00")):
+            if buf[i] == "\r" and rest[:1] in ("\n", "\x00"):
                 rest = rest[1:]
             buf = rest
             if dropping or len(line) > max_line:
@@ -81,11 +85,34 @@ async def read_capped_lines(reader, max_line: int):
                 dropping = False
             else:
                 yield line
-        if len(buf) > max_line:
+        effective_len = len(buf)
+        if not eof and buf.endswith("\r") and _find_eol(buf) == len(buf) - 1:
+            effective_len -= 1
+        if effective_len > max_line:
             dropping = True
             buf = ""
+    while True:
+        i = _find_eol(buf)
+        if i == -1:
+            break
+        line = buf[:i]
+        rest = buf[i + 1 :]
+        if buf[i] == "\r" and rest[:1] in ("\n", "\x00"):
+            rest = rest[1:]
+        buf = rest
+        if dropping or len(line) > max_line:
+            yield None
+            dropping = False
+        else:
+            yield line
     if buf and not dropping:
-        yield buf
+        if buf == "\r":
+            pass
+        else:
+            if buf.endswith("\r"):
+                buf = buf[:-1]
+            if buf:
+                yield buf
 
 class TelnetConnection(BaseConnection):
     """
