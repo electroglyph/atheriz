@@ -569,3 +569,192 @@ def test_save_with_unpicklable_data_logs_error():
         cursor.execute("SELECT data FROM areas WHERE name = ?", ("BadArea",))
         row = cursor.fetchone()
     assert row is None, "unsaveable area must not be persisted"
+
+
+def test_load_isolates_bad_node_and_per_area_and_updates_max_id():
+    """47: per-node and per-area failures during load are isolated and max_id tracks only good nodes."""
+    from unittest.mock import patch
+    from atheriz.globals import get as get_singleton
+    from atheriz.globals.objects import get as get_obj, _ALL_OBJECTS
+
+    class BadDict(dict):
+        def values(self):
+            raise RuntimeError("injected grid failure")
+
+    handler = NodeHandler()
+    handler.clear()
+    _ALL_OBJECTS.clear()
+    get_singleton.set_id(-1)
+
+    area_good0 = NodeArea(name="Good0")
+    grid_good0 = NodeGrid(z=0)
+    node_good0 = Node(coord=Coord("Good0", 0, 0, 0))
+    grid_good0.nodes[(0, 0)] = node_good0
+    area_good0.add_grid(grid_good0)
+    handler.add_area(area_good0)
+
+    area_badnode = NodeArea(name="BadNodeArea")
+    grid_badnode = NodeGrid(z=0)
+    node_bad = Node(coord=Coord("BadNodeArea", 1, 1, 0))
+    grid_badnode.nodes[(1, 1)] = node_bad
+    area_badnode.add_grid(grid_badnode)
+    handler.add_area(area_badnode)
+
+    area_broken = NodeArea(name="BrokenArea")
+    grid_broken = NodeGrid(z=0)
+    area_broken.add_grid(grid_broken)
+    node_broken = Node(coord=Coord("BrokenArea", 0, 0, 0))
+    grid_broken.nodes[(0, 0)] = node_broken
+    handler.add_area(area_broken)
+
+    area_good1 = NodeArea(name="Good1")
+    grid_good1 = NodeGrid(z=0)
+    node_good1 = Node(coord=Coord("Good1", 2, 2, 0))
+    grid_good1.nodes[(2, 2)] = node_good1
+    area_good1.add_grid(grid_good1)
+    handler.add_area(area_good1)
+
+    good0_id = node_good0.id
+    bad_id = node_bad.id
+    good1_id = node_good1.id
+    broken_id = node_broken.id
+    assert bad_id > good0_id
+    handler.save(force=True)
+    from atheriz.database_setup import get_database
+    import dill
+
+    db = get_database()
+    with db.lock:
+        cursor = db.connection.cursor()
+        cur_area = handler.get_area("BrokenArea")
+        cur_grid = cur_area.get_grid(0)
+        cur_grid.nodes = BadDict({(0, 0): cur_grid.nodes[(0, 0)]})
+        cursor.execute(
+            "INSERT OR REPLACE INTO areas (name, data) VALUES (?, ?)",
+            (cur_area.name, dill.dumps(cur_area)),
+        )
+        db.connection.commit()
+        cur_grid.nodes = {(0, 0): cur_grid.nodes[(0, 0)]}
+
+    _ALL_OBJECTS.clear()
+    get_singleton.set_id(-1)
+    orig_resolve = Node.resolve_relations
+
+    def fake_resolve(self):
+        if getattr(self.coord, "area", None) == "BadNodeArea":
+            raise RuntimeError("injected bad resolve")
+        return orig_resolve(self)
+
+    with patch.object(Node, "resolve_relations", fake_resolve):
+        with patch("atheriz.globals.node.logger.error") as mock_log:
+            handler2 = NodeHandler()
+            assert handler2.get_area("Good0") is not None
+            assert handler2.get_area("BadNodeArea") is not None
+            assert handler2.get_area("BrokenArea") is not None
+            assert handler2.get_area("Good1") is not None
+            assert get_obj(good0_id)
+            assert not get_obj(bad_id)
+            assert get_obj(good1_id)
+            assert get_singleton.get_id() == max(good0_id, good1_id)
+            msgs = " ".join(str(c) for c in mock_log.call_args_list)
+            assert "BadNodeArea" in msgs or "Error resolving node" in msgs
+            assert "BrokenArea" in msgs or "Error resolving area" in msgs
+
+
+def test_save_gating_and_force_and_always_save():
+    """47: save() gates on _is_dirty unless force or ALWAYS_SAVE_ALL, and clears flags only after COMMIT."""
+    from unittest.mock import patch, MagicMock
+    from atheriz.globals.objects import _ALL_OBJECTS
+    from atheriz.globals import get as get_singleton
+
+    handler = NodeHandler()
+    handler.clear()
+    _ALL_OBJECTS.clear()
+    get_singleton.set_id(-1)
+
+    area = NodeArea(name="GateTest")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("GateTest", 0, 0, 0))
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+
+    assert handler._is_dirty() is True
+    handler.save(force=True)
+    assert handler._is_dirty() is False
+    assert handler._modified is False
+    assert area.is_modified is False
+    with area.lock:
+        for g in area.grids.values():
+            assert g.is_modified is False
+            for n in g.nodes.values():
+                with n.lock:
+                    assert n.is_modified is False
+
+    with patch("atheriz.globals.node.get_database") as mock_get:
+        handler.save(force=False)
+        mock_get.assert_not_called()
+
+    with node.lock:
+        node.is_modified = True
+    assert handler._is_dirty() is True
+    handler.save(force=False)
+    assert handler._is_dirty() is False
+
+    handler._modified = False
+    for a in list(handler.areas.values()):
+        a.is_modified = False
+        with a.lock:
+            for g in list(a.grids.values()):
+                g.is_modified = False
+                for n in list(g.nodes.values()):
+                    try:
+                        with n.lock:
+                            n.is_modified = False
+                    except Exception:
+                        pass
+    assert handler._is_dirty() is False
+
+    orig_always = settings.ALWAYS_SAVE_ALL
+    settings.ALWAYS_SAVE_ALL = True
+    try:
+        with patch("atheriz.globals.node.get_database") as mock_get:
+            mock_db = MagicMock()
+            mock_lock = MagicMock()
+            mock_lock.__enter__ = MagicMock(return_value=None)
+            mock_lock.__exit__ = MagicMock(return_value=False)
+            mock_db.lock = mock_lock
+            mock_cursor = MagicMock()
+            mock_db.connection.cursor.return_value = mock_cursor
+            mock_get.return_value = mock_db
+            handler.save(force=False)
+            mock_get.assert_called()
+            assert mock_cursor.execute.called
+    finally:
+        settings.ALWAYS_SAVE_ALL = orig_always
+
+    for a in list(handler.areas.values()):
+        a.is_modified = False
+        with a.lock:
+            for g in list(a.grids.values()):
+                g.is_modified = False
+                for n in list(g.nodes.values()):
+                    try:
+                        with n.lock:
+                            n.is_modified = False
+                    except Exception:
+                        pass
+    handler._modified = False
+    assert handler._is_dirty() is False
+    with patch("atheriz.globals.node.get_database") as mock_get:
+        mock_db = MagicMock()
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=False)
+        mock_db.lock = mock_lock
+        mock_cursor = MagicMock()
+        mock_db.connection.cursor.return_value = mock_cursor
+        mock_get.return_value = mock_db
+        handler.save(force=True)
+        mock_get.assert_called()
+        assert mock_cursor.execute.called
