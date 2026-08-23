@@ -1,4 +1,5 @@
 from __future__ import annotations
+import threading
 from atheriz.globals.objects import filter_by, get
 from atheriz.commands.base_cmd import Command
 from atheriz.utils import wrap_xterm256
@@ -14,6 +15,7 @@ class ChannelCommand(Command):
     desc = "Use and subscribe to channels."
     category: str = "Communication"
     _channel_cache: dict[str, Channel] = {}
+    _channel_cache_lock = threading.RLock()
 
     def __init__(self):
         super().__init__()
@@ -80,8 +82,9 @@ class ChannelCommand(Command):
             return
         name = args.channel.lower()
         channel = self._channel_cache.get(name)
-        if channel is not None and channel.is_deleted:
-            del self._channel_cache[name]
+        if channel is not None and (channel.is_deleted or channel.name.lower() != name):
+            with self._channel_cache_lock:
+                self._channel_cache.pop(name, None)
             channel = None
         if channel is None:
             result = filter_by(lambda x: x.is_channel and x.name.lower() == name)
@@ -89,7 +92,11 @@ class ChannelCommand(Command):
                 caller.msg(f"Channel {args.channel} not found.")
                 return
             channel = result[0]
-            self._channel_cache[name] = channel
+            with self._channel_cache_lock:
+                self._channel_cache[name] = channel
+                for k, v in list(self._channel_cache.items()):
+                    if k != name and v.id == channel.id:
+                        self._channel_cache.pop(k, None)
         if args.unsubscribe:
             caller.unsubscribe(channel)
         elif args.subscribe:

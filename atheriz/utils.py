@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
 
 
-_ANSI_COLOR = r"\x1b\[[0-9;]+m"
+_ANSI_COLOR = r"\x1b\[[0-9;]*m"
 _COLOR_REGEX = re.compile(_ANSI_COLOR)
 
 

@@ -1,3 +1,5 @@
+import threading
+import time
 from importlib import metadata
 from atheriz.globals.objects import filter_by
 from typing import TYPE_CHECKING
@@ -41,9 +43,22 @@ enter 'connect <account> <password>' to login
 """
 
 
+_CACHE: tuple[float, int, int] = (0, 0, 0)
+_LOCK = threading.Lock()
+
+
 def get_online():
+    global _CACHE
+    now = time.monotonic()
+    with _LOCK:
+        if now - _CACHE[0] < 5:
+            return _CACHE[1], _CACHE[2]
     results: list[Object] = filter_by(lambda x: x.is_pc)
-    return (sum(1 for x in results if x.is_connected), len(results))
+    online = sum(1 for x in results if x.is_connected)
+    known = len(results)
+    with _LOCK:
+        _CACHE = (now, online, known)
+    return online, known
 
 
 def _version():

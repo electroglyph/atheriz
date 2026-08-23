@@ -31,7 +31,7 @@ def apply_settings():
 def _setup_logger():
     """Ensure the logger has a default handler with the preferred formatter."""
     for h in logger.handlers:
-        if isinstance(h.formatter, logging.Formatter) and h.formatter._fmt == FORMATTER._fmt:
+        if h.formatter is FORMATTER:
             return
     
     handler = logging.StreamHandler()

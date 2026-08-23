@@ -130,7 +130,15 @@ class GroupCommand(Command):
                 try:
                     channel = Channel.create(f"{caller.name}'s group", caller)
                 except ValueError:
-                    channel = Channel.create(f"{caller.name}'s group {random.randint(0, 99)}", caller)
+                    for _ in range(5):
+                        try:
+                            channel = Channel.create(f"{caller.name}'s group {random.randint(0, 99)}", caller)
+                            break
+                        except ValueError:
+                            continue
+                    else:
+                        caller.msg("Could not create a group channel; try again.")
+                        return
                 channel.add_listener(caller)
                 caller.group_channel = channel.id
             else:

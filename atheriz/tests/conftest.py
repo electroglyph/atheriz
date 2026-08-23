@@ -68,6 +68,13 @@ def global_test_env():
     get_singleton._LOGGEDIN_CMDSET = None
     get_singleton._UNLOGGEDIN_CMDSET = None
     get_singleton._CONNECTION_MANAGER = None
+    try:
+        import atheriz.connection_screen as _cs
+
+        with _cs._LOCK:
+            _cs._CACHE = (0, 0, 0)
+    except Exception:
+        pass
 
     # Stop any background ticker left running by a previous test, then drop the
     # singleton, so its at_tick coros can't fire across the test boundary.
@@ -97,6 +104,13 @@ def global_test_env():
         obj_singleton.TEMP_BANNED_IPS.clear()
     with obj_singleton.CREATION_COOLDOWN_LOCK:
         obj_singleton.CREATION_COOLDOWNS.clear()
+    try:
+        import atheriz.connection_screen as _cs2
+
+        with _cs2._LOCK:
+            _cs2._CACHE = (0, 0, 0)
+    except Exception:
+        pass
 
 
 @pytest.fixture(autouse=True)

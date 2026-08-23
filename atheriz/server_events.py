@@ -25,9 +25,12 @@ def at_char_create(account_name: str, char_name: str, password: str):
         char_name (str): The name of the character to create.
         password (str): The password of the account.
     """
-    results: list[Account] = filter_by(lambda x: x.is_account and x.name == account_name)
+    results: list[Account] = filter_by(lambda x: x.is_account and x.name.lower() == account_name.lower())
     nh = get_node_handler()
     home = nh.get_node(settings.DEFAULT_HOME)
+    if home is None:
+        print(f"Default home {settings.DEFAULT_HOME} not found; aborting char create")
+        return
     if results:
         for r in results:
             if not r.check_password(password):

@@ -459,7 +459,8 @@ class TestDoResetCommand:
 
         with patch.object(az, "setup_game_folder", return_value=True), \
              patch.object(az, "importlib", fake_importlib), \
-             patch.object(az, "spawn_daemon") as m_spawn:
+             patch.object(az, "spawn_daemon") as m_spawn, \
+             patch("psutil.net_connections", return_value=[]):
             do_reset_command(args)
 
         fake_importlib.import_module.assert_called_once()
@@ -519,7 +520,7 @@ class TestSpawnDaemon:
         with patch("atheriz.settings.SAVE_PATH", str(tmp_path)), \
              patch("atheriz.atheriz.setup_game_folder"), \
              patch("subprocess.Popen") as mock_popen, \
-             patch("psutil.pid_exists", return_value=True):
+             patch("atheriz.atheriz._pid_is_server_process", return_value=True):
             spawn_daemon(args)
         # No new process spawned
         mock_popen.assert_not_called()

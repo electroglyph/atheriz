@@ -859,6 +859,15 @@ def main():
     reset_parser.add_argument(
         "-f", "--force", action="store_true", help="Skip confirmation prompt"
     )
+    reset_parser.add_argument(
+        "--port",
+        type=int,
+        default=None,
+        help=f"Override default port (default: {settings.WEBSERVER_PORT})",
+    )
+    reset_parser.add_argument(
+        "--host", type=str, default=None, help="Override the host interface to bind to"
+    )
 
     create_parser = subparsers.add_parser(
         "create", help="Create a new account and character"
@@ -1020,13 +1029,21 @@ def spawn_daemon(args):
         try:
             with open(pid_file, "r") as f:
                 old_pid = int(f.read().strip())
-            import psutil
-            if psutil.pid_exists(old_pid):
+        except Exception:
+            from atheriz.logger import logger
+
+            logger.warning("Removing stale pid file (unreadable/corrupt)")
+            pid_file.unlink(missing_ok=True)
+        else:
+            try:
+                import psutil
+            except ImportError:
+                print("Cannot verify server state; install psutil or remove server.pid manually")
+                return
+            if _pid_is_server_process(old_pid):
                 print(f"Server is already running with PID: {old_pid}")
                 return
-        except Exception:
-            pass
-        pid_file.unlink(missing_ok=True)
+            pid_file.unlink(missing_ok=True)
 
     cmd = [sys.executable, "-m", "atheriz.atheriz", "start", "--foreground"]
     if args.port:
@@ -1154,15 +1171,15 @@ def do_reset_command(args):
     pid_file = save_path / "server.pid"
 
     is_running = False
+    pid = None
     if pid_file.exists():
         try:
             with open(pid_file, "r") as f:
                 pid = int(f.read().strip())
-            import psutil
-            if psutil.pid_exists(pid):
+            if _pid_is_server_process(pid):
                 is_running = True
         except Exception:
-            pass
+            pid = None
 
     if not args.force:
         print("WARNING: This will delete ALL game data. This action cannot be undone.")
@@ -1173,15 +1190,39 @@ def do_reset_command(args):
             print("Aborted.")
             return
 
+    target_port = getattr(args, "port", None) or settings.WEBSERVER_PORT
+    try:
+        import psutil
+
+        telnet_port = getattr(settings, "TELNET_PORT", None) if getattr(settings, "TELNET_ENABLED", False) else None
+        ports_to_check = {target_port}
+        if telnet_port:
+            ports_to_check.add(telnet_port)
+        for conn in psutil.net_connections(kind="inet"):
+            if conn.status != "LISTEN" or conn.laddr.port not in ports_to_check:
+                continue
+            if not conn.pid:
+                print(f"Port {conn.laddr.port} still listening; abort")
+                return
+            try:
+                proc = psutil.Process(conn.pid)
+                if proc.name().lower().startswith(("python", "atheriz")):
+                    print(f"Port {conn.laddr.port} still listening; abort")
+                    return
+            except Exception:
+                continue
+    except Exception:
+        pass
+
     try:
         from atheriz.database_setup import get_database
         get_database().close()
     except Exception:
         pass
 
-    if is_running:
+    if is_running and pid is not None:
         print("Stopping server...")
-        stop_server()
+        stop_server(port=target_port)
         print(f"Waiting for server (PID {pid}) to stop...", end="", flush=True)
         import time
         import psutil
@@ -1194,7 +1235,6 @@ def do_reset_command(args):
             except Exception:
                 break
         print(" Done.")
-        # Brief pause to ensure OS file locks are fully released
         time.sleep(0.5)
 
     print("Deleting game data...")

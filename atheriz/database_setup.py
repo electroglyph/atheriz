@@ -19,6 +19,15 @@ class Database:
         self.connection = connection
 
     def close(self):
+        """Close the shared SQLite connection.
+
+        All DB access must hold ``db.lock`` (see ``objects.py:190``,
+        ``map.py:398`` for canonical examples). This method is only safe
+        from quiesced contexts where no other thread holds ``db.lock`` or
+        an open cursor — e.g. the ``reset`` command stops the server first
+        (``atheriz.py:1186-1202``). Calling it while other threads are
+        mid-statement will close the underlying connection underneath them.
+        """
         global _DATABASE, _CLOSED
         with _INIT_LOCK:
             with self.lock:
