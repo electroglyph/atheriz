@@ -46,6 +46,10 @@ class GiveCommand(Command):
             caller.msg("You already have that!")
             return
 
+        if not (target.is_container or target.is_npc or target.is_pc):
+            caller.msg(f"You can't give anything to {target.get_display_name(caller)}.")
+            return
+
         if obj_name == "all":
             objs_to_give = list(caller.contents)
         else:
