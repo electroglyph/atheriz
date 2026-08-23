@@ -378,6 +378,8 @@ def verb_actor_stance_components(verb, plural=False):
             in the same tense as the ingoing verb.
     """
     tense = verb_tense(verb)
+    if tense is None:
+        return (verb, verb)
     them = "*" if plural else "3"
     them_suff = "" if plural else "s"
 

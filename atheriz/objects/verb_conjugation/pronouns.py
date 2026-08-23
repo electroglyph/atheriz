@@ -183,6 +183,8 @@ ALIASES = {
     "object": "object pronoun",
     "pa": "possessive adjective",
     "pp": "possessive pronoun",
+    "adjective": "possessive adjective",
+    "pronoun": "possessive pronoun",
 }
 
 
