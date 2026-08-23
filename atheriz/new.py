@@ -7,6 +7,7 @@ that inherit from the base atheriz classes.
 
 import inspect
 import ast
+import keyword
 from pathlib import Path
 from typing import Any, Callable
 
@@ -85,6 +86,7 @@ class TemplateGenerator:
         self.add_db_ops: bool = False
         self.add_access_lock: bool = False
         self.type_checking_imports: list[tuple[str, list[str]]] = []
+        self.init_body: list[str] | None = None
 
     def add_type_checking_imports(self, imports: list[tuple[str, list[str]]]):
         """
@@ -257,7 +259,11 @@ class TemplateGenerator:
         ])
         
         has_methods = bool(self.methods)
-        
+
+        if self.init_body is not None:
+            lines.extend([""] + self.init_body)
+            has_methods = True
+
         if self.add_flags:
             lines.extend([
                 "",
@@ -482,16 +488,13 @@ def generate_loggedin_cmdset_template() -> str:
 
     generator = TemplateGenerator("LoggedinCmdSet", "atheriz.commands.loggedin.cmdset", "LoggedinCmdSet")
     generator.add_methods(methods)
-
-    content = generator.generate()
-    # Replace 'pass' with __init__ with commented example
-    init_body = "\n".join([
+    generator.init_body = [
         "    def __init__(self):",
         "        super().__init__()",
         "        # self.add(MyLoggedinCommand())",
-    ])
-    content = content.replace("    pass", init_body)
-    return content
+    ]
+
+    return generator.generate()
 
 
 def generate_unloggedin_cmdset_template() -> str:
@@ -503,16 +506,13 @@ def generate_unloggedin_cmdset_template() -> str:
 
     generator = TemplateGenerator("UnloggedinCmdSet", "atheriz.commands.unloggedin.cmdset", "UnloggedinCmdSet")
     generator.add_methods(methods)
-
-    content = generator.generate()
-    # Replace 'pass' with __init__ with commented example
-    init_body = "\n".join([
+    generator.init_body = [
         "    def __init__(self):",
         "        super().__init__()",
         "        # self.add(MyUnloggedinCommand())",
-    ])
-    content = content.replace("    pass", init_body)
-    return content
+    ]
+
+    return generator.generate()
 
 
 
@@ -549,6 +549,11 @@ def create_game_folder(folder_name: str) -> None:
     import getpass
 
     folder_path = Path(folder_name)
+
+    raw = folder_path.name
+    if not raw or raw == "." or not raw.isidentifier() or keyword.iskeyword(raw):
+        print(f"Error: '{raw}' is not a valid Python identifier (hyphens/digits/spaces not allowed).")
+        return
 
     folder_exists_initially = folder_path.exists()
 
