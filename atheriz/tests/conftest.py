@@ -19,6 +19,7 @@ from atheriz import settings, database_setup
 from atheriz.globals import objects as obj_singleton
 from atheriz.globals import get as get_singleton
 from atheriz.globals import startstop as startstop_module
+from atheriz.globals import salt as salt_module
 
 
 def _clear_ticker():
@@ -35,8 +36,11 @@ def _clear_ticker():
 def global_test_env():
     # Setup: Redirect SAVE_PATH to a temporary directory
     old_save_path = settings.SAVE_PATH
+    old_salt = salt_module._SALT
     temp_dir = tempfile.mkdtemp()
     settings.SAVE_PATH = temp_dir
+    if salt_module._SALT is None:
+        salt_module._SALT = "testsalt"
 
     # Ensure database singleton is fresh
     if database_setup._DATABASE:
@@ -87,6 +91,7 @@ def global_test_env():
         pass
 
     settings.SAVE_PATH = old_save_path
+    salt_module._SALT = old_salt
     obj_singleton._ALL_OBJECTS.clear()
     with obj_singleton.TEMP_BANNED_LOCK:
         obj_singleton.TEMP_BANNED_IPS.clear()

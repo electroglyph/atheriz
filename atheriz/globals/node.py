@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from atheriz.objects.base_door import Door
 
 from atheriz.database_setup import get_database
+import atheriz.settings as settings
 
 
 class NodeHandler:
@@ -27,6 +28,7 @@ class NodeHandler:
         # guards self.doors:
         self.lock3 = RLock()
         self.doors: dict[Coord, dict[str, Door]] = {}
+        self._modified = False
 
         self.load()
 
@@ -42,53 +44,101 @@ class NodeHandler:
                         self.areas[name] = dill.loads(blob)
                     except Exception as e:
                         logger.error(f"Error loading area {name}: {e}")
-
                 cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
                 for area, x, y, z, blob in cursor:
                     try:
                         self.transitions[Coord(area, x, y, z)] = dill.loads(blob)
                     except Exception as e:
                         logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
-
                 cursor.execute("SELECT area, x, y, z, data FROM doors")
                 for area, x, y, z, blob in cursor:
                     try:
                         self.doors[Coord(area, x, y, z)] = dill.loads(blob)
                     except Exception as e:
                         logger.error(f"Error loading doors at {area},{x},{y},{z}: {e}")
-
-            max_node_id = 0
-            for area in self.areas.values():
-                for grid in area.grids.values():
-                    for node in grid.nodes.values():
-                        if hasattr(node, "resolve_relations"):
-                            node.resolve_relations()
-                        if node.id is not None and node.id > max_node_id:
-                            max_node_id = node.id
-                        existing = get(node.id)
-                        if existing and existing[0] is not node:
-                            logger.warning(
-                                f"Node id collision on load: id {node.id} already mapped to {existing[0]}"
-                            )
-                        add_object(node)
-            if max_node_id:
-                set_id(max(get_id(), max_node_id))
-
         except Exception as e:
             logger.error(f"Error loading node data from DB: {e}")
+            return
+        max_node_id = 0
+        for area in list(self.areas.values()):
+            try:
+                for grid in list(area.grids.values()):
+                    for node in list(grid.nodes.values()):
+                        try:
+                            if hasattr(node, "resolve_relations"):
+                                node.resolve_relations()
+                            if node.id is not None and node.id > max_node_id:
+                                max_node_id = node.id
+                            existing = get(node.id)
+                            if existing and existing[0] is not node:
+                                logger.warning(
+                                    f"Node id collision on load: id {node.id} already mapped to {existing[0]}"
+                                )
+                            add_object(node)
+                        except Exception as e:
+                            logger.error(f"Error resolving node {getattr(node, 'id', '?')} in area {getattr(area, 'name', '?')}: {e}")
+            except Exception as e:
+                logger.error(f"Error resolving area {getattr(area, 'name', '?')}: {e}")
+        if max_node_id:
+            set_id(max(get_id(), max_node_id))
 
-    def save(self):
+    def _is_dirty(self):
+        with self.lock:
+            areas = list(self.areas.values())
+            if self._modified:
+                return True
+        for a in areas:
+            with a.lock:
+                if getattr(a, "is_modified", False):
+                    return True
+                grids = list(a.grids.values())
+            for g in grids:
+                with g.lock:
+                    if getattr(g, "is_modified", False):
+                        return True
+                    nodes = list(g.nodes.values())
+                for n in nodes:
+                    try:
+                        with n.lock:
+                            if getattr(n, "is_modified", False):
+                                return True
+                    except Exception:
+                        pass
+        with self.lock2:
+            if self._modified:
+                return True
+        with self.lock3:
+            if self._modified:
+                return True
+        return False
+
+    def save(self, force=False):
+        if not force and not settings.ALWAYS_SAVE_ALL and not self._is_dirty():
+            return
         db = get_database()
-
-        try:
-            with self.lock:
-                areas_snapshot = [detach(a) for a in self.areas.values()]
-            with self.lock2:
-                transitions_snapshot = [detach(t) for t in self.transitions.values()]
-            with self.lock3:
-                doors_snapshot = [(k, detach(v)) for k, v in self.doors.items()]
-        except Exception as e:
-            logger.error(f"Error preparing node save: {e}")
+        areas_snapshot = []
+        with self.lock:
+            refs = list(self.areas.values())
+            for a in refs:
+                try:
+                    areas_snapshot.append(detach(a))
+                except Exception as e:
+                    logger.error(f"Error detaching area {getattr(a, 'name', '?')}: {e}")
+        transitions_snapshot = []
+        with self.lock2:
+            for t in list(self.transitions.values()):
+                try:
+                    transitions_snapshot.append(detach(t))
+                except Exception as e:
+                    logger.error(f"Error detaching transition {t}: {e}")
+        doors_snapshot = []
+        with self.lock3:
+            for k, v in list(self.doors.items()):
+                try:
+                    doors_snapshot.append((k, detach(v)))
+                except Exception as e:
+                    logger.error(f"Error detaching doors at {k}: {e}")
+        if not areas_snapshot and not transitions_snapshot and not doors_snapshot:
             return
 
         with db.lock:
@@ -116,6 +166,20 @@ class NodeHandler:
             except Exception as e:
                 cursor.execute("ROLLBACK")
                 logger.error(f"Error saving node data to DB: {e}")
+                return
+        with self.lock:
+            self._modified = False
+            for a in list(self.areas.values()):
+                a.is_modified = False
+                with a.lock:
+                    for g in list(a.grids.values()):
+                        g.is_modified = False
+                        for n in list(g.nodes.values()):
+                            try:
+                                with n.lock:
+                                    n.is_modified = False
+                            except Exception:
+                                pass
 
     def get_doors(self, coord: Coord) -> dict[str, Door] | None:
         with self.lock3:
@@ -136,6 +200,7 @@ class NodeHandler:
             else:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
+            self._modified = True
         mh = get_map_handler()
         mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
         if mi:
@@ -165,6 +230,7 @@ class NodeHandler:
                         rem_keys.append(k)
                 for k in rem_keys:
                     del d[k]
+            self._modified = True
         mh = get_map_handler()
         mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
         if mi:
@@ -187,16 +253,20 @@ class NodeHandler:
             grid.add_node(node)
             area.add_grid(grid)
             self.add_area(area)
+        with self.lock:
+            self._modified = True
 
     def add_area(self, area: NodeArea):
         with self.lock:
             self.areas[area.name] = area
+            self._modified = True
 
     def remove_area(self, name: str):
         with self.lock:
             area = self.areas.pop(name, None)
             if area:
                 area.clear()
+            self._modified = True
 
     def clear(self):
         with self.lock:
@@ -206,10 +276,13 @@ class NodeHandler:
                         remove_object(node)
                 v.clear()
             self.areas.clear()
+            self._modified = True
         with self.lock2:
             self.transitions.clear()
+            self._modified = True
         with self.lock3:
             self.doors.clear()
+            self._modified = True
 
     def get_area(self, name: str) -> NodeArea | None:
         with self.lock:
@@ -236,6 +309,8 @@ class NodeHandler:
                 grid.remove_node((coord.x, coord.y))
         if node:
             remove_object(node)
+        with self.lock:
+            self._modified = True
 
     def get_nodes(self, coords: list[Coord]) -> list:
         result = []
@@ -247,11 +322,13 @@ class NodeHandler:
 
     def add_transition(self, transition: Transition):
         with self.lock2:
-            self.transitions[transition.to_coord] = transition  # key = destination
+            self.transitions[transition.to_coord] = transition
+            self._modified = True
 
     def remove_transition(self, destination: Coord):
         with self.lock2:
             self.transitions.pop(destination, None)
+            self._modified = True
 
     def find_transitions(
         self, from_z=None, to_z=None, from_area=None, to_area=None

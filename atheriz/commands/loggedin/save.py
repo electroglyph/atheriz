@@ -26,7 +26,7 @@ class SaveCommand(Command):
         start = time.time()
         save_objects()
         get_map_handler().save()
-        get_node_handler().save()
+        get_node_handler().save(force=True)
         if settings.TIME_SYSTEM_ENABLED:
             get_game_time().save()
         caller.msg(f"Saved in {(time.time() - start) * 1000} milliseconds.")
