@@ -80,8 +80,8 @@ class _ParsedFunc:
     kwargs: dict = dataclasses.field(default_factory=dict)
 
     # state storage
-    fullstr: str = ""
-    infuncstr: str = ""
+    fullstr: list = dataclasses.field(default_factory=list)
+    infuncstr: list = dataclasses.field(default_factory=list)
     double_quoted: int = -1
     current_kwarg: str = ""
     open_lparens: int = 0
@@ -89,11 +89,19 @@ class _ParsedFunc:
     open_lcurly: int = 0
     exec_return = ""
 
+    def __post_init__(self):
+        if isinstance(self.fullstr, str):
+            self.fullstr = list(self.fullstr)
+        if isinstance(self.infuncstr, str):
+            self.infuncstr = list(self.infuncstr)
+
     def get(self):
         return self.funcname, self.args, self.kwargs
 
     def __str__(self):
-        return self.fullstr + self.infuncstr
+        fs = "".join(self.fullstr) if isinstance(self.fullstr, list) else self.fullstr
+        ins = "".join(self.infuncstr) if isinstance(self.infuncstr, list) else self.infuncstr
+        return fs + ins
 
 
 class ParsingError(RuntimeError):
@@ -184,7 +192,7 @@ class FuncParser:
             callables (dict): A mapping `{"funcname": callable, ...}` to validate
 
         Raise:
-            AssertionError: If invalid callable was found.
+            ParsingError: If invalid callable was found.
 
         Notes:
             This is also a good method to override for individual parsers
@@ -200,8 +208,10 @@ class FuncParser:
                     exc_info=True,
                 )
             else:
-                assert mapping.varargs, f"Parse-func callable '{funcname}' does not support *args."
-                assert mapping.varkw, f"Parse-func callable '{funcname}' does not support **kwargs."
+                if not mapping.varargs:
+                    raise ParsingError(f"Parse-func callable '{funcname}' does not support *args.")
+                if not mapping.varkw:
+                    raise ParsingError(f"Parse-func callable '{funcname}' does not support **kwargs.")
 
     def execute(self, parsedfunc, raise_errors=False, **reserved_kwargs):
         """
@@ -310,6 +320,8 @@ class FuncParser:
             ParsingError: If a problem is encountered and `raise_errors` is True.
 
         """
+        if len(string) > 2 * settings.WEBSOCKET_MAX_MESSAGE_SIZE:
+            raise ParsingError(f"Input too long ({len(string)} chars)")
         start_char = self.start_char
         escape_char = self.escape_char
 
@@ -328,17 +340,17 @@ class FuncParser:
         exec_return = ""
 
         curr_func = None
-        fullstr = ""  # final string
-        infuncstr = ""  # string parts inside the current level of $funcdef (including $)
+        fullstr = []
+        infuncstr = []
         literal_infuncstr = False
 
         for ichar, char in enumerate(string):
             if escaped:
                 # always store escaped characters verbatim
                 if curr_func:
-                    infuncstr += char
+                    infuncstr.append(char)
                 else:
-                    fullstr += char
+                    fullstr.append(char)
                 escaped = False
                 continue
 
@@ -348,9 +360,9 @@ class FuncParser:
                 if ichar + 1 >= len(string):
                     # trailing singleton escape char: keep it verbatim
                     if curr_func:
-                        infuncstr += char
+                        infuncstr.append(char)
                     else:
-                        fullstr += char
+                        fullstr.append(char)
                     return_str = True
                     continue
                 escaped = True
@@ -368,22 +380,22 @@ class FuncParser:
                                 "Only allows for parsing nesting function defs "
                                 f"to a max depth of {_MAX_NESTING}."
                             )
-                        infuncstr += char
+                        infuncstr.append(char)
                         continue
                     else:
                         # merge any pending execution return before storing state
                         if exec_return != "":
-                            infuncstr += str(exec_return)
+                            infuncstr.extend(list(str(exec_return)))
                             exec_return = ""
                         # store state for the current func and stack it
                         curr_func.current_kwarg = current_kwarg
-                        curr_func.infuncstr = infuncstr
+                        curr_func.infuncstr = list(infuncstr)
                         curr_func.double_quoted = double_quoted
                         curr_func.open_lparens = open_lparens
                         curr_func.open_lsquare = open_lsquare
                         curr_func.open_lcurly = open_lcurly
                         current_kwarg = ""
-                        infuncstr = ""
+                        infuncstr = []
                         double_quoted = -1
                         open_lparens = 0
                         open_lsquare = 0
@@ -393,12 +405,12 @@ class FuncParser:
                         callstack.append(curr_func)
 
                 # start a new func
-                curr_func = _ParsedFunc(prefix=char, fullstr=char)
+                curr_func = _ParsedFunc(prefix=char, fullstr=[char])
                 continue
 
             if not curr_func:
                 # a normal piece of string
-                fullstr += char
+                fullstr.append(char)
                 # this must always be a string
                 return_str = True
                 continue
@@ -409,7 +421,7 @@ class FuncParser:
                 # if exec_return is followed by any other character
                 # than one demarking an arg,kwarg or function-end
                 # it must immediately merge as a string
-                infuncstr += str(exec_return)
+                infuncstr.extend(list(str(exec_return)))
                 exec_return = ""
 
             if char == '"':  # note that this is the same as '\"'
@@ -418,12 +430,15 @@ class FuncParser:
                     infuncstr = infuncstr[1:]
                     double_quoted = -1
                 elif double_quoted > 0:
-                    prefix = infuncstr[0:double_quoted]
-                    infuncstr = prefix + infuncstr[double_quoted + 1 :]
+                    s = "".join(infuncstr)
+                    prefix = s[:double_quoted]
+                    s = prefix + s[double_quoted + 1 :]
+                    infuncstr = list(s)
                     double_quoted = -1
                 else:
-                    infuncstr += char
-                    infuncstr = infuncstr.strip()
+                    infuncstr.append(char)
+                    s = "".join(infuncstr).strip()
+                    infuncstr = list(s)
                     double_quoted = len(infuncstr) - 1
                     literal_infuncstr = True
 
@@ -431,43 +446,45 @@ class FuncParser:
 
             if double_quoted >= 0:
                 # inside a string definition - this escapes everything else
-                infuncstr += char
+                infuncstr.append(char)
                 continue
 
             # special characters detected inside function def
             if char == "(":
                 if not curr_func.funcname:
                     # end of a funcdef name
-                    curr_func.funcname = infuncstr
-                    curr_func.fullstr += infuncstr + char
-                    infuncstr = ""
+                    curr_func.funcname = "".join(infuncstr)
+                    curr_func.fullstr.extend(infuncstr)
+                    curr_func.fullstr.append(char)
+                    infuncstr = []
                 else:
                     # just a random left-parenthesis
-                    infuncstr += char
+                    infuncstr.append(char)
                 # track the open left-parenthesis
                 open_lparens += 1
                 continue
 
             if char in "[]":
                 # a square bracket - start/end of a list?
-                infuncstr += char
+                infuncstr.append(char)
                 open_lsquare += -1 if char == "]" else 1
                 continue
 
             if char in "{}":
                 # a curly bracket - start/end of dict/set?
-                infuncstr += char
+                infuncstr.append(char)
                 open_lcurly += -1 if char == "}" else 1
                 continue
 
             if char == "=":
                 # beginning of a keyword argument
                 if exec_return != "":
-                    infuncstr = exec_return
-                current_kwarg = infuncstr.strip()
+                    infuncstr = list(str(exec_return))
+                current_kwarg = "".join(infuncstr).strip()
                 curr_func.kwargs[current_kwarg] = ""
-                curr_func.fullstr += infuncstr + char
-                infuncstr = ""
+                curr_func.fullstr.extend(infuncstr)
+                curr_func.fullstr.append(char)
+                infuncstr = []
                 continue
 
             if char in (",)"):
@@ -477,13 +494,13 @@ class FuncParser:
                     # one open left-parens is ok (beginning of arglist), more
                     # indicate we are inside an unclosed, nested (, so
                     # we need to not count this as a new arg or end of funcdef.
-                    infuncstr += char
+                    infuncstr.append(char)
                     open_lparens -= 1 if char == ")" else 0
                     continue
 
                 if open_lcurly > 0 or open_lsquare > 0:
                     # also escape inside an open [... or {... structure
-                    infuncstr += char
+                    infuncstr.append(char)
                     continue
 
                 if exec_return != "":
@@ -494,24 +511,26 @@ class FuncParser:
                         curr_func.args.append(exec_return)
                 else:
                     if not literal_infuncstr:
-                        infuncstr = infuncstr.strip()
-
+                        s = "".join(infuncstr).strip()
+                        infuncstr = list(s)
                     # store a string instead
                     if current_kwarg:
-                        curr_func.kwargs[current_kwarg] = infuncstr
-                    elif literal_infuncstr or infuncstr.strip():
+                        curr_func.kwargs[current_kwarg] = "".join(infuncstr)
+                    elif literal_infuncstr or "".join(infuncstr).strip():
                         # don't store the empty string
-                        curr_func.args.append(infuncstr)
+                        curr_func.args.append("".join(infuncstr))
 
                 # note that at this point either exec_return or infuncstr will
                 # be empty. We need to store the full string so we can print
                 # it 'raw' in case this funcdef turns out to e.g. lack an
                 # ending paranthesis
-                curr_func.fullstr += str(exec_return) + infuncstr + char
+                curr_func.fullstr.extend(list(str(exec_return)))
+                curr_func.fullstr.extend(infuncstr)
+                curr_func.fullstr.append(char)
 
                 current_kwarg = ""
                 exec_return = ""
-                infuncstr = ""
+                infuncstr = []
                 literal_infuncstr = False
 
                 if char == ")":
@@ -524,7 +543,7 @@ class FuncParser:
                         exec_return = ""
                     elif escape:
                         # get function and set it as escaped
-                        exec_return = escape_char + curr_func.fullstr
+                        exec_return = escape_char + "".join(curr_func.fullstr)
                     else:
                         # execute the function - the result may be a string or
                         # something else
@@ -540,9 +559,12 @@ class FuncParser:
                         if curr_func.infuncstr:
                             # if we have an ongoing string, we must merge the
                             # exec into this as a part of that string
-                            infuncstr = curr_func.infuncstr + str(exec_return)
+                            infuncstr = list(curr_func.infuncstr)
+                            infuncstr.extend(list(str(exec_return)))
                             exec_return = ""
-                        curr_func.infuncstr = ""
+                        else:
+                            infuncstr = []
+                        curr_func.infuncstr = []
                         double_quoted = curr_func.double_quoted
                         open_lparens = curr_func.open_lparens
                         open_lsquare = curr_func.open_lsquare
@@ -551,14 +573,14 @@ class FuncParser:
                         # back to the top-level string - this means the
                         # exec_return should always be converted to a string.
                         curr_func = None
-                        fullstr += str(exec_return)
+                        fullstr.extend(list(str(exec_return)))
                         if return_str:
                             exec_return = ""
-                        infuncstr = ""
+                        infuncstr = []
                         literal_infuncstr = False
                 continue
 
-            infuncstr += char
+            infuncstr.append(char)
 
         if curr_func:
             # if there is a still open funcdef or defs remaining in callstack,
@@ -567,22 +589,23 @@ class FuncParser:
             callstack.append(curr_func)
             for inum, _ in enumerate(range(len(callstack))):
                 funcstr = str(callstack.pop())
-                if inum == 0 and funcstr.endswith(infuncstr):
+                infuncstr_str = "".join(infuncstr)
+                if inum == 0 and funcstr.endswith(infuncstr_str):
                     # avoid double-echo of nested function calls. This should
                     # produce a good result most of the time, but it's not 100%
                     # guaranteed to, since it can ignore genuine duplicates
-                    infuncstr = funcstr
+                    infuncstr = list(funcstr)
                 else:
-                    infuncstr = funcstr + infuncstr
+                    infuncstr = list(funcstr + infuncstr_str)
 
         if not return_str and exec_return != "":
             # return explicit return
             return exec_return
 
         # add the last bit to the finished string
-        fullstr += infuncstr
+        fullstr.extend(infuncstr)
 
-        return fullstr
+        return "".join(fullstr)
 
     def parse_to_any(
         self, string, raise_errors=False, escape=False, strip=False, **reserved_kwargs
@@ -1100,7 +1123,13 @@ def funcparser_callable_pluralize(*args, **kwargs):
         plural_word = f"{singular_word}s"
     else:
         singular_word, number = args[0], 1
-    return singular_word if abs(int(number)) in (0, 1) else plural_word
+    try:
+        n = abs(int(number))
+    except (TypeError, ValueError) as e:
+        if kwargs.get("raise_errors"):
+            raise ParsingError(f"pluralize: number {number!r} not an integer") from e
+        return singular_word
+    return singular_word if n in (0, 1) else plural_word
 
 
 # def funcparser_callable_search(*args, caller=None, access="control", **kwargs):

@@ -47,8 +47,8 @@ class TestParsedFunc:
         assert pf.funcname == ""
         assert pf.args == []
         assert pf.kwargs == {}
-        assert pf.fullstr == ""
-        assert pf.infuncstr == ""
+        assert "".join(pf.fullstr) == ""
+        assert "".join(pf.infuncstr) == ""
         assert pf.double_quoted == -1
         assert pf.current_kwarg == ""
         assert pf.open_lparens == 0
@@ -156,13 +156,13 @@ class TestValidateCallables:
     def test_function_without_args_raises(self, global_test_env):
         def myfn(x, **kwargs):  # no *args
             return ""
-        with pytest.raises(AssertionError, match="\\*args"):
+        with pytest.raises(ParsingError, match="\\*args"):
             FuncParser({"myfn": myfn})
 
     def test_function_without_kwargs_raises(self, global_test_env):
         def myfn(*args):  # no **kwargs
             return ""
-        with pytest.raises(AssertionError, match="\\*\\*kwargs"):
+        with pytest.raises(ParsingError, match="\\*\\*kwargs"):
             FuncParser({"myfn": myfn})
 
     def test_lambda_passes(self, global_test_env):

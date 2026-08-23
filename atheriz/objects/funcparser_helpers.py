@@ -387,11 +387,43 @@ def safe_convert_to_types(converters, *args, raise_errors=True, **kwargs):
     container_end_char = {"(": ")", "[": "]", "{": "}"}
 
     def _manual_parse_containers(inp):
-        startchar = inp[0]
-        endchar = inp[-1]
-        if endchar != container_end_char.get(startchar):
+        if not inp or inp[0] not in container_end_char or inp[-1] != container_end_char[inp[0]]:
             return None
-        return [str(part).strip() for part in inp[1:-1].split(",")]
+        inner = inp[1:-1]
+        parts = []
+        cur = []
+        in_single = False
+        in_double = False
+        escaped = False
+        for ch in inner:
+            if escaped:
+                cur.append(ch)
+                escaped = False
+                continue
+            if ch == "\\":
+                escaped = True
+                cur.append(ch)
+                continue
+            if ch == "'" and not in_double:
+                in_single = not in_single
+                cur.append(ch)
+                continue
+            if ch == '"' and not in_single:
+                in_double = not in_double
+                cur.append(ch)
+                continue
+            if in_single or in_double:
+                cur.append(ch)
+                continue
+            if ch in "([{":
+                return None
+            if ch == ",":
+                parts.append("".join(cur).strip())
+                cur = []
+                continue
+            cur.append(ch)
+        parts.append("".join(cur).strip())
+        return [str(p).strip() for p in parts]
 
     def _safe_eval(inp):
         if not inp:
