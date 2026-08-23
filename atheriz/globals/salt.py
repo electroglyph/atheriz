@@ -1,4 +1,5 @@
 from __future__ import annotations
+import os
 import secrets
 import threading
 from atheriz import settings
@@ -30,12 +31,43 @@ def get_salt() -> str:
         # likely by atheriz new) or if we are clearly in a game folder.
         if secret_path.is_absolute() or is_in_game_folder():
             if salt_file.exists():
-                _SALT = salt_file.read_text().strip()
+                try:
+                    salt_file.chmod(0o600)
+                except OSError:
+                    pass
+                raw = salt_file.read_text().strip()
+                if not raw:
+                    raise RuntimeError(
+                        f"Corrupt salt file {salt_file}: empty/whitespace. "
+                        f"Restore secret/salt.txt from backup; deleting it invalidates all password hashes."
+                    )
+                _SALT = raw
                 return _SALT
 
             salt_val = str(secrets.randbits(64))
             salt_file.parent.mkdir(parents=True, exist_ok=True)
-            salt_file.write_text(salt_val)
+            try:
+                salt_file.parent.chmod(0o700)
+            except OSError:
+                pass
+            try:
+                fd = os.open(str(salt_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+                try:
+                    os.write(fd, salt_val.encode())
+                finally:
+                    os.close(fd)
+            except FileExistsError:
+                raw = salt_file.read_text().strip()
+                if not raw:
+                    raise RuntimeError(f"Corrupt salt file {salt_file} after concurrent create.")
+                _SALT = raw
+                return _SALT
+            except OSError:
+                salt_file.write_text(salt_val)
+                try:
+                    salt_file.chmod(0o600)
+                except OSError:
+                    pass
             _SALT = salt_val
             return _SALT
 
