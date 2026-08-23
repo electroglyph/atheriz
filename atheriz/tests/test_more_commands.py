@@ -173,6 +173,7 @@ class TestGiveCommand:
         room = _make_room()
         c.location = room
         target = Object.create(None, "Bob")
+        target.is_container = True
         room.search = MagicMock(return_value=[target])
         c.search = MagicMock(return_value=[])
         args = MagicMock(object="apple", target=["bob"])
@@ -184,6 +185,7 @@ class TestGiveCommand:
         room = _make_room()
         c.location = room
         target = Object.create(None, "Bob")
+        target.is_container = True
         target.msg = MagicMock()
         room.search = MagicMock(return_value=[target])
         apple = Object.create(None, "Apple")
@@ -203,6 +205,7 @@ class TestGiveCommand:
         room = _make_room()
         c.location = room
         target = Object.create(None, "Bob")
+        target.is_container = True
         room.search = MagicMock(return_value=[target])
         c.search = MagicMock(return_value=[])
         args = MagicMock(object="apple", target=["to", "bob"])

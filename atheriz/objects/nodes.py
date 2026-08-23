@@ -83,17 +83,14 @@ class Node(Flags, AccessLock):
     """
 
     def __eq__(self, other):
+        if self is other:
+            return True
         if isinstance(other, Node):
-            return self.coord == other.coord
+            return self.id != -1 and self.id == other.id
         return False
 
     def __hash__(self):
-        return hash(self.coord)
-
-    def __ne__(self, other):
-        if isinstance(other, Node):
-            return self.coord != other.coord
-        return True
+        return hash(self.id)
 
     @hookable
     def at_desc(self, looker: Object | None = None, **kwargs):
@@ -437,7 +434,7 @@ class Node(Flags, AccessLock):
 
         all_ops = _delete_recursive(self) if recursive else _move_contents(self)
         _self_delete()
-        return 0, all_ops
+        return 1, all_ops
 
     @hookable
     def at_delete(self, caller: Object) -> bool:
@@ -1034,8 +1031,9 @@ class NodeGrid:
             old_to_new: dict[Coord, Coord] = {}
             for node, dst in moved:
                 new_coord = Coord(self.area, dst[0], dst[1], self.z)
-                old_to_new[node.coord] = new_coord
-                node.coord = new_coord
+                with node.lock:
+                    old_to_new[node.coord] = new_coord
+                    node.coord = new_coord
                 self.nodes[dst] = node
             # rewrite every link in this grid that points at a moved coord
             # (covers neighbors' inbound links and links between moved rooms)

@@ -72,7 +72,9 @@ def test_node_equality():
     node2 = Node(coord=Coord("TestArea", 0, 0, 0))
     node3 = Node(coord=Coord("TestArea", 1, 0, 0))
 
-    assert node1 == node2
+    assert node1 == node1
+    assert node1 != node2
+    assert node1.coord == node2.coord
     assert node1 != node3
 
 

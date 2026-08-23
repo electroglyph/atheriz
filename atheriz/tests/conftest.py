@@ -48,6 +48,10 @@ def global_test_env():
 
     # Clear other globals/state if necessary
     obj_singleton._ALL_OBJECTS.clear()
+    with obj_singleton.TEMP_BANNED_LOCK:
+        obj_singleton.TEMP_BANNED_IPS.clear()
+    with obj_singleton.CREATION_COOLDOWN_LOCK:
+        obj_singleton.CREATION_COOLDOWNS.clear()
 
     # Reset internal ID counter to ensure predictable test IDs if needed
     get_singleton.set_id(-1)
@@ -84,6 +88,10 @@ def global_test_env():
 
     settings.SAVE_PATH = old_save_path
     obj_singleton._ALL_OBJECTS.clear()
+    with obj_singleton.TEMP_BANNED_LOCK:
+        obj_singleton.TEMP_BANNED_IPS.clear()
+    with obj_singleton.CREATION_COOLDOWN_LOCK:
+        obj_singleton.CREATION_COOLDOWNS.clear()
 
 
 @pytest.fixture(autouse=True)
@@ -119,10 +127,16 @@ def reset_connection_manager():
 
 @pytest.fixture(autouse=True)
 def reset_banned_ips():
-    """Clear the temporary ban list between tests."""
-    obj_singleton.TEMP_BANNED_IPS.clear()
+    """Clear the temporary ban list and creation cooldowns between tests."""
+    with obj_singleton.TEMP_BANNED_LOCK:
+        obj_singleton.TEMP_BANNED_IPS.clear()
+    with obj_singleton.CREATION_COOLDOWN_LOCK:
+        obj_singleton.CREATION_COOLDOWNS.clear()
     yield
-    obj_singleton.TEMP_BANNED_IPS.clear()
+    with obj_singleton.TEMP_BANNED_LOCK:
+        obj_singleton.TEMP_BANNED_IPS.clear()
+    with obj_singleton.CREATION_COOLDOWN_LOCK:
+        obj_singleton.CREATION_COOLDOWNS.clear()
 
 
 @pytest.fixture

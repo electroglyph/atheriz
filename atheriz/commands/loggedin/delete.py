@@ -102,7 +102,7 @@ class DeleteCommand(Command):
             node_count, ops = result
             if ops:
                 delete_objects(ops)
-            count = node_count + len(ops) + 1
+            count = node_count + len(ops)
 
         if count > 1:
             caller.msg(f"Deleted or moved {full_name}, {count} objects total.")
