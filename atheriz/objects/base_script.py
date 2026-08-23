@@ -118,11 +118,14 @@ class Script(Flags, DbOps):
         Returns:
             bool: True upon successful deletion.
         """
-        if self.child:
-            self.remove_hooks()
-            if self.id in self.child.scripts:
-                self.child.scripts.remove(self.id)
-                self.child.is_modified = True
+        child = self.child
+        if child is not None:
+            self.remove_hooks(child)
+            with child.lock:
+                if self.id in child.scripts:
+                    child.scripts.remove(self.id)
+                    child.is_modified = True
+            object.__setattr__(self, "child", None)
         if not self.is_temporary:
             ops = [self.get_del_ops()]
             delete_objects(ops)
