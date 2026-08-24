@@ -56,29 +56,40 @@ def astar(
     nh = get_node_handler()
 
     def get_link_nodes(node: Node) -> list[Node]:
+        with node.lock:
+            links = list(node.links) if node.links else []
         result = []
-        if node.links:
-            for l in node.links:
-                n = nh.get_node(l.coord)
-                if n:
-                    result.append(n)
+        for l in links:
+            n = nh.get_node(l.coord)
+            if n:
+                result.append(n)
         return result
 
     def get_link_nodes_caller(node: Node) -> list[Node]:
+        with node.lock:
+            links = list(node.links) if node.links else []
+        if not links:
+            return []
+        doors = nh.get_doors(node.coord)
         result = []
-        if node.links:
-            doors = nh.get_doors(node.coord)
-            for l in node.links:
-                if doors:
-                    d = doors.get(l.name)
-                    if d:
-                        if d.closed and not d.access(caller, "open"):
-                            continue
-                        if d.locked and not d.access(caller, "unlock"):
-                            continue
-                n = nh.get_node(l.coord)
-                if n:
-                    result.append(n)
+        for l in links:
+            if doors:
+                d = doors.get(l.name)
+                if d:
+                    try:
+                        with d.lock:
+                            closed = d.closed
+                            locked = d.locked
+                    except AttributeError:
+                        closed = d.closed
+                        locked = d.locked
+                    if closed and not d.access(caller, "open"):
+                        continue
+                    if locked and not d.access(caller, "unlock"):
+                        continue
+            n = nh.get_node(l.coord)
+            if n:
+                result.append(n)
         return result
 
     start_node = PathNode(None, start)

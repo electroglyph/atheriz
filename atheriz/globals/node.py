@@ -426,7 +426,7 @@ class NodeHandler:
     def get_doors(self, coord: Coord) -> dict[str, Door] | None:
         with self.lock3:
             d = self.doors.get(coord)
-            return d
+            return dict(d) if d else None
 
     def add_door(self, door: Door):
         with self.lock3:
