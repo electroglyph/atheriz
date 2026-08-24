@@ -427,10 +427,22 @@ class Node(Flags, AccessLock):
             if getattr(self, "_is_tickable", False):
                 get_async_ticker().remove_coro(self.at_tick, self._tick_seconds)
             get_node_handler().remove_node(self.coord)
-            self.is_deleted = True
+            with self.lock:
+                self.is_deleted = True
 
         if not self.at_delete(caller):
             return None
+
+        # Mark deleted before moving contents so that concurrent moves
+        # into this node can observe the flag while holding the node's
+        # lock and abort. The grid check in object movement (holding the
+        # node's grid lock) serializes with the grid removal below and
+        # ensures a mover either completes before this snapshot or aborts
+        # after seeing the flag/grid absence, avoiding orphaned objects.
+        with self.lock:
+            if getattr(self, "is_deleted", False):
+                return None
+            self.is_deleted = True
 
         all_ops = _delete_recursive(self) if recursive else _move_contents(self)
         _self_delete()

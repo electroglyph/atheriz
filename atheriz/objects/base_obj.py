@@ -999,27 +999,89 @@ class Object(Flags, DbOps, AccessLock):
             return sorted([a, b], key=get_key)
 
         def do_item_move():
-            # update to be atomic and bypass thread-safety patch
-            if loc:
-                ordered = sort_locks(loc, destination)
-                with ordered[0].lock:
-                    with ordered[1].lock:
-                        if loc.is_node:
-                            if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
-                                return False
-                            loc.at_object_leave(destination, to_exit, **kwargs)
-                        loc._contents.discard(self.id)
-                        destination._contents.add(self.id)
-                        object.__setattr__(loc, "is_modified", True)
-                        object.__setattr__(destination, "is_modified", True)
-            else:
-                with destination.lock:
+            # Prevent moving into a node that is concurrently being deleted.
+            # Hold the destination (and source, if a node) grid lock while
+            # holding the node locks, validating that each node is still
+            # present in its grid and not marked deleted. This serializes
+            # with grid removal and avoids orphaned objects.
+            def _grid_for(node):
+                if not getattr(node, "is_node", False):
+                    return None
+                try:
+                    nh = get_node_handler()
+                    area = nh.get_area(node.coord.area)
+                    if area is None:
+                        return None
+                    return area.get_grid(node.coord.z)
+                except Exception:
+                    return None
+
+            loc_grid = _grid_for(loc) if loc and getattr(loc, "is_node", False) else None
+            dest_grid = _grid_for(destination) if getattr(destination, "is_node", False) else None
+            grids = []
+            if loc_grid is not None:
+                grids.append(loc_grid)
+            if dest_grid is not None and dest_grid is not loc_grid:
+                grids.append(dest_grid)
+            grids.sort(key=lambda g: (g.area, g.z))
+
+            def _do_with_nodes():
+                if getattr(destination, "is_deleted", False):
+                    return False
+                if getattr(destination, "is_node", False) and dest_grid is not None:
+                    if dest_grid.nodes.get((destination.coord.x, destination.coord.y)) is not destination:
+                        return False
+                if loc:
+                    if loc.is_node:
+                        if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
+                            return False
+                        loc.at_object_leave(destination, to_exit, **kwargs)
+                    loc._contents.discard(self.id)
+                    destination._contents.add(self.id)
+                    object.__setattr__(loc, "is_modified", True)
+                    object.__setattr__(destination, "is_modified", True)
+                else:
                     if destination.is_node:
                         if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
                             return False
                         destination.at_object_receive(loc, to_exit, **kwargs)
                     destination._contents.add(self.id)
                     object.__setattr__(destination, "is_modified", True)
+                return True
+
+            # Acquire grids before nodes to avoid deadlock with grid
+            # operations that also acquire in grid-then-node order.
+            if loc:
+                ordered = sort_locks(loc, destination)
+                if grids:
+                    if len(grids) == 1:
+                        with grids[0].lock:
+                            with ordered[0].lock:
+                                with ordered[1].lock:
+                                    if not _do_with_nodes():
+                                        return False
+                    else:
+                        with grids[0].lock:
+                            with grids[1].lock:
+                                with ordered[0].lock:
+                                    with ordered[1].lock:
+                                        if not _do_with_nodes():
+                                            return False
+                else:
+                    with ordered[0].lock:
+                        with ordered[1].lock:
+                            if not _do_with_nodes():
+                                return False
+            else:
+                if grids and dest_grid is not None:
+                    with dest_grid.lock:
+                        with destination.lock:
+                            if not _do_with_nodes():
+                                return False
+                else:
+                    with destination.lock:
+                        if not _do_with_nodes():
+                            return False
             with self.lock:
                 object.__setattr__(self, "location", destination)
                 object.__setattr__(self, "last_touched_by", destination.id)
@@ -1037,53 +1099,97 @@ class Object(Flags, DbOps, AccessLock):
         from_exit = reverse_link.name if reverse_link else None
 
         def do_move():
-            # update to be atomic
+            # Same grid-then-node serialization as above for moves between nodes.
+            def _grid_for(node):
+                if not getattr(node, "is_node", False):
+                    return None
+                try:
+                    nh = get_node_handler()
+                    area = nh.get_area(node.coord.area)
+                    if area is None:
+                        return None
+                    return area.get_grid(node.coord.z)
+                except Exception:
+                    return None
+
             object.__setattr__(self, "is_modified", True)
             old_coord = loc.coord if loc and loc.is_node else None
+            loc_grid = _grid_for(loc) if loc and getattr(loc, "is_node", False) else None
+            dest_grid = _grid_for(destination)  # destination is Node here
+            grids = []
+            if loc_grid is not None:
+                grids.append(loc_grid)
+            if dest_grid is not None and dest_grid is not loc_grid:
+                grids.append(dest_grid)
+            grids.sort(key=lambda g: (g.area, g.z))
+
+            def _do_move_with_nodes_locked():
+                if getattr(destination, "is_deleted", False):
+                    return False
+                if dest_grid is not None:
+                    if dest_grid.nodes.get((destination.coord.x, destination.coord.y)) is not destination:
+                        return False
+                if loc and loc.is_node:
+                    if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
+                        return False
+                    loc.at_object_leave(destination, to_exit, **kwargs)
+                if destination.is_node:
+                    if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                        return False
+                    destination.at_object_receive(loc, to_exit, **kwargs)
+                if loc:
+                    loc._contents.discard(self.id)
+                destination._contents.add(self.id)
+                if loc:
+                    object.__setattr__(loc, "is_modified", True)
+                object.__setattr__(destination, "is_modified", True)
+                destination.add_exits(self, internal=True)
+                with self.lock:
+                    self.location = destination
+                    self.last_touched_by = destination.id
+                return True
+
             if loc:
                 ordered = sort_locks(loc, destination)
-                with ordered[0].lock:
-                    with ordered[1].lock:
-                        if loc.is_node:
-                            if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
+                if grids:
+                    if len(grids) == 1:
+                        with grids[0].lock:
+                            with ordered[0].lock:
+                                with ordered[1].lock:
+                                    if not _do_move_with_nodes_locked():
+                                        return False
+                    else:
+                        with grids[0].lock:
+                            with grids[1].lock:
+                                with ordered[0].lock:
+                                    with ordered[1].lock:
+                                        if not _do_move_with_nodes_locked():
+                                            return False
+                else:
+                    with ordered[0].lock:
+                        with ordered[1].lock:
+                            if not _do_move_with_nodes_locked():
                                 return False
-                            loc.at_object_leave(destination, to_exit, **kwargs)
-                        if destination.is_node:
-                            if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
-                                return False
-                            destination.at_object_receive(loc, to_exit, **kwargs)
-                        loc._contents.discard(self.id)
-                        destination._contents.add(self.id)
-                        object.__setattr__(loc, "is_modified", True)
-                        object.__setattr__(destination, "is_modified", True)
-                        destination.add_exits(self, internal=True)
-                        with self.lock:
-                            self.location = destination
-                            self.last_touched_by = destination.id
                 if announce:
                     self.announce_move_to(loc, to_exit, **kwargs)
                     self.announce_move_from(destination, from_exit, **kwargs)
             else:
-                with destination.lock:
-                    if destination.is_node:
-                        if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                if dest_grid is not None:
+                    with dest_grid.lock:
+                        with destination.lock:
+                            if not _do_move_with_nodes_locked():
+                                return False
+                else:
+                    with destination.lock:
+                        if not _do_move_with_nodes_locked():
                             return False
-                        destination.at_object_receive(loc, to_exit, **kwargs)
-                    destination._contents.add(self.id)
-                    object.__setattr__(destination, "is_modified", True)
-                    destination.add_exits(self, internal=True)
-                    with self.lock:
-                        self.location = destination
-                        self.last_touched_by = destination.id
                 if announce:
                     self.announce_move_from(destination, from_exit, **kwargs)
             if settings.MAP_ENABLED:
                 mh = get_map_handler()
                 if self.is_pc:
-                    # PCs are always listeners (they get map updates)
                     mh.move_listener(self, destination.coord, old_coord)
                 if self.is_mapable:
-                    # mapables appear on the map
                     mh.move_mapable(self, destination.coord, old_coord)
             self.at_post_move(destination, to_exit, **kwargs)
             return True
