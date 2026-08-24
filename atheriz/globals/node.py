@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
+import sqlite3
 
 
 class NodeHandler:
@@ -115,15 +116,17 @@ class NodeHandler:
     def save(self, force=False):
         if not force and not settings.ALWAYS_SAVE_ALL and not self._is_dirty():
             return
-        db = get_database()
-        areas_snapshot = []
+        try:
+            db = get_database()
+        except RuntimeError:
+            logger.warning("NodeHandler.save: database closed, skipping")
+            return
         with self.lock:
-            refs = list(self.areas.values())
-            for a in refs:
-                try:
-                    areas_snapshot.append(detach(a))
-                except Exception as e:
-                    logger.error(f"Error detaching area {getattr(a, 'name', '?')}: {e}")
+            area_refs = list(self.areas.values())
+            handler_was = self._modified
+            if handler_was:
+                self._modified = False
+        handler_cleared = handler_was
         transitions_snapshot = []
         with self.lock2:
             for t in list(self.transitions.values()):
@@ -138,19 +141,116 @@ class NodeHandler:
                     doors_snapshot.append((k, detach(v)))
                 except Exception as e:
                     logger.error(f"Error detaching doors at {k}: {e}")
+        areas_snapshot = []
+        cleared_areas: list[NodeArea] = []
+        cleared_grids: list[NodeGrid] = []
+        cleared_nodes: list[Node] = []
+        for a in area_refs:
+            with a.lock:
+                was_area = a.is_modified
+                local_grids: list[NodeGrid] = []
+                local_nodes: list[Node] = []
+                grids = list(a.grids.values())
+                for g in grids:
+                    with g.lock:
+                        if g.is_modified:
+                            g.is_modified = False
+                            local_grids.append(g)
+                        nodes = list(g.nodes.values())
+                        for n in nodes:
+                            try:
+                                with n.lock:
+                                    if n.is_modified:
+                                        n.is_modified = False
+                                        local_nodes.append(n)
+                            except Exception:
+                                pass
+                if was_area:
+                    a.is_modified = False
+                try:
+                    blob = detach(a)
+                except Exception as e:
+                    logger.error(f"Error detaching area {getattr(a, 'name', '?')}: {e}")
+                    if was_area:
+                        a.is_modified = True
+                    for g in local_grids:
+                        with g.lock:
+                            g.is_modified = True
+                    for n in local_nodes:
+                        try:
+                            with n.lock:
+                                n.is_modified = True
+                        except Exception:
+                            pass
+                    continue
+                areas_snapshot.append(blob)
+                if was_area:
+                    cleared_areas.append(a)
+                cleared_grids.extend(local_grids)
+                cleared_nodes.extend(local_nodes)
         if not areas_snapshot and not transitions_snapshot and not doors_snapshot:
+            if handler_cleared:
+                with self.lock:
+                    self._modified = True
+            for a in cleared_areas:
+                with a.lock:
+                    a.is_modified = True
+            for g in cleared_grids:
+                with g.lock:
+                    g.is_modified = True
+            for n in cleared_nodes:
+                try:
+                    with n.lock:
+                        n.is_modified = True
+                except Exception:
+                    pass
             return
-
         with db.lock:
-            cursor = db.connection.cursor()
-            cursor.execute("BEGIN TRANSACTION")
+            if getattr(db, "_closed", False) is True:
+                logger.warning("NodeHandler.save: database closed, skipping")
+                if handler_cleared:
+                    with self.lock:
+                        self._modified = True
+                for a in cleared_areas:
+                    with a.lock:
+                        a.is_modified = True
+                for g in cleared_grids:
+                    with g.lock:
+                        g.is_modified = True
+                for n in cleared_nodes:
+                    try:
+                        with n.lock:
+                            n.is_modified = True
+                    except Exception:
+                        pass
+                return
+            try:
+                cursor = db.connection.cursor()
+                cursor.execute("BEGIN TRANSACTION")
+            except sqlite3.ProgrammingError as e:
+                logger.warning(f"NodeHandler.save: database closed ({e}), skipping")
+                if handler_cleared:
+                    with self.lock:
+                        self._modified = True
+                for a in cleared_areas:
+                    with a.lock:
+                        a.is_modified = True
+                for g in cleared_grids:
+                    with g.lock:
+                        g.is_modified = True
+                for n in cleared_nodes:
+                    try:
+                        with n.lock:
+                            n.is_modified = True
+                    except Exception:
+                        pass
+                return
             try:
                 for area in areas_snapshot:
                     cursor.execute(
                         "INSERT OR REPLACE INTO areas (name, data) VALUES (?, ?)",
                         (area.name, dill.dumps(area)),
                     )
-
                 for t in transitions_snapshot:
                     cursor.execute(
                         "INSERT OR REPLACE INTO transitions (to_area, to_x, to_y, to_z, data) VALUES (?, ?, ?, ?, ?)",
@@ -161,25 +261,29 @@ class NodeHandler:
                         "INSERT OR REPLACE INTO doors (area, x, y, z, data) VALUES (?, ?, ?, ?, ?)",
                         (coord.area, coord.x, coord.y, coord.z, dill.dumps(doors_dict)),
                     )
-
                 cursor.execute("COMMIT")
             except Exception as e:
-                cursor.execute("ROLLBACK")
+                try:
+                    cursor.execute("ROLLBACK")
+                except sqlite3.ProgrammingError:
+                    pass
                 logger.error(f"Error saving node data to DB: {e}")
+                if handler_cleared:
+                    with self.lock:
+                        self._modified = True
+                for a in cleared_areas:
+                    with a.lock:
+                        a.is_modified = True
+                for g in cleared_grids:
+                    with g.lock:
+                        g.is_modified = True
+                for n in cleared_nodes:
+                    try:
+                        with n.lock:
+                            n.is_modified = True
+                    except Exception:
+                        pass
                 return
-        with self.lock:
-            self._modified = False
-            for a in list(self.areas.values()):
-                a.is_modified = False
-                with a.lock:
-                    for g in list(a.grids.values()):
-                        g.is_modified = False
-                        for n in list(g.nodes.values()):
-                            try:
-                                with n.lock:
-                                    n.is_modified = False
-                            except Exception:
-                                pass
 
     def get_doors(self, coord: Coord) -> dict[str, Door] | None:
         with self.lock3:

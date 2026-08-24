@@ -201,7 +201,7 @@ def load_objects():
     objects = {}
     max_id = -1
     with db.lock:
-        if getattr(db, "_closed", False):
+        if getattr(db, "_closed", False) is True:
             logger.warning("load_objects: database closed, skipping")
             return
         try:
@@ -274,7 +274,7 @@ def save_objects(force: bool = False):
     ]
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
-        if getattr(db, "_closed", False):
+        if getattr(db, "_closed", False) is True:
             logger.warning("save_objects: database closed, skipping")
             return
         try:
@@ -317,7 +317,7 @@ def delete_objects(ops: list[tuple[str, tuple]]):
         logger.warning("delete_objects: database closed, skipping")
         return
     with db.lock:
-        if getattr(db, "_closed", False):
+        if getattr(db, "_closed", False) is True:
             logger.warning("delete_objects: database closed, skipping")
             return
         try:
