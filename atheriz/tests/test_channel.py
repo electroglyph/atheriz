@@ -104,7 +104,7 @@ def test_channel_target_and_message(caller, channel):
             cmd.run(caller, args)
             mock_msg.assert_called_with("hello", caller)
 
-    assert cmd.channel == channel
+    assert GlobalChannelCommand._channel_cache.get("public") is channel
 
 
 def test_channel_lookup_cached(caller, channel):

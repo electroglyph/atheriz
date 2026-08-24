@@ -28,46 +28,34 @@ class TestChannelCommandRace:
     def test_concurrent_invocations_use_their_own_target(self, global_test_env):
         """INTENT: when two players run `channel` concurrently on the shared
         singleton command, each must subscribe to the channel they chose, not
-        the one the other player selected."""
+        the one the other player selected. `Barrier(2)` forces the race on the
+        shared `_channel_cache` and the former `self.channel` mutation."""
         chan_a = Channel.create("alpha")
         chan_b = Channel.create("beta")
         caller_a = self._caller("Alice")
         caller_b = self._caller("Bob")
 
         cmd = ChannelCommand()
+        barrier = threading.Barrier(2, timeout=5)
 
-        a_at_channel_set = threading.Event()
-        release_a = threading.Event()
-        blocked = False
+        def run_a():
+            barrier.wait(timeout=5)
+            cmd.run(caller_a, make_args(channel="alpha", subscribe=True))
 
-        orig = ChannelCommand.channel
+        def run_b():
+            barrier.wait(timeout=5)
+            cmd.run(caller_b, make_args(channel="beta", subscribe=True))
 
-        def blocking_setter(self, ch):
-            nonlocal blocked
-            orig.fset(self, ch)
-            if not blocked:
-                blocked = True
-                a_at_channel_set.set()
-                release_a.wait(5)
+        t_a = threading.Thread(target=run_a)
+        t_b = threading.Thread(target=run_b)
+        t_a.start()
+        t_b.start()
+        t_a.join(timeout=5)
+        t_b.join(timeout=5)
 
-        ChannelCommand.channel = property(orig.fget, blocking_setter, orig.fdel)
-        try:
-            args_a = make_args(channel="alpha", subscribe=True)
-            args_b = make_args(channel="beta", subscribe=True)
-
-            t_a = threading.Thread(target=cmd.run, args=(caller_a, args_a))
-            t_a.start()
-
-            assert a_at_channel_set.wait(2), "first invocation never set its channel"
-            cmd.run(caller_b, args_b)
-            release_a.set()
-            t_a.join(2)
-        finally:
-            ChannelCommand.channel = property(orig.fget, orig.fset, orig.fdel)
-
-        assert not t_a.is_alive(), "first invocation did not finish"
-        caller_b.subscribe.assert_called_once_with(chan_b)
+        assert not t_a.is_alive() and not t_b.is_alive(), "invocations hung"
         caller_a.subscribe.assert_called_once_with(chan_a)
+        caller_b.subscribe.assert_called_once_with(chan_b)
 
     def test_stale_cached_channel_rejected_after_delete(self, global_test_env):
         """INTENT: after a channel is deleted, the shared cache must not hand

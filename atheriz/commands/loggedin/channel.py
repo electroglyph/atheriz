@@ -81,11 +81,11 @@ class ChannelCommand(Command):
             caller.msg(f"{self.parser.format_help()}")
             return
         name = args.channel.lower()
-        channel = self._channel_cache.get(name)
-        if channel is not None and (channel.is_deleted or channel.name.lower() != name):
-            with self._channel_cache_lock:
+        with self._channel_cache_lock:
+            channel = self._channel_cache.get(name)
+            if channel is not None and (channel.is_deleted or channel.name.lower() != name):
                 self._channel_cache.pop(name, None)
-            channel = None
+                channel = None
         if channel is None:
             result = filter_by(lambda x: x.is_channel and x.name.lower() == name)
             if not result:
@@ -114,4 +114,3 @@ class ChannelCommand(Command):
                 caller.msg("You do not have permission to send to this channel.")
                 return
             channel.msg(args.message, caller)
-        self.channel = channel
