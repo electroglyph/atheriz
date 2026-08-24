@@ -43,17 +43,21 @@ class GameTime:
         if row is None:
             if self._load_legacy_file():
                 return
-            self.ticks = 0
-            self.alarms: dict[tuple[str, str], list[tuple[int, bool, Any]]] = {}
+            with self.lock:
+                self.ticks = 0
+                self.alarms: dict[tuple[str, str], list[tuple[int, bool, Any]]] = {}
             return
         try:
             data = dill.loads(row[0])
-            self.ticks = data["ticks"]
-            self.alarms = data["alarms"]
         except Exception as e:
             logger.warning(f"Corrupt gametime row, resetting to defaults: {e}")
-            self.ticks = 0
-            self.alarms = {}
+            with self.lock:
+                self.ticks = 0
+                self.alarms = {}
+            return
+        with self.lock:
+            self.ticks = data["ticks"]
+            self.alarms = data["alarms"]
 
     def _load_legacy_file(self) -> bool:
         path = Path(settings.SAVE_PATH) / "time"
@@ -65,23 +69,24 @@ class GameTime:
         except (json.JSONDecodeError, OSError) as e:
             logger.warning(f"Corrupt time file, resetting to defaults: {e}")
             return False
-        self.ticks = data.get("ticks", 0)
-        self.alarms = {}
-        for k, v in data.get("alarms", {}).items():
-            try:
-                key = ast.literal_eval(k)
-                if isinstance(key, tuple) and len(key) == 2:
-                    cleaned = []
-                    for id, repeat, adata in v:
-                        if adata is None or isinstance(adata, dict):
-                            cleaned.append((id, repeat, adata))
-                        else:
-                            logger.warning(f"Skipping alarm with non-dict data: {k}")
-                    if cleaned:
-                        self.alarms[key] = cleaned
-            except (ValueError, SyntaxError):
-                logger.warning(f"Error parsing alarm key: {k}")
-                pass
+        with self.lock:
+            self.ticks = data.get("ticks", 0)
+            self.alarms = {}
+            for k, v in data.get("alarms", {}).items():
+                try:
+                    key = ast.literal_eval(k)
+                    if isinstance(key, tuple) and len(key) == 2:
+                        cleaned = []
+                        for id, repeat, adata in v:
+                            if adata is None or isinstance(adata, dict):
+                                cleaned.append((id, repeat, adata))
+                            else:
+                                logger.warning(f"Skipping alarm with non-dict data: {k}")
+                        if cleaned:
+                            self.alarms[key] = cleaned
+                except (ValueError, SyntaxError):
+                    logger.warning(f"Error parsing alarm key: {k}")
+                    pass
         try:
             self.save()
         except Exception as e:
@@ -220,7 +225,21 @@ class GameTime:
                 if objs:
                     func = getattr(objs[0], "at_alarm")
                     if not atp.add_task(func, after_time, data):
-                        logger.warning(f"Task queue full; alarm for {objs[0]} dropped.")
+                        logger.warning(f"Task queue full; alarm for {objs[0]} retrying.")
+                        import time as _time
+
+                        _time.sleep(0.05)
+                        if not atp.add_task(func, after_time, data):
+                            logger.warning(
+                                f"Task queue still full; running alarm inline for {objs[0]}"
+                            )
+                            try:
+                                func(after_time, data)
+                            except Exception:
+                                logger.error(
+                                    f"Error in inline alarm for {objs[0]}",
+                                    exc_info=True,
+                                )
                 else:
                     logger.warning(f"obj not found for alarm: {id}")
         after_sun = self.sun_up_alt(after_time["hour"])
