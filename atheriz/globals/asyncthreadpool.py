@@ -164,15 +164,24 @@ class AsyncThreadPool:
                 task = self.task_queue.get()
             if task is None:  # kill signal
                 if relief:
-                    # always re-queue the sentinel: stop() pushes exactly one
-                    # spare, so consuming one here can starve a fixed worker
-                    # of its kill signal. put_nowait cannot fail — the get()
-                    # above freed the slot.
-                    self.task_queue.put_nowait(None)
-                    if self._stopped:
-                        with self._busy_lock:
+                    # re-queue sentinel so fixed workers still get theirs;
+                    # get() freed one slot but concurrent add_task may have
+                    # filled it before put (1.3), so handle Full like stop().
+                    try:
+                        self.task_queue.put_nowait(None)
+                    except queue.Full:
+                        try:
+                            self.task_queue.get_nowait()
+                        except queue.Empty:
+                            pass
+                        try:
+                            self.task_queue.put_nowait(None)
+                        except queue.Full:
+                            pass
+                    with self._busy_lock:
+                        if self._stopped:
                             self._relief_count -= 1
-                        return
+                            return
                     time.sleep(0.05)
                     continue
                 break
@@ -220,8 +229,9 @@ class AsyncThreadPool:
                 kwargs={"relief": True},
                 name=f"AsyncThreadPoolRelief-{seq}",
             )
+            with self._busy_lock:
+                self._relief_threads.append(t)
             t.start()
-            self._relief_threads.append(t)
 
     def _watchdog_loop(self):
         interval = getattr(settings, "THREADPOOL_WATCHDOG_INTERVAL", 5.0) or 5.0
@@ -271,7 +281,8 @@ class AsyncThreadPool:
             wait (bool, optional): wait for async tasks to finish. Defaults to True.
             timeout (float, optional): seconds to wait for worker threads. Defaults to 10.
         """
-        self._stopped = True
+        with self._busy_lock:
+            self._stopped = True
         logger.info("at AsyncThreadPool.stop() ...")
         try:
             self.threads[0].stop(wait)
@@ -298,9 +309,12 @@ class AsyncThreadPool:
                 t.join(timeout=timeout)
                 if t.is_alive():
                     logger.warning(f"Thread {t.name} did not stop within {timeout}s")
-            for t in self._relief_threads:
+            with self._busy_lock:
+                relief_snapshot = list(self._relief_threads)
+            for t in relief_snapshot:
                 t.join(timeout=1)
-            self._relief_threads = [t for t in self._relief_threads if t.is_alive()]
+            with self._busy_lock:
+                self._relief_threads = [t for t in self._relief_threads if t.is_alive()]
             self.threads[0].join(timeout=timeout)
             if self.threads[0].is_alive():
                 logger.warning(
@@ -317,23 +331,24 @@ class AsyncThreadPool:
         Returns True when the task was accepted, False when the queue is
         full (newest task rejected; admission never blocks the caller, #32).
         """
-        if self._stopped:
-            now = time.monotonic()
-            if now - self._last_full_log > 10:
-                self._last_full_log = now
-                logger.warning("[AsyncThreadPool] task submitted after stop; discarded")
-            return False
-        try:
-            self.task_queue.put_nowait((func, args, kwargs))
-        except queue.Full:
-            now = time.monotonic()
-            if now - self._last_full_log > 10:
-                # throttled so a task flood doesn't cause a logging flood
-                self._last_full_log = now
-                logger.warning(
-                    f"[AsyncThreadPool] task queue full ({self.task_queue.maxsize}); dropping task"
-                )
-            return False
+        with self._busy_lock:
+            if self._stopped:
+                now = time.monotonic()
+                if now - self._last_full_log > 10:
+                    self._last_full_log = now
+                    logger.warning("[AsyncThreadPool] task submitted after stop; discarded")
+                return False
+            try:
+                self.task_queue.put_nowait((func, args, kwargs))
+            except queue.Full:
+                now = time.monotonic()
+                if now - self._last_full_log > 10:
+                    # throttled so a task flood doesn't cause a logging flood
+                    self._last_full_log = now
+                    logger.warning(
+                        f"[AsyncThreadPool] task queue full ({self.task_queue.maxsize}); dropping task"
+                    )
+                return False
         self._maybe_spawn_relief_worker()
         return True
         
@@ -348,8 +363,8 @@ class AsyncThreadPool:
         """
         async def _delayed_task():
             await asyncio.sleep(delay)
-            self.add_task(func, *args, **kwargs)
-        _submit(_delayed_task(), self.loop)
+            get_async_threadpool().add_task(func, *args, **kwargs)
+        _submit(_delayed_task(), get_async_threadpool().loop)
 
 
 class AsyncTicker:
@@ -404,7 +419,6 @@ class AsyncTicker:
                     self._release(coro)
 
         async def timer(self):
-            atp = get_async_threadpool()
             loop = asyncio.get_running_loop()
             next_tick = loop.time() + self.interval
             try:
@@ -425,6 +439,7 @@ class AsyncTicker:
                                 # removed between snapshot and dispatch
                                 self.pending.discard(c)
                                 continue
+                        atp = get_async_threadpool()
                         if not atp.add_task(self._tick_once, c):
                             self._release(c)
                     next_tick += self.interval
