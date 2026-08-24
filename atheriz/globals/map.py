@@ -484,20 +484,22 @@ class MapHandler:
         to_coord: Coord,
         from_coord: Coord | None = None,
     ):
-        # if from_coord and from_coord.area == to_coord.area and from_coord.z == to_coord.z:
-        #     return
         from_map = None
+        to_map = None
         with self.lock:
             if from_coord:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
-        if not to_map:
-            to_map = self._get_or_create(to_coord.area, to_coord.z)
-        if from_map:
-            from_map.remove_listener(listener)
+            if to_map is None:
+                to_map = MapInfo(name=to_coord.area)
+                self.data[(to_coord.area, to_coord.z)] = to_map
+            if from_map is not None:
+                from_map.remove_listener(listener)
+            if to_map is not None:
+                to_map.add_listener(listener)
+        if from_map is not None:
             from_map.render(False)
-        if to_map:
-            to_map.add_listener(listener)
+        if to_map is not None:
             to_map.render(True)
 
     def move_mapable(
@@ -512,17 +514,21 @@ class MapHandler:
             current_map.render(True)
             return
         from_map = None
+        to_map = None
         with self.lock:
             if from_coord:
                 from_map = self.data.get((from_coord.area, from_coord.z))
             to_map = self.data.get((to_coord.area, to_coord.z))
-        if not to_map:
-            to_map = self._get_or_create(to_coord.area, to_coord.z)
-        if from_map:
-            from_map.remove_mapable(mapable)
+            if to_map is None:
+                to_map = MapInfo(name=to_coord.area)
+                self.data[(to_coord.area, to_coord.z)] = to_map
+            if from_map is not None:
+                from_map.remove_mapable(mapable)
+            if to_map is not None:
+                to_map.add_mapable(mapable)
+        if from_map is not None:
             from_map.render(False)
-        if to_map:
-            to_map.add_mapable(mapable)
+        if to_map is not None:
             to_map.render(True)
 
     def remove_mapable(self, mapable: Object, from_area: str, from_z: int):
