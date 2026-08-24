@@ -7,10 +7,13 @@ from random import randint
 from string import punctuation
 import colorsys
 import math
+import threading
 from typing import TYPE_CHECKING, Any
 from atheriz.coord import Coord  # noqa: F401 — re-exported for callers
 from atheriz.globals.get import get_connection_manager, get_node_handler
 from pathlib import Path
+
+_PATCH_LOCK = threading.Lock()
 
 if TYPE_CHECKING:
     from atheriz.objects.nodes import Node, NodeLink
@@ -44,35 +47,37 @@ def ensure_thread_safe(obj):
     """Patches the class of the provided object if not already patched."""
     cls = obj.__class__
 
-    # only patch once
     if getattr(cls, "_is_thread_safe", False):
         return
+    with _PATCH_LOCK:
+        if getattr(cls, "_is_thread_safe", False):
+            return
 
-    orig_get = object.__getattribute__
-    orig_set = object.__setattr__
+        orig_get = object.__getattribute__
+        orig_set = object.__setattr__
 
-    def __getattribute__(self, name):
-        # always allow access to the lock itself and other essentials
-        if name in ("lock", "__dict__", "__class__", "__setstate__", "__getstate__"):
-            return orig_get(self, name)
+        def __getattribute__(self, name):
+            # always allow access to the lock itself and other essentials
+            if name in ("lock", "__dict__", "__class__", "__setstate__", "__getstate__"):
+                return orig_get(self, name)
 
-        lock = orig_get(self, "lock")
+            lock = orig_get(self, "lock")
 
-        with lock:
-            return orig_get(self, name)
+            with lock:
+                return orig_get(self, name)
 
-    def __setattr__(self, name, value):
-        if name == "lock":
-            orig_set(self, name, value)
-        else:
-            with orig_get(self, "lock"):
-                if name != "is_modified":
-                    orig_set(self, "is_modified", True)
+        def __setattr__(self, name, value):
+            if name == "lock":
                 orig_set(self, name, value)
+            else:
+                with orig_get(self, "lock"):
+                    if name != "is_modified":
+                        orig_set(self, "is_modified", True)
+                    orig_set(self, name, value)
 
-    cls.__getattribute__ = __getattribute__
-    cls.__setattr__ = __setattr__
-    cls._is_thread_safe = True
+        cls.__getattribute__ = __getattribute__
+        cls.__setattr__ = __setattr__
+        cls._is_thread_safe = True
 
 
 def detach(value):
