@@ -8,6 +8,7 @@ from atheriz.database_setup import get_database
 from atheriz.logger import logger
 import atheriz.settings as settings
 import dill
+import sqlite3
 from typing import Any, Callable, TYPE_CHECKING, Iterable
 
 if TYPE_CHECKING:
@@ -192,12 +193,23 @@ def remove_object(obj: Object | Channel | Script | Account) -> None:
 def load_objects():
     """Load objects from the database."""
     global _ALL_OBJECTS
-    db = get_database()
+    try:
+        db = get_database()
+    except RuntimeError:
+        logger.warning("load_objects: database closed, skipping")
+        return
     objects = {}
     max_id = -1
     with db.lock:
-        cursor = db.connection.cursor()
-        cursor.execute("SELECT id, data FROM objects")
+        if getattr(db, "_closed", False):
+            logger.warning("load_objects: database closed, skipping")
+            return
+        try:
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT id, data FROM objects")
+        except sqlite3.ProgrammingError as e:
+            logger.warning(f"load_objects: database closed ({e}), skipping")
+            return
         for obj_id, blob in cursor:
             try:
                 obj = dill.loads(blob)
@@ -246,7 +258,11 @@ def save_objects(force: bool = False):
     both at snapshot time and again immediately before each row is written, so
     a concurrent delete can never be resurrected by a checkpoint.
     """
-    db = get_database()
+    try:
+        db = get_database()
+    except RuntimeError:
+        logger.warning("save_objects: database closed, skipping")
+        return
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
     snapshot = [
@@ -258,8 +274,15 @@ def save_objects(force: bool = False):
     ]
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
-        cursor = db.connection.cursor()
-        cursor.execute("BEGIN TRANSACTION")
+        if getattr(db, "_closed", False):
+            logger.warning("save_objects: database closed, skipping")
+            return
+        try:
+            cursor = db.connection.cursor()
+            cursor.execute("BEGIN TRANSACTION")
+        except sqlite3.ProgrammingError as e:
+            logger.warning(f"save_objects: database closed ({e}), skipping")
+            return
         attempted = []
         try:
             for obj in to_save:
@@ -270,7 +293,10 @@ def save_objects(force: bool = False):
                 cursor.execute(ops[0], ops[1])
             cursor.execute("COMMIT")
         except Exception:
-            cursor.execute("ROLLBACK")
+            try:
+                cursor.execute("ROLLBACK")
+            except sqlite3.ProgrammingError:
+                pass
             for obj in attempted:
                 with obj.lock:
                     object.__setattr__(obj, "is_modified", True)
@@ -285,14 +311,28 @@ def delete_objects(ops: list[tuple[str, tuple]]):
     """
     if not ops:
         return
-    db = get_database()
+    try:
+        db = get_database()
+    except RuntimeError:
+        logger.warning("delete_objects: database closed, skipping")
+        return
     with db.lock:
-        cursor = db.connection.cursor()
-        cursor.execute("BEGIN TRANSACTION")
+        if getattr(db, "_closed", False):
+            logger.warning("delete_objects: database closed, skipping")
+            return
+        try:
+            cursor = db.connection.cursor()
+            cursor.execute("BEGIN TRANSACTION")
+        except sqlite3.ProgrammingError as e:
+            logger.warning(f"delete_objects: database closed ({e}), skipping")
+            return
         try:
             for op in ops:
                 cursor.execute(op[0], op[1])
             cursor.execute("COMMIT")
         except Exception:
-            cursor.execute("ROLLBACK")
+            try:
+                cursor.execute("ROLLBACK")
+            except sqlite3.ProgrammingError:
+                pass
             raise

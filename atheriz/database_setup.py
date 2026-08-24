@@ -17,6 +17,7 @@ class Database:
     def __init__(self, connection: Connection):
         self.lock = RLock()
         self.connection = connection
+        self._closed = False
 
     def close(self):
         """Close the shared SQLite connection.
@@ -31,7 +32,10 @@ class Database:
         global _DATABASE, _CLOSED
         with _INIT_LOCK:
             with self.lock:
+                if self._closed:
+                    return
                 self.connection.close()
+                self._closed = True
             _DATABASE = None
             _CLOSED = True
 
