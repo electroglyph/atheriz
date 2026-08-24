@@ -368,7 +368,7 @@ def main(argv=None):
         return 0 if ok else 1
 
     for path, content in files.items():
-        with open(path, "w", encoding="utf-8") as f:
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(content)
         print(f"Successfully generated {path}")
     return 0

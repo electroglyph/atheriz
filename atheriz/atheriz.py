@@ -49,7 +49,7 @@ def _check_admin(request: Request, action: str) -> str | None:
     token_file = secret_path / "admin.token"
     if not token_file.exists():
         return "Token file not found."
-    with open(token_file, "r") as f:
+    with open(token_file, "r", encoding="utf-8") as f:
         expected_token = f.read().strip()
     client = request.client
     if client is None or client.host not in ["127.0.0.1", "::1"]:
@@ -294,7 +294,19 @@ def format_webclient_sync_warning(
             )
         return "\n".join(lines)
     lines.append("  Copy the server's webclient over the game's:")
-    rel = os.path.relpath(str(engine_web), str(game_cwd))
+    try:
+        rel_path = Path(engine_web).resolve().relative_to(Path(game_cwd).resolve())
+        rel = str(rel_path)
+        if os_name == "nt":
+            rel = rel.replace("/", "\\")
+        else:
+            rel = rel.replace("\\", "/")
+    except ValueError:
+        rel = os.path.relpath(str(engine_web), str(game_cwd))
+        if os_name == "nt":
+            rel = rel.replace("/", "\\")
+        else:
+            rel = rel.replace("\\", "/")
     if os_name == "nt":
         lines.append(f'    xcopy "{rel}\\templates\\webclient" "web\\templates\\webclient\\" /E /Y /I')
         lines.append(f'    xcopy "{rel}\\static\\webclient" "web\\static\\webclient\\" /E /Y /I')
@@ -446,7 +458,7 @@ def start_server():
 
     if pid_file.exists():
         try:
-            with open(pid_file, "r") as f:
+            with open(pid_file, "r", encoding="utf-8") as f:
                 old_pid = int(f.read().strip())
         except Exception:
             old_pid = None
@@ -471,11 +483,11 @@ def start_server():
 
     pid_file = save_path / "server.pid"
     try:
-        with open(pid_file, "x") as f:
+        with open(pid_file, "x", encoding="utf-8") as f:
             f.write(str(pid))
     except FileExistsError:
         try:
-            with open(pid_file, "r") as f:
+            with open(pid_file, "r", encoding="utf-8") as f:
                 old_pid = int(f.read().strip())
         except Exception:
             old_pid = None
@@ -487,31 +499,44 @@ def start_server():
         except Exception:
             pass
         try:
-            with open(pid_file, "x") as f:
+            with open(pid_file, "x", encoding="utf-8") as f:
                 f.write(str(pid))
         except FileExistsError:
             try:
-                with open(pid_file, "r") as f:
+                with open(pid_file, "r", encoding="utf-8") as f:
                     old_pid = int(f.read().strip())
             except Exception:
                 old_pid = None
             if old_pid is not None and _pid_is_server_process(old_pid):
                 print(f"Server is already running with PID: {old_pid}")
                 return
-            with open(pid_file, "w") as f:
-                f.write(str(pid))
+            try:
+                pid_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+            try:
+                with open(pid_file, "x", encoding="utf-8") as f:
+                    f.write(str(pid))
+            except FileExistsError:
+                print("Failed to acquire PID file after retries")
+                return
 
     # write admin token
     token = secrets.token_hex(32)
     secret_path = Path(settings.SECRET_PATH)
-    if not secret_path.exists():
-        secret_path.mkdir(parents=True)
+    secret_path.mkdir(parents=True, exist_ok=True)
+    try:
+        secret_path.chmod(0o700)
+    except (OSError, NotImplementedError):
+        pass
 
     token_file = secret_path / "admin.token"
-    with open(token_file, "w") as f:
+    with open(token_file, "w", encoding="utf-8", newline="\n") as f:
         f.write(token)
-    # secure permission (read/write for owner only)
-    token_file.chmod(0o600)
+    try:
+        token_file.chmod(0o600)
+    except (OSError, NotImplementedError):
+        pass
 
     if settings.WEBSERVER_ENABLED:
         setup_static_files()
@@ -571,8 +596,13 @@ def start_server():
         if server_state.uvicorn_server:
             server_state.uvicorn_server.should_exit = True
 
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    try:
+        signal.signal(signal.SIGINT, signal_handler)
+        signal.signal(signal.SIGTERM, signal_handler)
+        if os.name == "nt" and hasattr(signal, "SIGBREAK"):
+            signal.signal(signal.SIGBREAK, signal_handler)
+    except ValueError:
+        pass
 
     # run the server
     try:
@@ -609,7 +639,7 @@ def request_internal_shutdown(port: int | None = None) -> bool:
         return False
 
     try:
-        with open(token_file, "r") as f:
+        with open(token_file, "r", encoding="utf-8") as f:
             token = f.read().strip()
     except Exception:
         return False
@@ -661,7 +691,7 @@ def request_create_account(
         return "unavailable", "No admin.token found. Is the server running?"
 
     try:
-        with open(token_file, "r") as f:
+        with open(token_file, "r", encoding="utf-8") as f:
             token = f.read().strip()
     except Exception:
         return "unavailable", "Could not read admin.token."
@@ -733,7 +763,7 @@ def stop_server(port: int | None = None):
     # try reading PID from file
     if pid_file.exists():
         try:
-            with open(pid_file, "r") as f:
+            with open(pid_file, "r", encoding="utf-8") as f:
                 pid = int(f.read().strip())
         except ValueError:
             print("Invalid PID file content.")
@@ -778,38 +808,46 @@ def stop_server(port: int | None = None):
                 print("\nWarning: Process still exists after kill.")
         return
 
-    # fallback: scan for process listening on the port (verified by construction)
+    # fallback: scan for process listening on the port (verified)
     print(f"Scanning for process listening on port {target_port}...")
     try:
         for conn in psutil.net_connections(kind="inet"):
-            if conn.laddr.port == target_port and conn.pid:
+            if conn.status != "LISTEN":
+                continue
+            if conn.laddr.port != target_port or not conn.pid:
+                continue
+            try:
+                proc = psutil.Process(conn.pid)
                 try:
-                    proc = psutil.Process(conn.pid)
-                    print(
-                        f"Found process {proc.name()} (PID: {proc.pid}) listening on port {target_port}...",
-                        end="",
-                        flush=True,
-                    )
-                    proc.terminate()
-
-                    # wait for process to stop
-                    try:
-                        proc.wait(timeout=3)
-                    except psutil.TimeoutExpired:
-                        print("\nProcess did not stop in time. Killing...", end="")
-                        proc.kill()
-                        proc.wait(timeout=3)
-
-                    print(" Done.")
-                    if pid_file.exists() and not proc.is_running():
-                        pid_file.unlink()
-                    return
-                except (
-                    psutil.NoSuchProcess,
-                    psutil.AccessDenied,
-                    psutil.ZombieProcess,
-                ):
-                    pass
+                    pname = proc.name().lower()
+                except Exception:
+                    continue
+                if not pname.startswith(("python", "atheriz")):
+                    continue
+                if not _process_listening_by_port(proc, target_port):
+                    continue
+                print(
+                    f"Found process {proc.name()} (PID: {proc.pid}) listening on port {target_port}...",
+                    end="",
+                    flush=True,
+                )
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except psutil.TimeoutExpired:
+                    print("\nProcess did not stop in time. Killing...", end="")
+                    proc.kill()
+                    proc.wait(timeout=3)
+                print(" Done.")
+                if pid_file.exists() and not proc.is_running():
+                    pid_file.unlink()
+                return
+            except (
+                psutil.NoSuchProcess,
+                psutil.AccessDenied,
+                psutil.ZombieProcess,
+            ):
+                pass
         print("No server process found.")
     except Exception as e:
         print(f"Error scanning for process: {e}")
@@ -981,7 +1019,7 @@ def main():
         old_pid = None
         if pid_file.exists():
             try:
-                with open(pid_file, "r") as f:
+                with open(pid_file, "r", encoding="utf-8") as f:
                     old_pid = int(f.read().strip())
             except ValueError:
                 pass
@@ -1060,7 +1098,7 @@ def spawn_daemon(args):
     pid_file = save_path / "server.pid"
     if pid_file.exists():
         try:
-            with open(pid_file, "r") as f:
+            with open(pid_file, "r", encoding="utf-8") as f:
                 old_pid = int(f.read().strip())
         except Exception:
             from atheriz.logger import logger
@@ -1086,26 +1124,22 @@ def spawn_daemon(args):
         cmd.extend(["--host", str(args.host)])
 
     save_path = Path(settings.SAVE_PATH)
-    if not save_path.exists():
-        save_path.mkdir(parents=True)
+    save_path.mkdir(parents=True, exist_ok=True)
     log_file = save_path / "server.log"
 
     print(f"Spawning server in background. Logging to: {log_file}")
 
     # platform specific flags
     kwargs = {}
-    if sys.platform == "win32":
-        # DETACHED_PROCESS = 0x00000008
-        # CREATE_NEW_PROCESS_GROUP = 0x00000200
-        # CREATE_NO_WINDOW = 0x08000000
+    if os.name == "nt":
+        DETACHED_PROCESS = getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
+        CREATE_NEW_PROCESS_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200)
         CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
-        kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
+        kwargs["creationflags"] = DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
     else:
-        # separate process group
         kwargs["start_new_session"] = True
 
-    # open log file for append
-    with open(log_file, "a") as f:
+    with open(log_file, "a", encoding="utf-8") as f:
         # spawn process
         proc = subprocess.Popen(
             cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs
@@ -1170,7 +1204,7 @@ def do_reload_command(args):
         print("Error: admin.token not found. Is the server running?")
         return
 
-    with open(token_file, "r") as f:
+    with open(token_file, "r", encoding="utf-8") as f:
         token = f.read().strip()
 
     url = f"http://localhost:{port}/_internal/hot_reload"
@@ -1207,7 +1241,7 @@ def do_reset_command(args):
     pid = None
     if pid_file.exists():
         try:
-            with open(pid_file, "r") as f:
+            with open(pid_file, "r", encoding="utf-8") as f:
                 pid = int(f.read().strip())
             if _pid_is_server_process(pid):
                 is_running = True

@@ -40,16 +40,15 @@ class BaseConnection:
         self._disconnected = False
 
     def _resolve_loop(self):
-        """Return the loop to schedule cross-thread work on. Falls back to the
-        running loop, then the async threadpool loop, when the connection was
-        constructed outside an event loop (self.loop is None)."""
+        """Return the loop to schedule cross-thread work on."""
         if self.loop is not None:
             return self.loop
         try:
             return asyncio.get_running_loop()
         except RuntimeError:
-            from atheriz.globals.get import get_async_threadpool
-            return get_async_threadpool().loop
+            raise RuntimeError(
+                "BaseConnection has no owning event loop; construct on server thread or pass loop="
+            )
 
     def _is_on_loop_thread(self) -> bool:
         """Return True if the current thread is the resolved loop's thread."""
@@ -170,8 +169,8 @@ class BaseConnection:
         if cmd == "text" and args:
             if not isinstance(args[0], str):
                 args[0] = str(args[0])
-            if not args[0].endswith(("\r\n", "\n")):
-                args[0] += "\r\n"
+            if not args[0].endswith("\n"):
+                args[0] += "\n"
             if self.session.screenreader:
                 args[0] = strip_ansi(args[0])
         self.send_command(cmd, *args, **outgoing_kwargs)

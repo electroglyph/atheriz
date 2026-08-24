@@ -321,9 +321,8 @@ class Object(Flags, DbOps, AccessLock):
                     for content in list(obj.contents):
                         if content.id not in seen:
                             if depth + 1 >= settings.MAX_SEARCH_DEPTH:
-                                stack.append((content, depth + 1))
-                            else:
-                                stack.append((content, depth + 1))
+                                continue
+                            stack.append((content, depth + 1))
             for obj in reversed(order):
                 _delete_object(obj)
 
@@ -589,20 +588,30 @@ class Object(Flags, DbOps, AccessLock):
         if getattr(channel, "is_deleted", False):
             return
         with self.lock:
+            if channel.id in self.channels:
+                return
+        if getattr(channel, "is_deleted", False):
+            return
+        channel.add_listener(self)
+        with self.lock:
             if channel.id not in self.channels:
                 self.channels.append(channel.id)
                 cmd = channel.get_command()
                 self.internal_cmdset.add(cmd)
-                channel.add_listener(self)
+                object.__setattr__(self, "is_modified", True)
 
     def unsubscribe(self, channel: Channel):
         """Unsubscribe from a channel."""
+        with self.lock:
+            if channel.id not in self.channels:
+                return
+        channel.remove_listener(self)
         with self.lock:
             if channel.id in self.channels:
                 self.channels.remove(channel.id)
                 cmd = channel.get_command()
                 self.internal_cmdset.remove(cmd)
-                channel.remove_listener(self)
+                object.__setattr__(self, "is_modified", True)
 
     def search(self, query: str, recursive: bool = True) -> list[Object]:
         """

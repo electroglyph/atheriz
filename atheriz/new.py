@@ -587,7 +587,7 @@ def create_game_folder(folder_name: str) -> None:
 
     # Create __init__.py
     init_file = folder_path / "__init__.py"
-    init_file.write_text("")
+    init_file.write_text("", encoding="utf-8")
 
     # Generate template files that need class inspection
     for filename, base_import, base_class in TEMPLATE_CONFIGS:
@@ -615,18 +615,18 @@ def create_game_folder(folder_name: str) -> None:
         generator.add_methods(methods)
 
         content = generator.generate()
-        (folder_path / filename).write_text(content)
+        (folder_path / filename).write_text(content, encoding="utf-8")
 
     # Generate special templates
     print("  Creating flags.py...")
     import atheriz.objects.base_flags
     flags_src = Path(atheriz.objects.base_flags.__file__)
-    (folder_path / "flags.py").write_text(flags_src.read_text())
+    (folder_path / "flags.py").write_text(flags_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print("  Creating db_ops.py...")
     import atheriz.objects.base_db_ops
     db_ops_src = Path(atheriz.objects.base_db_ops.__file__)
-    (folder_path / "db_ops.py").write_text(db_ops_src.read_text())
+    (folder_path / "db_ops.py").write_text(db_ops_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print("  Creating access.py...")
     import atheriz.objects.base_lock
@@ -636,7 +636,7 @@ def create_game_folder(folder_name: str) -> None:
     access_gen = TemplateGenerator("AccessLock", "atheriz.objects.base_lock", "AccessLock")
     access_gen.add_methods(access_methods)
     access_gen.add_type_checking_imports(get_type_checking_imports(atheriz.objects.base_lock))
-    (folder_path / "access.py").write_text(access_gen.generate())
+    (folder_path / "access.py").write_text(access_gen.generate(), encoding="utf-8")
 
     print("  Creating door.py...")
     import atheriz.objects.base_door
@@ -646,41 +646,41 @@ def create_game_folder(folder_name: str) -> None:
     door_gen = TemplateGenerator("Door", "atheriz.objects.base_door", "Door")
     door_gen.add_methods(door_methods)
     door_gen.add_type_checking_imports(get_type_checking_imports(atheriz.objects.base_door))
-    (folder_path / "door.py").write_text(door_gen.generate())
+    (folder_path / "door.py").write_text(door_gen.generate(), encoding="utf-8")
 
     # Create commands directory
     print("  Creating commands directory...")
     commands_path = folder_path / "commands"
     commands_path.mkdir(parents=True, exist_ok=True)
-    (commands_path / "__init__.py").write_text("")
+    (commands_path / "__init__.py").write_text("", encoding="utf-8")
 
     print("  Creating commands/command.py...")
-    (commands_path / "command.py").write_text(generate_command_base_template())
+    (commands_path / "command.py").write_text(generate_command_base_template(), encoding="utf-8")
 
 
     print("  Creating commands/loggedin.py...")
-    (commands_path / "loggedin.py").write_text(generate_loggedin_cmdset_template())
+    (commands_path / "loggedin.py").write_text(generate_loggedin_cmdset_template(), encoding="utf-8")
 
     print("  Creating commands/unloggedin.py...")
-    (commands_path / "unloggedin.py").write_text(generate_unloggedin_cmdset_template())
+    (commands_path / "unloggedin.py").write_text(generate_unloggedin_cmdset_template(), encoding="utf-8")
 
     print("  Creating inputfuncs.py...")
-    (folder_path / "inputfuncs.py").write_text(generate_inputfuncs_template())
+    (folder_path / "inputfuncs.py").write_text(generate_inputfuncs_template(), encoding="utf-8")
 
     print(f"  Creating settings.py...")
-    (folder_path / "settings.py").write_text(generate_settings_template())
+    (folder_path / "settings.py").write_text(generate_settings_template(), encoding="utf-8")
 
     print("  Creating objects.py...")
-    (folder_path / "objects.py").write_text(generate_objects_template())
+    (folder_path / "objects.py").write_text(generate_objects_template(), encoding="utf-8")
 
     print("  Creating database_setup.py...")
-    (folder_path / "database_setup.py").write_text(generate_database_setup_template())
+    (folder_path / "database_setup.py").write_text(generate_database_setup_template(), encoding="utf-8")
 
     # Copy initial_setup.py
     print(f"  Copying initial_setup.py...")
     import atheriz.initial_setup
     initial_setup_src = Path(atheriz.initial_setup.__file__)
-    content = initial_setup_src.read_text()
+    content = initial_setup_src.read_text(encoding="utf-8")
     
     # Patch imports to use local template classes
     content = content.replace(
@@ -714,19 +714,19 @@ def create_game_folder(folder_name: str) -> None:
 
 
     
-    (folder_path / "initial_setup.py").write_text(content)
+    (folder_path / "initial_setup.py").write_text(content, encoding="utf-8")
 
     # Copy connection_screen.py
     print(f"  Copying connection_screen.py...")
     import atheriz.connection_screen
     connection_screen_src = Path(atheriz.connection_screen.__file__)
-    (folder_path / "connection_screen.py").write_text(connection_screen_src.read_text())
+    (folder_path / "connection_screen.py").write_text(connection_screen_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     # Copy server_events.py
     print(f"  Copying server_events.py...")
     import atheriz.server_events
     server_events_src = Path(atheriz.server_events.__file__)
-    (folder_path / "server_events.py").write_text(server_events_src.read_text())
+    (folder_path / "server_events.py").write_text(server_events_src.read_text(encoding="utf-8"), encoding="utf-8")
 
     print(f"  Copying web folder...")
     copy_web_folder(folder_path)

@@ -155,7 +155,9 @@ class Command:
             arg_list = []
         else:
             try:
-                arg_list = shlex.split(args_string, posix=True)
+                import os as _os
+
+                arg_list = shlex.split(args_string, posix=(_os.name != "nt"))
             except ValueError:
                 caller.msg("Unbalanced quote in command.")
                 caller.msg(self.print_help())

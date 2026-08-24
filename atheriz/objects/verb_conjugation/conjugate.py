@@ -62,7 +62,7 @@ verb_tenses_aliases = {
 verb_tenses = {}
 
 path = os.path.join(os.path.dirname(__file__), _VERBS_FILE)
-with open(path) as fil:
+with open(path, encoding="utf-8") as fil:
     for line in fil.readlines():
         wordlist = [part.strip() for part in line.split(",")]
         verb_tenses[wordlist[0]] = wordlist

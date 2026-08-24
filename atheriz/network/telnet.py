@@ -45,6 +45,10 @@ def _clamp_naws(rows, cols) -> tuple[int, int]:
 TELNET_INPUT_CHUNK = 4096
 
 
+def _telnet_text(text: str) -> str:
+    return text.replace("\r\n", "\n").replace("\n", "\r\n")
+
+
 def _find_eol(buf: str) -> int:
     idx = buf.find("\r")
     nl = buf.find("\n")
@@ -152,13 +156,14 @@ class TelnetConnection(BaseConnection):
         return None
 
     def _offloop_write(self, text: str, nb: int):
+        text = _telnet_text(text)
         try:
             buf = self._get_write_buffer_size()
             if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
                 logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf} > {settings.TELNET_MAX_PENDING_BYTES}")
                 self.close()
                 return
-            self.writer.write(text)
+            self.writer.write(_telnet_text(text))
             buf2 = self._get_write_buffer_size()
             if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
                 logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")
@@ -214,7 +219,7 @@ class TelnetConnection(BaseConnection):
                         logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf} > {settings.TELNET_MAX_PENDING_BYTES}")
                         self.close()
                         return
-                    self.writer.write(text)
+                    self.writer.write(_telnet_text(text))
                     buf2 = self._get_write_buffer_size()
                     if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
                         logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")
@@ -274,7 +279,7 @@ class TelnetConnection(BaseConnection):
                         return
                     self.writer.iac(telnetlib3.telopt.WILL, telnetlib3.telopt.ECHO)
                     if text:
-                        self.writer.write(text)
+                        self.writer.write(_telnet_text(text))
                     buf2 = self._get_write_buffer_size()
                     if buf2 is not None and buf2 > settings.TELNET_MAX_PENDING_BYTES:
                         logger.debug(f"[Telnet] closing {self.client_host}: write buffer {buf2} > {settings.TELNET_MAX_PENDING_BYTES} after write")

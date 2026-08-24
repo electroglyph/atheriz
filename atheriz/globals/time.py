@@ -64,7 +64,7 @@ class GameTime:
         if not path.exists():
             return False
         try:
-            with open(path, "r") as f:
+            with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             logger.warning(f"Corrupt time file, resetting to defaults: {e}")

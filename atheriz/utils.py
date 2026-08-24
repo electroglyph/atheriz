@@ -7,6 +7,7 @@ from random import randint
 from string import punctuation
 import colorsys
 import math
+import os
 import threading
 from typing import TYPE_CHECKING, Any
 from atheriz.coord import Coord  # noqa: F401 — re-exported for callers
@@ -23,8 +24,31 @@ _ANSI_COLOR = r"\x1b\[[0-9;]*m"
 _COLOR_REGEX = re.compile(_ANSI_COLOR)
 
 
+def _exists_exact(path: Path) -> bool:
+    try:
+        return path.name in os.listdir(path.parent)
+    except Exception:
+        return path.exists()
+
+
+def _exists_exact_str(path_str: str) -> bool:
+    try:
+        parent = os.path.dirname(path_str) or "."
+        name = os.path.basename(path_str)
+        return name in os.listdir(parent)
+    except Exception:
+        return os.path.exists(path_str)
+
+
 def is_in_game_folder() -> bool:
     """Check if the current directory is a game folder."""
+    if os.name == "nt":
+        cwd_s = os.getcwd()
+        return (
+            _exists_exact_str(os.path.join(cwd_s, "settings.py"))
+            and _exists_exact_str(os.path.join(cwd_s, "__init__.py"))
+            and not _exists_exact_str(os.path.join(cwd_s, "atheriz.py"))
+        )
     cwd = Path.cwd()
     return (
         (cwd / "settings.py").exists()

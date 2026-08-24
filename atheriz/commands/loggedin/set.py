@@ -42,6 +42,11 @@ PROTECTED_ATTRIBUTES = frozenset(
         "quelled",
         "is_banned",
         "ban_reason",
+        "location",
+        "home",
+        "_contents",
+        "group_channel",
+        "contents",
     }
 )
 
@@ -121,6 +126,10 @@ class SetCommand(Command):
             caller.msg(f"'{attr}' is protected and cannot be set.")
             return
 
+        if attr in ("location", "home", "_contents", "group_channel", "contents"):
+            caller.msg(f"'{attr}' cannot be set directly; use move/teleport instead.")
+            return
+
         try:
             setattr(target, attr, value)
         except AttributeError:
@@ -187,6 +196,10 @@ class UnsetCommand(Command):
 
         if not caller.is_superuser and _is_protected(attr):
             caller.msg(f"'{attr}' is protected and cannot be removed.")
+            return
+
+        if attr in ("location", "home", "_contents", "group_channel", "contents"):
+            caller.msg(f"'{attr}' cannot be removed directly.")
             return
 
         if not hasattr(target, attr):

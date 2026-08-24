@@ -114,7 +114,7 @@ class WebSocketConnection(BaseConnection):
         if pending:
             try:
                 pending_awaitables = [
-                    asyncio.wrap_future(task, loop=asyncio.get_running_loop())
+                    asyncio.wrap_future(task)
                     if isinstance(task, concurrent.futures.Future)
                     else task
                     for task in pending

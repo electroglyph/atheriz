@@ -61,7 +61,7 @@ class ShutdownCommand(Command):
             return
 
         try:
-            with open(token_file, "r") as f:
+            with open(token_file, "r", encoding="utf-8") as f:
                 token = f.read().strip()
         except Exception as e:
             caller.msg(f"Error reading token: {e}")

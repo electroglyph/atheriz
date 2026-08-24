@@ -68,7 +68,7 @@ class SpamCommand(Command):
         # Save credentials to file
         save_path = Path(settings.SAVE_PATH)
         creds_file = save_path / "spam_accounts.txt"
-        with open(creds_file, "w") as f:
+        with open(creds_file, "w", encoding="utf-8", newline="\n") as f:
             f.write("# Account Name | Password | Character Name\n")
             for account_name, password, char_name in created:
                 f.write(f"{account_name}|{password}|{char_name}\n")

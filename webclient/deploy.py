@@ -10,6 +10,7 @@ without touching npm.
 from __future__ import annotations
 
 import argparse
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -124,7 +125,7 @@ def build_frontend() -> None:
             "npm was not found on PATH; install Node.js or pass --no-build "
             "to stage an already-built dist/"
         )
-    subprocess.run([npm, "run", "build"], cwd=PROJECT_ROOT, check=True)
+    subprocess.run([npm, "run", "build"], cwd=PROJECT_ROOT, check=True, shell=(os.name == "nt"))
 
 
 def main() -> int:

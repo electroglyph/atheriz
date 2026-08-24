@@ -36,7 +36,16 @@ def _get_atheriz_package_dir() -> Path:
 
 def _is_under(path: Path | str, ancestor: Path | str) -> bool:
     try:
-        Path(path).resolve().relative_to(Path(ancestor).resolve())
+        if os.name == "nt":
+            try:
+                p = os.path.normcase(os.path.abspath(str(path))).lower()
+                a = os.path.normcase(os.path.abspath(str(ancestor))).lower()
+                return os.path.commonpath([p, a]) == a
+            except ValueError:
+                return False
+        p = Path(path).resolve()
+        a = Path(ancestor).resolve()
+        p.relative_to(a)
         return True
     except ValueError:
         return False
@@ -253,19 +262,6 @@ def _apply_patch(obj, new_class):
 
             old_class = obj.__class__
             obj.__class__ = new_class
-
-            old_init = getattr(old_class, "__init__", None)
-            new_init = getattr(new_class, "__init__", None)
-            init_changed = (
-                old_init is None
-                or new_init is None
-                or inspect.signature(old_init) != inspect.signature(new_init)
-            )
-            if init_changed:
-                try:
-                    obj.__init__()
-                except TypeError:
-                    pass
 
             if hasattr(obj, "__setstate__"):
                 obj.__setstate__(state)

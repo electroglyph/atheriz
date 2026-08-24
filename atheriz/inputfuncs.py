@@ -72,7 +72,10 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
     """
     if not text:
         return None
-    parts = text.split(" ", 1)
+    stripped = text.strip(" \t\r\n")
+    if not stripped:
+        return None
+    parts = stripped.split(None, 1)
     raw_cmd_key = parts[0].lower()
     cmd_args = parts[1] if len(parts) > 1 else ""
     matched_alias = raw_cmd_key
@@ -87,8 +90,8 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
         # this makes 'bleh work as `say bleh`
         cmd = get_loggedin_cmdset().get(raw_cmd_key[:1])
         if cmd:
-            matched_alias = text[:1]
-            cmd_args = text[1:]
+            matched_alias = stripped[:1]
+            cmd_args = stripped[1:].lstrip(" \t\r\n")
         else:
             # check for commands provided by objects in the player's location
             loc = puppet.location
@@ -103,7 +106,7 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
                         break
 
         if not cmd and settings.AUTO_COMMAND_ALIASING:
-            if raw_cmd_key[:1] in _NO_ALIAS_COMMANDS:
+            if raw_cmd_key in _NO_ALIAS_COMMANDS:
                 puppet.msg("You can't do that.")
                 return None
             for key in get_loggedin_cmdset().get_keys():
@@ -116,7 +119,7 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
         if not cmd:
             cmd = get_loggedin_cmdset().get("none")
             matched_alias = "none"
-            cmd_args = raw_cmd_key
+            cmd_args = stripped
     if not cmd:
         return None
     if not cmd.access(puppet):
@@ -139,7 +142,10 @@ def _resolve_unloggedin(connection: Connection, text: str):
     Returns the ``(func, caller, eargs)`` job, or None. Mirrors the
     not-logged-in branch of the ``text`` input handler (aliases, auto-aliasing,
     ``none`` fallback)."""
-    parts = text.split(" ", 1)
+    stripped = text.strip(" \t\r\n")
+    if not stripped:
+        return None
+    parts = stripped.split(None, 1)
     raw_cmd_key = parts[0].lower()
     cmd_args = parts[1] if len(parts) > 1 else ""
     matched_alias = raw_cmd_key
@@ -158,7 +164,7 @@ def _resolve_unloggedin(connection: Connection, text: str):
         if not cmd:
             cmd = cmdset.get("none")
             matched_alias = "none"
-            cmd_args = raw_cmd_key
+            cmd_args = stripped
     if not cmd:
         return None
     if not cmd.access(connection):

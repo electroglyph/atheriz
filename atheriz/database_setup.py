@@ -61,11 +61,19 @@ def get_database():
             raise RuntimeError("database is closed; refusing to reopen")
         if _DATABASE is not None:
             return _DATABASE
-        if not os.path.exists(settings.SAVE_PATH):
-            os.makedirs(settings.SAVE_PATH)
-        db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
-        c = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
-        c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        from pathlib import Path
+
+        Path(settings.SAVE_PATH).mkdir(parents=True, exist_ok=True)
+        db_path = Path(settings.SAVE_PATH) / "database.sqlite3"
+        c = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
+        try:
+            c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        except Exception:
+            try:
+                c.execute("PRAGMA journal_mode=DELETE;")
+                c.execute("PRAGMA synchronous=NORMAL;")
+            except Exception:
+                pass
         _DATABASE = Database(c)
         return _DATABASE
 

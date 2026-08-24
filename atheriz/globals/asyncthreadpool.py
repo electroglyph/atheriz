@@ -12,6 +12,12 @@ from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.globals.get import get_async_threadpool
 
+if os.name == "nt":
+    try:
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
 
 def _submit(coro, loop):
     """Schedule coro on loop and return its future; close it if submission
@@ -35,7 +41,10 @@ class AsyncThread(Thread):
     def run(self):
         self.loop.run_until_complete(self.stop_event.wait())
         if self._wait_event.is_set():
-            pending = asyncio.all_tasks(self.loop)
+            try:
+                pending = asyncio.all_tasks(self.loop)  # type: ignore[call-arg]
+            except TypeError:
+                pending = asyncio.all_tasks()
             if pending:
                 done, not_done = self.loop.run_until_complete(
                     asyncio.wait(pending, timeout=10)
@@ -82,7 +91,13 @@ class AsyncThreadPool:
             max_threads = os.cpu_count() or 4
         self.max_threads = max_threads
         self.threads = []
-        self.loop = asyncio.new_event_loop()
+        if os.name == "nt":
+            try:
+                self.loop = asyncio.SelectorEventLoop()
+            except Exception:
+                self.loop = asyncio.new_event_loop()
+        else:
+            self.loop = asyncio.new_event_loop()
         self.threads.append(AsyncThread(self.loop, 0))
         self.threads[0].start()  # first thread is for async
         self.timeout = default_timeout
