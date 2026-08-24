@@ -3,7 +3,7 @@ import json
 import time
 from typing import Callable, TYPE_CHECKING
 from atheriz.logger import logger
-from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK, is_ip_banned
 import atheriz.settings as settings
 from atheriz.utils import strip_terminal_escapes
 
@@ -74,6 +74,13 @@ class ConnectionManager:
         host = getattr(connection, "client_host", "?")
         limit = settings.MAX_CONNECTIONS_PER_IP
         with self._lock:
+            if is_ip_banned(host):
+                logger.warning(f"[Network] Refusing connection from banned host {host}")
+                try:
+                    connection.close()
+                except Exception:
+                    pass
+                return False
             if limit > 0 and host != "?":
                 same_host = sum(
                     1
