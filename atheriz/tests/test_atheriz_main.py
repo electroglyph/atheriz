@@ -404,7 +404,8 @@ class TestInternalAdminEndpointsBlockLoop:
         blocking = self._make_blocking()
         with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
              patch("atheriz.atheriz.do_reload", blocking), \
-             patch("atheriz.atheriz.reloader.reload_game_logic", blocking):
+             patch("atheriz.atheriz.reloader.reload_game_logic", blocking), \
+             patch("atheriz.reloader._reload_game_logic", blocking):
             delay = self._ordered_measure(
                 lambda: hot_reload_endpoint(
                     _FakeRequest(token="real-token", host="127.0.0.1")

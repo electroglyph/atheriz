@@ -158,6 +158,54 @@ def reset_banned_ips():
         obj_singleton.CREATION_COOLDOWNS.clear()
 
 
+@pytest.fixture(autouse=True)
+def reset_lag_gate():
+    """Ensure grotto's lag_gate monkey-patch on BaseCommand does not leak
+    between core tests. Full-suite runs may trigger a real hot-reload (via
+    reloader) that imports grotto and installs the wrapper; core
+    test_base_cmd expects the original BaseCommand.execute (bound method, not
+    functools.partial)."""
+    from atheriz.commands.base_cmd import Command as BaseCommand
+
+    # Save original before test
+    orig_execute = BaseCommand.execute
+    orig_flag = getattr(BaseCommand, "_grotto_lag_gated", False)
+    yield
+    # Restore after test — remove grotto's wrapper if it was installed
+    try:
+        if getattr(BaseCommand, "_grotto_lag_gated", False) and not orig_flag:
+            # grotto installed it during this test; restore original
+            BaseCommand.execute = orig_execute
+            if hasattr(BaseCommand, "_grotto_lag_gated"):
+                delattr(BaseCommand, "_grotto_lag_gated")
+        elif BaseCommand.execute is not orig_execute:
+            BaseCommand.execute = orig_execute
+            if hasattr(BaseCommand, "_grotto_lag_gated"):
+                try:
+                    delattr(BaseCommand, "_grotto_lag_gated")
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    # Also purge grotto from sys.modules to keep core isolation (optional)
+    # but keep it minimal — only remove grotto.* that were loaded via reload
+    # during the test, so next test starts clean. Core tests never need grotto.
+    import sys
+
+    for mod in list(sys.modules.keys()):
+        if mod == "grotto" or mod.startswith("grotto."):
+            # Do not remove if it was already loaded before test suite start
+            # (e.g., if running `grotto` game tests, keep it). For core, it
+            # should not have been loaded before; safe to purge.
+            if mod not in reset_lag_gate._preloaded_grotto:
+                sys.modules.pop(mod, None)
+
+
+# Remember which grotto modules were preloaded before any test (usually none for core)
+import sys as _sys_for_grotto
+reset_lag_gate._preloaded_grotto = {m for m in _sys_for_grotto.modules if m == "grotto" or m.startswith("grotto.")}
+
+
 @pytest.fixture
 def fixed_salt(monkeypatch):
     """Pin atheriz.globals.salt._SALT to a known value for deterministic hashes."""
