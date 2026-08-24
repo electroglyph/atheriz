@@ -758,3 +758,302 @@ def test_save_gating_and_force_and_always_save():
         handler.save(force=True)
         mock_get.assert_called()
         assert mock_cursor.execute.called
+
+
+def test_node_save_post_snapshot_dirty_preserved(global_test_env):
+    """2.9: save must not clear a node dirtied after snapshot but before COMMIT."""
+    import threading
+    from unittest.mock import patch
+    from atheriz.utils import detach as orig_detach
+
+    handler = NodeHandler()
+    handler.clear()
+    area = NodeArea(name="PostSnap")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("PostSnap", 0, 0, 0), desc="orig")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+    handler.save(force=True)
+    with area.lock:
+        area.is_modified = False
+    with grid.lock:
+        grid.is_modified = False
+    with node.lock:
+        node.is_modified = False
+        node.desc = "clean"
+    with handler.lock:
+        handler._modified = False
+    with node.lock:
+        node.is_modified = True
+        node.desc = "dirty_before"
+    with area.lock:
+        area.is_modified = True
+    with grid.lock:
+        grid.is_modified = True
+    with handler.lock:
+        handler._modified = True
+
+    barrier_a = threading.Barrier(2, timeout=5)
+    barrier_b = threading.Barrier(2, timeout=5)
+
+    def patched(obj):
+        is_area = isinstance(obj, NodeArea)
+        res = orig_detach(obj)
+        if is_area and obj.name == "PostSnap":
+            try:
+                barrier_a.wait(timeout=5)
+                barrier_b.wait(timeout=5)
+            except Exception:
+                pass
+        return res
+
+    def saver():
+        with patch("atheriz.globals.node.detach", side_effect=patched):
+            handler.save(force=False)
+
+    t = threading.Thread(target=saver)
+    t.start()
+    barrier_a.wait(timeout=5)
+    with node.lock:
+        node.desc = "mutated_during_save"
+        node.is_modified = True
+    barrier_b.wait(timeout=5)
+    t.join(timeout=5)
+    assert not t.is_alive(), "save deadlocked"
+    assert node.is_modified is True, "post-snapshot dirty must not be cleared"
+    assert node.desc == "mutated_during_save"
+    assert area.is_modified is False, "snapshotted dirty area should be cleared"
+    assert grid.is_modified is False
+
+
+def test_node_save_clean_to_dirty_after_snapshot_preserved(global_test_env):
+    """2.9: a clean node dirtied after snapshot must remain dirty."""
+    import threading
+    from unittest.mock import patch
+    from atheriz.utils import detach as orig_detach
+
+    handler = NodeHandler()
+    handler.clear()
+    area = NodeArea(name="CleanSnap")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("CleanSnap", 0, 0, 0), desc="clean")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+    handler.save(force=True)
+    with area.lock:
+        area.is_modified = False
+    with grid.lock:
+        grid.is_modified = False
+    with node.lock:
+        node.is_modified = False
+    with handler.lock:
+        handler._modified = False
+    area2 = NodeArea(name="DirtyOther")
+    grid2 = NodeGrid(z=1)
+    node2 = Node(coord=Coord("DirtyOther", 0, 0, 1), desc="dirty")
+    grid2.nodes[(0, 0)] = node2
+    area2.add_grid(grid2)
+    handler.add_area(area2)
+    with area2.lock:
+        area2.is_modified = True
+    with grid2.lock:
+        grid2.is_modified = True
+    with node2.lock:
+        node2.is_modified = True
+    with handler.lock:
+        handler._modified = True
+    assert node.is_modified is False
+    assert node2.is_modified is True
+
+    barrier_a = threading.Barrier(2, timeout=5)
+    barrier_b = threading.Barrier(2, timeout=5)
+    count = [0]
+
+    def patched(obj):
+        is_area = isinstance(obj, NodeArea)
+        res = orig_detach(obj)
+        if is_area:
+            count[0] += 1
+            if count[0] == 1 and obj.name == "CleanSnap":
+                try:
+                    barrier_a.wait(timeout=5)
+                    barrier_b.wait(timeout=5)
+                except Exception:
+                    pass
+        return res
+
+    def saver():
+        with patch("atheriz.globals.node.detach", side_effect=patched):
+            handler.save(force=False)
+
+    t = threading.Thread(target=saver)
+    t.start()
+    barrier_a.wait(timeout=5)
+    with node.lock:
+        node.desc = "mutated_clean"
+        node.is_modified = True
+    barrier_b.wait(timeout=5)
+    t.join(timeout=5)
+    assert not t.is_alive()
+    assert node.is_modified is True, "clean->dirty after snapshot must stay dirty"
+    assert node2.is_modified is False, "dirty at snapshot must be cleared"
+
+
+def test_node_save_clears_only_snapshotted(global_test_env):
+    """2.9: new area/grid/node added after snapshot must not be cleared."""
+    import threading
+    from unittest.mock import patch
+    from atheriz.utils import detach as orig_detach
+
+    handler = NodeHandler()
+    handler.clear()
+    area = NodeArea(name="SnapOnly")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("SnapOnly", 0, 0, 0), desc="orig")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+    handler.save(force=True)
+    with area.lock:
+        area.is_modified = False
+    with grid.lock:
+        grid.is_modified = False
+    with node.lock:
+        node.is_modified = False
+    with handler.lock:
+        handler._modified = False
+    with area.lock:
+        area.is_modified = True
+    with grid.lock:
+        grid.is_modified = True
+    with node.lock:
+        node.is_modified = True
+    with handler.lock:
+        handler._modified = True
+
+    barrier_a = threading.Barrier(2, timeout=5)
+    barrier_b = threading.Barrier(2, timeout=5)
+
+    def patched(obj):
+        is_area = isinstance(obj, NodeArea) and obj.name == "SnapOnly"
+        res = orig_detach(obj)
+        if is_area:
+            try:
+                barrier_a.wait(timeout=5)
+                barrier_b.wait(timeout=5)
+            except Exception:
+                pass
+        return res
+
+    def saver():
+        with patch("atheriz.globals.node.detach", side_effect=patched):
+            handler.save(force=False)
+
+    t = threading.Thread(target=saver)
+    t.start()
+    barrier_a.wait(timeout=5)
+    new_area = NodeArea(name="NewAfterSnap")
+    new_grid = NodeGrid(z=1)
+    new_node = Node(coord=Coord("NewAfterSnap", 0, 0, 1), desc="new")
+    new_grid.nodes[(0, 0)] = new_node
+    new_area.add_grid(new_grid)
+    handler.add_area(new_area)
+    assert new_node.is_modified is True
+    assert new_area.is_modified is True
+    barrier_b.wait(timeout=5)
+    t.join(timeout=5)
+    assert not t.is_alive()
+    assert new_node.is_modified is True, "new node added after snapshot must not be cleared"
+    assert new_area.is_modified is True
+    with new_grid.lock:
+        assert new_grid.is_modified is True
+    assert node.is_modified is False
+
+
+def test_node_save_rollback_restores_dirty(global_test_env):
+    """2.9: ROLLBACK must restore dirty flags cleared at snapshot."""
+    from unittest.mock import patch, MagicMock
+
+    handler = NodeHandler()
+    handler.clear()
+    area = NodeArea(name="RollbackArea")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("RollbackArea", 0, 0, 0), desc="orig")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+    with area.lock:
+        area.is_modified = True
+    with grid.lock:
+        grid.is_modified = True
+    with node.lock:
+        node.is_modified = True
+    with handler.lock:
+        handler._modified = True
+
+    mock_db = MagicMock()
+    mock_lock = MagicMock()
+    mock_lock.__enter__ = MagicMock(return_value=None)
+    mock_lock.__exit__ = MagicMock(return_value=False)
+    mock_db.lock = mock_lock
+    mock_cursor = MagicMock()
+
+    def _exec(sql, params=()):
+        if "COMMIT" in sql:
+            raise RuntimeError("injected COMMIT failure")
+        return None
+
+    mock_cursor.execute.side_effect = _exec
+    mock_db.connection.cursor.return_value = mock_cursor
+    mock_db._closed = False
+
+    with patch("atheriz.globals.node.get_database", return_value=mock_db):
+        handler.save(force=False)
+
+    assert handler._modified is True, "handler flag must be restored on ROLLBACK"
+    assert area.is_modified is True
+    with grid.lock:
+        assert grid.is_modified is True
+    with node.lock:
+        assert node.is_modified is True
+
+
+def test_node_save_db_closed_restores_dirty(global_test_env):
+    """2.9: early return on closed DB must restore dirty flags."""
+    from unittest.mock import patch, MagicMock
+
+    handler = NodeHandler()
+    handler.clear()
+    area = NodeArea(name="ClosedArea")
+    grid = NodeGrid(z=0)
+    node = Node(coord=Coord("ClosedArea", 0, 0, 0), desc="orig")
+    grid.nodes[(0, 0)] = node
+    area.add_grid(grid)
+    handler.add_area(area)
+    with area.lock:
+        area.is_modified = True
+    with grid.lock:
+        grid.is_modified = True
+    with node.lock:
+        node.is_modified = True
+    with handler.lock:
+        handler._modified = True
+
+    mock_db = MagicMock()
+    mock_lock = MagicMock()
+    mock_lock.__enter__ = MagicMock(return_value=None)
+    mock_lock.__exit__ = MagicMock(return_value=False)
+    mock_db.lock = mock_lock
+    mock_db._closed = True
+
+    with patch("atheriz.globals.node.get_database", return_value=mock_db):
+        handler.save(force=False)
+
+    assert handler._modified is True
+    assert area.is_modified is True
+    with grid.lock:
+        assert grid.is_modified is True
+    with node.lock:
+        assert node.is_modified is True
