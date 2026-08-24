@@ -237,23 +237,23 @@ class MapInfo:
         with self.lock:
             rendered = copy.deepcopy(self.pre_grid)
             original = self.pre_grid.copy()
-        to_place = {}
-        for k, v in rendered.items():
-            style = _PLACEHOLDER_STYLES.get(v)
-            if style is not None:
-                n, s, e, w = MapInfo.get_dirs(original, k, settings.ALL_SYMBOLS)
-                to_place[k] = MapInfo._resolve_char(n, s, e, w, style)
-            elif v == settings.ROOM_PLACEHOLDER:
-                to_place[k] = " "
-        rendered.update(to_place)
-        with self.lock:
+            to_place = {}
+            for k, v in rendered.items():
+                style = _PLACEHOLDER_STYLES.get(v)
+                if style is not None:
+                    n, s, e, w = MapInfo.get_dirs(original, k, settings.ALL_SYMBOLS)
+                    to_place[k] = MapInfo._resolve_char(n, s, e, w, style)
+                elif v == settings.ROOM_PLACEHOLDER:
+                    to_place[k] = " "
+            rendered.update(to_place)
             self.post_grid = rendered
 
     def update_grid(self, coord: tuple[int, int], new_symbol: str):
         with self.lock:
             self.pre_grid[coord] = new_symbol
             self.map_changed = True
-        if self._batch_update == 0:
+            should_render = self._batch_update == 0
+        if should_render:
             self.render(True)
 
     @contextmanager
