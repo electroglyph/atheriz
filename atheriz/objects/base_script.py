@@ -118,6 +118,8 @@ class Script(Flags, DbOps):
         Returns:
             bool: True upon successful deletion.
         """
+        with self.lock:
+            self.is_deleted = True
         child = self.child
         if child is not None:
             self.remove_hooks(child)
