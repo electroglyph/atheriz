@@ -196,9 +196,18 @@ class TelnetConnection(BaseConnection):
                 return
             nb = len(text.encode("utf-8"))
             if threading.get_ident() == self.thread_id:
+                should_close = False
                 with self._pending_lock:
                     if self._closing:
                         return
+                    if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
+                        should_close = True
+                    else:
+                        self._pending_bytes += nb
+                if should_close:
+                    logger.debug(f"[Telnet] closing {self.client_host}: pending {self._pending_bytes} + {nb} bytes exceeds {settings.TELNET_MAX_PENDING_BYTES}")
+                    self.close()
+                    return
                 try:
                     buf = self._get_write_buffer_size()
                     if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
@@ -213,6 +222,9 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
                     self.close()
+                finally:
+                    with self._pending_lock:
+                        self._pending_bytes = max(0, self._pending_bytes - nb)
             else:
                 should_close = False
                 with self._pending_lock:
@@ -237,9 +249,23 @@ class TelnetConnection(BaseConnection):
             text = args[0] if args else ""
             nb = len(text.encode("utf-8")) if text else 0
             if threading.get_ident() == self.thread_id:
-                with self._pending_lock:
-                    if self._closing:
+                should_close = False
+                if nb:
+                    with self._pending_lock:
+                        if self._closing:
+                            return
+                        if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
+                            should_close = True
+                        else:
+                            self._pending_bytes += nb
+                    if should_close:
+                        logger.debug(f"[Telnet] closing {self.client_host}: pending {self._pending_bytes} + {nb} bytes exceeds {settings.TELNET_MAX_PENDING_BYTES}")
+                        self.close()
                         return
+                else:
+                    with self._pending_lock:
+                        if self._closing:
+                            return
                 try:
                     buf = self._get_write_buffer_size()
                     if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
@@ -256,6 +282,10 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write/iac failed for {self.client_host}: {e}")
                     self.close()
+                finally:
+                    if nb:
+                        with self._pending_lock:
+                            self._pending_bytes = max(0, self._pending_bytes - nb)
             else:
                 if nb:
                     should_close = False
