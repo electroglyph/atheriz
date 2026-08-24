@@ -5,6 +5,8 @@ import shlex
 import threading
 from typing import TYPE_CHECKING
 
+_parser_building_local = threading.local()
+
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
     from atheriz.network.connection import BaseConnection as Connection
@@ -83,6 +85,9 @@ class Command:
 
     @property
     def parser(self) -> GameArgumentParser | None:
+        building = getattr(_parser_building_local, "building", None)
+        if building is not None and building[0] is self:
+            return building[1]
         if self._parser is None:
             if self.use_parser:
                 with self._parser_lock:
@@ -90,8 +95,12 @@ class Command:
                         parser = GameArgumentParser(
                             prog=self.key, description=self.desc, add_help=True
                         )
+                        _parser_building_local.building = (self, parser)
+                        try:
+                            self.setup_parser()
+                        finally:
+                            _parser_building_local.building = None  # type: ignore[attr-defined]
                         self._parser = parser
-                        self.setup_parser()
         return self._parser
 
     @parser.setter
@@ -186,7 +195,10 @@ class Command:
         self.__dict__.update(state)
         self._parser_lock = threading.Lock()
         if self.use_parser:
-            # _parser from state may be stale (old parser); rebuild fresh
             parser = GameArgumentParser(prog=self.key, description=self.desc, add_help=True)
+            _parser_building_local.building = (self, parser)  # type: ignore[attr-defined]
+            try:
+                self.setup_parser()
+            finally:
+                _parser_building_local.building = None  # type: ignore[attr-defined]
             self._parser = parser
-            self.setup_parser()

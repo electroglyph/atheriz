@@ -354,16 +354,12 @@ class FuncParser:
                 escaped = False
                 continue
 
-            if char == escape_char and string[ichar + 1 : ichar + 2] != escape_char:
-                # don't store the escape-char itself, but keep one escape-char,
-                # if it's followed by another escape-char
+            if char == escape_char:
                 if ichar + 1 >= len(string):
-                    # trailing singleton escape char: keep it verbatim
                     if curr_func:
                         infuncstr.append(char)
                     else:
                         fullstr.append(char)
-                    return_str = True
                     continue
                 escaped = True
                 continue
@@ -437,8 +433,6 @@ class FuncParser:
                     double_quoted = -1
                 else:
                     infuncstr.append(char)
-                    s = "".join(infuncstr).strip()
-                    infuncstr = list(s)
                     double_quoted = len(infuncstr) - 1
                     literal_infuncstr = True
 

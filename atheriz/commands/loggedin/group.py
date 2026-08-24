@@ -34,10 +34,12 @@ class GroupCommand(Command):
             caller.msg(self.print_help())
             return
         if args[0].lower() == "list":
-            if not caller.group_channel:
+            with caller.lock:
+                gc = caller.group_channel
+            if not gc:
                 caller.msg("You are not in a group.")
                 return
-            channel_list: list[Channel] = get(caller.group_channel)
+            channel_list: list[Channel] = get(gc)
 
             if not channel_list:
                 caller.msg("Error: Group channel not found.")
@@ -50,17 +52,21 @@ class GroupCommand(Command):
             if len(args) < 2:
                 caller.msg("Usage: group kick <name>")
                 return
-            if not caller.group_channel:
-                caller.msg("You are not in a group.")
-                return
-            channel_list: list[Channel] = get(caller.group_channel)
+            with caller.lock:
+                if not caller.group_channel:
+                    caller.msg("You are not in a group.")
+                    return
+                gc = caller.group_channel
+            channel_list: list[Channel] = get(gc)
             if not channel_list:
                 caller.msg("Error: Group channel not found.")
                 return
             channel = channel_list[0]
-            if channel.created_by != caller.id:
-                caller.msg("You are not the leader of this group.")
-                return
+            with caller.lock:
+                with channel.lock:
+                    if channel.created_by != caller.id:
+                        caller.msg("You are not the leader of this group.")
+                        return
             target = args[1]
             matches = caller.search(target)
             if not matches:
@@ -77,29 +83,38 @@ class GroupCommand(Command):
             if target == caller:
                 caller.msg("You can't kick yourself!")
                 return
-            channel.msg(f"{caller.get_display_name()} kicked {target.get_display_name()} from the group.")
-            channel.remove_listener(target)
-            target.group_channel = None
+            with caller.lock:
+                with channel.lock:
+                    channel.msg(f"{caller.get_display_name()} kicked {target.get_display_name()} from the group.")
+                    channel.remove_listener(target)
+            with target.lock:
+                target.group_channel = None
             return
         if args[0].lower() == "leave":
-            if not caller.group_channel:
-                caller.msg("You are not in a group.")
-                return
-            channel_list = get(caller.group_channel)
+            with caller.lock:
+                if not caller.group_channel:
+                    caller.msg("You are not in a group.")
+                    return
+                gc = caller.group_channel
+            channel_list = get(gc)
             if not channel_list:
-                caller.group_channel = None
+                with caller.lock:
+                    caller.group_channel = None
                 caller.msg("Error: Group channel not found.")
                 return
             channel = channel_list[0]
-            was_leader = channel.created_by == caller.id
-            channel.msg(f"{caller.get_display_name()} left the group.")
-            with channel.lock:
-                channel.remove_listener(caller)
-                remaining = list(channel.listeners.values())
-                if was_leader and remaining:
-                    channel.created_by = remaining[0].id
-            caller.group_channel = None
-            if not remaining:
+            should_delete = False
+            with caller.lock:
+                with channel.lock:
+                    was_leader = channel.created_by == caller.id
+                    channel.msg(f"{caller.get_display_name()} left the group.")
+                    channel.remove_listener(caller)
+                    remaining = list(channel.listeners.values())
+                    if was_leader and remaining:
+                        channel.created_by = remaining[0].id
+                    should_delete = not remaining
+                caller.group_channel = None
+            if should_delete:
                 channel.delete()
             return
         if args[0].lower() == "add":
@@ -126,40 +141,60 @@ class GroupCommand(Command):
                 if target.id not in caller.followers:
                     caller.msg(f"{target.get_display_name()} is not following you.")
                     return
-            if not caller.group_channel:
-                try:
-                    channel = Channel.create(f"{caller.name}'s group", caller)
-                except ValueError:
-                    for _ in range(5):
-                        try:
-                            channel = Channel.create(f"{caller.name}'s group {random.randint(0, 99)}", caller)
-                            break
-                        except ValueError:
-                            continue
+                if not caller.group_channel:
+                    try:
+                        channel = Channel.create(f"{caller.name}'s group", caller)
+                    except ValueError:
+                        for _ in range(5):
+                            try:
+                                channel = Channel.create(f"{caller.name}'s group {random.randint(0, 99)}", caller)
+                                break
+                            except ValueError:
+                                continue
+                        else:
+                            caller.msg("Could not create a group channel; try again.")
+                            return
+                    if caller.group_channel:
+                        leaked = channel
+                        existing = get(caller.group_channel)
+                        if existing:
+                            channel = existing[0]
+                            try:
+                                leaked.delete()
+                            except Exception:
+                                pass
+                        else:
+                            with channel.lock:
+                                channel.add_listener(caller)
+                            caller.group_channel = channel.id
                     else:
-                        caller.msg("Could not create a group channel; try again.")
-                        return
-                channel.add_listener(caller)
-                caller.group_channel = channel.id
-            else:
-                channel_list = get(caller.group_channel)
-                if not channel_list:
-                    caller.msg("Error: Group channel not found.")
-                    return
+                        with channel.lock:
+                            channel.add_listener(caller)
+                        caller.group_channel = channel.id
                 else:
-                    channel = channel_list[0]
-                if channel.created_by != caller.id:
-                    caller.msg("You are not the leader of this group.")
-                    return
-            channel.add_listener(target)
-            channel.msg(f"{caller.get_display_name()} added {target.get_display_name()} to the group.")
-            target.group_channel = channel.id
+                    channel_list = get(caller.group_channel)
+                    if not channel_list:
+                        caller.msg("Error: Group channel not found.")
+                        return
+                    else:
+                        channel = channel_list[0]
+                    with channel.lock:
+                        if channel.created_by != caller.id:
+                            caller.msg("You are not the leader of this group.")
+                            return
+                with channel.lock:
+                    channel.add_listener(target)
+                    channel.msg(f"{caller.get_display_name()} added {target.get_display_name()} to the group.")
+                with target.lock:
+                    target.group_channel = channel.id
             return
         message = " ".join(args)
-        if not caller.group_channel:
+        with caller.lock:
+            gc = caller.group_channel
+        if not gc:
             caller.msg("You are not in a group.")
             return
-        channel_list = get(caller.group_channel)
+        channel_list = get(gc)
         if not channel_list:
             caller.msg("Error: Group channel not found.")
             return

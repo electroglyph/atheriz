@@ -39,7 +39,6 @@ class ServerState:
 
 
 server_state = ServerState()
-_reload_lock = asyncio.Lock()
 
 app = FastAPI(title=settings.SERVERNAME)
 
@@ -334,15 +333,16 @@ async def hot_reload_endpoint(request: Request):
     err = _check_admin(request, "reload")
     if err:
         return {"status": "error", "message": err}
-    async with _reload_lock:
+    def _do_reload():
         if not reloader._reload_lock.acquire(blocking=False):
             return {"status": "error", "message": "Reload already in progress; skipping."}
         try:
-            await run_in_threadpool(do_reload)
-            msg = await run_in_threadpool(reloader._reload_game_logic)
+            do_reload()
+            msg = reloader._reload_game_logic()
+            return {"status": "ok", "message": msg}
         finally:
             reloader._reload_lock.release()
-    return {"status": "ok", "message": msg}
+    return await run_in_threadpool(_do_reload)
 
 
 @app.post("/_internal/shutdown")
@@ -417,7 +417,7 @@ async def create_account_endpoint(request: Request):
 def setup_static_files():
     """Mount the static files directory (uses game folder's web/static if available)."""
     if static_dir.exists():
-        app.mount("/", StaticFiles(directory=str(static_dir), html=True), name="static")
+        app.mount("/static", StaticFiles(directory=str(static_dir), html=True), name="static")
         print(f"Serving static files from: {static_dir}")
         draw_entrypoint = static_dir / "atheriz_draw" / "index.html"
         if draw_entrypoint.is_file():
@@ -1039,16 +1039,15 @@ def main():
                     break
             print(" Done.")
 
-        try:
-            setup_game_folder()
-            do_startup()
-        except Exception as e:
-            print(f"Startup tasks failed: {traceback.format_exc()}")
-            os._exit(1)
-
         if args.foreground:
             start_server()
         else:
+            try:
+                setup_game_folder()
+                do_startup()
+            except Exception as e:
+                print(f"Startup tasks failed: {traceback.format_exc()}")
+                os._exit(1)
             do_shutdown()
             spawn_daemon(args)
             print(f"Restart took {(time.time() - t0) * 1000:.2f}ms")
@@ -1139,11 +1138,10 @@ def spawn_daemon(args):
     else:
         kwargs["start_new_session"] = True
 
-    with open(log_file, "a", encoding="utf-8") as f:
-        # spawn process
-        proc = subprocess.Popen(
-            cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs
-        )
+    f = open(log_file, "a", encoding="utf-8")
+    proc = subprocess.Popen(
+        cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs
+    )
 
     print(f"Server started with PID: {proc.pid}")
 
@@ -1207,14 +1205,18 @@ def do_reload_command(args):
     with open(token_file, "r", encoding="utf-8") as f:
         token = f.read().strip()
 
-    url = f"http://localhost:{port}/_internal/hot_reload"
+    tls_on = bool(settings.SSL_CERTFILE)
+    url = f"{'https' if tls_on else 'http'}://localhost:{port}/_internal/hot_reload"
     print(f"Triggering hot reload at {url}...")
 
     t0 = time.time()
     req = urllib.request.Request(url, method="POST")
     req.add_header("X-Admin-Token", token)
     try:
-        with urllib.request.urlopen(req) as response:
+        import ssl
+
+        ctx = ssl._create_unverified_context() if tls_on else None
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode())
                 elapsed = time.time() - t0

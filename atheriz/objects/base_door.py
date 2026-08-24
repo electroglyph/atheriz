@@ -45,6 +45,10 @@ class Door(AccessLock):
     def __getstate__(self):
         with self.lock:
             state = self.__dict__.copy()
+            for cls in type(self).mro():
+                excludes = getattr(cls, "_pickle_excludes", ())
+                for key in excludes:
+                    state.pop(key, None)
             state.pop("lock", None)
             return state
 
@@ -241,25 +245,37 @@ class Door(AccessLock):
             return True
 
     def map_close(self):
-        if settings.MAP_ENABLED and self.symbol_coord and self.to_coord:
+        if settings.MAP_ENABLED and self.symbol_coord and self.from_coord and self.to_coord:
             mh = get_map_handler()
-            mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
-            if mi:
-                with mi.lock:
-                    mi.post_grid[self.symbol_coord] = self.closed_symbol
-                    if mi.pre_grid:
-                        mi.pre_grid[self.symbol_coord] = self.closed_symbol
-                        mi.map_changed = True
-                mi.render(True)
+            seen = set()
+            for coord in (self.from_coord, self.to_coord):
+                key = (coord.area, coord.z)
+                if key in seen:
+                    continue
+                seen.add(key)
+                mi = mh.get_mapinfo(coord.area, coord.z)
+                if mi:
+                    with mi.lock:
+                        mi.post_grid[self.symbol_coord] = self.closed_symbol
+                        if mi.pre_grid:
+                            mi.pre_grid[self.symbol_coord] = self.closed_symbol
+                            mi.map_changed = True
+                    mi.render(True)
 
     def map_open(self):
-        if settings.MAP_ENABLED and self.symbol_coord and self.to_coord:
+        if settings.MAP_ENABLED and self.symbol_coord and self.from_coord and self.to_coord:
             mh = get_map_handler()
-            mi = mh.get_mapinfo(self.to_coord.area, self.to_coord.z)
-            if mi:
-                with mi.lock:
-                    mi.post_grid[self.symbol_coord] = self.open_symbol
-                    if mi.pre_grid:
-                        mi.pre_grid[self.symbol_coord] = self.open_symbol
-                        mi.map_changed = True
-                mi.render(True)
+            seen = set()
+            for coord in (self.from_coord, self.to_coord):
+                key = (coord.area, coord.z)
+                if key in seen:
+                    continue
+                seen.add(key)
+                mi = mh.get_mapinfo(coord.area, coord.z)
+                if mi:
+                    with mi.lock:
+                        mi.post_grid[self.symbol_coord] = self.open_symbol
+                        if mi.pre_grid:
+                            mi.pre_grid[self.symbol_coord] = self.open_symbol
+                            mi.map_changed = True
+                    mi.render(True)

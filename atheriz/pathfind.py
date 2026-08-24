@@ -110,7 +110,7 @@ def astar(
     while True:
         iterations += 1
         closed_set.add(current_node.position.coord)
-        if current_node.position == end_node.position:
+        if current_node.position.coord == end_node.position.coord:
             return True, get_path(current_node), list(closed_set)
         if iterations > max_iterations:
             return False, [], list(closed_set)

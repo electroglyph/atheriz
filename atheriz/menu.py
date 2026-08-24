@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
 
 from atheriz import settings
+from atheriz.logger import logger
 
 MenuNode = Callable[["MenuContext"], tuple[str, list["Choice"]]]
 
@@ -38,9 +39,12 @@ class MenuEngine:
             return
         text, choices_list = self.current_node(self.context)
         self._current_text = text
-        self._current_choices = {
-            str(choice.key).lower().strip(): choice for choice in choices_list
-        }
+        self._current_choices = {}
+        for choice in choices_list:
+            key = str(choice.key).lower().strip()
+            if key in self._current_choices:
+                raise ValueError(f"duplicate menu key: {choice.key!r}")
+            self._current_choices[key] = choice
 
     def get_display(self) -> str:
         if not self.current_node:
@@ -60,7 +64,10 @@ class MenuEngine:
             return True
         choice = self._current_choices[clean_input]
         if choice.callback:
-            choice.callback(self.context)
+            try:
+                choice.callback(self.context)
+            except Exception:
+                logger.error("menu callback failed", exc_info=True)
         if choice.goto:
             self.current_node = choice.goto
             self._render_node()

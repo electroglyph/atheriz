@@ -88,7 +88,27 @@ def ensure_thread_safe(obj):
             lock = orig_get(self, "lock")
 
             with lock:
-                return orig_get(self, name)
+                val = orig_get(self, name)
+                if isinstance(val, (list, dict, set)):
+                    try:
+                        rc = lock._recursion_count()  # type: ignore[attr-defined]
+                    except Exception:
+                        rc = 1
+                    if rc > 1:
+                        return val
+                    if name == "contents":
+                        return list(val)
+                    try:
+                        return copy.deepcopy(val)
+                    except Exception:
+                        try:
+                            return dill.loads(dill.dumps(val))
+                        except Exception:
+                            try:
+                                return copy.copy(val)
+                            except Exception:
+                                return type(val)(val) if isinstance(val, (list, set, dict)) else val
+                return val
 
         def __setattr__(self, name, value):
             if name == "lock":

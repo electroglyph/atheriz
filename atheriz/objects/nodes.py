@@ -208,11 +208,19 @@ class Node(Flags, AccessLock):
 
     @tick_seconds.setter
     def tick_seconds(self, value):
-        if self._is_tickable and value != self._tick_seconds:
+        old = None
+        do_swap = False
+        with self.lock:
+            if self._is_tickable and value != self._tick_seconds:
+                old = self._tick_seconds
+                self._tick_seconds = value
+                do_swap = True
+            else:
+                self._tick_seconds = value
+        if do_swap:
             at = get_async_ticker()
-            at.remove_coro(self.at_tick, self._tick_seconds)
+            at.remove_coro(self.at_tick, old)
             at.add_coro(self.at_tick, value)
-        self._tick_seconds = value
 
     @property
     def is_tickable(self) -> bool:
@@ -221,12 +229,23 @@ class Node(Flags, AccessLock):
 
     @is_tickable.setter
     def is_tickable(self, value):
-        self._is_tickable = value
+        tick = None
+        do_add = False
+        do_remove = False
+        with self.lock:
+            if self._is_tickable == value:
+                return
+            tick = self._tick_seconds
+            self._is_tickable = value
+            if value:
+                do_add = True
+            else:
+                do_remove = True
         at = get_async_ticker()
-        if value:
-            at.add_coro(self.at_tick, self._tick_seconds)
-        else:
-            at.remove_coro(self.at_tick, self._tick_seconds)
+        if do_add:
+            at.add_coro(self.at_tick, tick)
+        elif do_remove:
+            at.remove_coro(self.at_tick, tick)
 
     @hookable
     def at_pre_emit_sound(self, emitter: Object, sound_desc: str, sound_msg: str, loudness: float, is_say: bool):
@@ -505,7 +524,7 @@ class Node(Flags, AccessLock):
     def __str__(self):
         return f"Node: {self.coord}"
 
-    def search(self, query: str, recursive: bool = False) -> list[Any]:
+    def search(self, query: str, recursive: bool = False, looker: Any | None = None) -> list[Any]:
         """
         Searches the contents of this node using the given query string.
 
@@ -513,11 +532,12 @@ class Node(Flags, AccessLock):
             query (str): The search phrase.
             recursive (bool): If True (default), descend into nested containers.
                 If False, search only this node's direct contents.
+            looker (Any | None): The object doing the looking; defaults to self.
 
         Returns:
             list[Any]: A list of objects matching the search query.
         """
-        return search(self, query, recursive=recursive)
+        return search(self, query, recursive=recursive, looker=looker if looker is not None else self)
 
     def get_links(self) -> list[NodeLink]:
         """
@@ -629,7 +649,11 @@ class Node(Flags, AccessLock):
         with self.lock:
             if any(link.name == name for link in self.links):
                 return False
-            self.add_link(factory())
+        link = factory()
+        with self.lock:
+            if any(link.name == name for link in self.links):
+                return False
+            self.add_link(link)
             return True
 
     def remove_link(self, name: str):
@@ -1112,8 +1136,6 @@ class NodeGrid:
                             door.to_coord = new
                         if door.symbol_coord and (dx or dy):
                             door.symbol_coord = (door.symbol_coord[0] + dx, door.symbol_coord[1] + dy)
-        # refresh cross-area transitions: drop ones keyed on moved coords,
-        # then re-register every cross-area link leaving this grid
         with self.lock:
             cross_links = [
                 (node, link)
@@ -1121,8 +1143,16 @@ class NodeGrid:
                 for link in node.links
                 if link.coord.area != self.area
             ]
-        for old_full in old_to_new_full:
-            nh.remove_transition(old_full)
+        with nh.lock2:
+            for old_full, new_full in old_to_new_full.items():
+                trans = nh.transitions.pop(old_full, None)
+                if trans is not None:
+                    try:
+                        with trans.lock:
+                            trans.to_coord = new_full
+                    except AttributeError:
+                        trans.to_coord = new_full
+                    nh.transitions[new_full] = trans
         for node, link in cross_links:
             nh.add_transition(Transition(node.coord, link.coord, link.name))
         # rebuild ExitCommands on occupants of affected rooms so their cached

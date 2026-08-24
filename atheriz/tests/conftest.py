@@ -56,6 +56,11 @@ def global_test_env():
         obj_singleton.TEMP_BANNED_IPS.clear()
     with obj_singleton.CREATION_COOLDOWN_LOCK:
         obj_singleton.CREATION_COOLDOWNS.clear()
+    try:
+        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+    except AttributeError:
+        pass
 
     # Reset internal ID counter to ensure predictable test IDs if needed
     get_singleton.set_id(-1)
@@ -105,6 +110,11 @@ def global_test_env():
     with obj_singleton.CREATION_COOLDOWN_LOCK:
         obj_singleton.CREATION_COOLDOWNS.clear()
     try:
+        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+    except AttributeError:
+        pass
+    try:
         import atheriz.connection_screen as _cs2
 
         with _cs2._LOCK:
@@ -151,11 +161,21 @@ def reset_banned_ips():
         obj_singleton.TEMP_BANNED_IPS.clear()
     with obj_singleton.CREATION_COOLDOWN_LOCK:
         obj_singleton.CREATION_COOLDOWNS.clear()
+    try:
+        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+    except AttributeError:
+        pass
     yield
     with obj_singleton.TEMP_BANNED_LOCK:
         obj_singleton.TEMP_BANNED_IPS.clear()
     with obj_singleton.CREATION_COOLDOWN_LOCK:
         obj_singleton.CREATION_COOLDOWNS.clear()
+    try:
+        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+    except AttributeError:
+        pass
 
 
 @pytest.fixture(autouse=True)

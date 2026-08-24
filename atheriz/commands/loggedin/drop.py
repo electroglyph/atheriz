@@ -32,7 +32,9 @@ class DropCommand(Command):
                 for obj in list(caller.contents):
                     if not obj.at_pre_drop(caller):
                         continue
-                    obj.move_to(loc)
+                    if not obj.move_to(loc):
+                        caller.msg(f"You can't drop {obj.name}.")
+                        continue
                     loc.msg_contents(
                         f"{caller.name} dropped {obj.name}.",
                         from_obj=caller,
@@ -49,7 +51,9 @@ class DropCommand(Command):
             for f in found:
                 if not f.at_pre_drop(caller):
                     continue
-                f.move_to(loc)
+                if not f.move_to(loc):
+                    caller.msg(f"You can't drop {f.name}.")
+                    continue
                 loc.msg_contents(
                     f"{caller.name} dropped {f.name}.",
                     from_obj=caller,

@@ -31,9 +31,9 @@ class PutCommand(Command):
 
         loc: Node | None = caller.location
 
-        dest = caller.search(dest_name)
+        dest = caller.search(dest_name, looker=caller)
         if not dest and loc and loc.access(caller, "put"):
-            dest = loc.search(dest_name)
+            dest = loc.search(dest_name, looker=caller)
         if not dest:
             caller.msg(f"'{dest_name}' not found.")
             return
@@ -48,7 +48,9 @@ class PutCommand(Command):
                     continue  # don't put container in itself
                 if not obj.at_pre_put(caller, dest[0]):
                     continue
-                obj.move_to(dest[0])
+                if not obj.move_to(dest[0]):
+                    caller.msg(f"You can't put {obj.name} in {dest[0].name}.")
+                    continue
                 if loc:
                     loc.msg_contents(
                         f"{caller.name} put {obj.name} in {dest[0].name}.",
@@ -69,7 +71,9 @@ class PutCommand(Command):
             if not obj.at_pre_put(caller, dest[0]):
                 caller.msg(f"You can't put {obj.name} in {dest[0].name}.")
                 continue
-            obj.move_to(dest[0])
+            if not obj.move_to(dest[0]):
+                caller.msg(f"You can't put {obj.name} in {dest[0].name}.")
+                continue
             if loc:
                 loc.msg_contents(
                     f"{caller.name} put {obj.name} in {dest[0].name}.",

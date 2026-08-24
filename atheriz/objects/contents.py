@@ -93,13 +93,14 @@ def filter_contents(obj: Object | Node, l: Callable[[Any], bool]) -> list[Any]:
     return [o for o in obj.contents if l(o)]
 
 
-def _gather_contents(obj: Object | Node, visited: set[int] | None = None, depth: int = 0) -> list[Any]:
+def _gather_contents(obj: Object | Node, visited: set[int] | None = None, depth: int = 0, looker: Object | None = None) -> list[Any]:
     """Recursively gather obj's contents, descending into children with ``is_container``.
 
     Args:
         obj (Object | Node): The root object to gather from.
         visited (set[int] | None): Accumulating set of already-seen object ids.
         depth (int): Current recursion depth; capped at MAX_SEARCH_DEPTH.
+        looker (Object | None): The object doing the looking; locked containers not viewable by looker are not descended into.
 
     Returns:
         list[Any]: Flat list of nested contents, top-level first. May be partial if the
@@ -116,14 +117,16 @@ def _gather_contents(obj: Object | Node, visited: set[int] | None = None, depth:
         visited.add(o.id)
         result.append(o)
         if getattr(o, "is_container", False):
+            if looker is not None and not o.access(looker, "view"):
+                continue
             try:
-                result.extend(_gather_contents(o, visited, depth + 1))
+                result.extend(_gather_contents(o, visited, depth + 1, looker))
             except RecursionError:
                 break
     return result
 
 
-def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
+def search(obj: Object | Node, query: str, recursive: bool = True, looker: Object | None = None) -> list[Any]:
     """
     search for matching objects
     example queries:
@@ -139,12 +142,13 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
         recursive (bool): If True (default), descend into nested containers
             (children with ``is_container``). If False, search only ``obj``'s
             direct contents.
+        looker (Object | None): The object doing the looking; used to check view locks on containers.
     """
     query = query.lower()
     if query == "me" or query == obj.name.lower():
         return [obj]
     # computed once so the #id branch and the match loop share one candidate list
-    objs = _gather_contents(obj) if recursive else obj.contents
+    objs = _gather_contents(obj, looker=looker) if recursive else obj.contents
     if query.startswith("#"):
         try:
             id = int(query[1:])
@@ -229,8 +233,12 @@ def search(obj: Object | Node, query: str, recursive: bool = True) -> list[Any]:
                     if len(matches) == count and index == 0:
                         return matches
                     break
-    if count == 0:  # 0 means all
-        return matches
+    if count == 0:
+        if index == 0:
+            return matches
+        if index <= len(matches):
+            return [matches[index - 1]]
+        return []
     if index == 0 and len(matches) > count:  # we have more matches than requested
         return matches[:count]
     if index != 0 and index <= len(matches):  # specific match index was requested

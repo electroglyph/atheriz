@@ -61,6 +61,9 @@ def unban_ip(host: str) -> None:
 CREATION_COOLDOWNS = {}
 CREATION_COOLDOWN_LOCK = RLock()
 
+FAILED_LOGIN_ATTEMPTS: dict[str, int] = {}
+FAILED_LOGIN_ATTEMPTS_LOCK = RLock()
+
 
 def creation_cooldown_active(op: str, host: str, now: float) -> bool:
     """Return True if ``op`` for ``host`` is still within its cooldown window."""

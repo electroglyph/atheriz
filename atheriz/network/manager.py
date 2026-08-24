@@ -118,10 +118,11 @@ class ConnectionManager:
         session = connection.session
         if session is not None:
             if not self.atp.add_task(self._do_session_disconnect, session):
+                logger.warning("pool saturated, dropping disconnect for %s", session)
                 try:
-                    session.at_disconnect()
-                except Exception as e:
-                    logger.error(f"[Network] Session teardown failed during disconnect: {e}", exc_info=True)
+                    session.connection.close()
+                except Exception:
+                    pass
         try:
             connection.close()
         except Exception as e:

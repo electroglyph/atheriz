@@ -33,9 +33,9 @@ class GetCommand(Command):
         if obj_name == "all":
             # Get all from a container or from the room
             if source_name:
-                container = caller.search(source_name)
+                container = caller.search(source_name, looker=caller)
                 if not container:
-                    container = loc.search(source_name)
+                    container = loc.search(source_name, looker=caller)
                 if not container:
                     caller.msg(f"'{source_name}' not found.")
                     return
@@ -52,7 +52,9 @@ class GetCommand(Command):
             for obj in list(source.contents):
                 if not obj.at_pre_get(caller) or obj.id == caller.id:
                     continue
-                obj.move_to(caller)
+                if not obj.move_to(caller):
+                    caller.msg(f"You can't get {obj.name}.")
+                    continue
                 loc.msg_contents(
                     f"{caller.name} picked up {obj.name}.",
                     from_obj=caller,
@@ -65,9 +67,9 @@ class GetCommand(Command):
 
         # Get specific object from a container or from the room
         if source_name:
-            container = caller.search(source_name)
+            container = caller.search(source_name, looker=caller)
             if not container:
-                container = loc.search(source_name)
+                container = loc.search(source_name, looker=caller)
             if not container:
                 caller.msg(f"'{source_name}' not found.")
                 return
@@ -75,7 +77,7 @@ class GetCommand(Command):
             if not source.access(caller, "get"):
                 caller.msg("You can't take anything from there.")
                 return
-            found = source.search(obj_name)
+            found = source.search(obj_name, looker=caller)
             if not found:
                 caller.msg(f"'{obj_name}' not found in {source.name}.")
                 return
@@ -83,7 +85,7 @@ class GetCommand(Command):
             if not loc.access(caller, "get"):
                 caller.msg("You can't get something from here!")
                 return
-            found = loc.search(obj_name)
+            found = loc.search(obj_name, looker=caller)
             if not found:
                 caller.msg("Object not found.")
                 return
@@ -92,7 +94,9 @@ class GetCommand(Command):
             if not f.at_pre_get(caller):
                 caller.msg(f"You can't get {f.name}.")
                 continue
-            f.move_to(caller)
+            if not f.move_to(caller):
+                caller.msg(f"You can't get {f.name}.")
+                continue
             loc.msg_contents(
                 f"{caller.name} picked up {f.name}.",
                 from_obj=caller,

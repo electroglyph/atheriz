@@ -80,15 +80,16 @@ class FollowCommand(Command):
         if target.no_follow and not caller.is_builder:
             caller.msg(f"{target.name} will not lead you.")
             return
-        if caller.following == target.id:
-            caller.msg(f"You are already following {target.name}!")
-            return
-        caller.following = target.id
+        with caller.lock:
+            if caller.following == target.id:
+                caller.msg(f"You are already following {target.name}!")
+                return
+            caller.following = target.id
         with target.lock:
             target.followers.add(caller.id)
-        if not target.get_scripts_by_type("FollowScript"):
-            s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
-            target.add_script(s)
+            if not target.get_scripts_by_type("FollowScript"):
+                s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
+                target.add_script(s)
         loc = caller.location
         if loc and target.access(caller, "view"):
             loc.msg_contents(

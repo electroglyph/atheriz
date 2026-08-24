@@ -32,6 +32,8 @@ class NodeHandler:
         self.lock3 = RLock()
         self.doors: dict[Coord, dict[str, Door]] = {}
         self._modified = False
+        self._modified2 = False
+        self._modified3 = False
 
         self.load()
 
@@ -39,22 +41,34 @@ class NodeHandler:
         """Load node data from the database."""
         try:
             db = get_database()
+            area_rows = []
+            trans_rows = []
+            door_rows = []
             with db.lock:
                 cursor = db.connection.cursor()
                 cursor.execute("SELECT name, data FROM areas")
                 for name, blob in cursor:
+                    area_rows.append((name, blob))
+                cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
+                for area, x, y, z, blob in cursor:
+                    trans_rows.append((area, x, y, z, blob))
+                cursor.execute("SELECT area, x, y, z, data FROM doors")
+                for area, x, y, z, blob in cursor:
+                    door_rows.append((area, x, y, z, blob))
+            with self.lock:
+                for name, blob in area_rows:
                     try:
                         self.areas[name] = dill.loads(blob)
                     except Exception as e:
                         logger.error(f"Error loading area {name}: {e}")
-                cursor.execute("SELECT to_area, to_x, to_y, to_z, data FROM transitions")
-                for area, x, y, z, blob in cursor:
+            with self.lock2:
+                for area, x, y, z, blob in trans_rows:
                     try:
                         self.transitions[Coord(area, x, y, z)] = dill.loads(blob)
                     except Exception as e:
                         logger.error(f"Error loading transition to {area},{x},{y},{z}: {e}")
-                cursor.execute("SELECT area, x, y, z, data FROM doors")
-                for area, x, y, z, blob in cursor:
+            with self.lock3:
+                for area, x, y, z, blob in door_rows:
                     try:
                         self.doors[Coord(area, x, y, z)] = dill.loads(blob)
                     except Exception as e:
@@ -108,10 +122,10 @@ class NodeHandler:
                     except Exception:
                         pass
         with self.lock2:
-            if self._modified:
+            if self._modified2:
                 return True
         with self.lock3:
-            if self._modified:
+            if self._modified3:
                 return True
         return False
 
@@ -131,6 +145,16 @@ class NodeHandler:
         handler_cleared = handler_was
         with self.lock2:
             trans_refs = list(self.transitions.values())
+            trans_was = self._modified2
+            if trans_was:
+                self._modified2 = False
+        trans_cleared = trans_was
+        with self.lock3:
+            doors_refs = [(k, dict(v)) for k, v in self.doors.items()]
+            doors_was = self._modified3
+            if doors_was:
+                self._modified3 = False
+        doors_cleared = doors_was
         transitions_snapshot = []
         for t in trans_refs:
             try:
@@ -146,8 +170,6 @@ class NodeHandler:
                 transitions_snapshot.append(t_copy)
             except Exception as e:
                 logger.error(f"Error detaching transition {t}: {e}")
-        with self.lock3:
-            doors_refs = [(k, dict(v)) for k, v in self.doors.items()]
         doors_snapshot = []
         for k, doors_dict in doors_refs:
             doors_copy = {}
@@ -330,6 +352,12 @@ class NodeHandler:
             if handler_cleared:
                 with self.lock:
                     self._modified = True
+            if trans_cleared:
+                with self.lock2:
+                    self._modified2 = True
+            if doors_cleared:
+                with self.lock3:
+                    self._modified3 = True
             for a in cleared_areas:
                 with a.lock:
                     a.is_modified = True
@@ -349,6 +377,12 @@ class NodeHandler:
                 if handler_cleared:
                     with self.lock:
                         self._modified = True
+                if trans_cleared:
+                    with self.lock2:
+                        self._modified2 = True
+                if doors_cleared:
+                    with self.lock3:
+                        self._modified3 = True
                 for a in cleared_areas:
                     with a.lock:
                         a.is_modified = True
@@ -370,6 +404,12 @@ class NodeHandler:
                 if handler_cleared:
                     with self.lock:
                         self._modified = True
+                if trans_cleared:
+                    with self.lock2:
+                        self._modified2 = True
+                if doors_cleared:
+                    with self.lock3:
+                        self._modified3 = True
                 for a in cleared_areas:
                     with a.lock:
                         a.is_modified = True
@@ -409,6 +449,12 @@ class NodeHandler:
                 if handler_cleared:
                     with self.lock:
                         self._modified = True
+                if trans_cleared:
+                    with self.lock2:
+                        self._modified2 = True
+                if doors_cleared:
+                    with self.lock3:
+                        self._modified3 = True
                 for a in cleared_areas:
                     with a.lock:
                         a.is_modified = True
@@ -442,17 +488,25 @@ class NodeHandler:
             else:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
-            self._modified = True
+            self._modified3 = True
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
-        if mi:
-            symbol = door.closed_symbol if door.closed else door.open_symbol
-            with mi.lock:
-                mi.post_grid[door.symbol_coord] = symbol
-                if mi.pre_grid:
-                    mi.pre_grid[door.symbol_coord] = symbol
-                    mi.map_changed = True
-            mi.render(True)
+        symbol = door.closed_symbol if door.closed else door.open_symbol
+        seen = set()
+        for coord in (door.from_coord, door.to_coord):
+            if coord is None:
+                continue
+            key = (coord.area, coord.z)
+            if key in seen:
+                continue
+            seen.add(key)
+            mi = mh.get_mapinfo(coord.area, coord.z)
+            if mi:
+                with mi.lock:
+                    mi.post_grid[door.symbol_coord] = symbol
+                    if mi.pre_grid:
+                        mi.pre_grid[door.symbol_coord] = symbol
+                        mi.map_changed = True
+                mi.render(True)
 
     def remove_door(self, door: Door):
         with self.lock3:
@@ -472,12 +526,20 @@ class NodeHandler:
                         rem_keys.append(k)
                 for k in rem_keys:
                     del d[k]
-            self._modified = True
+            self._modified3 = True
         mh = get_map_handler()
-        mi = mh.get_mapinfo(door.to_coord.area, door.to_coord.z)
-        if mi:
-            mi.update_grid(door.symbol_coord, " ")
-            mi.render(True)
+        seen = set()
+        for coord in (door.from_coord, door.to_coord):
+            if coord is None:
+                continue
+            key = (coord.area, coord.z)
+            if key in seen:
+                continue
+            seen.add(key)
+            mi = mh.get_mapinfo(coord.area, coord.z)
+            if mi:
+                mi.update_grid(door.symbol_coord, " ")
+                mi.render(True)
 
     def add_node(self, node: Node):
         area = self.get_area(node.coord.area)
@@ -521,10 +583,10 @@ class NodeHandler:
             self._modified = True
         with self.lock2:
             self.transitions.clear()
-            self._modified = True
+            self._modified2 = True
         with self.lock3:
             self.doors.clear()
-            self._modified = True
+            self._modified3 = True
 
     def get_area(self, name: str) -> NodeArea | None:
         with self.lock:
@@ -565,12 +627,12 @@ class NodeHandler:
     def add_transition(self, transition: Transition):
         with self.lock2:
             self.transitions[transition.to_coord] = transition
-            self._modified = True
+            self._modified2 = True
 
     def remove_transition(self, destination: Coord):
         with self.lock2:
             self.transitions.pop(destination, None)
-            self._modified = True
+            self._modified2 = True
 
     def find_transitions(
         self, from_z=None, to_z=None, from_area=None, to_area=None

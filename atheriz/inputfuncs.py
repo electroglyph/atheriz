@@ -90,8 +90,8 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
         # this makes 'bleh work as `say bleh`
         cmd = get_loggedin_cmdset().get(raw_cmd_key[:1])
         if cmd:
-            matched_alias = stripped[:1]
-            cmd_args = stripped[1:].lstrip(" \t\r\n")
+            matched_alias = raw_cmd_key[:1]
+            cmd_args = (parts[0][1:] + (f" {parts[1]}" if len(parts) > 1 else "")).lstrip(" \t\r\n")
         else:
             # check for commands provided by objects in the player's location
             loc = puppet.location
@@ -106,10 +106,10 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
                         break
 
         if not cmd and settings.AUTO_COMMAND_ALIASING:
-            if raw_cmd_key in _NO_ALIAS_COMMANDS:
+            if len(raw_cmd_key) == 1 and raw_cmd_key.lower() in _NO_ALIAS_COMMANDS:
                 puppet.msg("You can't do that.")
                 return None
-            for key in get_loggedin_cmdset().get_keys():
+            for key in sorted(get_loggedin_cmdset().get_keys()):
                 if key in _IGNORE_KEYS:
                     continue
                 if key.startswith(raw_cmd_key):
@@ -154,7 +154,7 @@ def _resolve_unloggedin(connection: Connection, text: str):
     cmd = cmdset.get(raw_cmd_key)
     if not cmd:
         if settings.AUTO_COMMAND_ALIASING:
-            for key in cmdset.get_keys():
+            for key in sorted(cmdset.get_keys()):
                 if key in _IGNORE_KEYS:
                     continue
                 if key.startswith(raw_cmd_key):

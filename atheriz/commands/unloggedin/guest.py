@@ -5,7 +5,10 @@ from atheriz.menu import Choice, MenuEngine
 from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import (
+    CREATION_COOLDOWN_LOCK,
+    CREATION_COOLDOWNS,
     apply_creation_cooldown,
+    filter_by,
     try_reserve_creation_cooldown,
 )
 from atheriz.commands.unloggedin.validation import validate_character_name
@@ -55,6 +58,8 @@ class GuestCommand(Command):
         name = await caller.session.prompt("Enter a name for your guest character:")
         name = name.strip()
         if err := validate_character_name(name):
+            with CREATION_COOLDOWN_LOCK:
+                CREATION_COOLDOWNS.pop(f"guest:{rate_key}", None)
             caller.msg(err)
             return
 
@@ -74,9 +79,13 @@ class GuestCommand(Command):
             gender = await caller.session.prompt("Enter your character's gender:")
             gender = gender.strip()
             if not gender:
+                with CREATION_COOLDOWN_LOCK:
+                    CREATION_COOLDOWNS.pop(f"guest:{rate_key}", None)
                 caller.msg("Gender cannot be empty.")
                 return
         elif not gender:
+            with CREATION_COOLDOWN_LOCK:
+                CREATION_COOLDOWNS.pop(f"guest:{rate_key}", None)
             caller.msg("Gender selection is required.")
             return
 
@@ -84,6 +93,12 @@ class GuestCommand(Command):
             "Enter a short description of your character:"
         )
         desc = desc.strip()
+
+        if filter_by(lambda o: getattr(o, "is_pc", False) and isinstance(getattr(o, "name", None), str) and o.name.lower() == name.lower()):
+            with CREATION_COOLDOWN_LOCK:
+                CREATION_COOLDOWNS.pop(f"guest:{rate_key}", None)
+            caller.msg(f"Character with this name ({name}) already exists.")
+            return
 
         character = Object.create(None, name, desc=desc, is_pc=True)
         apply_creation_cooldown("guest", rate_key, time.monotonic(), settings.CREATION_COOLDOWN)

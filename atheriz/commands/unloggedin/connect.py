@@ -2,7 +2,13 @@ from __future__ import annotations
 import time
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
-from atheriz.globals.objects import ban_ip, filter_by, get
+from atheriz.globals.objects import (
+    FAILED_LOGIN_ATTEMPTS,
+    FAILED_LOGIN_ATTEMPTS_LOCK,
+    ban_ip,
+    filter_by,
+    get,
+)
 from atheriz.objects.base_account import Account
 import atheriz.settings as settings
 from atheriz.logger import logger
@@ -99,10 +105,18 @@ class ConnectCommand(Command):
         account: Account = accounts[0]
 
         if not account.check_password(password):
+            host = getattr(caller, "client_host", "?")
+            if not isinstance(host, str):
+                host = "?"
+            with FAILED_LOGIN_ATTEMPTS_LOCK:
+                FAILED_LOGIN_ATTEMPTS[host] = FAILED_LOGIN_ATTEMPTS.get(host, 0) + 1
+                attempts = FAILED_LOGIN_ATTEMPTS[host]
+            try:
+                caller.failed_login_attempts = getattr(caller, "failed_login_attempts", 0) + 1
+            except Exception:
+                pass
             caller.msg("Invalid password.")
-            caller.failed_login_attempts += 1
-            if caller.failed_login_attempts > settings.MAX_LOGIN_ATTEMPTS:
-                host = getattr(caller, "client_host", "?")
+            if attempts > settings.MAX_LOGIN_ATTEMPTS or getattr(caller, "failed_login_attempts", 0) > settings.MAX_LOGIN_ATTEMPTS:
                 logger.warning(
                     f"Host {host} has been banned for {settings.LOGIN_ATTEMPT_COOLDOWN} seconds due to too many failed login attempts."
                 )
@@ -110,6 +124,16 @@ class ConnectCommand(Command):
                 caller.close()
                 ban_ip(host, time.time() + settings.LOGIN_ATTEMPT_COOLDOWN)
             return
+
+        host = getattr(caller, "client_host", "?")
+        if not isinstance(host, str):
+            host = "?"
+        with FAILED_LOGIN_ATTEMPTS_LOCK:
+            FAILED_LOGIN_ATTEMPTS.pop(host, None)
+        try:
+            caller.failed_login_attempts = 0
+        except Exception:
+            pass
 
         if account.is_banned:
             caller.msg(f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}")

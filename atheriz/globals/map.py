@@ -308,11 +308,10 @@ class MapInfo:
                 l.at_legend_update(entries, True, self.name)
 
     def render(self, force=False):
-        # Atomically read and reset map_changed to prevent a race where
-        # update_grid() sets it True between our check and our reset.
         with self.lock:
             needs_pre_render = (force or self.map_changed) and bool(self.pre_grid)
-            self.map_changed = False
+            if needs_pre_render:
+                self.map_changed = False
         if needs_pre_render:
             self.pre_render()
 
@@ -394,7 +393,7 @@ class MapHandler:
     def __init__(self) -> None:
         self.lock = RLock()
         self.data: dict[tuple[str, int], MapInfo] = {}
-        
+        buffer: dict[tuple[str, int], MapInfo] = {}
         try:
             db = get_database()
             with db.lock:
@@ -403,9 +402,11 @@ class MapHandler:
                 for area, z, blob in cursor:
                     try:
                         mi = dill.loads(blob)
-                        self.data[(area, z)] = mi
+                        buffer[(area, z)] = mi
                     except Exception as e:
                         logger.error(f"Error loading map chunk {area}:{z}: {e}")
+            with self.lock:
+                self.data.update(buffer)
         except Exception as e:
             logger.error(f"Error loading map data from DB: {e}")
 

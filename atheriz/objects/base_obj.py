@@ -406,6 +406,7 @@ class Object(Flags, DbOps, AccessLock):
             state.pop("session", None)
             state.pop("lock", None)
             state.pop("hooks", None)
+            state.pop("group_channel", None)
             try:
                 loc = object.__getattribute__(self, "location")
             except AttributeError:
@@ -519,11 +520,19 @@ class Object(Flags, DbOps, AccessLock):
 
     @tick_seconds.setter
     def tick_seconds(self, value):
-        if self._is_tickable and value != self._tick_seconds:
+        old = None
+        do_swap = False
+        with self.lock:
+            if self._is_tickable and value != self._tick_seconds:
+                old = self._tick_seconds
+                self._tick_seconds = value
+                do_swap = True
+            else:
+                self._tick_seconds = value
+        if do_swap:
             at = get_async_ticker()
-            at.remove_coro(self.at_tick, self._tick_seconds)
+            at.remove_coro(self.at_tick, old)
             at.add_coro(self.at_tick, value)
-        self._tick_seconds = value
 
     @property
     def is_tickable(self) -> bool:
@@ -532,12 +541,23 @@ class Object(Flags, DbOps, AccessLock):
 
     @is_tickable.setter
     def is_tickable(self, value):
-        self._is_tickable = value
+        tick = None
+        do_add = False
+        do_remove = False
+        with self.lock:
+            if self._is_tickable == value:
+                return
+            tick = self._tick_seconds
+            self._is_tickable = value
+            if value:
+                do_add = True
+            else:
+                do_remove = True
         at = get_async_ticker()
-        if value:
-            at.add_coro(self.at_tick, self._tick_seconds)
-        else:
-            at.remove_coro(self.at_tick, self._tick_seconds)
+        if do_add:
+            at.add_coro(self.at_tick, tick)
+        elif do_remove:
+            at.remove_coro(self.at_tick, tick)
 
     @property
     def seconds_played(self) -> float:
@@ -613,7 +633,7 @@ class Object(Flags, DbOps, AccessLock):
                 self.internal_cmdset.remove(cmd)
                 object.__setattr__(self, "is_modified", True)
 
-    def search(self, query: str, recursive: bool = True) -> list[Object]:
+    def search(self, query: str, recursive: bool = True, looker: Object | None = None) -> list[Object]:
         """
         Search for an object by name or alias inside the contents of this object,
         and within the room this object is standing in.
@@ -622,11 +642,12 @@ class Object(Flags, DbOps, AccessLock):
             query (str): The search string to evaluate.
             recursive (bool): If True (default), descend into nested containers.
                 If False, search only this object's direct contents.
+            looker (Object | None): The object doing the looking; defaults to self.
 
         Returns:
             list[Object]: A list of objects matching the query.
         """
-        return search(self, query, recursive=recursive)
+        return search(self, query, recursive=recursive, looker=looker if looker is not None else self)
 
     @hookable
     def at_legend_update(

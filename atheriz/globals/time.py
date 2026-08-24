@@ -11,6 +11,7 @@ import json
 import ast
 import os
 import dill
+from fractions import Fraction
 from atheriz.objects.base_obj import Object
 
 
@@ -27,11 +28,11 @@ class GameTime:
         db = get_database()
         with self.lock:
             blob = dill.dumps({"ticks": self.ticks, "alarms": self.alarms})
-            with db.lock:
-                cursor = db.connection.cursor()
-                cursor.execute(
-                    "INSERT OR REPLACE INTO gametime (id, data) VALUES (0, ?)", (blob,)
-                )
+        with db.lock:
+            cursor = db.connection.cursor()
+            cursor.execute(
+                "INSERT OR REPLACE INTO gametime (id, data) VALUES (0, ?)", (blob,)
+            )
 
     def load(self) -> None:
         self._ensure_table()
@@ -279,7 +280,8 @@ class GameTime:
             last_word = "in the future"
             ticks *= -1
         leftover = ticks
-        tph = settings.MINUTES_PER_HOUR / settings.TICK_MINUTES
+        tick_minutes = Fraction(str(settings.TICK_MINUTES))
+        tph = Fraction(settings.MINUTES_PER_HOUR, 1) / tick_minutes
         tpd = tph * settings.HOURS_PER_DAY
         tpw = tpd * settings.DAYS_PER_WEEK
         tpmo = tpd * settings.DAYS_PER_MONTH
@@ -291,37 +293,38 @@ class GameTime:
         d = 0
         h = 0
         if leftover >= tpy:
-            y = leftover // tpy
+            y = int(leftover // tpy)
             formatted = f"{y:.0f} years" if y > 1 else "1 year"
-            leftover %= y * tpy
+            leftover %= Fraction(y) * tpy
         if leftover >= tpmo:
             if formatted != "":
                 formatted += ", "
-            m = leftover // tpmo
+            m = int(leftover // tpmo)
             formatted += f"{m:.0f} months" if m > 1 else "1 month"
-            leftover %= m * tpmo
+            leftover %= Fraction(m) * tpmo
         if leftover >= tpw:
             if formatted != "":
                 formatted += ", "
-            w = leftover // tpw
+            w = int(leftover // tpw)
             formatted += f"{w:.0f} weeks" if w > 1 else "1 week"
-            leftover %= w * tpw
+            leftover %= Fraction(w) * tpw
         if leftover >= tpd:
             if formatted != "":
                 formatted += ", "
-            d = leftover // tpd
+            d = int(leftover // tpd)
             formatted += f"{d:.0f} days" if d > 1 else "1 day"
-            leftover %= d * tpd
+            leftover %= Fraction(d) * tpd
         if leftover >= tph:
             if formatted != "":
                 formatted += ", "
-            h = leftover // tph
+            h = int(leftover // tph)
             formatted += f"{h:.0f} hours" if h > 1 else "1 hour"
-            leftover %= h * tph
+            leftover %= Fraction(h) * tph
         if leftover > 0:
             if formatted != "":
                 formatted += ", "
-            formatted += f"{leftover * settings.TICK_MINUTES:.0f} minutes"
+            leftover_minutes = leftover * tick_minutes
+            formatted += f"{float(leftover_minutes):.0f} minutes"
         comma = formatted.rfind(",")
         if comma > 0:
             desc = f"{formatted[:comma]} and{formatted[comma+1:]} {last_word}"
@@ -333,7 +336,7 @@ class GameTime:
             "weeks": w,
             "days": d,
             "hours": h,
-            "minutes": leftover * settings.TICK_MINUTES,
+            "minutes": float(leftover * tick_minutes),
             "desc": desc,
         }
 
@@ -361,21 +364,21 @@ class GameTime:
 
         with self.lock:
             current_ticks = self.ticks
-        tick_duration_seconds = int(settings.TICK_MINUTES * settings.SECONDS_PER_MINUTE)
+        tick_duration_seconds = float(settings.TICK_MINUTES * settings.SECONDS_PER_MINUTE)
         total_seconds_elapsed = current_ticks * tick_duration_seconds
-        total_days_elapsed = total_seconds_elapsed // settings.SECONDS_PER_DAY
+        total_days_elapsed = int(total_seconds_elapsed // settings.SECONDS_PER_DAY)
 
         remaining_seconds_in_day = total_seconds_elapsed % settings.SECONDS_PER_DAY
-        calc_hour = remaining_seconds_in_day // settings.SECONDS_PER_HOUR
+        calc_hour = int(remaining_seconds_in_day // settings.SECONDS_PER_HOUR)
         remaining_seconds_in_hour = remaining_seconds_in_day % settings.SECONDS_PER_HOUR
-        calc_minute = remaining_seconds_in_hour // settings.SECONDS_PER_MINUTE
-        calc_second = remaining_seconds_in_hour % settings.SECONDS_PER_MINUTE
+        calc_minute = int(remaining_seconds_in_hour // settings.SECONDS_PER_MINUTE)
+        calc_second = int(remaining_seconds_in_hour % settings.SECONDS_PER_MINUTE)
 
-        calc_year_offset: int = total_days_elapsed // settings.DAYS_PER_YEAR
-        day_of_year: int = total_days_elapsed % settings.DAYS_PER_YEAR
-        calc_month: int = day_of_year // settings.DAYS_PER_MONTH
-        calc_day = day_of_year % settings.DAYS_PER_MONTH
-        day_in_lunar_cycle = total_days_elapsed % settings.LUNAR_CYCLE_DAYS
+        calc_year_offset: int = int(total_days_elapsed // settings.DAYS_PER_YEAR)
+        day_of_year: int = int(total_days_elapsed % settings.DAYS_PER_YEAR)
+        calc_month: int = int(day_of_year // settings.DAYS_PER_MONTH)
+        calc_day = int(day_of_year % settings.DAYS_PER_MONTH)
+        day_in_lunar_cycle = int(total_days_elapsed % settings.LUNAR_CYCLE_DAYS)
         moon_phase = ""
 
         if day_in_lunar_cycle == 0:

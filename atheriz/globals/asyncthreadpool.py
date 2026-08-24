@@ -481,27 +481,21 @@ class AsyncTicker:
     def add_coro(self, coro, interval: float):
         with self.lock:
             slot = self.slots.get(interval)
-            if not slot:
+            if slot is None:
                 slot = AsyncTicker.TimeSlot(interval)
-                slot.add_coro(coro)
                 self.slots[interval] = slot
-                slot.start()
-                return
-        slot.add_coro(coro)
-        slot.start()
+            slot.add_coro(coro)
+            slot.start()
 
     def remove_coro(self, coro, interval: float):
         with self.lock:
             slot = self.slots.get(interval)
-        if slot:
-            slot.remove_coro(coro)
+            if slot:
+                slot.remove_coro(coro)
                 
     def clear(self):
-        """
-        clear all running tickers
-        """
-        self.stop()
         with self.lock:
+            self.stop()
             self.slots.clear()
 
     def stop(self):

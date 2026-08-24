@@ -91,21 +91,20 @@ class PuppetCommand(Command):
         if not target.access(caller, "puppet"):
             caller.msg(f"You cannot puppet {target.name}.")
             return
-        with (target.lock if hasattr(target, "lock") else nullcontext()):
-            if getattr(target, "session", None) is not None and target.session is not session:
-                caller.msg(f"{target.name} is already being puppeted.")
-                return
-            if getattr(target, "is_deleted", False):
-                caller.msg(f"{target.name} is not available.")
-                return
-            with session.lock:
+        with session.lock:
+            with (target.lock if hasattr(target, "lock") else nullcontext()):
+                if getattr(target, "session", None) is not None and target.session is not session:
+                    caller.msg(f"{target.name} is already being puppeted.")
+                    return
+                if getattr(target, "is_deleted", False):
+                    caller.msg(f"{target.name} is not available.")
+                    return
                 session.puppet_stack.append((caller, target))
-            target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
-            caller_priv = caller.privilege_level
-            caller.at_disconnect()
-            target.is_pc = True
-            target.privilege_level = caller_priv
-            with session.lock:
+                target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
+                caller_priv = caller.privilege_level
+                caller.at_disconnect()
+                target.is_pc = True
+                target.privilege_level = caller_priv
                 session.puppet = target
                 target.session = session
         target.at_puppet(caller=caller)
@@ -144,8 +143,8 @@ class UnpuppetCommand(Command):
             target.__dict__.update(restore)
             del target._puppet_restore
         target.at_disconnect()
-        with (prev.lock if hasattr(prev, "lock") else nullcontext()):
-            with session.lock:
+        with session.lock:
+            with (prev.lock if hasattr(prev, "lock") else nullcontext()):
                 session.puppet = prev
                 prev.session = session
         prev.at_post_puppet()
