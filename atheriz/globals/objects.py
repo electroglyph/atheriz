@@ -226,12 +226,17 @@ def _is_still_saveable(obj: Any) -> bool:
     Checked at execute time inside the save transaction so a delete racing the
     checkpoint cannot be resurrected by INSERT OR REPLACE.
     """
+    try:
+        obj_id = object.__getattribute__(obj, "id")
+    except AttributeError:
+        return False
+    with _ALL_OBJECTS_LOCK:
+        if _ALL_OBJECTS.get(obj_id) is not obj:
+            return False
     with obj.lock:
         if getattr(obj, "is_deleted", False):
             return False
-        obj_id = obj.id
-    with _ALL_OBJECTS_LOCK:
-        return _ALL_OBJECTS.get(obj_id) is obj
+    return True
 
 
 def save_objects(force: bool = False):
@@ -243,13 +248,14 @@ def save_objects(force: bool = False):
     """
     db = get_database()
     with _ALL_OBJECTS_LOCK:
-        snapshot = list(
-            o
-            for o in _ALL_OBJECTS.values()
-            if not getattr(o, "is_temporary", False)
-            and not getattr(o, "is_node", False)
-            and not getattr(o, "is_deleted", False)
-        )
+        snapshot = list(_ALL_OBJECTS.values())
+    snapshot = [
+        o
+        for o in snapshot
+        if not getattr(o, "is_temporary", False)
+        and not getattr(o, "is_node", False)
+        and not getattr(o, "is_deleted", False)
+    ]
     to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         cursor = db.connection.cursor()
