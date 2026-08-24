@@ -52,19 +52,18 @@ def get_database():
     Grabs a cache global copy of the sqlite connection used to access the db.
     """
     global _DATABASE
-    if _CLOSED:
-        raise RuntimeError("database is closed; refusing to reopen")
-    if _DATABASE is None:
-        with _INIT_LOCK:
-            if _DATABASE is not None:
-                return _DATABASE
-            if not os.path.exists(settings.SAVE_PATH):
-                os.makedirs(settings.SAVE_PATH)
-            db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
-            c = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
-            c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
-            _DATABASE = Database(c)
-    return _DATABASE
+    with _INIT_LOCK:
+        if _CLOSED:
+            raise RuntimeError("database is closed; refusing to reopen")
+        if _DATABASE is not None:
+            return _DATABASE
+        if not os.path.exists(settings.SAVE_PATH):
+            os.makedirs(settings.SAVE_PATH)
+        db_path = os.path.join(settings.SAVE_PATH, "database.sqlite3")
+        c = sqlite3.connect(db_path, check_same_thread=False, isolation_level=None)
+        c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+        _DATABASE = Database(c)
+        return _DATABASE
 
 
 def do_setup():
