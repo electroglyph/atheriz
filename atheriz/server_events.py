@@ -1,5 +1,4 @@
-from atheriz.globals.objects import save_objects
-from atheriz.globals.objects import add_object
+from atheriz.globals.objects import save_objects, remove_object
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import filter_by
 from atheriz.objects.base_obj import Object
@@ -38,15 +37,22 @@ def at_char_create(account_name: str, char_name: str, password: str):
                     f"Account '{account_name}' already exists with a different password..."
                 )
                 return
-            if len(r.characters) >= settings.MAX_CHARACTERS:
-                print(
-                    f"Account '{account_name}' already has {settings.MAX_CHARACTERS} characters..."
-                )
-                return
+            with r.lock:
+                if len(r.characters) >= settings.MAX_CHARACTERS:
+                    print(
+                        f"Account '{account_name}' already has {settings.MAX_CHARACTERS} characters..."
+                    )
+                    return
             character = Object.create(None, char_name, is_pc=True)
             character.home = home
-            r.add_character(character)
-            add_object(character)
+            with r.lock:
+                if len(r.characters) >= settings.MAX_CHARACTERS:
+                    remove_object(character)
+                    print(
+                        f"Account '{account_name}' already has {settings.MAX_CHARACTERS} characters..."
+                    )
+                    return
+                r.characters.append(character.id)
             character.move_to(home)
             save_objects()
             print("Success! Character created.")
@@ -64,9 +70,8 @@ def at_char_create(account_name: str, char_name: str, password: str):
     print(f"Creating character '{char_name}'...")
     character = Object.create(None, char_name, is_pc=True)
     character.home = home
-    account.add_character(character)
-    add_object(account)
-    add_object(character)
+    with account.lock:
+        account.characters.append(character.id)
     character.move_to(home)
     save_objects()
     print("Success! Account and character created.")

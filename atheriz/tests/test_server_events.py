@@ -138,12 +138,13 @@ class TestAtCharCreateNewAccount:
 
     def test_creates_account_when_none_exists(self, global_test_env, real_home_node, fixed_salt):
         with patch("atheriz.server_events.save_objects") as mock_save, \
-             patch("atheriz.server_events.add_object") as mock_add, \
              patch("atheriz.objects.base_obj.Object.move_to"):
             at_char_create("newuser", "Newbie", "pw")
 
-        # Account.create + Object.create = at least 2 add_object calls
-        assert mock_add.call_count >= 2
+        from atheriz.globals.objects import filter_by
+
+        assert len(filter_by(lambda x: getattr(x, "is_account", False) and x.name == "newuser")) == 1
+        assert len(filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "Newbie")) >= 1
         mock_save.assert_called_once()
 
     def test_returns_early_when_account_create_fails(self, global_test_env, real_home_node):
