@@ -77,8 +77,9 @@ def do_shutdown():
     # inside a test process). This must come last: earlier steps (e.g.
     # GameTime.stop) still resolve the live singletons.
     import atheriz.globals.get as get_singleton
-    get_singleton._ASYNC_THREAD_POOL = None
-    get_singleton._ASYNC_TICKER = None
+    with get_singleton._SINGLETON_LOCK:
+        get_singleton._ASYNC_THREAD_POOL = None
+        get_singleton._ASYNC_TICKER = None
     _shutdown_step("db_close", get_database().close)
 
 
