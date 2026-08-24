@@ -287,17 +287,21 @@ class MapInfo:
             else:
                 if was_suppressed:
                     self._legend_suppressed = False
-                obj_entries = [
-                    (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
-                    for o in self.objects.values()
-                    if o.location is not None
-                ]
-                static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+                objects_snapshot = list(self.objects.values())
+                static_snapshot = list(self.legend_entries)
         if is_over and not was_suppressed:
             for l in listeners:
                 l.at_legend_update([], False, self.name)
             return
         if not is_over:
+            obj_entries = []
+            for o in objects_snapshot:
+                loc = o.location
+                if loc is not None:
+                    obj_entries.append(
+                        (o.id, (o.symbol, o.name, (loc.coord.x, loc.coord.y)))
+                    )
+            static_entries = [(e.symbol, e.desc, e.coord) for e in static_snapshot]
             for l in listeners:
                 entries = [e for oid, e in obj_entries if oid != l.id]
                 entries.extend(static_entries)
@@ -313,19 +317,24 @@ class MapInfo:
             self.pre_render()
 
         t = time.time()
-        # Snapshot everything needed under the lock, then do per-listener
-        # work (at_pre_map_render, render_grid, at_map_update) outside it
-        # to keep the critical section tight.
+        # Keep the critical section tight: snapshot the collections under the
+        # map lock, then read per-object state outside it. This avoids
+        # acquiring object or node locks while holding the map lock, which
+        # would invert the ordering used by movement and serialization paths.
         with self.lock:
             show_legend = not self._is_over_legend_cap()
-            obj_entries = [
-                (o.id, (o.symbol, o.name, (o.location.coord.x, o.location.coord.y)))
-                for o in self.objects.values()
-                if o.location is not None
-            ]
-            static_entries = [(e.symbol, e.desc, e.coord) for e in self.legend_entries]
+            objects_snapshot = list(self.objects.values())
+            static_snapshot = list(self.legend_entries)
             listeners = list(self.listeners.values())
             grid_snapshot = self.post_grid.copy()
+        obj_entries = []
+        for o in objects_snapshot:
+            loc = o.location
+            if loc is not None:
+                obj_entries.append(
+                    (o.id, (o.symbol, o.name, (loc.coord.x, loc.coord.y)))
+                )
+        static_entries = [(e.symbol, e.desc, e.coord) for e in static_snapshot]
 
         fps_limit = 1 / settings.MAP_FPS_LIMIT if settings.MAP_FPS_LIMIT > 0 else 0.0
         for l in listeners:
