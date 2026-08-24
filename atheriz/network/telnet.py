@@ -195,7 +195,7 @@ class TelnetConnection(BaseConnection):
             if not text:
                 return
             nb = len(text.encode("utf-8"))
-            if threading.get_ident() == self.thread_id:
+            if self._is_on_loop_thread():
                 should_close = False
                 with self._pending_lock:
                     if self._closing:
@@ -248,7 +248,7 @@ class TelnetConnection(BaseConnection):
         elif cmd == "prompt_masked":
             text = args[0] if args else ""
             nb = len(text.encode("utf-8")) if text else 0
-            if threading.get_ident() == self.thread_id:
+            if self._is_on_loop_thread():
                 should_close = False
                 if nb:
                     with self._pending_lock:
@@ -318,7 +318,7 @@ class TelnetConnection(BaseConnection):
                 if self._closing:
                     return
             try:
-                if threading.get_ident() == self.thread_id:
+                if self._is_on_loop_thread():
                     self.writer.iac(telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
                 else:
                     self._resolve_loop().call_soon_threadsafe(self._offloop_iac, telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
@@ -333,7 +333,7 @@ class TelnetConnection(BaseConnection):
                 return
             self._closing = True
         try:
-            if threading.get_ident() == self.thread_id:
+            if self._is_on_loop_thread():
                 self.writer.close()
             else:
                 self._resolve_loop().call_soon_threadsafe(self.writer.close)

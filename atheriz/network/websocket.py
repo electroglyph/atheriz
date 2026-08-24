@@ -85,8 +85,8 @@ class WebSocketConnection(BaseConnection):
                 self._pending_count += 1
                 self._pending_bytes += nb
                 try:
-                    if threading.get_ident() == self.thread_id:
-                        task = self.loop.create_task(self.websocket.send_text(data))
+                    if self._is_on_loop_thread():
+                        task = self._resolve_loop().create_task(self.websocket.send_text(data))
                     else:
                         task = asyncio.run_coroutine_threadsafe(
                             self.websocket.send_text(data), self._resolve_loop()
@@ -137,8 +137,8 @@ class WebSocketConnection(BaseConnection):
                 return
             self._closing = True
         try:
-            if threading.get_ident() == self.thread_id:
-                self._close_task = self.loop.create_task(self._close_websocket())
+            if self._is_on_loop_thread():
+                self._close_task = self._resolve_loop().create_task(self._close_websocket())
             else:
                 self._close_task = asyncio.run_coroutine_threadsafe(self._close_websocket(), self._resolve_loop())
         except Exception as e:

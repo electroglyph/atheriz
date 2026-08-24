@@ -51,6 +51,20 @@ class BaseConnection:
             from atheriz.globals.get import get_async_threadpool
             return get_async_threadpool().loop
 
+    def _is_on_loop_thread(self) -> bool:
+        """Return True if the current thread is the resolved loop's thread."""
+        try:
+            running = asyncio.get_running_loop()
+        except RuntimeError:
+            return threading.get_ident() == self.thread_id
+        try:
+            loop = self._resolve_loop()
+        except Exception:
+            return False
+        if loop is None:
+            return threading.get_ident() == self.thread_id
+        return running is loop
+
     def enqueue_input(self, handler, args: list, kwargs: dict):
         """Queue one input handler for serialized execution on the game
         threadpool. Called from the protocol event loop; returns immediately.
