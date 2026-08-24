@@ -42,6 +42,7 @@ class Session:
     def at_disconnect(self):
         with self.lock:
             future = self.input_future
+            self.input_future = None
             masked = self._input_masked
             self._input_masked = False
             stack, self.puppet_stack = self.puppet_stack, []
@@ -51,11 +52,28 @@ class Session:
                 self.connection.send_command("echo_on")
             except Exception:
                 pass
-        if future and not future.done():
+        if future is not None:
             try:
-                future.get_loop().call_soon_threadsafe(future.cancel)
+                loop = future.get_loop()
             except RuntimeError:
-                logger.debug("Input future's loop already closed; skipping cancel.")
+                loop = None
+            if loop is not None:
+                def _do_cancel():
+                    if not future.done():
+                        try:
+                            future.cancel()
+                        except asyncio.InvalidStateError:
+                            pass
+                try:
+                    loop.call_soon_threadsafe(_do_cancel)
+                except RuntimeError:
+                    logger.debug("Input future's loop already closed; skipping cancel.")
+            else:
+                if not future.done():
+                    try:
+                        future.cancel()
+                    except asyncio.InvalidStateError:
+                        pass
         # unwind any in-progress puppet chain before autosave so a
         # mid-puppet disconnect doesn't persist a mutated target as a real PC.
         while stack:
@@ -82,19 +100,50 @@ class Session:
         """
         Send a prompt to the user and await their response.
         """
-        prev_masked = False
         prev = None
+        prev_masked = False
         need_restore = False
         with self.lock:
             prev = self.input_future
             prev_masked = self._input_masked
-            future = asyncio.Future()
-            if prev and not prev.done():
-                prev.set_result("")
+            try:
+                loop = asyncio.get_running_loop()
+                future = loop.create_future()
+            except RuntimeError:
+                future = asyncio.Future()
+            if prev is not None and not prev.done():
                 if prev_masked and not mask:
                     need_restore = True
+            else:
+                prev = None
             self.input_future = future
             self._input_masked = mask
+        if prev is not None:
+            try:
+                loop = prev.get_loop()
+            except RuntimeError:
+                loop = None
+            if loop is not None:
+                def _do_set():
+                    if not prev.done():
+                        try:
+                            prev.set_result("")
+                        except asyncio.InvalidStateError:
+                            pass
+                try:
+                    loop.call_soon_threadsafe(_do_set)
+                except RuntimeError:
+                    if not prev.done():
+                        try:
+                            prev.set_result("")
+                        except asyncio.InvalidStateError:
+                            pass
+            else:
+                if not prev.done():
+                    try:
+                        prev.set_result("")
+                    except asyncio.InvalidStateError:
+                        pass
         if need_restore:
             try:
                 self.connection.send_command("echo_on")

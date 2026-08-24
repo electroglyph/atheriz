@@ -129,12 +129,14 @@ class TestAtDisconnect:
             await asyncio.sleep(0)
             assert s.input_future is not None
             assert not s.input_future.done()
+            fut = s.input_future
             s.at_disconnect()
             for _ in range(100):
-                if s.input_future.cancelled():
+                if fut.cancelled():
                     break
                 await asyncio.sleep(0.01)
-            assert s.input_future.cancelled()
+            assert fut.cancelled()
+            assert s.input_future is None
 
         asyncio.run(run())
 
