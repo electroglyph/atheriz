@@ -221,7 +221,7 @@ class NodeHandler:
                     except Exception:
                         continue
                     try:
-                        detached_node = Node.__new__(Node)
+                        detached_node = n.__class__.__new__(n.__class__)
                         detached_node.__dict__.update(n_state)
                         detached_node.lock = RLock()
                         detached_nodes[coord] = detached_node
@@ -237,7 +237,7 @@ class NodeHandler:
                                 local_nodes.remove(n)
                         continue
                 try:
-                    detached_grid = NodeGrid.__new__(NodeGrid)
+                    detached_grid = g.__class__.__new__(g.__class__)
                     detached_grid.area = g_area
                     detached_grid.z = g_z
                     detached_grid.is_modified = False
@@ -291,7 +291,7 @@ class NodeHandler:
                         pass
                 continue
             try:
-                detached_area = NodeArea.__new__(NodeArea)
+                detached_area = a.__class__.__new__(a.__class__)
                 detached_area.name = a_name
                 detached_area.theme = a_theme
                 detached_area.is_modified = False
