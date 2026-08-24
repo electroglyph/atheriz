@@ -50,6 +50,9 @@ class SpamCommand(Command):
             except ValueError:
                 caller.msg(f"Account '{account_name}' already exists, skipping...")
                 continue
+            if account is None:
+                caller.msg(f"Account '{account_name}' already exists, skipping...")
+                continue
 
             character = Object.create(None, char_name, is_pc=True, is_mapable=True)
             character.symbol = "A"

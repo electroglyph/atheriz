@@ -48,6 +48,9 @@ class CreateCommand(Command):
         except ValueError as e:
             caller.msg(str(e))
             return
+        if account is None:
+            caller.msg(f"Account with this name ({name}) already exists.")
+            return
         apply_creation_cooldown(
             "account", rate_key, time.monotonic(), settings.CREATION_COOLDOWN
         )

@@ -53,7 +53,11 @@ def at_char_create(account_name: str, char_name: str, password: str):
             return
 
     print(f"Creating account '{account_name}'...")
-    account = Account.create(account_name, password)
+    try:
+        account = Account.create(account_name, password)
+    except ValueError:
+        print(f"Account '{account_name}' already exists.")
+        return
     if not account:
         print(f"Account '{account_name}' already exists.")
         return
