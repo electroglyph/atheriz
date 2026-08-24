@@ -3,27 +3,19 @@
 ## 8.1 The WebSocket Connection
 
 ### 8.1.1 Connection Lifecycle
-Atheriz uses FastAPI to handle WebSocket connections. 
-1. When a client connects, Atheriz accepts the connection and creates a `Connection` wrapper object to manage it.
-2. The client handshake finishes and typically sends a `client_ready` message.
-3. The server responds to `client_ready` by rendering the welcome screen and prompting for login.
-
-Reference `atheriz/network/websocket.py` and `atheriz/network/connection.py` for the core implementation of the `WebSocketProtocol`/`Connection` classes.
+Atheriz uses FastAPI at `GET /ws` (`atheriz/network/websocket.py:158`, `WEBSOCKET_MAX_MESSAGE_SIZE=65536`: close 1009 if larger, pending-send limits `WEBSOCKET_MAX_PENDING_SENDS/BYTES`). On connect it checks `is_ip_banned` and `MAX_CONNECTIONS_PER_IP` (`atheriz/network/manager.py:68`), registers via `ConnectionManager`, and creates `WebSocketConnection`/`TelnetConnection`. Telnet auto-dispatches `client_ready` (`atheriz/network/telnet.py:356`, `TELNET_MAX_LINE`, NAWS clamp) and negotiates `telnet_tls`.
+Reference `atheriz/network/websocket.py`, `atheriz/network/connection.py`, and `atheriz/network/manager.py`.
 
 ### 8.1.2 Message Format
-Communications between the client UI and the game server use a structured JSON format. Every message sent to the server must be a list with three elements:
+Communications between the client UI and the game server use a structured JSON format. Messages are lists ` [command_name, [positional_args], {kwargs}]` (`atheriz/network/manager.py:168`), but the server is lenient: 1 element (`[cmd]`) is accepted, missing `args` defaults to `[]`, missing `kwargs` to `{}`; `STRIP_INPUT_ESCAPE_SEQUENCES` (`atheriz/settings.py:40`) strips CSI/OSC/null (`manager.py:199`) and throttles malformed input (`manager.py:10`, `_MALFORMED_WINDOW=5.0`).
 
-`[command_name, [positional_args], {kwargs}]`
-
-Built-in message commands natively handled by the engine include: `text`, `term_size`, `map_size`, `screenreader`, and `client_ready`. You can add custom commands (like button clicks or UI events) by writing custom input handlers on the server and sending matching JSON arrays from the client.
+Built-in message commands natively handled by the engine include: `text`, `term_size`, `map_size`, `screenreader`, `client_ready`, plus `map_edit` and `map_validate_moves` for AtheriZ Draw (authenticated via rotating `mapedit` key chain, `atheriz/inputfuncs.py:337`). Unknown commands only `logger.debug`. Add custom commands by writing input handlers and sending matching JSON arrays from the client.
 
 ### 8.1.3 Login Flow
-The connection screen is rendered by `atheriz/connection_screen.py`. When `ACCOUNT_CREATION_ENABLED` is `True`, it shows an `enter 'create' to make a new account` hint. The unlogged-in command set (`atheriz/commands/unloggedin/`) handles the flow:
+The connection screen is rendered by `atheriz/connection_screen.py` (`render(session)` + `get_online()`). When `ACCOUNT_CREATION_ENABLED` is `True`, it shows `enter 'create' to make a new account`. The unlogged-in command set (`atheriz/commands/unloggedin/cmdset.py:13` — always includes `GuestCommand`; `CreateCommand`/`NewCharacterCommand` conditional) handles:
 
-1. `connect` logs an existing account in; after a successful login the player is routed through character selection (`char_selection` in `connect.py`), which lists their characters and lets them pick one (or `new`).
-2. `create` (key `create`, available when `ACCOUNT_CREATION_ENABLED` is `True`) prompts for a name and password, creates a new account, auto-logs the player in, and routes them straight to character selection.
-3. `new` (key `new`, available when `CHAR_CREATION_ENABLED` is `True`) lets a logged-in account create a new character — name, gender, and description prompts, mirroring the guest flow — and attaches the new `is_pc` object to the account.
-4. `guest` (available when `GUEST_ENABLED` is `True`) connects without an account.
+1. `connect` (`connect.py:15` `char_selection`, `75` `ConnectCommand`): shows `[banned]` tag, checks `at_pre_puppet`, puppet guard (`session`, `is_deleted`), increments `failed_login_attempts`, bans IP via `ban_ip` after `>MAX_LOGIN_ATTEMPTS` (`LOGIN_ATTEMPT_COOLDOWN`), checks `account.is_banned` → close, sends `logged_in`.
+2. `create` / `new` / `guest` enforce unified `CREATION_COOLDOWN` via `try_reserve_creation_cooldown`/`apply_creation_cooldown` (`guest.py:52`, `create.py:31`, `new.py:41`), validate via `validation.py` (`MAX_ACCOUNT_NAME_LENGTH` etc), `new` checks `MAX_CHARACTERS`, `guest` sets `is_temporary=True` (`guest.py:90`, `save_objects` skips). Route through `char_selection` (or `new`) and auto-login.
 
 ## 8.2 Input Functions
 
@@ -33,12 +25,7 @@ The `InputFuncs` class maps incoming JSON message commands (like `"text"` or `"m
 Reference `atheriz/inputfuncs.py` for the base implementations.
 
 ### 8.2.2 The `text` Handler
-Standard player commands (like typing "look" or "say hello") are sent as `text` messages. The `text` handler does the following:
-1. Receives the raw string from the client.
-2. Checks if the player is in a prompt/input state (resolving `input_future` if so).
-3. Splits the text to find the command name and its arguments.
-4. Searches for the command in the appropriate command sets (unlogged-in, logged-in, objects in room, inventory, etc.).
-5. If a command is found, it schedules it for execution in the async threadpool.
+Standard player commands (`look`, `say hello`) are sent as `text` messages (`atheriz/inputfuncs.py:206-266`, enqueued via `BaseConnection.enqueue_input` `CONNECTION_INPUT_QUEUE_LIMIT` FIFO, `busy` throttle `connection.py:69`). `text()` atomically checks `session.lock` `input_future` (`223`), handles `_input_masked`/`echo_on`/`prompt_masked` (`session.py:99`), `call_soon_threadsafe(future.set_result)` if in prompt else snapshots `puppet` (`251`), calls `dispatch_loggedin(..., immediate=True)` (`59`, resolves `puppet.internal_cmdset` → `LoggedinCmdSet` → `external_cmdset` → `AUTO_COMMAND_ALIASING` with `_IGNORE_KEYS`/`_NO_ALIAS_COMMANDS:16` → `none` fallback → `access` → `execute`) and schedules `atp.run(*job)` on the threadpool. `BaseConnection.msg` appends `\r\n` and strips ANSI if `screenreader` (`connection.py:150`).
 
 ### 8.2.3 Creating Custom Input Handlers
 To add new WebSocket message handlers or override existing ones, extend the base `InputFuncs` class and use the `@inputfunc` decorator.

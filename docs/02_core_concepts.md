@@ -11,7 +11,7 @@ For exact attribute definitions, refer to [`atheriz/objects/base_obj.py`](../ath
 ### 2.1.2 Creating Objects
 Objects are generated via the `Object.create()` class method. This method allocates the object's ID, registers it in the in-memory global cache (`atheriz.globals.objects`), marks it as modified, and calls the `at_create` hook for customized setup. Nothing is written to the database at this point — the object lives only in memory until the next save checkpoint calls `save_objects()`, which persists everything flagged `is_modified = True` (unless the object is `is_temporary`).
 
-Key parameters include `caller`, `name`, `desc`, `location`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds`.
+Key parameters include `caller`, `name`, `desc`, `aliases`, `is_pc`, `is_item`, `is_npc`, `is_mapable`, `is_container`, `is_tickable`, and `tick_seconds` (`atheriz/objects/base_obj.py:118`). There is no `location` parameter — set location after creation via `obj.move_to(destination)`.
 
 Example usage:
 ```python
@@ -19,34 +19,35 @@ sword = Object.create(caller=None, name="Iron Sword", desc="A rusty blade.", is_
 ```
 
 ### 2.1.3 The Hook System (`at_*` methods)
-Atheriz relies heavily on a hook architecture. Methods beginning with `at_` signal lifecycle and interaction events. Hooks prefixed with `at_pre_` can typically cancel an action by returning `False`.
+Atheriz relies heavily on a hook architecture. Methods beginning with `at_` signal lifecycle and interaction events. Many hooks prefixed with `at_pre_` can cancel an action by returning `False` (e.g. `at_pre_move`, `at_pre_get`, `at_delete`, `at_pre_object_receive/leave`), but the return contract varies by hook — `at_pre_say` returns a modified string, `at_pre_put` always returns `True`, `at_pre_hear` returns `(bool, …)`, etc. Check per-hook docs.
 
 - **Lifecycle**: `at_create`, `at_init`, `at_delete`, `at_disconnect`
-- **Movement**: `at_pre_move`, `at_post_move`
-- **Interaction**: `at_look`, `at_desc`, `at_get`, `at_pre_get`, `at_drop`, `at_pre_drop`, `at_give`, `at_pre_give`, `at_say`, `at_pre_say`
+- **Movement**: `at_pre_move`, `at_post_move`, `at_pre_object_receive`, `at_object_receive`, `at_pre_object_leave`, `at_object_leave` (Node)
+- **Interaction**: `at_look`, `at_desc`, `at_get`, `at_pre_get`, `at_drop`, `at_pre_drop`, `at_give`, `at_pre_give`, `at_put`, `at_pre_put`, `at_say`, `at_pre_say`, `at_puppet`, `at_unpuppet`, `at_post_puppet`
 - **Messaging**: `at_msg_send`, `at_msg_receive`
 - **Time**: `at_tick`, `at_alarm`, `at_solar_event`, `at_lunar_event`
 - **Map**: `at_map_update`, `at_legend_update`, `at_pre_map_render`
-- **Puppet**: `at_post_puppet`
+- **Sound**: `at_pre_hear`, `at_hear`, `at_pre_emit_sound`, `at_emit_sound`
+- **Puppet**: `at_puppet`, `at_unpuppet`, `at_post_puppet`
 
 By utilizing the `@hookable` decorator, external scripts can intercept and augment these hooks.
 
 ### 2.1.4 Object Contents & Inventory
-An object's contents are managed using the internal `_contents` list and modified by methods like `add_object()`, `add_objects()`, and `remove_object()`.
+An object's contents are managed using the internal `_contents: set[int]` (`atheriz/objects/base_obj.py:96`, `atheriz/objects/nodes.py:145`) and modified by `add_object()`, `add_objects()`, `remove_object()` (`set.add/discard` under lock). `Object.contents` returns a snapshot list via `get(self._contents)`; `MAX_SEARCH_DEPTH = 100` (`atheriz/settings.py:117`) caps recursive `search`/`delete` traversals.
 
 The `location` attribute designates parent-child relationships. An object's location is either another `Object` (acting as a container, such as a backpack holding a sword) or a `Node` (representing the physical room the object resides in).
 
 ### 2.1.5 Searching for Objects
 Locating objects depends on search requirements.
 
-- `Object.search(query)`: Matches against names and aliases locally for a given object or room.
-- `filter_by()`: A global cache filtering function found in `atheriz.globals.objects`. Ideal for complex or comprehensive querying.
+- `Object.search(query, recursive=True)`: Matches against names and aliases inside `self.contents` only (`atheriz/objects/contents.py:126` via `base_obj.py:636`). To search the room use `obj.location.search(query)`. Supports `all`, `2 sword` / `sword 2`, plural handling, and `recursive=False` for direct contents only.
+- `filter_by(func)`: Global cache filter `atheriz/globals/objects.py:104` — snapshots under `_ALL_OBJECTS_LOCK`, returns list copy.
   ```python
   from atheriz.globals.objects import filter_by
   merchants = filter_by(lambda x: x.is_npc and x.name == "Merchant")
   ```
-- `get()`: Used for direct ID-based lookups from the global cache.
-- `get_by_tag()`: Searches the global cache for objects that carry a specific tag (or any tag from a list). See [2.1.6 Tags](#216-tags) below.
+- `get(ids)`: Direct ID lookup `atheriz/globals/objects.py:142` — `get(int|Iterable[int]) -> list[Any]` (always a list; `[]` if missing; batch-capable).
+- `get_by_tag(tag, all=False)`: Searches global cache for objects carrying tag (`str|list|set`); `all=True` requires ALL tags, default ANY. Thread-safe via `filter_by`. See [2.1.6 Tags](#216-tags) below.
 
 ### 2.1.6 Tags
 
@@ -144,7 +145,7 @@ See [`atheriz/objects/base_account.py`](../atheriz/objects/base_account.py) for 
 - Registration and auth: `Account.create(name, password)`, `login()`, `check_password()`, `set_password()`.
 - Management: `add_character()`, `remove_character()`.
 
-Passwords are hashed utilizing SHA-256 combined with a dedicated salt (`atheriz/globals/salt.py`).
+Passwords are hashed via `hashlib.pbkdf2_hmac("sha256", password, salt, 600_000)` (`atheriz/objects/base_account.py:146`, `atheriz/globals/salt.py`), verified with `hmac.compare_digest`.
 
 ## 2.4 Channels
 
@@ -161,9 +162,7 @@ Objects subscribe via `subscribe()` and disconnect via `unsubscribe()`. History 
 Atheriz is designed to make heavy use of multithreading, allowing thousands of objects to run `at_tick()` concurrently without slowing down the game engine. It is specifically intended to be used with Python 3.14+ free-threaded. As a consequence, game objects must manage concurrent state modifications safely.
 
 ### 2.5.2 `THREADSAFE_GETTERS_SETTERS`
-By default, the setting `THREADSAFE_GETTERS_SETTERS = True` is enabled. When an Object initializes, Atheriz dynamically patches its class via `ensure_thread_safe()` (found in `atheriz/utils.py`). This overrides Python's native `__getattribute__` and `__setattr__`.
-
-When you read or write a direct attribute on an Object (e.g., `foo.health = 10` or `print(foo.name)`), Atheriz automatically acquires the object's internal reentrant lock (`self.lock`), performs the operation, updates the `is_modified` flag so the save code knows to save the object, and releases the lock. For primitive types (integers, strings, booleans), this makes thread-safety automatic—you just use them like normal.
+By default, the setting `THREADSAFE_GETTERS_SETTERS = True` is enabled. When an Object/Node/Account initializes, Atheriz dynamically patches its class via `ensure_thread_safe()` (`atheriz/utils.py:46`). This overrides `__getattribute__`/`__setattr__` per-class under `_PATCH_LOCK`, acquires `self.lock`, deep-copies `list/dict/set` on read (or shallow `list(val)` for `contents`), excludes `is_modified`/`lock` from marking, and sets `is_modified=True` on write. For primitive types this makes thread-safety automatic; mutating a returned list/dict does *not* auto-persist (reassign or set `is_modified` manually). Disabling the setting breaks the engine (`atheriz/settings.py:199`).
 
 ### 2.5.3 Working with Mutable Types (Dicts & Lists)
 The automatic thread-safety patch **only triggers on assignment to the object itself**, not when you modify a mutable type already inside an attribute. If you have a dictionary attribute `foo.inventory_dict`, executing `foo.inventory_dict['sword'] = True` is **not thread-safe** and will not trigger the `is_modified` flag correctly.
@@ -191,7 +190,7 @@ foo.bar['key'] = "new_value"  # NOT THREAD-SAFE! May corrupt data and will fail 
 ```
 
 ### 2.5.4 Understanding RLocks (`self.lock`)
-Every standard entity (`Object`, `Node`, `Account`, etc.) initializes with `self.lock = RLock()` from Python's `threading` library. A Reentrant Lock (RLock) means that the same thread can acquire the lock multiple times without deadlocking itself. If your custom method acquires `self.lock`, and then calls another method on the same object that also acquires `self.lock`, execution proceeds safely. However, modifying or moving *multiple* objects simultaneously requires locking every object involved in a consistent order to prevent deadlocks (see `sort_locks` inside `Object.move_to()`).
+Every standard entity (`Object`, `Node`, `Account`, etc.) initializes with `self.lock = RLock()` from Python's `threading` library. A Reentrant Lock (RLock) means that the same thread can acquire the lock multiple times without deadlocking itself. If your custom method acquires `self.lock`, and then calls another method on the same object that also acquires `self.lock`, execution proceeds safely. However, modifying or moving *multiple* objects simultaneously requires locking every object involved in a consistent order to prevent deadlocks. `Object.move_to()` sorts locks as `(is_node, coord/id)` via `sort_locks` (`atheriz/objects/base_obj.py:1032`) but also acquires the source/destination `NodeGrid.lock` before node locks to serialize with grid removal and validates `is_deleted`/grid presence (`1049-1114`).
 
 ## 2.6 Access Control
 
@@ -203,16 +202,16 @@ The `AccessLock` system manages a dictionary of lock names, where each name maps
 ### 2.6.2 How Access Control Works
 When checking access, the `access()` method on the object is called. It takes two arguments: the object attempting the action, and the name of the lock (e.g., `target_obj.access(accessing_obj, "get")`).
 
-The access check logic evaluates in this order:
-1. **Self-Targeting Restriction:** An object cannot perform `get` or `delete` on itself. Any such interaction immediately returns `False`.
-2. **Superuser Bypass:** If the accessing object is a superuser (`accessing_obj.is_superuser == True`), access is always granted (`True`).
-3. **Callable Evaluation:** If neither exception applies, the system evaluates all callables associated with the lock name.
-   - If *any* callable returns `False`, access is immediately denied (`False`).
-   - If all callables return `True` (or if there are no callables defined for the lock), access is granted (`True`).
+The access check logic evaluates in this order (`atheriz/objects/base_lock.py:52`):
+1. **Self-Targeting Restriction:** An object cannot `get` or `delete` itself — returns `False` even for superusers (`id == self.id and name in ["delete","get"]` checked before superuser).
+2. **Superuser Bypass:** If `accessing_obj.is_superuser` (i.e. `privilege_level >= Admin`), access is granted for all *other* locks (including `delete` on other objects).
+3. **Callable Evaluation:** Otherwise evaluates all callables for the lock name — *any* `False` denies (`False`), otherwise grants (`True`).
 
-Furthermore, lock evaluation supports two different modes determined by the `settings.SLOW_LOCKS` configuration:
-- **Fast Mode:** Callables execute without acquiring the object's thread lock. This relies on the callables being thread-safe and is best for read-only conditions.
-- **Slow Mode (Default):** Callables execute inside a `with self.lock:` block, adding an extra layer of thread safety during evaluation.
+Furthermore, lock evaluation supports two modes via `settings.SLOW_LOCKS`:
+- **Fast Mode:** Callables execute without `self.lock` (`_fast_access`) — `locks` dict may tear if mutated.
+- **Slow Mode (Default):** Callables execute inside `with self.lock:` (`_safe_access`).
+
+Under free-threaded Python (`sys._is_gil_enabled()==False`) the engine forces `SLOW_LOCKS=True` (`atheriz/settings.py:143`), so fast mode is unavailable on 3.14t. `AccessLock._pickle_excludes = ("access",)`; `__setstate__` rebinds `access` to `_safe/_fast` based on current setting.
 
 ### 2.6.3 Managing Locks
 Use `add_lock()` to append an evaluation function to an object's locks, and `clear_locks_by_name()` to wipe them.

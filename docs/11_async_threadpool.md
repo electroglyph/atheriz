@@ -4,16 +4,16 @@
 
 The `AsyncThreadPool` is Atheriz's core concurrency engine, located at `atheriz/globals/asyncthreadpool.py`. Rather than relying on rigid, single-threaded processing loops, Atheriz executes heavy systems concurrently to ensure the game server never drops client connections or lags during complex operations.
 
-When you boot an Atheriz server, it spins up a designated number of threads based on your server's CPU count (or overridden via `THREADPOOL_LIMIT` in your `settings.py`). 
+When you boot a server it spins up threads based on `THREADPOOL_LIMIT` (default `os.cpu_count()`, `atheriz/settings.py:71`).
 
-- The **First Thread** is strictly preserved for running the internal `asyncio` event loop.
-- The **Remaining Threads** are worker threads waiting to cleanly execute synchronous Python code pulled from a queue.
+- The **First Thread** runs the `asyncio` event loop (`atheriz/globals/asyncthreadpool.py:84`).
+- The **Remaining Threads** are workers pulling from a bounded queue.
+- **Relief workers** spawn if queue depth exceeds `THREADPOOL_RELIEF_LIMIT` (`settings.py:73`, `RELIEF_SPAWN_COOLDOWN` `asyncthreadpool.py:69`, `_maybe_spawn_relief_worker:222`).
+- **Watchdog** logs starvation if tasks stall `THREADPOOL_WATCHDOG_SECONDS`/`INTERVAL` (`settings.py:75`, `asyncthreadpool.py:251`).
 
 ## 11.2 Using the Pool (Fire and Forget)
 
-Because retrieving return values from threads requires managing blocking states (which risks slowing down the server), the `AsyncThreadPool` operates strictly on a **"Fire-and-Forget"** mentality.
-
-You send a function into the pool, and the pool guarantees it will execute it as soon as a worker thread becomes available. You do not wait for the function to finish, and you do not receive a return value.
+Because retrieving return values would block, the pool is fire-and-forget — but `add_task(func, *args, **kwargs) -> bool` (`asyncthreadpool.py:339`) returns whether the task was accepted. If the bounded queue (`THREADPOOL_QUEUE_LIMIT=10000`, `settings.py:79`) is full it returns `False` (dropped, throttled log via `_last_full_log`, `112`). Callers like `GameTime.on_tick` (`atheriz/globals/time.py:228`) and `Connection.enqueue_input` check this. You still don't await results, but check the bool for back-pressure.
 
 ### 11.2.1 How to Queue a Task
 First, import the getter to retrieve the global threadpool instance:
@@ -46,18 +46,9 @@ If you pass a synchronous function (like the example above), it is handed to one
 If you pass an `async def` coroutine, the server automatically routes it to the designated asyncio loop thread and schedules it safely using `asyncio.run_coroutine_threadsafe`.
 
 ### 11.2.3 Delayed Tasks
-If you need a function to execute after a specified duration, you can use the `delay` method. It requires a delay in seconds as the first argument, followed by the function and any necessary arguments.
-
-```python
-# Wait 5.5 seconds, then queue the function! (delay, function, args..., kwargs...)
-atp.delay(5.5, calculate_massive_damage, my_target, 500, element="ice")
-```
-
-Just like `add_task`, the `delay` method supports both regular functions and `async def` coroutines, automatically routing them to the correct thread when the timer finishes.
+`delay(delay, func, *args, **kwargs)` (`asyncthreadpool.py:370`) sleeps `delay` via `await asyncio.sleep` on the loop thread (`_submit` + `_delayed_task`) then `add_task`s the target; supports sync and `async def` coroutines. Returns `None`.
 
 ## 11.3 Error Handling
-If a function executed by the threadpool crashes or raises an Exception, it will not crash the threadpool itself. Instead, the `AsyncThreadPool` catches the Exception and logs the traceback to the server log located in the save folder.
-
-Furthermore, if `DEBUG = True` in your `settings.py`, and the first argument (`args[0]`) passed to your function happens to be an object capable of receiving messages (like a standard `Object` or `Connection`), the threadpool will attempt to automatically print the crash traceback directly to that player's screen in-game!
+If a pooled function raises, the pool catches, logs via `logger.error` (throttled to 10 s `_last_full_log` `112`), and if `DEBUG=True` and `args[0]` is an `Object`/`Connection` it `msg`s the traceback to that player (`asyncthreadpool.py:158`). Watchdog also logs starvation via `_log_starvation:278`.
 
 [Table of Contents](./table_of_contents.md) | [Next: 12 The Webclient](./12_webclient.md)

@@ -22,7 +22,7 @@ Atheriz utilizes a class injection system. When the server starts, it reads `CLA
 
 ### 1.2.1 Prerequisites
 
-Python 3.14t (free-threaded) is highly recommended. [uv](https://docs.astral.sh/uv/getting-started/installation/) is an easy way to manage Python versions and virtual environments.
+Atheriz requires Python `>=3.13` (`pyproject.toml` `requires-python`). Python 3.14t (free-threaded, `3.14t`) is highly recommended for best concurrency — when the GIL is disabled the engine forces `SLOW_LOCKS=True` (`atheriz/settings.py:143`) — but 3.13 and regular 3.14 work fine. [uv](https://docs.astral.sh/uv/getting-started/installation/) is an easy way to manage Python versions and virtual environments.
 
 **Install uv:**
 ```sh
@@ -117,10 +117,15 @@ Each generated file corresponds to a base class in the Atheriz framework and ser
 | `commands/unloggedin.py`| `UnloggedinCmdSet`| Commands available at the login prompt. |
 | `inputfuncs.py` | `atheriz.inputfuncs.InputFuncs` | Custom handles for WebSocket messages. |
 | `settings.py` | `atheriz.settings` | Game configuration and class injection settings. |
-| `flags.py` | `(Standalone mixin)` | Manages boolean flags for object classification. |
-| `access.py` | `(Standalone mixin)` | Handles the permission and lock system. |
-| `db_ops.py` | `(Standalone mixin)` | Manages custom database serialization. |
+| `flags.py` | `atheriz.objects.base_flags.Flags` (mixin, copy) | Boolean flags (`is_pc`, `is_item`, etc.); `Tags` helpers. Generated via `new.py:622`. |
+| `access.py` | `atheriz.objects.base_lock.AccessLock` (mixin, templated) | Permission/lock system (`add_lock`/`access`). Generated via `TemplateGenerator` `new.py:632`. |
+| `db_ops.py` | `atheriz.objects.base_db_ops.DbOps` (mixin, copy) | DB serialization (`get_save_ops`/`get_save_ops_clearing`/`get_del_ops`). Copy of `base_db_ops.py` `new.py:626`. |
 | `door.py` | `atheriz.objects.base_door.Door` | Represents doors between adjacent nodes. |
+| `objects.py` | `atheriz.globals.objects` wrapper | Re-exports `get`/`filter_by`/`get_by_tag` for the game package (`new.py:674`). |
+| `database_setup.py` | `atheriz.database_setup` | Creates the SQLite schema (`objects`, `mapdata`, `areas`, `transitions`, `doors`, `gametime`) via `do_setup()` (`new.py:677`). |
+| `initial_setup.py` | `atheriz.initial_setup` (patched) | First-start data (superuser creation, world seeding). Patched from `atheriz.initial_setup` `new.py:681`. |
+| `connection_screen.py` | `atheriz.connection_screen` (`render`) | Login splash + `get_online()`; imported directly by `atheriz/inputfuncs.py:7` (`new.py:721`). |
+| `server_events.py` | `atheriz.server_events` | Hooks `at_server_start/stop/reload` + `at_char_create` (`new.py:726`); imported with fallback `startstop.py:38`. |
 | `web/` | `(static assets)` | Webclient templates and static files served by the webserver. |
 
 ### 1.3.3 Starting the Server
@@ -135,15 +140,15 @@ The server runs in the background by default. Pass `-f` / `--foreground` to atta
 
 #### Superuser Account
 
-On first start, Atheriz creates a superuser account and character automatically. You can pre-set the credentials via environment variables so you are not prompted:
+On first creation (`atheriz new my_game`), Atheriz creates a superuser account/character via `initial_setup.do_setup()`. You can pre-set credentials so you are not prompted:
 
 ```sh
 export ATHERIZ_SUPERUSER_USERNAME=admin
 export ATHERIZ_SUPERUSER_PASSWORD=secret
-atheriz start
+atheriz new my_game
 ```
 
-If the variables are not set, Atheriz will prompt for them interactively.
+If the variables are not set, `atheriz new` prompts interactively during `create_game_folder()` (`atheriz/new.py:570`). `atheriz start` (`atheriz/atheriz.py:436`) does **not** prompt — it calls `do_startup()` → `initial_setup.do_setup()` without interaction; set the env vars before `new` or create the account later with `atheriz create`.
 
 #### CLI Commands
 
@@ -155,10 +160,10 @@ If the variables are not set, Atheriz will prompt for them interactively.
 | `atheriz restart` | Stop, then start the server again. |
 | `atheriz reload` | Hot-reload game logic without a full restart. |
 | `atheriz reset` | Delete all game data and re-run initial_setup.py. Prompts for confirmation unless `-f` is passed. |
-| `atheriz create <account> <character> <password>` | Create an account and character from the command line (server must be stopped). |
-| `atheriz test [pytest_args...]` | Run the test suite with local game objects injected. |
+| `atheriz create <account> <character> <password>` | Create an account and character from the command line. Works with a running server (preferred — `/_internal/create_account` via `atheriz/atheriz.py:1136`); falls back to offline `load_objects()` only when no server is detected (`status=="unavailable"`). Accepts `--port`. |
+| `atheriz test [core] [pytest_args...]` | Run tests: bare `atheriz test` runs **game tests if inside a game folder**, else core tests; `atheriz test core` forces core (`atheriz/tests`). (`atheriz/atheriz.py:948`, `1329`) |
 
-All commands that contact a running server (`stop`, `reload`, etc.) accept `--port` to override the default port.
+`start`, `restart`, `new`, `reset` accept **both** `--port` and `--host`; `stop`/`reload` accept `--port` only (`atheriz/atheriz.py:831`, `848`, `865`, `873`). `create --port`, `reset --host/--port` also supported.
 
 ### 1.3.4 The Class Injection System
 The core mechanic for extending Atheriz is class injection, handled within `settings.py`. By defining `CLASS_INJECTIONS`, you instruct Atheriz to replace its base classes with your game folder's templates. This can be ignored if you're just modifying the default classes in your game folder.
@@ -172,5 +177,7 @@ CLASS_INJECTIONS = [
 ]
 ```
 When the engine requests `from atheriz.objects.base_obj import Object`, it receives your custom `Object` class containing your specific rules and overrides. This Python-level monkey-patching applies globally across the server environment.
+
+The generated template ships 9 entries covering `object`, `account`, `channel`, `node`, `door`, `commands.loggedin`, `commands.unloggedin`, `inputfuncs`, `script` (`atheriz/new.py:292`). Each tuple is `(local_module_without_.py, class_name, target_import_path)`; at startup/reload the engine tries `f"{pkg_name}.{local_mod}"` then fallback `local_mod` and does `setattr(target, cls_name, new_cls)` (`atheriz/atheriz.py:157`, `atheriz/reloader.py:201`).
 
 [Table of Contents](./table_of_contents.md) | [Next: 02 Core Concepts](./02_core_concepts.md)

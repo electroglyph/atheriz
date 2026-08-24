@@ -3,8 +3,8 @@
 ## 7.1 The `Flags` Mixin
 
 ### 7.1.1 What Flags Exist
-The `Flags` mixin provides uniform boolean properties allowing for immediate identification across game routines. Standard properties include:
-`is_pc`, `is_npc`, `is_item`, `is_mapable`, `is_container`, `is_script`, `is_tickable`, `is_account`, `is_channel`, `is_node`, `is_modified`, `is_deleted`, and `is_connected`.
+The `Flags` mixin provides uniform boolean properties allowing for immediate identification across game routines. Standard properties `atheriz/objects/base_flags.py:5` include:
+`is_pc`, `is_npc`, `is_item`, `is_mapable`, `is_container`, `is_script`, `is_tickable` (stored as `_is_tickable`), `is_account`, `is_channel`, `is_node`, `is_modified`, `is_deleted`, `is_connected`, plus `is_temporary` (`False`, `save_objects` skips), `is_banned`, `can_hear`, and `tags: set[str]` with helpers `add_tag/remove_tag/has_tag` (`base_flags.py:29`). `Object` property `is_tickable` (`atheriz/objects/base_obj.py:529`) also registers with the async ticker.
 
 Reference the `flags.py` in your game folder (generated from `atheriz/objects/base_flags.py`) for the standard implementation.
 
@@ -21,6 +21,7 @@ Using `object.__setattr__` bypasses the customized thread-safe property setter d
 The `AccessLock` mixin provides access control for interacting with game objects. It uses a dictionary to store locks, where each lock is a list of callables. When the lock is checked, every callable must return `True` for the interaction to be allowed.
 
 - `add_lock(lock_name, callable)`: Stores a verification check against a specified lock name.
+- `clear_locks_by_name(lock_name)` (`atheriz/objects/base_lock.py:40`): wipes a lock entry.
 - `access(accessing_obj, name)`: Executes all registered callables for the lock. If they all return `True`, access is authorized.
 
 Example restricting item retrieval exclusively to builders:
@@ -28,19 +29,19 @@ Example restricting item retrieval exclusively to builders:
 obj.add_lock("get", lambda target: getattr(target, 'is_builder', False))
 ```
 Review the `access.py` in your game folder (generated from `atheriz/objects/base_lock.py`) to examine the standard mixin baseline.
-*Note: Any object where `is_superuser` is `True` automatically bypasses all locks to return `True`, unless the lock name being evaluated is `"delete"`.*
+*Note: Self-`get` and self-`delete` are always denied even for superusers (`if id==self.id and name in ["delete","get"]: return False` before `is_superuser` check, `atheriz/objects/base_lock.py:52`). A superuser bypasses all *other* objects' locks (including `delete` on others).*
 
 ### 7.2.2 Safe vs. Fast Access
-Atheriz governs synchronization checking through the `SLOW_LOCKS` configuration toggle in `settings.py`.
-- `SLOW_LOCKS = True`: The `access` method resolves as `_safe_access`. This wraps the evaluation in a thread lock to safely prevent concurrent modification collisions. This comes at the cost of general performance.
-- `SLOW_LOCKS = False`: The `access` method resolves as `_fast_access`. This completes validation significantly faster but exposes data corruption risks if lock definitions are changing continuously during concurrent executions.
+Atheriz governs synchronization checking through the `SLOW_LOCKS` configuration toggle in `settings.py` (`atheriz/settings.py:133`).
+- `SLOW_LOCKS = True`: `access` → `_safe_access` inside `with self.lock:` (`atheriz/objects/base_lock.py:50`).
+- `SLOW_LOCKS = False`: `access` → `_fast_access` without lock — faster but `locks` dict may tear.
+
+Under free-threaded Python (`sys._is_gil_enabled()==False`) the engine forces `SLOW_LOCKS=True` (`settings.py:143`), so fast mode is unavailable on 3.14t.
 
 ### 7.2.3 `_pickle_excludes`
-Because the `access` pointer changes dynamically depending on the `SLOW_LOCKS` configuration, it cannot be safely serialized. It is excluded entirely from standard `dill` database pickling protocols by being included in the class-level `_pickle_excludes` tuple. If your mixins add properties that shouldn't be saved, add them to `_pickle_excludes`.
+Because `access` is rebased per `SLOW_LOCKS`, it is excluded via `_pickle_excludes = ("access",)` (`atheriz/objects/base_lock.py:12`); `__setstate__` rebinds `access` to `_safe/_fast` per current setting (`74`). MRO loop in `atheriz/objects/base_obj.py:401` pops per-class excludes; add custom non-picklable attrs to your class's `_pickle_excludes`.
 
 ## 7.3 The `DbOps` Mixin
-Modifying the `db_ops.py` in your game folder (generated from `atheriz/objects/base_db_ops.py`) allows you to define custom SQL for deletion and save operations. 
-- `get_save_ops()` produces a tuple defining internal `(sql, params)` target logic supporting standard `INSERT OR REPLACE` statements.
-- `get_del_ops()` governs standard deletion execution statements. By modifying DbOps mixin and creating your own `database_setup.py`, you can use whatever SQL backend with whatever table layout you want.
+Modifying `db_ops.py` in your game folder (generated from `atheriz/objects/base_db_ops.py`) allows custom SQL. As in §5.2.5, `atheriz/objects/base_db_ops.py` defines `get_save_ops()`, `get_save_ops_clearing()` (atomic `is_modified` clear, used live by `save_objects`), and `get_del_ops()` (`DELETE…`). By modifying DbOps and `database_setup.py`, you can use any backend/table layout.
 
 [Table of Contents](./table_of_contents.md) | [Next: 08 Input Handling](./08_input_handling.md)

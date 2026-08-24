@@ -3,9 +3,7 @@
 ## 9.1 How Time Works
 
 ### 9.1.1 The Game Clock
-Atheriz separates internal game time from server uptime. Every N real-world seconds (defined by `TIME_UPDATE_SECONDS` in `settings`), the game clock advances by N in-game minutes (defined by `TICK_MINUTES`). 
-
-These settings natively default to 1 real second advancing 1 game minute, which means 1 real hour represents 60 game hours (2.5 game days). The calendar mapping logic (days per month, months per year, hours per day) is managed in `atheriz/globals/time.py`.
+Atheriz separates internal game time from server uptime. Every `TIME_UPDATE_SECONDS` real seconds (default `1.0`, `atheriz/settings.py:245`) the clock advances by `TICK_MINUTES` game minutes (default `1.0`, `settings.py:249`) via `GameTime.on_tick` (`atheriz/globals/time.py:192`, gated by `TIME_SYSTEM_ENABLED=True` `settings.py:233`). 1 real hour = 60 game hours (2.5 days) at defaults. Calendar mapping (`START_YEAR=888` etc, days/month) is in `atheriz/globals/time.py`. `get_time()` returns `year, month, day, hour, minute, second, moon_phase, formatted, season, …`.
 
 ## 9.2 Solar & Lunar Events
 
@@ -29,17 +27,15 @@ The current moon phases calculated natively are: "new", "waxing crescent", "firs
 ## 9.3 Ticks & Alarms
 
 ### 9.3.1 The Tick System
-The `TIME_UPDATE_SECONDS` frequency dictates the tick resolution of the system. Atheriz uses a background async ticker loop to drive real-time engine operations natively. While time calculations drive hooks based on in-game hours, ticks act locally on objects. 
+Per-object ticks are not polled on global `ticks`; each `is_tickable` object/node registers `obj.at_tick` as a coro on `AsyncTicker.TimeSlot(interval=tick_seconds)` (`atheriz/globals/asyncthreadpool.py:385`, `atheriz/objects/base_obj.py:529`). `time.py:178` `add_coro(on_tick, TIME_UPDATE_SECONDS)` drives the game clock independently of object ticks.
 
-Any game object (including rooms/nodes) with an active `is_tickable` property checks an internal `tick_seconds` reference logic. When elapsed ticks match the expected duration, the object safely triggers its custom `at_tick()` loop hook asynchronously.
-
-To create an NPC that executes an action every 5 seconds, simply enable `self.is_tickable = True` inside their init, assign `self.tick_seconds = 5`, and write an `at_tick(self)` routine defining exactly what must occur.
+Prefer `Object.create(caller, name, is_tickable=True, tick_seconds=5)` (`base_obj.py:118`) which atomically registers; manual `self.is_tickable=True; self.tick_seconds=5` works via remove/add but `Node` defaults `Flags` `False` (`atheriz/objects/nodes.py:217`). `tick_seconds`/`is_tickable` setters auto add/remove the ticker (`base_obj.py:517-541`, `nodes.py:217-229`).
 
 ### 9.3.2 Alarms
-The `at_alarm(time, data)` hook schedules callbacks targeting specific synchronized in-game times globally tracked by `GameTime`.
+`GameTime.add_alarm(hour, minute, caller, repeat=False, data=None)` (`atheriz/globals/time.py:107`; `hour/minute` coerced to `str`, `data` must be `dict|None` else `TypeError` `124`) schedules `caller.at_alarm(time, data)` (`atheriz/objects/base_obj.py:586`) when `after_time` matches. Remove via `remove_alarm`/`remove_alarms_by_caller`.
 
-Using `GameTime.add_alarm(hour, minute, caller, repeat=False, data=None)`, you can queue logic to fire precisely when the clock aligns with the assigned tuple. This is incredibly useful for scheduling routines like opening shops at 08:00 AM in-game, automatically locking access doors during midnight alignments, or spawning world events consistently during scheduled holidays.
+Wildcards: `("?", minute)` fires every hour at that minute, `(hour, "?")` fires every minute of that hour (`time.py:199`); `("?","?")` not supported. Queue-full `add_task` may retry/inline (`time.py:228`).
 
-Use `?"` symbols inside arguments to define recurring wildcard matches (assigning an hour string as `?` causes the logic to execute at that specific minute interval every sequential hour).
+Example: shop at `08:00` (`add_alarm("8","0", shop, repeat=True)`), lock doors at midnight.
 
 [Table of Contents](./table_of_contents.md) | [Next: 10 Utilities & Advanced Topics](./10_utilities_advanced.md)

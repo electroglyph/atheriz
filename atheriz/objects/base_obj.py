@@ -1627,7 +1627,7 @@ class Object(Flags, DbOps, AccessLock):
             emitter (Object): The object emitting the sound.
             sound_desc (str): The description of the sound.
             sound_msg (str): The message of the sound.
-            loud (bool): Whether the sound is loud.
+            loudness (float): The loudness of the sound in decibels.
             is_say (bool): Whether the sound is a say.
 
         Returns:

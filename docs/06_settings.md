@@ -26,7 +26,9 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `SERVERNAME`: The display name of the game server.
 - `SERVER_HOSTNAME`: The root hostname or IP address of the server.
 - `WEBSOCKET_ENABLED`: If `True`, enables the WebSocket server functionality.
-- `WEBSOCKET_MAX_MESSAGE_SIZE`: The maximum size in bytes of a single incoming WebSocket message.
+- `WEBSOCKET_MAX_MESSAGE_SIZE`: The maximum size in bytes of a single incoming WebSocket message (`65536`, `atheriz/network/websocket.py:176` → close 1009).
+- `WEBSOCKET_MAX_PENDING_SENDS` / `WEBSOCKET_MAX_PENDING_BYTES` (`256` / `4 MiB`, `atheriz/settings.py:17-18`, enforced `network/websocket.py:80`): drop/close if send backlog grows.
+- `TELNET_MAX_PENDING_BYTES` (`1 MiB`, `settings.py:19`, `network/telnet.py:198`): analogous limit for telnet.
 - `TELNET_ENABLED`: If `True`, enables the telnet server.
 - `TELNET_PORT`: The port the telnet server listens on.
 - `TELNET_INTERFACE`: The network interface to bind the telnet server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
@@ -41,8 +43,9 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `TERM_SIZE_MAX_WIDTH` / `TERM_SIZE_MAX_HEIGHT`: Upper bounds for the reported terminal size.
 - `MAP_SIZE_MAX_WIDTH` / `MAP_SIZE_MAX_HEIGHT`: Upper bounds for the reported map-pane size.
 - `WEBSERVER_ENABLED`: If `True`, hosts a web server for HTTP traffic.
-- `WEBSERVER_PORT`: The integer port where the web server listens (e.g., `8000`).
-- `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"` for all IPv4 or `"::"` for all IPv6/dual-stack).
+- `WEBCLIENT_SYNC_CHECK` (`True`, `settings.py:69`, `atheriz/atheriz.py:224`): verify compiled webclient freshness at startup.
+- `WEBSERVER_PORT`: The integer port where the web server listens (default `9999`, `atheriz/settings.py:61`).
+- `WEBSERVER_INTERFACE`: The network interface to bind the web server to (e.g., `"0.0.0.0"` for all IPv4-only, `"::"` for IPv6-only — `asyncio` disables dual-stack).
 - `SSL_CERTFILE`: Path to the TLS certificate file. Setting this enables the
   web server (and its `/ws` WebSocket endpoint) to serve `https`/`wss`
   instead of `http`/`ws`. **This is the only setting required** when the cert
@@ -60,19 +63,27 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `DEFAULT_HOME`: The default `Coord` coordinates where players spawn or respawn.
 - `DEFAULT_TICK_SECONDS`: How often the game loop ticks for objects with `is_tickable = True`.
 - `AUTO_COMMAND_ALIASING`: If `True`, automatically prefixes matches for player commands (e.g., typing `exa` correctly triggers `examine`).
-- `THREADPOOL_LIMIT`: Maximum number of threads to use in the threadpool (defaults to system CPU count).
-- `THREADPOOL_QUEUE_LIMIT`: Maximum number of pending tasks in the threadpool queue; when full, new tasks are rejected rather than queued.
-- `CONNECTION_INPUT_QUEUE_LIMIT`: Maximum number of pending input messages per connection; beyond this the newest input is dropped.
-- `MAX_SEARCH_DEPTH`: Maximum recursion depth when searching nested containers (guards against stack overflow).
-- `THREADSAFE_GETTERS_SETTERS`: If `True`, applies thread-safe property locks on attributes. Disabling this may cause race conditions.
-- `SLOW_LOCKS`: Set to `True` if you plan on changing object permission locks while they are in use. If you only set locks at object creation, you can set this to `False` for better performance.
+- `THREADPOOL_LIMIT`: Maximum number of threads to use in the threadpool (defaults to system CPU count, `settings.py:71`).
+- `THREADPOOL_QUEUE_LIMIT`: Maximum pending tasks (`10000`, `settings.py:79`); when full `add_task()` returns `False` (`atheriz/globals/asyncthreadpool.py:355`).
+- `THREADPOOL_RELIEF_LIMIT` / `THREADPOOL_WATCHDOG_SECONDS` / `THREADPOOL_WATCHDOG_INTERVAL` (`settings.py:73-77`, `asyncthreadpool.py:69-278`): relief worker spawn and starvation watchdog.
+- `CONNECTION_INPUT_QUEUE_LIMIT`: Maximum pending input messages per connection (`100`); beyond this newest input is dropped (`atheriz/network/connection.py:85`).
+- `MAX_SEARCH_DEPTH` (`100`, `settings.py:117`): caps recursion in `search`/`_gather_contents`/`_delete_recursive`.
+- `MAX_ASTAR_ITERATIONS` (`50000`, `settings.py:119`, `atheriz/pathfind.py:106`): caps A* pathfinding.
+- `MAX_CONNECTIONS_PER_IP` (`2`, `settings.py:155`, `atheriz/network/manager.py:75`): per-IP connection limit.
+- `MENU_PROMPT_TIMEOUT` (`60`, `settings.py:157`, `atheriz/menu.py:100`): `run_menu` future timeout → auto-close.
+- `MAPEDIT_CHAIN_TTL` / `MAPEDIT_MAX_CHAINS` (`180.0` / `256`, `settings.py:161`, `atheriz/globals/mapedit.py:42`): AtheriZ Draw key-chain expiry/limit.
+- `THREADSAFE_GETTERS_SETTERS`: If `True`, applies thread-safe property locks on attributes. Disabling this may cause race conditions. Patched per-class under `_PATCH_LOCK`.
+- `SLOW_LOCKS`: Set `True` if you plan to change locks while in use; `False` for better perf. Forced `True` under free-threaded Python (`sys._is_gil_enabled()==False`, `atheriz/settings.py:143`), so fast mode unavailable on 3.14t.
+- `AUTO_ALIAS_IGNORED_KEYS` (`["save","quit","wander","exit","logout","disconnect","none"]`, `settings.py:198`, `atheriz/inputfuncs.py:15`): excluded from `AUTO_COMMAND_ALIASING`.
 - `Privilege`: An `IntEnum` of permission levels — `Guest`, `Player`, `Helper`, `Builder`, `Admin` — ordered from least to most privileged. Permission gates such as `is_builder` and `is_superuser` are derived from it.
 
 ### 6.2.3 Accounts & Security
 - `ACCOUNT_CREATION_ENABLED`: Allows new accounts to be created from the client.
 - `CHAR_CREATION_ENABLED`: Allows logged-in accounts to create new characters from the client (via the `new` command).
 - `GUEST_ENABLED`: Allows guests to connect without an account.
-- `GUEST_CREATION_COOLDOWN`: Minimum seconds between successful guest character creations from one host.
+- `CREATION_COOLDOWN` (`60`, `atheriz/settings.py:159`, `atheriz/commands/unloggedin/guest.py:52`): unified cooldown (guest/account/character) per host; `try_reserve_creation_cooldown("guest")` etc. — no `GUEST_`-prefixed variant exists.
+- `MAX_ACCOUNT_NAME_LENGTH` / `MAX_CHARACTER_NAME_LENGTH` (`20`, `settings.py:165`, `atheriz/commands/unloggedin/validation.py:26`): name length gates.
+- `MIN_PASSWORD_LENGTH` / `MAX_PASSWORD_LENGTH` (`8` / `1024`, `settings.py:169`, `validation.py:26`): `pbkdf2_hmac` 600k iterations (`atheriz/objects/base_account.py:146`).
 - `MAX_LOGIN_ATTEMPTS`: Maximum failed login attempts before a temporary ban.
 - `LOGIN_ATTEMPT_COOLDOWN`: Cooldown duration in seconds for a temporary ban.
 
@@ -125,5 +136,9 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `DEFAULT_OPEN_SOUND_ATTENUATION`: Decibels subtracted from a sound each time it passes through an open pathway (e.g., open doors, hallways). Default `10.0`.
 - `DEFAULT_ENCLOSED_SOUND_ATTENUATION`: Decibels subtracted from a sound each time it passes through a closed/enclosed pathway. Default `20.0`.
 - `DEFAULT_AMBIENT_SOUND_LEVEL`: Ambient noise floor in decibels; incoming sounds quieter than this are ignored. Default `5.0`.
+- `LOUDNESS_LEVELS` / `REPLACE_LEVELS` (`atheriz/settings.py:296`, `atheriz/objects/base_obj.py:1626`): dB → adjective/replacement mappings for `at_hear`; overrode per `Node` via `open_attenuation`/`enclosed_attenuation`/`ambient_sound_level`.
+
+### 6.2.11 Python Sandbox (py command)
+- `PY_MAX_OUTPUT_LINES` / `PY_MAX_OUTPUT_BYTES` / `PY_MAX_CODE_BYTES` / `PY_MAX_AST_NODES` / `PY_MAX_LINE_EVENTS` / `PY_OUTPUT_FG` / `KILL_PY_COMMAND_AFTER` / `PY_REQUIRE_SUPERUSER` (`atheriz/settings.py:318`, `atheriz/commands/loggedin/py.py:161`): limits for the in-game `py` evaluator.
 
 [Table of Contents](./table_of_contents.md) | [Next: 07 Mixins](./07_mixins.md)

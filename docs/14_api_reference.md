@@ -155,7 +155,7 @@ Subscribe to a channel.
 
 Unsubscribe from a channel.
 
-#### `def search(self, query: str, recursive: bool = True)`
+#### `def search(self, query: str, recursive: bool = True, looker: Object | None = None)`
 
 Search for an object by name or alias inside the contents of this object,
 and within the room this object is standing in.
@@ -164,6 +164,7 @@ Args:
     query (str): The search string to evaluate.
     recursive (bool): If True (default), descend into nested containers.
         If False, search only this object's direct contents.
+    looker (Object | None): The object doing the looking; defaults to self.
 
 Returns:
     list[Object]: A list of objects matching the query.
@@ -590,7 +591,7 @@ Args:
     emitter (Object): The object emitting the sound.
     sound_desc (str): The description of the sound.
     sound_msg (str): The message of the sound.
-    loud (bool): Whether the sound is loud.
+    loudness (float): The loudness of the sound in decibels.
     is_say (bool): Whether the sound is a say.
 
 Returns:
@@ -780,7 +781,7 @@ Args:
     emitter (Object): The object emitting the sound.
     sound_desc (str): The description of the sound.
     sound_msg (str): The message of the sound.
-    loud (bool): Whether the sound is loud.
+    loudness (float): The loudness of the sound in decibels.
     is_say (bool): Whether the sound is a say.
 
 Returns:
@@ -891,7 +892,7 @@ Args:
 Returns:
     str | None: The description, or None if not found.
 
-#### `def search(self, query: str, recursive: bool = False)`
+#### `def search(self, query: str, recursive: bool = False, looker: Any | None = None)`
 
 Searches the contents of this node using the given query string.
 
@@ -899,6 +900,7 @@ Args:
     query (str): The search phrase.
     recursive (bool): If True (default), descend into nested containers.
         If False, search only this node's direct contents.
+    looker (Any | None): The object doing the looking; defaults to self.
 
 Returns:
     list[Any]: A list of objects matching the search query.
@@ -957,6 +959,8 @@ Returns:
 add an exit to this node
 Args:
     link (NodeLink): exit to add
+
+#### `def add_link_if_absent(self, name: str, factory)`
 
 #### `def remove_link(self, name: str)`
 
@@ -1100,6 +1104,29 @@ load arbitrary data for this grid... make sure it can be pickled
 #### `def remove_node(self, coord: tuple[int, int])`
 
 #### `def get_node(self, coord: tuple[int, int])`
+
+#### `def check_moves(self, moves: list[tuple[tuple[int, int], tuple[int, int]]], context: list[tuple[tuple[int, int], tuple[int, int]]] | None = None)`
+
+Validate a batch of room moves against this grid.
+
+A move is valid when its source holds a node, its source is not
+used by another move in the batch, and its destination is either
+empty or itself being vacated by the batch (chains and swaps).
+
+context lists moves that are pending but not yet applied on the
+server (the editor's unsaved changes). They are simulated first so
+destinations vacated by them count as free; genuine collisions with
+rooms the context does not move are still denied.
+Returns the indices of invalid moves.
+
+#### `def apply_moves(self, moves: list[tuple[tuple[int, int], tuple[int, int]]])`
+
+Apply a batch of room moves: [(from_xy, to_xy), ...].
+
+Sources are vacated before destinations are filled so chains and
+swaps work. Re-keys inbound neighbor links and doors. Returns the
+indices of moves that could not be applied (nothing is changed
+for those).
 
 #### `def clear(self)`
 
@@ -1288,6 +1315,8 @@ Args:
     
 Returns:
     bool: True if the channel was successfully deleted, False if aborted.
+
+#### `def _detach_subscriber(self, obj: Object)`
 
 #### `def at_delete(self, caller: Object | None = None)`
 
@@ -1695,8 +1724,27 @@ Handle map editor edits authenticated by the rotating key chain.
 
 Args:
     connection (Connection): The connection sending the edit.
-    args (list): Expects `[key (str), seq (int), cells (list of [x, y, symbol])]`.
+    args (list): Expects `[key (str), seq (int), cells]` where each cell
+        is `[x, y, symbol]` (legacy plain char),
+        `[x, y, char, fg, bg, attrs]` (fg/bg: [r,g,b] or [-1,-1,-1]
+        for transparent; attrs: subset of "bold"/"italic"/"underline"),
+        or `["room", fromX, fromY, toX, toY]` (move a room's node).
     kwargs (dict): Unused.
+
+#### `def map_validate_moves(self, connection: Connection, args: list, kwargs: dict)`
+
+Validate prospective room moves for the map editor without applying them.
+
+Args:
+    connection (Connection): The connection sending the request.
+    args (list): Expects `[key (str), seq (int), moves]` where each move
+        is `[fromX, fromY, toX, toY]`, plus an optional 4th element
+        `context`: the editor's pending (unsaved) moves in the same
+        shape, simulated first so destinations they vacate count as
+        free.
+    kwargs (dict): Unused.
+
+#### `@staticmethod def _send_move_verdict(connection: Connection, seq: int, new_key: str, denied: list)`
 
 ### `def inputfunc(name: str | None = None)`
 
@@ -1733,6 +1781,12 @@ crossing per network message).
 
 ## 14.9 `atheriz.globals.objects`
 
+### `def is_ip_banned(host: str, now: float | None = None)`
+
+### `def ban_ip(host: str, expires: float | None = None)`
+
+### `def unban_ip(host: str)`
+
 ### `def creation_cooldown_active(op: str, host: str, now: float)`
 
 Return True if ``op`` for ``host`` is still within its cooldown window.
@@ -1740,6 +1794,8 @@ Return True if ``op`` for ``host`` is still within its cooldown window.
 ### `def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float)`
 
 Record a creation cooldown expiry for ``op`` and ``host``.
+
+### `def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: float)`
 
 ### `def filter_by(l: Callable[[Any], bool])`
 
@@ -1806,6 +1862,10 @@ Load objects from the database.
 
 Save modified objects to the database.
 
+Deleted objects (flagged or already removed from the registry) are skipped,
+both at snapshot time and again immediately before each row is written, so
+a concurrent delete can never be resurrected by a checkpoint.
+
 ### `def delete_objects(ops: list[tuple[str, tuple]])`
 
 Delete objects using a list of SQL operations in a transaction.
@@ -1821,6 +1881,8 @@ this is for adding information about environment symbols on the map.
 symbols will be placed on the map in first render pass
 
 ### Class: `MapInfo`
+
+#### `def _is_over_legend_cap(self)`
 
 #### `def place_walls(self, coord: tuple[int, int], char: str)`
 
@@ -1874,6 +1936,8 @@ in a single pass over the grid, then stores the result in post_grid.
 #### `def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo)`
 
 #### `def get_mapinfo(self, area: str, z: int)`
+
+#### `def _get_or_create(self, area: str, z: int)`
 
 #### `def add_mapable(self, mapable: Object, notify: bool = False)`
 
@@ -2016,6 +2080,17 @@ Args:
     inverse (bool, optional): inverse? Defaults to False.
     strikethru (bool, optional): strikethrough? Defaults to False.
     clear (bool, optional): strip existing ANSI color from input. Defaults to False.
+
+Returns:
+    str: colorized string with color reset at the end
+
+### `def wrap_rgb(input: str, fg = None, bg = None, bold = False, italic = False, underline = False)`
+
+wrap input string with exact ANSI truecolor RGB codes and a color reset.
+
+Unlike wrap_truecolor (HSV params), fg/bg are exact (r, g, b) tuples,
+each component 0-255. Defaults: bg black (0, 0, 0) — the engine's
+"unset background" convention — and fg gray (204, 204, 204).
 
 Returns:
     str: colorized string with color reset at the end
@@ -2218,7 +2293,7 @@ Args:
     callables (dict): A mapping `{"funcname": callable, ...}` to validate
 
 Raise:
-    AssertionError: If invalid callable was found.
+    ParsingError: If invalid callable was found.
 
 Notes:
     This is also a good method to override for individual parsers
@@ -2890,13 +2965,17 @@ Default value: `True`
 
 Default value: `65536`
 
-### `MAPEDIT_KEY_TTL`
+### `WEBSOCKET_MAX_PENDING_SENDS`
 
-Default value: `7200`
+Default value: `256`
 
-### `MAPEDIT_KEY_IDLE`
+### `WEBSOCKET_MAX_PENDING_BYTES`
 
-Default value: `900`
+Default value: `4 * 1024 * 1024`
+
+### `TELNET_MAX_PENDING_BYTES`
+
+Default value: `1 * 1024 * 1024`
 
 ### `TELNET_ENABLED`
 
@@ -2994,6 +3073,18 @@ Default value: `True`
 
 Default value: `os.cpu_count()`
 
+### `THREADPOOL_RELIEF_LIMIT`
+
+Default value: `os.cpu_count() or 4`
+
+### `THREADPOOL_WATCHDOG_SECONDS`
+
+Default value: `30.0`
+
+### `THREADPOOL_WATCHDOG_INTERVAL`
+
+Default value: `5.0`
+
 ### `THREADPOOL_QUEUE_LIMIT`
 
 Default value: `10000`
@@ -3042,6 +3133,10 @@ Default value: `20`
 
 Default value: `100`
 
+### `MAX_ASTAR_ITERATIONS`
+
+Default value: `50000`
+
 ### `CLIENT_DEFAULT_WIDTH`
 
 Default value: `78`
@@ -3089,6 +3184,30 @@ Default value: `60`
 ### `CREATION_COOLDOWN`
 
 Default value: `60`
+
+### `MAPEDIT_CHAIN_TTL`
+
+Default value: `180.0`
+
+### `MAPEDIT_MAX_CHAINS`
+
+Default value: `256`
+
+### `MAX_ACCOUNT_NAME_LENGTH`
+
+Default value: `20`
+
+### `MAX_CHARACTER_NAME_LENGTH`
+
+Default value: `20`
+
+### `MIN_PASSWORD_LENGTH`
+
+Default value: `8`
+
+### `MAX_PASSWORD_LENGTH`
+
+Default value: `1024`
 
 ### `ALWAYS_SAVE_ALL`
 
@@ -3309,6 +3428,22 @@ Default value: `15`
 ### `KILL_PY_COMMAND_AFTER`
 
 Default value: `5`
+
+### `PY_MAX_CODE_BYTES`
+
+Default value: `65536`
+
+### `PY_MAX_AST_NODES`
+
+Default value: `20000`
+
+### `PY_MAX_LINE_EVENTS`
+
+Default value: `5000000`
+
+### `PY_REQUIRE_SUPERUSER`
+
+Default value: `False`
 
 [Previous: 13 The Menu Engine](./13_menu_engine.md) | [Table of Contents](./table_of_contents.md) | [Next: 15 Sound Propagation](./15_sound_propagation.md)
 
