@@ -101,3 +101,107 @@ def test_reloads_are_serialized(global_test_env):
     assert proc.returncode == 0, proc.stdout + proc.stderr
     max_overlap = int(results.get("max_overlap", "-1"))
     assert max_overlap <= 1, f"concurrent reloads overlapped {max_overlap} deep"
+
+
+def test_http_vs_ingame_reload_not_interleaved(global_test_env, tmp_path):
+    """INTENT: `5.5` — `hot_reload_endpoint` (`asyncio.Lock` → `threading.Lock`
+    across `do_reload` + `_reload_game_logic`) vs `reload_game_logic()` (only
+    `threading.Lock`) must not interleave `do_reload`'s `ticker.clear` with
+    patching. HTTP holds both locks; in-game holds only threading. `Barrier(2)`
+    racing `reload_game_logic` vs `hot_reload_endpoint` must serialize
+    (`max_overlap==1`, second gets `already in progress` or waits, never both
+    inside `do_reload`/`importlib.reload` at once). Reuses `hot_reload_endpoint`
+    + `reloader._reload_lock` ordering `asyncio→threading`."""
+    import asyncio
+    import threading
+    import time
+    from unittest.mock import patch
+
+    import atheriz.atheriz as AZ
+    import atheriz.reloader as R
+
+    (tmp_path / "admin.token").write_text("real-token")
+
+    active: set[int] = set()
+    max_overlap = 0
+    overlap_lock = threading.Lock()
+    orig_reload = R.importlib.reload
+    barrier = threading.Barrier(2, timeout=5)
+
+    def slow_reload(module):
+        nonlocal max_overlap
+        tid = threading.get_ident()
+        with overlap_lock:
+            active.add(tid)
+            max_overlap = max(max_overlap, len(active))
+        time.sleep(0.05)
+        try:
+            return orig_reload(module)
+        finally:
+            with overlap_lock:
+                active.discard(tid)
+
+    def slow_do_reload(*_a, **_k):
+        nonlocal max_overlap
+        tid = threading.get_ident()
+        with overlap_lock:
+            active.add(tid)
+            max_overlap = max(max_overlap, len(active))
+        time.sleep(0.05)
+        try:
+            # keep original do_reload semantics minimal: just sleep, no side effects
+            return None
+        finally:
+            with overlap_lock:
+                active.discard(tid)
+
+    R.importlib.reload = slow_reload
+
+    results: list[str] = []
+    errors: list[str] = []
+
+    class _FakeClient:
+        host = "127.0.0.1"
+
+    class _FakeRequest:
+        def __init__(self, token: str, host: str = "127.0.0.1"):
+            self.headers = {"X-Admin-Token": token}
+            self.client = _FakeClient()
+            self.client.host = host
+
+    def ingame_worker():
+        try:
+            barrier.wait(timeout=5)
+            res = R.reload_game_logic()
+            results.append(res)
+        except Exception as exc:
+            errors.append(f"ingame: {exc!r}")
+
+    async def http_call():
+        return await AZ.hot_reload_endpoint(_FakeRequest(token="real-token"))
+
+    def http_worker():
+        try:
+            barrier.wait(timeout=5)
+            res = asyncio.run(http_call())
+            results.append(str(res))
+        except Exception as exc:
+            errors.append(f"http: {exc!r}")
+
+    with patch.object(AZ, "do_reload", side_effect=slow_do_reload), \
+         patch("atheriz.settings.SECRET_PATH", str(tmp_path)):
+        t1 = threading.Thread(target=ingame_worker)
+        t2 = threading.Thread(target=http_worker)
+        t1.start()
+        t2.start()
+        t1.join(timeout=10)
+        t2.join(timeout=10)
+
+    R.importlib.reload = orig_reload
+
+    assert not errors, f"errors: {errors}"
+    assert max_overlap <= 1, f"HTTP vs in-game overlapped {max_overlap} (active={active})"
+    # one of them must have been serialized: either HTTP got "already in progress"
+    # or in-game did (non-blocking second returns skipping). Never both ran
+    # do_reload+reload concurrently.
+    assert any("already in progress" in r.lower() for r in results) or len(results) == 2, f"expected serialization, results={results}"

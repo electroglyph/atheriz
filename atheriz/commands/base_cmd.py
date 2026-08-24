@@ -2,6 +2,7 @@ from __future__ import annotations
 from typing import Any, Callable
 import argparse
 import shlex
+import threading
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -78,20 +79,32 @@ class Command:
 
     def __init__(self):
         self._parser = None
+        self._parser_lock = threading.Lock()
 
     @property
     def parser(self) -> GameArgumentParser | None:
         if self._parser is None:
             if self.use_parser:
-                self._parser = GameArgumentParser(
-                    prog=self.key, description=self.desc, add_help=True
-                )
-                self.setup_parser()
+                with self._parser_lock:
+                    if self._parser is None:
+                        parser = GameArgumentParser(
+                            prog=self.key, description=self.desc, add_help=True
+                        )
+                        self._parser = parser
+                        self.setup_parser()
         return self._parser
 
     @parser.setter
     def parser(self, value):
-        self._parser = value
+        try:
+            lock = self._parser_lock
+        except AttributeError:
+            lock = None
+        if lock is not None:
+            with lock:
+                self._parser = value
+        else:
+            self._parser = value
 
     def setup_parser(self):
         """
@@ -148,16 +161,30 @@ class Command:
                 caller.msg(self.print_help())
                 return None, None, None
         try:
-            parsed_args = self.parser.parse_args(arg_list)
-            parsed_args.cmdstring = cmdstring
+            parser = self.parser
+            if parser is None:
+                parsed_args = None  # type: ignore
+            else:
+                with self._parser_lock:
+                    parsed_args = parser.parse_args(arg_list)
+            if parsed_args is not None:
+                parsed_args.cmdstring = cmdstring
         except CommandError:
             help_text = self.print_help()
             caller.msg(help_text)
             return None, None, None
         return self.run, caller, parsed_args
 
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state.pop("_parser_lock", None)
+        return state
+
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self._parser_lock = threading.Lock()
         if self.use_parser:
-            self.parser = GameArgumentParser(prog=self.key, description=self.desc, add_help=True)
+            # _parser from state may be stale (old parser); rebuild fresh
+            parser = GameArgumentParser(prog=self.key, description=self.desc, add_help=True)
+            self._parser = parser
             self.setup_parser()
