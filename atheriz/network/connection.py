@@ -37,6 +37,7 @@ class BaseConnection:
         self._input_queue = deque()
         self._input_running = False
         self._last_input_busy = 0.0
+        self._disconnected = False
 
     def _resolve_loop(self):
         """Return the loop to schedule cross-thread work on. Falls back to the
@@ -66,6 +67,8 @@ class BaseConnection:
         from atheriz.globals.get import get_async_threadpool
         notify_busy = False
         with self.lock:
+            if getattr(self, "_disconnected", False):
+                return
             if len(self._input_queue) >= settings.CONNECTION_INPUT_QUEUE_LIMIT:
                 now = time.monotonic()
                 if now - self._last_input_busy < 1.0:
@@ -100,7 +103,13 @@ class BaseConnection:
                 if not self._input_queue:
                     self._input_running = False
                     return
+                if getattr(self, "_disconnected", False):
+                    self._input_queue.clear()
+                    self._input_running = False
+                    return
                 handler, args, kwargs = self._input_queue.popleft()
+            if getattr(self, "_disconnected", False):
+                continue
             try:
                 handler(self, args, kwargs)
             except Exception:
@@ -111,6 +120,7 @@ class BaseConnection:
         """Drop queued-but-unrun input (used on disconnect)."""
         with self.lock:
             self._input_queue.clear()
+            self._input_running = False
 
     # pyrefly: ignore
     def send_command(self, cmd: str, *args, **kwargs):

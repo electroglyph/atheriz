@@ -95,28 +95,31 @@ class ConnectionManager:
         return True
 
     def disconnect(self, connection: "BaseConnection"):
+        conn_id = None
         with self._lock:
-            conn_id = None
             for cid, conn in self._connections.items():
                 if conn is connection:
                     conn_id = cid
                     break
-
             if conn_id:
                 del self._connections[conn_id]
-                connection.clear_pending_input()
-                session = connection.session
-                if session is not None:
-                    if not self.atp.add_task(self._do_session_disconnect, session):
-                        try:
-                            session.at_disconnect()
-                        except Exception as e:
-                            logger.error(f"[Network] Session teardown failed during disconnect: {e}", exc_info=True)
+        if not conn_id:
+            return
+        with connection.lock:
+            connection._disconnected = True
+        connection.clear_pending_input()
+        session = connection.session
+        if session is not None:
+            if not self.atp.add_task(self._do_session_disconnect, session):
                 try:
-                    connection.close()
+                    session.at_disconnect()
                 except Exception as e:
-                    logger.debug(f"[Network] Connection cleanup failed: {e}")
-                logger.info(f"[Network] Connection closed: {conn_id} (total: {self.connection_count})")
+                    logger.error(f"[Network] Session teardown failed during disconnect: {e}", exc_info=True)
+        try:
+            connection.close()
+        except Exception as e:
+            logger.debug(f"[Network] Connection cleanup failed: {e}")
+        logger.info(f"[Network] Connection closed: {conn_id} (total: {self.connection_count})")
 
     def _do_session_disconnect(self, session):
         """Run session teardown on the game threadpool so puppet unwinding,
