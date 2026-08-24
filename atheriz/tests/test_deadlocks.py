@@ -16,13 +16,14 @@ iteration-based smoke checks that must finish within a join timeout.
 import random
 import threading
 import time
+from unittest.mock import patch
 
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import add_object
 from atheriz.objects.base_channel import Channel
 from atheriz.objects.base_obj import Object
-from atheriz.objects.nodes import Node, NodeLink
+from atheriz.objects.nodes import Node, NodeArea, NodeGrid, NodeLink
 from atheriz.utils import Coord
 
 
@@ -199,3 +200,84 @@ def test_move_to_churn_no_deadlock(global_test_env):
 
     assert not any(t.is_alive() for t in threads), "move/look threads deadlocked"
     assert not failures, failures
+
+
+def test_move_into_deleting_node_not_orphan(global_test_env):
+    """Pinned test for moving into a node that is being deleted at the same moment.
+
+    Before the fix, grid removal held Grid.lock while move_to held Node.lock,
+    with no shared ordering or deletion flag. A mover could add itself to
+    B._contents after B was popped from grid.nodes, ending with location==B
+    but B no longer in the world — an orphan. After the fix, move_to holds
+    Grid->Node and checks both is_deleted and grid presence, while delete
+    marks is_deleted early. One side must win: either the mover gets in before
+    the delete and is then relocated with the rest of B's contents, or it
+    sees the flag/absence and aborts at the source. It never orphans.
+    """
+    nh = get_node_handler()
+    area = NodeArea("TestDeadlock")
+    grid = NodeGrid("TestDeadlock", 0)
+    area.add_grid(grid)
+    nh.add_area(area)
+
+    coord_a = Coord("TestDeadlock", 0, 0, 0)
+    coord_b = Coord("TestDeadlock", 1, 0, 0)
+    coord_home = Coord("TestDeadlock", 2, 0, 0)
+    node_a = Node(coord=coord_a, desc="A")
+    node_b = Node(coord=coord_b, desc="B")
+    home = Node(coord=coord_home, desc="home")
+    grid.add_node(node_a)
+    grid.add_node(node_b)
+    grid.add_node(home)
+
+    mover = Object.create(None, "Mover")
+    mover.move_to(node_a)
+    assert mover.location is node_a
+
+    caller = Object.create(None, "Caller")
+    caller.move_to(node_a)
+    mover.home = home
+
+    barrier = threading.Barrier(2, timeout=5)
+    failures: list[Exception] = []
+
+    def try_move():
+        try:
+            barrier.wait(timeout=5)
+            mover.move_to(node_b)
+        except Exception as exc:  # pragma: no cover
+            failures.append(exc)
+
+    def try_delete():
+        try:
+            barrier.wait(timeout=5)
+            with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
+                node_b.delete(caller, recursive=False)
+        except Exception as exc:  # pragma: no cover
+            failures.append(exc)
+
+    t1 = threading.Thread(target=try_move, daemon=True)
+    t2 = threading.Thread(target=try_delete, daemon=True)
+    t1.start()
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+
+    assert not t1.is_alive() and not t2.is_alive(), "move/delete threads deadlocked"
+    assert not failures, failures
+
+    # Never orphaned in a deleted room.
+    b_in_grid = grid.nodes.get((coord_b.x, coord_b.y)) is node_b
+    if mover.location is node_b:
+        assert b_in_grid, "orphan: mover.location is deleted node B but B not in grid"
+        assert not getattr(node_b, "is_deleted", False), "mover in node marked deleted"
+
+    # After delete, moving into the deleted node must fail.
+    after = Object.create(None, "After")
+    after.move_to(node_a)
+    assert after.move_to(node_b) is False
+    assert after.location is node_a
+
+    # Cleanup: handler holds references; global_test_env will isolate next test,
+    # but explicitly clear our area to avoid leaking into other tests in same process.
+    nh.remove_area("TestDeadlock")
