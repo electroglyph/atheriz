@@ -1,7 +1,8 @@
 from __future__ import annotations
 import time
 
-from atheriz.globals.get import set_id
+from atheriz.globals.get import get_id, set_id
+import atheriz.globals.get as get_module
 from threading import RLock
 from atheriz.database_setup import get_database
 from atheriz.logger import logger
@@ -208,7 +209,9 @@ def load_objects():
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS.clear()
         _ALL_OBJECTS.update(objects)
-        set_id(max_id)
+    with get_module._ID_LOCK:
+        if max_id > get_module._ID:
+            get_module._ID = max_id
 
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
