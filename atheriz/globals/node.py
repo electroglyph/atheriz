@@ -5,7 +5,8 @@ from threading import RLock
 from typing import TYPE_CHECKING
 from atheriz.logger import logger
 import dill
-from atheriz.objects.nodes import Node, NodeArea, NodeGrid
+from atheriz.objects.nodes import Node, NodeArea, NodeGrid, Transition
+from atheriz.objects.base_door import Door
 from atheriz.utils import Coord, detach
 
 if TYPE_CHECKING:
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 from atheriz.database_setup import get_database
 import atheriz.settings as settings
 import sqlite3
+import copy
 
 
 class NodeHandler:
@@ -127,20 +129,43 @@ class NodeHandler:
             if handler_was:
                 self._modified = False
         handler_cleared = handler_was
-        transitions_snapshot = []
         with self.lock2:
-            for t in list(self.transitions.values()):
-                try:
-                    transitions_snapshot.append(detach(t))
-                except Exception as e:
-                    logger.error(f"Error detaching transition {t}: {e}")
-        doors_snapshot = []
+            trans_refs = list(self.transitions.values())
+        transitions_snapshot = []
+        for t in trans_refs:
+            try:
+                lock = getattr(t, "lock", None)
+                if lock is not None:
+                    with lock:
+                        t_state = t.__dict__.copy()
+                else:
+                    t_state = t.__dict__.copy()
+                t_copy = Transition.__new__(Transition)
+                t_copy.__dict__.update(t_state)
+                t_copy.lock = RLock()
+                transitions_snapshot.append(t_copy)
+            except Exception as e:
+                logger.error(f"Error detaching transition {t}: {e}")
         with self.lock3:
-            for k, v in list(self.doors.items()):
+            doors_refs = [(k, dict(v)) for k, v in self.doors.items()]
+        doors_snapshot = []
+        for k, doors_dict in doors_refs:
+            doors_copy = {}
+            for dk, door in doors_dict.items():
                 try:
-                    doors_snapshot.append((k, detach(v)))
+                    lock = getattr(door, "lock", None)
+                    if lock is not None:
+                        with lock:
+                            door_state = door.__dict__.copy()
+                    else:
+                        door_state = door.__dict__.copy()
+                    door_copy = Door.__new__(Door)
+                    door_copy.__dict__.update(door_state)
+                    door_copy.lock = RLock()
+                    doors_copy[dk] = door_copy
                 except Exception as e:
-                    logger.error(f"Error detaching doors at {k}: {e}")
+                    logger.error(f"Error detaching door {dk} at {k}: {e}")
+            doors_snapshot.append((k, doors_copy))
         areas_snapshot = []
         cleared_areas: list[NodeArea] = []
         cleared_grids: list[NodeGrid] = []
@@ -148,46 +173,159 @@ class NodeHandler:
         for a in area_refs:
             with a.lock:
                 was_area = a.is_modified
-                local_grids: list[NodeGrid] = []
-                local_nodes: list[Node] = []
-                grids = list(a.grids.values())
-                for g in grids:
-                    with g.lock:
-                        if g.is_modified:
-                            g.is_modified = False
-                            local_grids.append(g)
-                        nodes = list(g.nodes.values())
-                        for n in nodes:
-                            try:
-                                with n.lock:
-                                    if n.is_modified:
-                                        n.is_modified = False
-                                        local_nodes.append(n)
-                            except Exception:
-                                pass
+                grids_snapshot = dict(a.grids)
+                a_data = dict(a.data)
+                a_name = a.name
+                a_theme = a.theme
+                a_linked = set(a.linked_areas) if a.linked_areas else None
                 if was_area:
                     a.is_modified = False
+                    cleared_areas.append(a)
+            detached_grids: dict[int, NodeGrid] = {}
+            local_grids: list[NodeGrid] = []
+            local_nodes: list[Node] = []
+            grid_failed = False
+            for z, g in grids_snapshot.items():
+                with g.lock:
+                    was_grid = g.is_modified
+                    nodes_snapshot = dict(g.nodes)
+                    g_data = dict(g.data)
+                    g_area = g.area
+                    g_z = g.z
+                    if was_grid:
+                        g.is_modified = False
+                        local_grids.append(g)
+            # build detached nodes per grid outside g.lock
+                detached_nodes: dict[tuple[int, int], Node] = {}
+                for coord, n in nodes_snapshot.items():
+                    try:
+                        with n.lock:
+                            was_node = n.is_modified
+                            n_state = n.__dict__.copy()
+                            if "_contents" in n_state:
+                                n_state["_contents"] = set(n_state["_contents"])
+                            if "links" in n_state:
+                                n_state["links"] = list(n_state["links"])
+                            if "nouns" in n_state:
+                                n_state["nouns"] = dict(n_state["nouns"])
+                            if "scripts" in n_state:
+                                n_state["scripts"] = set(n_state["scripts"])
+                            if "hooks" in n_state:
+                                n_state["hooks"] = {}
+                            if "tags" in n_state:
+                                n_state["tags"] = set(n_state["tags"])
+                            n_state["is_modified"] = False
+                            if was_node:
+                                n.is_modified = False
+                                local_nodes.append(n)
+                    except Exception:
+                        continue
+                    try:
+                        detached_node = Node.__new__(Node)
+                        detached_node.__dict__.update(n_state)
+                        detached_node.lock = RLock()
+                        detached_nodes[coord] = detached_node
+                    except Exception as e:
+                        logger.error(f"Error detaching node {getattr(n, 'id', '?')}: {e}")
+                        if was_node:
+                            try:
+                                with n.lock:
+                                    n.is_modified = True
+                            except Exception:
+                                pass
+                            if n in local_nodes:
+                                local_nodes.remove(n)
+                        continue
                 try:
-                    blob = detach(a)
+                    detached_grid = NodeGrid.__new__(NodeGrid)
+                    detached_grid.area = g_area
+                    detached_grid.z = g_z
+                    detached_grid.is_modified = False
+                    detached_grid.nodes = detached_nodes
+                    detached_grid.data = g_data
+                    detached_grid.lock = RLock()
+                    detached_grids[z] = detached_grid
                 except Exception as e:
-                    logger.error(f"Error detaching area {getattr(a, 'name', '?')}: {e}")
-                    if was_area:
-                        a.is_modified = True
-                    for g in local_grids:
-                        with g.lock:
-                            g.is_modified = True
-                    for n in local_nodes:
+                    logger.error(f"Error detaching grid {g_z} in area {a_name}: {e}")
+                    if was_grid:
                         try:
-                            with n.lock:
-                                n.is_modified = True
+                            with g.lock:
+                                g.is_modified = True
                         except Exception:
                             pass
+                        if g in local_grids:
+                            local_grids.remove(g)
+                    for n in list(detached_nodes.values()):
+                        pass
+                    for n in nodes_snapshot.values():
+                        if n in local_nodes:
+                            try:
+                                with n.lock:
+                                    n.is_modified = True
+                            except Exception:
+                                pass
+                            local_nodes.remove(n)
+                    grid_failed = True
                     continue
+            if grid_failed and not detached_grids and was_area and not local_grids and not local_nodes:
+                try:
+                    with a.lock:
+                        a.is_modified = True
+                except Exception:
+                    pass
+                if a in cleared_areas:
+                    cleared_areas.remove(a)
+                for g in local_grids:
+                    try:
+                        with g.lock:
+                            g.is_modified = True
+                    except Exception:
+                        pass
+                    if g in cleared_grids:
+                        cleared_grids.remove(g)
+                for n in local_nodes:
+                    try:
+                        with n.lock:
+                            n.is_modified = True
+                    except Exception:
+                        pass
+                continue
+            try:
+                detached_area = NodeArea.__new__(NodeArea)
+                detached_area.name = a_name
+                detached_area.theme = a_theme
+                detached_area.is_modified = False
+                detached_area.grids = detached_grids
+                detached_area.data = a_data
+                detached_area.linked_areas = a_linked
+                detached_area.lock = RLock()
+                blob = detach(detached_area)
                 areas_snapshot.append(blob)
-                if was_area:
-                    cleared_areas.append(a)
                 cleared_grids.extend(local_grids)
                 cleared_nodes.extend(local_nodes)
+            except Exception as e:
+                logger.error(f"Error detaching area {a_name}: {e}")
+                if was_area:
+                    try:
+                        with a.lock:
+                            a.is_modified = True
+                    except Exception:
+                        pass
+                    if a in cleared_areas:
+                        cleared_areas.remove(a)
+                for g in local_grids:
+                    try:
+                        with g.lock:
+                            g.is_modified = True
+                    except Exception:
+                        pass
+                for n in local_nodes:
+                    try:
+                        with n.lock:
+                            n.is_modified = True
+                    except Exception:
+                        pass
+                continue
         if not areas_snapshot and not transitions_snapshot and not doors_snapshot:
             if handler_cleared:
                 with self.lock:

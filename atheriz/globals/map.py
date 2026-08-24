@@ -414,10 +414,28 @@ class MapHandler:
 
         try:
             with self.lock:
-                snapshot = [(k, detach(v)) for k, v in self.data.items()]
+                refs = list(self.data.items())
         except Exception as e:
             logger.error(f"Error preparing map save: {e}")
             return
+        snapshot: list[tuple[tuple[str, int], MapInfo]] = []
+        for k, mi in refs:
+            try:
+                with mi.lock:
+                    mi_state = mi.__dict__.copy()
+                    mi_state["pre_grid"] = dict(mi_state.get("pre_grid", {}))
+                    mi_state["post_grid"] = dict(mi_state.get("post_grid", {}))
+                    mi_state["legend_entries"] = list(mi_state.get("legend_entries", []))
+                    mi_state["objects"] = {}
+                    mi_state["listeners"] = {}
+                    mi_state["_batch_update"] = 0
+                    mi_state["_legend_suppressed"] = False
+                mi_copy = MapInfo.__new__(MapInfo)
+                mi_copy.__dict__.update(mi_state)
+                mi_copy.lock = RLock()
+                snapshot.append((k, mi_copy))
+            except Exception as e:
+                logger.error(f"Error preparing map save for {k}: {e}")
 
         with db.lock:
             cursor = db.connection.cursor()
