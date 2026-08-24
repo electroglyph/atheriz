@@ -1028,12 +1028,24 @@ class NodeGrid:
         swaps work. Re-keys inbound neighbor links and doors. Returns the
         indices of moves that could not be applied (nothing is changed
         for those)."""
-        failed = self.check_moves(moves)
-        applied = [(src, dst) for i, (src, dst) in enumerate(moves) if i not in failed]
-        if not applied:
-            return list(failed)
         remap: dict[tuple[int, int], tuple[int, int]] = {}
         with self.lock:
+            occupied = set(self.nodes.keys())
+            sources = [src for src, _ in moves]
+            failed: set[int] = set()
+            for i, (src, dst) in enumerate(moves):
+                if src in sources[:i] or sources.count(src) > 1:
+                    failed.add(i)
+                    continue
+                if src not in occupied:
+                    failed.add(i)
+                    continue
+                if dst in occupied and dst not in sources:
+                    failed.add(i)
+                    continue
+            applied = [(src, dst) for i, (src, dst) in enumerate(moves) if i not in failed]
+            if not applied:
+                return list(failed)
             moved: list[tuple[Node, tuple[int, int]]] = []
             for src, dst in applied:
                 node = self.nodes.pop(src)
@@ -1088,17 +1100,18 @@ class NodeGrid:
                     if id(door) in seen_doors:
                         continue
                     seen_doors.add(id(door))
-                    dx = dy = 0
-                    if door.from_coord in old_to_new_full:
-                        new = old_to_new_full[door.from_coord]
-                        dx, dy = new.x - door.from_coord.x, new.y - door.from_coord.y
-                        door.from_coord = new
-                    if door.to_coord in old_to_new_full:
-                        new = old_to_new_full[door.to_coord]
-                        dx, dy = new.x - door.to_coord.x, new.y - door.to_coord.y
-                        door.to_coord = new
-                    if door.symbol_coord and (dx or dy):
-                        door.symbol_coord = (door.symbol_coord[0] + dx, door.symbol_coord[1] + dy)
+                    with door.lock:
+                        dx = dy = 0
+                        if door.from_coord in old_to_new_full:
+                            new = old_to_new_full[door.from_coord]
+                            dx, dy = new.x - door.from_coord.x, new.y - door.from_coord.y
+                            door.from_coord = new
+                        if door.to_coord in old_to_new_full:
+                            new = old_to_new_full[door.to_coord]
+                            dx, dy = new.x - door.to_coord.x, new.y - door.to_coord.y
+                            door.to_coord = new
+                        if door.symbol_coord and (dx or dy):
+                            door.symbol_coord = (door.symbol_coord[0] + dx, door.symbol_coord[1] + dy)
         # refresh cross-area transitions: drop ones keyed on moved coords,
         # then re-register every cross-area link leaving this grid
         with self.lock:
