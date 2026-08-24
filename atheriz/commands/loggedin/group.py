@@ -4,6 +4,7 @@ from atheriz.globals.objects import get
 from typing import TYPE_CHECKING
 from atheriz.objects.base_channel import Channel
 import random
+from contextlib import nullcontext
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -34,7 +35,8 @@ class GroupCommand(Command):
             caller.msg(self.print_help())
             return
         if args[0].lower() == "list":
-            with caller.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                 gc = caller.group_channel
             if not gc:
                 caller.msg("You are not in a group.")
@@ -52,7 +54,8 @@ class GroupCommand(Command):
             if len(args) < 2:
                 caller.msg("Usage: group kick <name>")
                 return
-            with caller.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                 if not caller.group_channel:
                     caller.msg("You are not in a group.")
                     return
@@ -62,8 +65,10 @@ class GroupCommand(Command):
                 caller.msg("Error: Group channel not found.")
                 return
             channel = channel_list[0]
-            with caller.lock:
-                with channel.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
+                _chl = getattr(channel, "lock", None)
+                with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                     if channel.created_by != caller.id:
                         caller.msg("You are not the leader of this group.")
                         return
@@ -83,29 +88,36 @@ class GroupCommand(Command):
             if target == caller:
                 caller.msg("You can't kick yourself!")
                 return
-            with caller.lock:
-                with channel.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
+                _chl = getattr(channel, "lock", None)
+                with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                     channel.msg(f"{caller.get_display_name()} kicked {target.get_display_name()} from the group.")
                     channel.remove_listener(target)
-            with target.lock:
+            _tl = getattr(target, "lock", None)
+            with (_tl if _tl is not None and hasattr(_tl, "__enter__") else nullcontext()):
                 target.group_channel = None
             return
         if args[0].lower() == "leave":
-            with caller.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                 if not caller.group_channel:
                     caller.msg("You are not in a group.")
                     return
                 gc = caller.group_channel
             channel_list = get(gc)
             if not channel_list:
-                with caller.lock:
+                _cl = getattr(caller, "lock", None)
+                with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                     caller.group_channel = None
                 caller.msg("Error: Group channel not found.")
                 return
             channel = channel_list[0]
             should_delete = False
-            with caller.lock:
-                with channel.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
+                _chl = getattr(channel, "lock", None)
+                with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                     was_leader = channel.created_by == caller.id
                     channel.msg(f"{caller.get_display_name()} left the group.")
                     channel.remove_listener(caller)
@@ -137,7 +149,8 @@ class GroupCommand(Command):
             if target == caller:
                 caller.msg("You can't add yourself!")
                 return
-            with caller.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                 if target.id not in caller.followers:
                     caller.msg(f"{target.get_display_name()} is not following you.")
                     return
@@ -164,11 +177,13 @@ class GroupCommand(Command):
                             except Exception:
                                 pass
                         else:
-                            with channel.lock:
+                            _chl = getattr(channel, "lock", None)
+                            with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                                 channel.add_listener(caller)
                             caller.group_channel = channel.id
                     else:
-                        with channel.lock:
+                        _chl = getattr(channel, "lock", None)
+                        with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                             channel.add_listener(caller)
                         caller.group_channel = channel.id
                 else:
@@ -178,18 +193,22 @@ class GroupCommand(Command):
                         return
                     else:
                         channel = channel_list[0]
-                    with channel.lock:
+                    _chl = getattr(channel, "lock", None)
+                    with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                         if channel.created_by != caller.id:
                             caller.msg("You are not the leader of this group.")
                             return
-                with channel.lock:
+                _chl = getattr(channel, "lock", None)
+                with (_chl if _chl is not None and hasattr(_chl, "__enter__") else nullcontext()):
                     channel.add_listener(target)
                     channel.msg(f"{caller.get_display_name()} added {target.get_display_name()} to the group.")
-                with target.lock:
+                _tl = getattr(target, "lock", None)
+                with (_tl if _tl is not None and hasattr(_tl, "__enter__") else nullcontext()):
                     target.group_channel = channel.id
             return
         message = " ".join(args)
-        with caller.lock:
+        _cl = getattr(caller, "lock", None)
+        with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
             gc = caller.group_channel
         if not gc:
             caller.msg("You are not in a group.")

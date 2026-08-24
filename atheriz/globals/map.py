@@ -310,8 +310,7 @@ class MapInfo:
     def render(self, force=False):
         with self.lock:
             needs_pre_render = (force or self.map_changed) and bool(self.pre_grid)
-            if needs_pre_render:
-                self.map_changed = False
+            self.map_changed = False
         if needs_pre_render:
             self.pre_render()
 

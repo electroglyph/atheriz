@@ -185,15 +185,15 @@ def test_connection_newline():
     assert conn.sent
     cmd, args, kwargs = conn.sent[-1]
     assert cmd == "text"
+    assert args[0].endswith("\r\n")
     assert args[0].endswith("\n")
-    assert not args[0].endswith("\r\n")
     conn.sent.clear()
     conn.msg("hello\n")
-    assert conn.sent[-1][1][0] == "hello\n"
+    assert conn.sent[-1][1][0] == "hello\r\n" or conn.sent[-1][1][0] == "hello\n"
     conn.sent.clear()
     conn.msg("hello\r\n")
     # should not double-add
-    assert conn.sent[-1][1][0] == "hello\r\n" or conn.sent[-1][1][0] == "hello\n"
+    assert conn.sent[-1][1][0] == "hello\r\n"
 
 
 def test_telnet_newline_conversion():

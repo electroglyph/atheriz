@@ -81,7 +81,7 @@ def test_open_x_is_windows_compatible(tmp_path):
     import atheriz.atheriz as mod
     import inspect
     src = inspect.getsource(mod.start_server)
-    assert 'open(pid_file, "x")' in src or "open(pid_file, 'x')" in src or 'open(pid_file, "x")' in src.replace("'", '"'), "start_server must use open(..., \"x\") for Windows"
+    assert 'open(pid_file, "x"' in src or "open(pid_file, 'x'" in src, "start_server must use open(..., \"x\") for Windows"
     assert "fcntl" not in src, "must not use fcntl (Windows incompatible)"
     # msvcrt is also not needed for exclusive create
     assert "msvcrt" not in src

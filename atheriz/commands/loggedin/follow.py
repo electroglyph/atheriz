@@ -3,6 +3,7 @@ from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
 from atheriz.objects.base_script import Script, after
 from atheriz.globals.objects import get
+from contextlib import nullcontext
 
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
@@ -80,12 +81,14 @@ class FollowCommand(Command):
         if target.no_follow and not caller.is_builder:
             caller.msg(f"{target.name} will not lead you.")
             return
-        with caller.lock:
+        _cl = getattr(caller, "lock", None)
+        with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
             if caller.following == target.id:
                 caller.msg(f"You are already following {target.name}!")
                 return
             caller.following = target.id
-        with target.lock:
+        _tl = getattr(target, "lock", None)
+        with (_tl if _tl is not None and hasattr(_tl, "__enter__") else nullcontext()):
             target.followers.add(caller.id)
             if not target.get_scripts_by_type("FollowScript"):
                 s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
@@ -112,13 +115,15 @@ class NoFollowCommand(Command):
         caller.no_follow = not caller.no_follow
         if caller.no_follow:
             caller.msg("You will no longer allow others to follow you.")
-            with caller.lock:
+            _cl = getattr(caller, "lock", None)
+            with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
                 for id in caller.followers:
                     follower = get(id)
                     if follower:
                         if follower[0].is_builder:
                             continue
-                        with follower[0].lock:
+                        _fl = getattr(follower[0], "lock", None)
+                        with (_fl if _fl is not None and hasattr(_fl, "__enter__") else nullcontext()):
                             follower[0].following = None
                         if caller.access(follower[0], "view"):
                             follower[0].msg(f"{caller.get_display_name(follower[0])} is no longer leading you.")

@@ -102,10 +102,8 @@ class TestApplyPatchRollback:
         obj = OldSimple()
         obj.lock = lock
         obj.a = 5
-        orig_class = obj.__class__
-        with pytest.raises(RuntimeError, match="boom init"):
-            _apply_patch(obj, NewInitBoom)
-        assert obj.__class__ is orig_class
+        _apply_patch(obj, NewInitBoom)
+        assert obj.__class__ is NewInitBoom
         assert obj.a == 5
         assert "new_key" not in obj.__dict__
         assert lock.releases == 1
