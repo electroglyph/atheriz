@@ -407,39 +407,54 @@ def _reload_game_logic() -> str:
         except Exception as e:
             logger.error(f"[HotReload] Error patching object {obj}: {e}")
 
-        # recurse into cmdsets (for objects and sessions)
-        # we need to do this even if the object itself wasn't patched,
-        # because the commands might have been reloaded.
         try:
             if hasattr(obj, "internal_cmdset") and obj.internal_cmdset:
-                for cmd in list(obj.internal_cmdset.commands.values()):
+                try:
+                    with obj.internal_cmdset.lock:
+                        cmds = list(obj.internal_cmdset.commands.values())
+                except Exception:
+                    cmds = list(obj.internal_cmdset.commands.values())
+                for cmd in cmds:
                     _patch_object(cmd)
             if hasattr(obj, "external_cmdset") and obj.external_cmdset:
-                for cmd in list(obj.external_cmdset.commands.values()):
+                try:
+                    with obj.external_cmdset.lock:
+                        cmds = list(obj.external_cmdset.commands.values())
+                except Exception:
+                    cmds = list(obj.external_cmdset.commands.values())
+                for cmd in cmds:
                     _patch_object(cmd)
         except Exception as e:
             logger.error(f"[HotReload] Error patching cmdsets for {obj}: {e}")
 
     try:
-        # import here to avoid potential circular imports
         from atheriz.globals.get import get_node_handler
 
         nh = get_node_handler()
         if nh:
             for area in nh.get_areas():
                 _patch_object(area)
-                for grid in area.grids.values():
+                with area.lock:
+                    grids = list(area.grids.values())
+                for grid in grids:
                     _patch_object(grid)
-                    for node in grid.nodes.values():
+                    with grid.lock:
+                        nodes = list(grid.nodes.values())
+                    for node in nodes:
                         _patch_object(node)
-                        if node.links:
-                            for link in node.links:
-                                _patch_object(link)
+                        with node.lock:
+                            links = list(node.links)
+                        for link in links:
+                            _patch_object(link)
 
-            for t in nh.transitions.values():
+            with nh.lock2:
+                transitions = list(nh.transitions.values())
+            for t in transitions:
                 _patch_object(t)
-            for d_group in nh.doors.values():
-                for d in d_group.values():
+            with nh.lock3:
+                doors_snapshot = [(k, dict(v)) for k, v in nh.doors.items()]
+            for _, d_group in doors_snapshot:
+                for d in list(d_group.values()):
                     _patch_object(d)
 
     except Exception as e:
@@ -461,14 +476,16 @@ def _reload_game_logic() -> str:
         global_sets = [get_loggedin_cmdset(), get_unloggedin_cmdset()]
         for s in global_sets:
             if s:
-                # patch existing commands FIRST (before __init__ replaces them)
-                for cmd in list(s.commands.values()):
+                try:
+                    with s.lock:
+                        cmds = list(s.commands.values())
+                except Exception:
+                    cmds = list(s.commands.values())
+                for cmd in cmds:
                     _patch_object(cmd)
 
-                # then patch the cmdset class itself
                 _patch_object(s)
 
-                # finally re-initialize (creates new command instances)
                 try:
                     s.__init__()
                 except Exception as e:

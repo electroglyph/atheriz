@@ -323,8 +323,13 @@ async def hot_reload_endpoint(request: Request):
     if err:
         return {"status": "error", "message": err}
     async with _reload_lock:
-        await run_in_threadpool(do_reload)
-        msg = await run_in_threadpool(reloader.reload_game_logic)
+        if not reloader._reload_lock.acquire(blocking=False):
+            return {"status": "error", "message": "Reload already in progress; skipping."}
+        try:
+            await run_in_threadpool(do_reload)
+            msg = await run_in_threadpool(reloader._reload_game_logic)
+        finally:
+            reloader._reload_lock.release()
     return {"status": "ok", "message": msg}
 
 
