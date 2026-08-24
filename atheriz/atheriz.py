@@ -467,11 +467,39 @@ def start_server():
 
     pid = os.getpid()
     if not save_path.exists():
-        save_path.mkdir(parents=True)
+        save_path.mkdir(parents=True, exist_ok=True)
 
     pid_file = save_path / "server.pid"
-    with open(pid_file, "w") as f:
-        f.write(str(pid))
+    try:
+        with open(pid_file, "x") as f:
+            f.write(str(pid))
+    except FileExistsError:
+        try:
+            with open(pid_file, "r") as f:
+                old_pid = int(f.read().strip())
+        except Exception:
+            old_pid = None
+        if old_pid is not None and _pid_is_server_process(old_pid):
+            print(f"Server is already running with PID: {old_pid}")
+            return
+        try:
+            pid_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            with open(pid_file, "x") as f:
+                f.write(str(pid))
+        except FileExistsError:
+            try:
+                with open(pid_file, "r") as f:
+                    old_pid = int(f.read().strip())
+            except Exception:
+                old_pid = None
+            if old_pid is not None and _pid_is_server_process(old_pid):
+                print(f"Server is already running with PID: {old_pid}")
+                return
+            with open(pid_file, "w") as f:
+                f.write(str(pid))
 
     # write admin token
     token = secrets.token_hex(32)
