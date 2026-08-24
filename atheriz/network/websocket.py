@@ -84,23 +84,29 @@ class WebSocketConnection(BaseConnection):
             else:
                 self._pending_count += 1
                 self._pending_bytes += nb
+                try:
+                    if threading.get_ident() == self.thread_id:
+                        task = self.loop.create_task(self.websocket.send_text(data))
+                    else:
+                        task = asyncio.run_coroutine_threadsafe(
+                            self.websocket.send_text(data), self._resolve_loop()
+                        )
+                except Exception as e:
+                    self._pending_count = max(0, self._pending_count - 1)
+                    self._pending_bytes = max(0, self._pending_bytes - nb)
+                    logger.debug(f"[WebSocket] Error sending command: {e}")
+                    return
+                self._pending_tasks.add(task)
+                self._pending_bytes_by_task[task] = nb
+                try:
+                    task.add_done_callback(self._task_done)
+                except Exception:
+                    pass
+                return
         if should_close:
             logger.debug(f"[WebSocket] closing {self.client_host}: pending {self._pending_count} msgs {self._pending_bytes} bytes exceeds limit")
             self.close()
             return
-        try:
-            if threading.get_ident() == self.thread_id:
-                task = self.loop.create_task(self.websocket.send_text(data))
-            else:
-                task = asyncio.run_coroutine_threadsafe(
-                    self.websocket.send_text(data), self._resolve_loop()
-                )
-            self._track_task(task, nb)
-        except Exception as e:
-            with self._pending_tasks_lock:
-                self._pending_count = max(0, self._pending_count - 1)
-                self._pending_bytes = max(0, self._pending_bytes - nb)
-            logger.debug(f"[WebSocket] Error sending command: {e}")
 
     async def _close_websocket(self):
         with self._pending_tasks_lock:
