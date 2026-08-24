@@ -67,10 +67,11 @@ class Account(Flags, DbOps):
         if not self.at_delete(caller):
             return False
 
+        with self.lock:
+            self.is_deleted = True
         ops = [self.get_del_ops()]
         delete_objects(ops)
         remove_object(self)
-        self.is_deleted = True
         return True
 
     def at_pre_puppet(self, character: Object) -> bool:

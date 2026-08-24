@@ -145,6 +145,8 @@ class Channel(Flags, DbOps, AccessLock):
         del unused
         if not self.at_delete(caller):
             return False
+        with self.lock:
+            self.is_deleted = True
         if not self.is_temporary:
             ops = [self.get_del_ops()]
             delete_objects(ops)
@@ -157,7 +159,6 @@ class Channel(Flags, DbOps, AccessLock):
             except Exception:
                 logger.error(f"Error detaching subscriber {getattr(listener, 'id', '?')} from channel {self.name}", exc_info=True)
         remove_object(self)
-        self.is_deleted = True
         return True
 
     def _detach_subscriber(self, obj: Object) -> None:
