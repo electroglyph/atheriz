@@ -65,8 +65,6 @@ class WebSocketConnection(BaseConnection):
             logger.debug(f"[WebSocket] Async task failed: {e}")
 
     def send_command(self, cmd: str, *args, **kwargs):
-        if self._closing:
-            return
         if cmd == "echo_on":
             return
         if cmd == "prompt_masked":
@@ -128,9 +126,10 @@ class WebSocketConnection(BaseConnection):
             pass
 
     def close(self):
-        if self._closing:
-            return
-        self._closing = True
+        with self._pending_tasks_lock:
+            if self._closing:
+                return
+            self._closing = True
         try:
             if threading.get_ident() == self.thread_id:
                 self._close_task = self.loop.create_task(self._close_websocket())
@@ -177,7 +176,8 @@ class WebSocketProtocol(BaseProtocol):
                             await websocket.close(code=1009, reason="Message too large")
                         except Exception:
                             pass
-                        connection._closing = True
+                        with connection._pending_tasks_lock:
+                            connection._closing = True
                         break
                     get_connection_manager().handle_command(connection, raw_message)
             except WebSocketDisconnect:

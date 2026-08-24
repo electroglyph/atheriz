@@ -187,14 +187,18 @@ class TelnetConnection(BaseConnection):
         They just read raw text.
         We will translate simple commands and log/ignore unsupported UI functions.
         """
-        if self._closing:
-            return
+        with self._pending_lock:
+            if self._closing:
+                return
         if cmd in ("text", "prompt"):
             text = args[0] if args else ""
             if not text:
                 return
             nb = len(text.encode("utf-8"))
             if threading.get_ident() == self.thread_id:
+                with self._pending_lock:
+                    if self._closing:
+                        return
                 try:
                     buf = self._get_write_buffer_size()
                     if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
@@ -212,6 +216,8 @@ class TelnetConnection(BaseConnection):
             else:
                 should_close = False
                 with self._pending_lock:
+                    if self._closing:
+                        return
                     if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
                         should_close = True
                     else:
@@ -231,6 +237,9 @@ class TelnetConnection(BaseConnection):
             text = args[0] if args else ""
             nb = len(text.encode("utf-8")) if text else 0
             if threading.get_ident() == self.thread_id:
+                with self._pending_lock:
+                    if self._closing:
+                        return
                 try:
                     buf = self._get_write_buffer_size()
                     if buf is not None and buf > settings.TELNET_MAX_PENDING_BYTES:
@@ -251,6 +260,8 @@ class TelnetConnection(BaseConnection):
                 if nb:
                     should_close = False
                     with self._pending_lock:
+                        if self._closing:
+                            return
                         if self._pending_bytes + nb > settings.TELNET_MAX_PENDING_BYTES:
                             should_close = True
                         else:
@@ -273,6 +284,9 @@ class TelnetConnection(BaseConnection):
                     logger.debug(f"[Telnet] Error scheduling prompt_masked for {self.client_host}: {e}")
                     self.close()
         elif cmd == "echo_on":
+            with self._pending_lock:
+                if self._closing:
+                    return
             try:
                 if threading.get_ident() == self.thread_id:
                     self.writer.iac(telnetlib3.telopt.WONT, telnetlib3.telopt.ECHO)
@@ -284,9 +298,10 @@ class TelnetConnection(BaseConnection):
 
 
     def close(self):
-        if self._closing:
-            return
-        self._closing = True
+        with self._pending_lock:
+            if self._closing:
+                return
+            self._closing = True
         try:
             if threading.get_ident() == self.thread_id:
                 self.writer.close()
