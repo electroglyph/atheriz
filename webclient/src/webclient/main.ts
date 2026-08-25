@@ -176,6 +176,8 @@ function installInputHandlers(): void {
         elements.input.style.height = 'auto';
         elements.input.style.height = `${inputHeight(elements.input.scrollHeight)}px`;
         hint.style.height = elements.input.style.height;
+        hint.scrollTop = elements.input.scrollTop;
+        hint.scrollLeft = elements.input.scrollLeft;
         window.setTimeout(fitAndReportSize, 0);
     };
     const updateHint = () => {
@@ -227,7 +229,8 @@ function installInputHandlers(): void {
 
         event.preventDefault();
         const command = elements.input.value;
-        if (!command) {
+        const trimmed = command.trim();
+        if (!trimmed) {
             elements.input.value = '';
             resizeInput();
             history.reset();
@@ -236,21 +239,24 @@ function installInputHandlers(): void {
             if (feedback) write(feedback);
             return;
         }
-        if (!censorInput) history.add(command);
-        if (command.startsWith(':') && handleInternalCommand(command)) {
+        if (trimmed.startsWith(':')) {
+            const handled = handleInternalCommand(trimmed);
             elements.input.value = '';
             resizeInput();
             history.reset();
             updateHint();
+            if (handled) return;
+            write(`\r\nUnknown command: ${trimmed.split(/\s+/)[0]}\r\nEnter :help for a list of commands.\r\n`);
             return;
         }
-        const feedback = submissionFeedback(connection.send('text', [command]));
+        if (!censorInput) history.add(trimmed);
+        const feedback = submissionFeedback(connection.send('text', [trimmed]));
         if (feedback) {
             write(feedback);
             commandSubmitted = false;
             return;
         }
-        if (!censorInput) writeSelf(command);
+        if (!censorInput) writeSelf(trimmed);
         elements.input.select();
         commandSubmitted = true;
     });

@@ -34,7 +34,8 @@ export class CommandHistory {
     }
 
     setPlayerCommands(commands: string[]): void {
-        this.playerCommands = [...new Set([...this.playerCommands, ...commands])];
+        const filtered = commands.filter((c): c is string => typeof c === 'string' && c.length > 0);
+        this.playerCommands = [...new Set([...this.playerCommands, ...filtered])].slice(0, this.maxSize);
     }
 
     findCompletions(value: string): void {

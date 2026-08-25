@@ -9,7 +9,8 @@ describe('webclient input behavior', () => {
     it('allows history navigation from an empty input or at its start', () => {
         expect(shouldNavigateHistory('ArrowUp', '', 0, 0, false)).toBe(true);
         expect(shouldNavigateHistory('ArrowUp', 'command', 0, 0, false)).toBe(true);
-        expect(shouldNavigateHistory('ArrowDown', 'command', 0, 0, false)).toBe(false);
+        expect(shouldNavigateHistory('ArrowDown', 'command', 0, 0, false)).toBe(true);
+        expect(shouldNavigateHistory('ArrowDown', '', 0, 0, false)).toBe(true);
     });
 
     it('keeps the input large enough for multiline content', () => {
