@@ -18,6 +18,15 @@ class MockMapHandler:
     def get_mapinfo(self, area, z):
         return self.data.get((area, z))
 
+    def _get_or_create(self, area, z):
+        from atheriz.globals.map import MapInfo
+
+        mi = self.data.get((area, z))
+        if mi is None:
+            mi = MapInfo(name=area)
+            self.data[(area, z)] = mi
+        return mi
+
     def set_mapinfo(self, area, z, mi):
         self.data[(area, z)] = mi
 

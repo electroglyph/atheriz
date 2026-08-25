@@ -179,20 +179,19 @@ class AsyncThreadPool:
                 task = self.task_queue.get()
             if task is None:  # kill signal
                 if relief:
-                    # re-queue sentinel so fixed workers still get theirs;
-                    # get() freed one slot but concurrent add_task may have
-                    # filled it before put (1.3), so handle Full like stop().
-                    try:
-                        self.task_queue.put_nowait(None)
-                    except queue.Full:
+                    requeued = False
+                    for _ in range(5):
                         try:
-                            self.task_queue.get_nowait()
-                        except queue.Empty:
-                            pass
+                            self.task_queue.put(None, timeout=0.1)
+                            requeued = True
+                            break
+                        except queue.Full:
+                            time.sleep(0.05)
+                    if not requeued:
                         try:
                             self.task_queue.put_nowait(None)
                         except queue.Full:
-                            pass
+                            logger.warning("[AsyncThreadPool] relief failed to re-queue sentinel; queue full")
                     with self._busy_lock:
                         if self._stopped:
                             self._relief_count -= 1
@@ -310,15 +309,11 @@ class AsyncThreadPool:
         for _ in range(self.max_threads - 1):
             while True:
                 try:
-                    self.task_queue.put_nowait(None)
+                    self.task_queue.put(None, timeout=0.5)
                     break
                 except queue.Full:
-                    # queue flooded (#32): discard the oldest pending task to
-                    # make room for the sentinel; shutdown must never block
-                    try:
-                        self.task_queue.get_nowait()
-                    except queue.Empty:
-                        break
+                    time.sleep(0.05)
+                    continue
         if wait:
             for t in self.threads[1:]:
                 t.join(timeout=timeout)

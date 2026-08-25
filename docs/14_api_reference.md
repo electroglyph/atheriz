@@ -1931,7 +1931,7 @@ in a single pass over the grid, then stores the result in post_grid.
 
 ### Class: `MapHandler`
 
-#### `def save(self)`
+#### `def save(self, force: bool = False)`
 
 #### `def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo)`
 

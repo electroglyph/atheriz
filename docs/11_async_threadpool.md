@@ -48,6 +48,9 @@ If you pass an `async def` coroutine, the server automatically routes it to the 
 ### 11.2.3 Delayed Tasks
 `delay(delay, func, *args, **kwargs)` (`asyncthreadpool.py:370`) sleeps `delay` via `await asyncio.sleep` on the loop thread (`_submit` + `_delayed_task`) then `add_task`s the target; supports sync and `async def` coroutines. Returns `None`.
 
+### 11.2.4 Menus
+`run_menu(caller, start_node)` (`atheriz/menu.py:135`) is fire-and-forget: the sync helper schedules an `async def _runner` on the loop via `asyncio.run_coroutine_threadsafe` and returns a `Future` immediately. The runner loops `await asyncio.wait_for(caller.session.prompt(display), timeout=MENU_PROMPT_TIMEOUT)` and `await engine.handle_input_async`, so no worker is parked while the user thinks. Both `def` and `async def` menu nodes and `Choice` callbacks are supported.
+
 ## 11.3 Error Handling
 If a pooled function raises, the pool catches, logs via `logger.error` (throttled to 10 s `_last_full_log` `112`), and if `DEBUG=True` and `args[0]` is an `Object`/`Connection` it `msg`s the traceback to that player (`asyncthreadpool.py:158`). Watchdog also logs starvation via `_log_starvation:278`.
 

@@ -235,11 +235,14 @@ def load_objects():
             obj.resolve_relations()
 
 
-def _is_still_saveable(obj: Any) -> bool:
+def _is_still_saveable(obj: Any, *, for_save: bool = False, force: bool = False) -> bool:
     """Return True unless obj has been deleted, made temporary, or removed from the registry.
 
     Checked at execute time inside the save transaction so a delete racing the
     checkpoint cannot be resurrected by INSERT OR REPLACE.
+    When ``for_save`` is True, also checks ``is_modified`` under ``obj.lock``
+    so the TOCTOU between an unlocked read and the locked save check cannot
+    skip a dirty object.
     """
     try:
         obj_id = object.__getattribute__(obj, "id")
@@ -252,6 +255,8 @@ def _is_still_saveable(obj: Any) -> bool:
         if getattr(obj, "is_deleted", False):
             return False
         if getattr(obj, "is_temporary", False):
+            return False
+        if for_save and not settings.ALWAYS_SAVE_ALL and not force and not getattr(obj, "is_modified", False):
             return False
     return True
 
@@ -290,9 +295,7 @@ def save_objects(force: bool = False):
         attempted = []
         try:
             for obj in snapshot:
-                if not settings.ALWAYS_SAVE_ALL and not force and not getattr(obj, "is_modified", False):
-                    continue
-                if not _is_still_saveable(obj):
+                if not _is_still_saveable(obj, for_save=True, force=force):
                     continue
                 attempted.append(obj)
                 ops = obj.get_save_ops_clearing()

@@ -261,20 +261,7 @@ class GameTime:
                     func = getattr(objs[0], "at_alarm")
                     if not atp.add_task(func, after_time, data):
                         logger.warning(f"Task queue full; alarm for {objs[0]} retrying.")
-                        import time as _time
-
-                        _time.sleep(0.05)
-                        if not atp.add_task(func, after_time, data):
-                            logger.warning(
-                                f"Task queue still full; running alarm inline for {objs[0]}"
-                            )
-                            try:
-                                func(after_time, data)
-                            except Exception:
-                                logger.error(
-                                    f"Error in inline alarm for {objs[0]}",
-                                    exc_info=True,
-                                )
+                        atp.delay(0.05, func, after_time, data)
                 else:
                     logger.warning(f"obj not found for alarm: {id}")
         after_sun = self.sun_up_alt(after_time["hour"])

@@ -91,6 +91,8 @@ class PuppetCommand(Command):
         if not target.access(caller, "puppet"):
             caller.msg(f"You cannot puppet {target.name}.")
             return
+        restore_snapshot = None
+        caller_priv = None
         with session.lock:
             with (target.lock if hasattr(target, "lock") else nullcontext()):
                 if getattr(target, "session", None) is not None and target.session is not session:
@@ -99,10 +101,35 @@ class PuppetCommand(Command):
                 if getattr(target, "is_deleted", False):
                     caller.msg(f"{target.name} is not available.")
                     return
-                session.puppet_stack.append((caller, target))
-                target._puppet_restore = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
+                restore_snapshot = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
                 caller_priv = caller.privilege_level
-                caller.at_disconnect()
+        caller.at_disconnect()
+        with session.lock:
+            with (target.lock if hasattr(target, "lock") else nullcontext()):
+                if getattr(target, "session", None) is not None and target.session is not session:
+                    caller.msg(f"{target.name} is already being puppeted.")
+                    try:
+                        with (caller.lock if hasattr(caller, "lock") else nullcontext()):
+                            if getattr(caller, "session", None) is None:
+                                caller.session = session
+                                caller.is_connected = True
+                        session.puppet = caller
+                    except Exception:
+                        pass
+                    return
+                if getattr(target, "is_deleted", False):
+                    caller.msg(f"{target.name} is not available.")
+                    try:
+                        with (caller.lock if hasattr(caller, "lock") else nullcontext()):
+                            if getattr(caller, "session", None) is None:
+                                caller.session = session
+                                caller.is_connected = True
+                        session.puppet = caller
+                    except Exception:
+                        pass
+                    return
+                session.puppet_stack.append((caller, target))
+                target._puppet_restore = restore_snapshot
                 target.is_pc = True
                 target.privilege_level = caller_priv
                 session.puppet = target

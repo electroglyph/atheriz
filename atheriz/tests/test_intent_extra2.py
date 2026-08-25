@@ -197,6 +197,8 @@ class TestChannelMoreBranches:
         c = _make_caller()
         chan = MagicMock()
         chan.id = 1
+        chan.name = "public"
+        chan.is_deleted = False
         chan.access = MagicMock(return_value=False)
         with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]):
             args = Namespace(list=False, channel="public", unsubscribe=False,
@@ -210,6 +212,8 @@ class TestChannelMoreBranches:
         c = _make_caller()
         chan = MagicMock()
         chan.id = 1
+        chan.name = "public"
+        chan.is_deleted = False
         chan.access = MagicMock(return_value=False)
         with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]):
             args = Namespace(list=False, channel="public", unsubscribe=False,
@@ -223,6 +227,8 @@ class TestChannelMoreBranches:
         c = _make_caller()
         chan = MagicMock()
         chan.id = 1
+        chan.name = "public"
+        chan.is_deleted = False
         # subscribe/replay need view; send needs send
         chan.access = MagicMock(side_effect=lambda u, p: p == "view")
         with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]):
@@ -238,6 +244,8 @@ class TestChannelMoreBranches:
         c.unsubscribe = MagicMock()
         chan = MagicMock()
         chan.id = 1
+        chan.name = "public"
+        chan.is_deleted = False
         with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]):
             args = Namespace(list=False, channel="public", unsubscribe=True,
                             subscribe=False, replay=False, message=None)

@@ -228,7 +228,8 @@ def test_run_menu_full_flow():
     mock_atp.loop = loop
 
     with patch("atheriz.globals.get.get_async_threadpool", return_value=mock_atp):
-        run_menu(caller, node_start)
+        fut = run_menu(caller, node_start)
+        fut.result(timeout=2)
 
     _stop_loop(loop, t)
 
@@ -249,7 +250,8 @@ def test_run_menu_exit_immediately():
     mock_atp.loop = loop
 
     with patch("atheriz.globals.get.get_async_threadpool", return_value=mock_atp):
-        run_menu(caller, node_start)
+        fut = run_menu(caller, node_start)
+        fut.result(timeout=2)
 
     _stop_loop(loop, t)
 
@@ -273,6 +275,7 @@ def test_run_menu_multi_step():
     mock_atp.loop = loop
 
     with patch("atheriz.globals.get.get_async_threadpool", return_value=mock_atp):
-        run_menu(caller, node_start)
+        fut = run_menu(caller, node_start)
+        fut.result(timeout=2)
 
     _stop_loop(loop, t)

@@ -170,9 +170,9 @@ def test_shlex_windows_backslash():
     assert shlex.split("C:\\new\\file", posix=False) == ["C:\\new\\file"]
     # posix=True mangles \n -> n
     assert shlex.split("C:\\new\\file", posix=True) != ["C:\\new\\file"]
-    # our code uses posix=(_os.name != "nt") => on nt=False
+    # our code uses posix=False (preserves backslashes) - previously checked for os.name conditional
     src = Path("atheriz/commands/base_cmd.py").read_text(encoding="utf-8")
-    assert 'posix=(_os.name != "nt")' in src or 'os.name' in src
+    assert 'posix=False' in src or 'posix=(_os.name != "nt")' in src or 'os.name' in src
     assert shlex.split("C:\\new\\file", posix=True) != ["C:\\new\\file"]
 
 

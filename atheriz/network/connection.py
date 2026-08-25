@@ -79,6 +79,7 @@ class BaseConnection:
         queue is kept intact and retried by the next enqueue."""
         from atheriz.globals.get import get_async_threadpool
         notify_busy = False
+        needs_drain = False
         with self.lock:
             if getattr(self, "_disconnected", False):
                 return
@@ -93,10 +94,11 @@ class BaseConnection:
                 if self._input_running:
                     return
                 self._input_running = True
-                if get_async_threadpool().add_task(self._drain_input):
-                    return
-                # No worker was started and none can be running (we held the
-                # reservation), so reverting the flag is safe; keep queued input.
+                needs_drain = True
+        if needs_drain:
+            if get_async_threadpool().add_task(self._drain_input):
+                return
+            with self.lock:
                 self._input_running = False
                 now = time.monotonic()
                 if now - self._last_input_busy >= 1.0:
@@ -121,8 +123,8 @@ class BaseConnection:
                     self._input_running = False
                     return
                 handler, args, kwargs = self._input_queue.popleft()
-            if getattr(self, "_disconnected", False):
-                continue
+                if getattr(self, "_disconnected", False):
+                    continue
             try:
                 handler(self, args, kwargs)
             except Exception:
