@@ -83,6 +83,7 @@ class _ParsedFunc:
     fullstr: list = dataclasses.field(default_factory=list)
     infuncstr: list = dataclasses.field(default_factory=list)
     double_quoted: int = -1
+    quoted_char: str = ""
     current_kwarg: str = ""
     open_lparens: int = 0
     open_lsquate: int = 0
@@ -325,12 +326,11 @@ class FuncParser:
         start_char = self.start_char
         escape_char = self.escape_char
 
-        # replace e.g. $$ with \$ so we only need to handle one escape method
-        string = string.replace(start_char + start_char, escape_char + start_char)
-
         # parsing state
         callstack = []
 
+        quoted = -1
+        quoted_char = ""
         double_quoted = -1
         open_lparens = 0  # open (
         open_lsquare = 0  # open [
@@ -344,7 +344,10 @@ class FuncParser:
         infuncstr = []
         literal_infuncstr = False
 
-        for ichar, char in enumerate(string):
+        i = 0
+        n = len(string)
+        while i < n:
+            char = string[i]
             if escaped:
                 # always store escaped characters verbatim
                 if curr_func:
@@ -352,19 +355,30 @@ class FuncParser:
                 else:
                     fullstr.append(char)
                 escaped = False
+                i += 1
                 continue
 
             if char == escape_char:
-                if ichar + 1 >= len(string):
+                if i + 1 >= n:
                     if curr_func:
                         infuncstr.append(char)
                     else:
                         fullstr.append(char)
+                    i += 1
                     continue
                 escaped = True
+                i += 1
                 continue
 
-            if char == start_char and not (curr_func and double_quoted >= 0):
+            if char == start_char and i + 1 < n and string[i + 1] == start_char:
+                if curr_func:
+                    infuncstr.append(start_char)
+                else:
+                    fullstr.append(start_char)
+                i += 2
+                continue
+
+            if char == start_char and not (curr_func and quoted >= 0):
                 # start a new function definition (not escaped as $$)
 
                 if curr_func:
@@ -377,6 +391,7 @@ class FuncParser:
                                 f"to a max depth of {_MAX_NESTING}."
                             )
                         infuncstr.append(char)
+                        i += 1
                         continue
                     else:
                         # merge any pending execution return before storing state
@@ -386,12 +401,15 @@ class FuncParser:
                         # store state for the current func and stack it
                         curr_func.current_kwarg = current_kwarg
                         curr_func.infuncstr = list(infuncstr)
-                        curr_func.double_quoted = double_quoted
+                        curr_func.double_quoted = quoted
+                        curr_func.quoted_char = quoted_char
                         curr_func.open_lparens = open_lparens
                         curr_func.open_lsquare = open_lsquare
                         curr_func.open_lcurly = open_lcurly
                         current_kwarg = ""
                         infuncstr = []
+                        quoted = -1
+                        quoted_char = ""
                         double_quoted = -1
                         open_lparens = 0
                         open_lsquare = 0
@@ -402,6 +420,7 @@ class FuncParser:
 
                 # start a new func
                 curr_func = _ParsedFunc(prefix=char, fullstr=[char])
+                i += 1
                 continue
 
             if not curr_func:
@@ -409,6 +428,7 @@ class FuncParser:
                 fullstr.append(char)
                 # this must always be a string
                 return_str = True
+                i += 1
                 continue
 
             # in a function def (can be nested)
@@ -420,27 +440,41 @@ class FuncParser:
                 infuncstr.extend(list(str(exec_return)))
                 exec_return = ""
 
-            if char == '"':  # note that this is the same as '\"'
-                # a double quote = flip status
-                if double_quoted == 0:
-                    infuncstr = infuncstr[1:]
-                    double_quoted = -1
-                elif double_quoted > 0:
-                    s = "".join(infuncstr)
-                    prefix = s[:double_quoted]
-                    s = prefix + s[double_quoted + 1 :]
-                    infuncstr = list(s)
-                    double_quoted = -1
+            if char in ('"', "'"):
+                if quoted >= 0:
+                    if char == quoted_char:
+                        if quoted == 0:
+                            infuncstr = infuncstr[1:]
+                            quoted = -1
+                            quoted_char = ""
+                            double_quoted = -1
+                        elif quoted > 0:
+                            s = "".join(infuncstr)
+                            prefix = s[:quoted]
+                            s = prefix + s[quoted + 1 :]
+                            infuncstr = list(s)
+                            quoted = -1
+                            quoted_char = ""
+                            double_quoted = -1
+                        else:
+                            quoted = -1
+                            quoted_char = ""
+                            double_quoted = -1
+                    else:
+                        infuncstr.append(char)
                 else:
                     infuncstr.append(char)
-                    double_quoted = len(infuncstr) - 1
+                    quoted = len(infuncstr) - 1
+                    quoted_char = char
+                    double_quoted = quoted
                     literal_infuncstr = True
-
+                i += 1
                 continue
 
-            if double_quoted >= 0:
+            if quoted >= 0:
                 # inside a string definition - this escapes everything else
                 infuncstr.append(char)
+                i += 1
                 continue
 
             # special characters detected inside function def
@@ -456,18 +490,21 @@ class FuncParser:
                     infuncstr.append(char)
                 # track the open left-parenthesis
                 open_lparens += 1
+                i += 1
                 continue
 
             if char in "[]":
                 # a square bracket - start/end of a list?
                 infuncstr.append(char)
                 open_lsquare += -1 if char == "]" else 1
+                i += 1
                 continue
 
             if char in "{}":
                 # a curly bracket - start/end of dict/set?
                 infuncstr.append(char)
                 open_lcurly += -1 if char == "}" else 1
+                i += 1
                 continue
 
             if char == "=":
@@ -479,6 +516,7 @@ class FuncParser:
                 curr_func.fullstr.extend(infuncstr)
                 curr_func.fullstr.append(char)
                 infuncstr = []
+                i += 1
                 continue
 
             if char in (",)"):
@@ -490,11 +528,13 @@ class FuncParser:
                     # we need to not count this as a new arg or end of funcdef.
                     infuncstr.append(char)
                     open_lparens -= 1 if char == ")" else 0
+                    i += 1
                     continue
 
                 if open_lcurly > 0 or open_lsquare > 0:
                     # also escape inside an open [... or {... structure
                     infuncstr.append(char)
+                    i += 1
                     continue
 
                 if exec_return != "":
@@ -559,7 +599,9 @@ class FuncParser:
                         else:
                             infuncstr = []
                         curr_func.infuncstr = []
-                        double_quoted = curr_func.double_quoted
+                        quoted = curr_func.double_quoted
+                        quoted_char = getattr(curr_func, "quoted_char", "")
+                        double_quoted = quoted
                         open_lparens = curr_func.open_lparens
                         open_lsquare = curr_func.open_lsquare
                         open_lcurly = curr_func.open_lcurly
@@ -572,9 +614,11 @@ class FuncParser:
                             exec_return = ""
                         infuncstr = []
                         literal_infuncstr = False
+                i += 1
                 continue
 
             infuncstr.append(char)
+            i += 1
 
         if curr_func:
             # if there is a still open funcdef or defs remaining in callstack,

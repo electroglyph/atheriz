@@ -1,6 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable
 import argparse
+import os
 import shlex
 import threading
 from typing import TYPE_CHECKING
@@ -166,16 +167,19 @@ class Command:
             arg_list = []
         else:
             try:
-                arg_list = shlex.split(args_string, posix=False)
-                # posix=False preserves backslashes (no Windows mangling) but keeps quotes;
-                # strip matching outer quotes to emulate posix=True quote stripping
-                normalized = []
-                for tok in arg_list:
-                    if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ('"', "'"):
-                        normalized.append(tok[1:-1])
-                    else:
-                        normalized.append(tok)
-                arg_list = normalized
+                use_posix = (os.name != "nt")
+                if use_posix:
+                    import re as _re
+                    args_string = _re.sub(r'\\(?![\"\'\\])', r'\\\\', args_string)
+                arg_list = shlex.split(args_string, posix=use_posix)
+                if not use_posix:
+                    normalized = []
+                    for tok in arg_list:
+                        if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ('"', "'"):
+                            normalized.append(tok[1:-1])
+                        else:
+                            normalized.append(tok)
+                    arg_list = normalized
             except ValueError:
                 caller.msg("Unbalanced quote in command.")
                 caller.msg(self.print_help())

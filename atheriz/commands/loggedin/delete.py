@@ -66,7 +66,7 @@ class DeleteCommand(Command):
             if not target:
                 loc: Node = caller.location
                 if loc and loc.access(caller, "view"):
-                    target = loc.search(target_name)
+                    target = loc.search(target_name, looker=caller)
                     if not target:
                         caller.msg(f"No match found for '{target_name}'.")
                         return

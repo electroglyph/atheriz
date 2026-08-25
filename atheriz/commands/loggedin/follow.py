@@ -60,7 +60,7 @@ class FollowCommand(Command):
         if not matches:
             loc = caller.location
             if loc and loc.access(caller, "view"):
-                matches = loc.search(target_name)
+                matches = loc.search(target_name, looker=caller)
 
         if not matches:
             caller.msg(f"Could not find '{target_name}'.")

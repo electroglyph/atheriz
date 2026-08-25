@@ -25,10 +25,12 @@ def setup_give_scenario():
 
     # Setup Objects
     giver = Object.create(None, "giver", is_pc=True)
+    giver.is_connected = True
     giver.location = node
     node.add_object(giver)
 
     receiver = Object.create(None, "receiver", is_pc=True)
+    receiver.is_connected = True
     receiver.location = node
     node.add_object(receiver)
 
@@ -162,6 +164,7 @@ def test_give_multiple_matches():
     item.move_to(giver)
     # Second object named "receiver" in the room creates ambiguity.
     twin = Object.create(None, "receiver", is_pc=True)
+    twin.is_connected = True
     twin.location = node
     node.add_object(twin)
 

@@ -13,6 +13,7 @@ PROTECTED_ATTRIBUTES = frozenset(
         "id",
         "session",
         "lock",
+        "locks",
         "internal_cmdset",
         "external_cmdset",
         "scripts",
@@ -49,6 +50,23 @@ PROTECTED_ATTRIBUTES = frozenset(
         "contents",
     }
 )
+
+
+def _privilege_denied(caller, target) -> bool:
+    if target is caller:
+        return False
+    try:
+        t_priv = object.__getattribute__(target, "privilege_level")
+    except AttributeError:
+        return False
+    try:
+        c_priv = object.__getattribute__(caller, "privilege_level")
+    except AttributeError:
+        return False
+    try:
+        return t_priv >= c_priv
+    except Exception:
+        return False
 
 
 def _is_protected(attr: str) -> bool:
@@ -97,7 +115,7 @@ class SetCommand(Command):
             if not matches:
                 loc: Node = caller.location
                 if loc and loc.access(caller, "view"):
-                    matches = loc.search(target_str)
+                    matches = loc.search(target_str, looker=caller)
 
             if not matches:
                 caller.msg(f"No match found for '{target_str}'.")
@@ -109,6 +127,10 @@ class SetCommand(Command):
                 return
             else:
                 target = matches[0]
+
+        if target is not None and _privilege_denied(caller, target):
+            caller.msg("You cannot modify an object of equal or higher privilege.")
+            return
 
         attr = args.attribute
         raw_value = args.value
@@ -179,7 +201,7 @@ class UnsetCommand(Command):
             if not matches:
                 loc: Node = caller.location
                 if loc and loc.access(caller, "view"):
-                    matches = loc.search(target_str)
+                    matches = loc.search(target_str, looker=caller)
 
             if not matches:
                 caller.msg(f"No match found for '{target_str}'.")
@@ -191,6 +213,10 @@ class UnsetCommand(Command):
                 return
             else:
                 target = matches[0]
+
+        if target is not None and _privilege_denied(caller, target):
+            caller.msg("You cannot modify an object of equal or higher privilege.")
+            return
 
         attr = args.attribute
 

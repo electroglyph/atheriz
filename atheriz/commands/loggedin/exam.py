@@ -207,7 +207,7 @@ class ExamineCommand(Command):
                 if not matches:
                     loc: Node = caller.location
                     if loc and loc.access(caller, "view"):
-                        matches = loc.search(target_str)
+                        matches = loc.search(target_str, looker=caller)
 
                 if not matches:
                     caller.msg(f"No match found for '{target_str}'.")

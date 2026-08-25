@@ -25,7 +25,10 @@ def _find_target(caller: "Object", query: str):
         return results[0], None
     matches = caller.search(query)
     if not matches and getattr(caller, "location", None):
-        matches = caller.location.search(query)
+        try:
+            matches = caller.location.search(query, looker=caller)
+        except TypeError:
+            matches = caller.location.search(query)
     if not matches:
         return None, f"No match found for '{query}'."
     if len(matches) > 1:
@@ -101,6 +104,9 @@ class PuppetCommand(Command):
                 if getattr(target, "is_deleted", False):
                     caller.msg(f"{target.name} is not available.")
                     return
+                if not target.access(caller, "puppet"):
+                    caller.msg(f"You cannot puppet {target.name}.")
+                    return
                 restore_snapshot = {"is_pc": target.is_pc, "privilege_level": target.privilege_level}
                 caller_priv = caller.privilege_level
         caller.at_disconnect()
@@ -165,10 +171,19 @@ class UnpuppetCommand(Command):
                 caller.msg("You are not puppeting anything.")
                 return
             prev, target = session.puppet_stack.pop()
-        target.at_unpuppet(caller=prev)
-        if restore := getattr(target, "_puppet_restore", None):
-            target.__dict__.update(restore)
-            del target._puppet_restore
+        restore = getattr(target, "_puppet_restore", None)
+        try:
+            target.at_unpuppet(caller=prev)
+        finally:
+            if restore is not None:
+                with (target.lock if hasattr(target, "lock") else nullcontext()):
+                    for k, v in restore.items():
+                        setattr(target, k, v)
+                    if hasattr(target, "_puppet_restore"):
+                        try:
+                            del target._puppet_restore
+                        except Exception:
+                            pass
         target.at_disconnect()
         with session.lock:
             with (prev.lock if hasattr(prev, "lock") else nullcontext()):

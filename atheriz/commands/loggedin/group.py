@@ -77,7 +77,7 @@ class GroupCommand(Command):
             if not matches:
                 loc = caller.location
                 if loc and loc.access(caller, "view"):
-                    matches = loc.search(target)
+                    matches = loc.search(target, looker=caller)
             if not matches:
                 caller.msg(f"Could not find '{target}'.")
                 return
@@ -138,7 +138,7 @@ class GroupCommand(Command):
             if not matches:
                 loc = caller.location
                 if loc and loc.access(caller, "view"):
-                    matches = loc.search(target)
+                    matches = loc.search(target, looker=caller)
             if not matches:
                 caller.msg(f"Could not find '{target}'.")
                 return

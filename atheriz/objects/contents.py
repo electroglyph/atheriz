@@ -115,10 +115,10 @@ def _gather_contents(obj: Object | Node, visited: set[int] | None = None, depth:
         if o.id in visited:
             continue
         visited.add(o.id)
+        if looker is not None and not o.access(looker, "view"):
+            continue
         result.append(o)
         if getattr(o, "is_container", False):
-            if looker is not None and not o.access(looker, "view"):
-                continue
             try:
                 result.extend(_gather_contents(o, visited, depth + 1, looker))
             except RecursionError:
@@ -148,7 +148,9 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
     if query == "me" or query == obj.name.lower():
         return [obj]
     # computed once so the #id branch and the match loop share one candidate list
-    objs = _gather_contents(obj, looker=looker) if recursive else obj.contents
+    objs = _gather_contents(obj, looker=looker) if recursive else list(obj.contents)
+    if looker is not None:
+        objs = [o for o in objs if o.access(looker, "view")]
     if query.startswith("#"):
         try:
             id = int(query[1:])

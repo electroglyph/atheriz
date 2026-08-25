@@ -29,10 +29,12 @@ def test_follow_command():
     node1, _ = setup_test_nodes()
     
     leader = Object.create(None, "Leader", is_pc=True)
+    leader.is_connected = True
     leader.location = node1
     node1.add_object(leader)
     
     follower = Object.create(None, "Follower", is_pc=True)
+    follower.is_connected = True
     follower.location = node1
     node1.add_object(follower)
     
@@ -53,14 +55,17 @@ def test_follow_multiple_followers():
     node1, node2 = setup_test_nodes()
     
     leader = Object.create(None, "Leader", is_pc=True)
+    leader.is_connected = True
     leader.location = node1
     node1.add_object(leader)
     
     f1 = Object.create(None, "F1", is_pc=True)
+    f1.is_connected = True
     f1.location = node1
     node1.add_object(f1)
     
     f2 = Object.create(None, "F2", is_pc=True)
+    f2.is_connected = True
     f2.location = node1
     node1.add_object(f2)
     
@@ -86,10 +91,12 @@ def test_nofollow_command():
     node1, _ = setup_test_nodes()
     
     leader = Object.create(None, "Leader", is_pc=True)
+    leader.is_connected = True
     leader.location = node1
     node1.add_object(leader)
     
     f1 = Object.create(None, "F1", is_pc=True)
+    f1.is_connected = True
     f1.location = node1
     node1.add_object(f1)
     
@@ -122,6 +129,7 @@ def test_cant_follow_self_or_nonexistent():
     node1, _ = setup_test_nodes()
     
     follower = Object.create(None, "Follower", is_pc=True)
+    follower.is_connected = True
     follower.location = node1
     node1.add_object(follower)
     
@@ -143,10 +151,12 @@ def test_unfollow_command():
     node1, _ = setup_test_nodes()
 
     leader = Object.create(None, "Leader", is_pc=True)
+    leader.is_connected = True
     leader.location = node1
     node1.add_object(leader)
 
     follower = Object.create(None, "Follower", is_pc=True)
+    follower.is_connected = True
     follower.location = node1
     node1.add_object(follower)
 
@@ -172,6 +182,7 @@ def test_unfollow_not_following():
     node1, _ = setup_test_nodes()
 
     follower = Object.create(None, "Follower", is_pc=True)
+    follower.is_connected = True
     follower.location = node1
     node1.add_object(follower)
 

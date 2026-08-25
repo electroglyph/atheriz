@@ -1,5 +1,6 @@
 from __future__ import annotations
 import ast
+import math
 import contextlib
 import ctypes
 import io
@@ -38,6 +39,7 @@ _FRAMED_TYPES = (types.FrameType, types.CodeType, types.TracebackType)
 _MAX_POW_OPERAND = 10 ** 100
 _MAX_REPEAT_INT = 10 ** 7
 _MAX_REPEAT_STR = 4096
+_MAX_POW_DIGITS = 50000
 
 
 def _log_denial(obj, name: str, reason: str) -> None:
@@ -289,6 +291,13 @@ def _static_int_value(node: ast.AST, depth: int = 0):
                     raise ValueError("sandbox: arithmetic literal too large")
                 return left * right
             if isinstance(node.op, ast.Pow):
+                if left != 0 and right > 0:
+                    try:
+                        est = int(right * math.log10(abs(left))) + 1
+                    except (ValueError, OverflowError):
+                        raise ValueError("sandbox: pow size check failed")
+                    if est > _MAX_POW_DIGITS:
+                        raise ValueError("sandbox: estimated pow size exceeds safe limit")
                 return left ** right
             if isinstance(node.op, ast.FloorDiv) and right:
                 return left // right

@@ -34,7 +34,7 @@ class LookCommand(Command):
             if not target:
                 loc: Node | None = caller.location
                 if loc and loc.access(caller, "view"):
-                    target = loc.search(target_name)
+                    target = loc.search(target_name, looker=caller)
                     if not target:
                         n = loc.get_noun(target_name.lower())
                         if n:

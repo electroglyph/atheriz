@@ -33,7 +33,7 @@ class GiveCommand(Command):
             caller.msg("No.")
             return
 
-        targets = loc.search(target_name)
+        targets = loc.search(target_name, looker=caller)
         if not targets:
             caller.msg(f"Could not find '{target_name}' here.")
             return
