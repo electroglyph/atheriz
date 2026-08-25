@@ -43,8 +43,8 @@ def _is_under(path: Path | str, ancestor: Path | str) -> bool:
                 return os.path.commonpath([p, a]) == a
             except ValueError:
                 return False
-        p = Path(path).resolve()
-        a = Path(ancestor).resolve()
+        p = Path(os.path.abspath(str(path)))
+        a = Path(os.path.abspath(str(ancestor)))
         p.relative_to(a)
         return True
     except ValueError:

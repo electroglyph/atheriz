@@ -99,16 +99,35 @@ def do_setup(username=None, password=None):
         import os
 
         username = os.environ.get("ATHERIZ_SUPERUSER_USERNAME")
+        if username is not None:
+            username = username.strip()
         if not username:
             username = input("Enter superuser username: ").strip()
+    else:
+        if isinstance(username, str):
+            username = username.strip()
 
     if not password:
         import os
         import getpass
 
         password = os.environ.get("ATHERIZ_SUPERUSER_PASSWORD")
+        if password is not None:
+            password = password.strip()
         if not password:
             password = getpass.getpass("Enter superuser password: ")
+            if isinstance(password, str):
+                password = password.strip()
+    else:
+        if isinstance(password, str):
+            password = password.strip()
+
+    from atheriz.commands.unloggedin.validation import validate_account_name, validate_password
+
+    if err := validate_account_name(username):
+        raise ValueError(f"Invalid superuser username: {err}")
+    if err := validate_password(password):
+        raise ValueError(f"Invalid superuser password: {err}")
 
     alarm_node = nh.get_node(Coord(LIMBO_AREA, 0, 0, LIMBO_GRID - 1))
     alarm_obj = AlarmObject.create(
