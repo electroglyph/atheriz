@@ -152,9 +152,9 @@ class TestSentinelShortage:
         signal."""
         pool = AsyncThreadPool(max_threads=2)
         pool.stop(wait=True, timeout=5)
-        # fixed worker consumed its sentinel and died; the spare remains
+        # fixed worker consumed its sentinel and died; no spare remains (max_threads-1 sentinels)
         spare = pool.task_queue.qsize()
-        assert spare >= 1
+        assert spare == 0
         pool._relief_count = 1
         t = threading.Thread(
             target=pool._work_loop, kwargs={"relief": True}, daemon=True

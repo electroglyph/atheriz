@@ -49,9 +49,9 @@ class AccessLock:
 
     def _safe_access(self, accessing_obj: Object, name: str):
         # workaround for doors
-        if getattr(self, "id", None) is not None and accessing_obj.id == self.id and name in ["delete", "get"]:
+        if getattr(self, "id", None) is not None and getattr(accessing_obj, "id", None) == self.id and name in ["delete", "get"]:
             return False
-        if accessing_obj.is_superuser:
+        if getattr(accessing_obj, "is_superuser", False):
             return True
         with self.lock:
             lock_list = self.locks.get(name, [])
@@ -61,9 +61,9 @@ class AccessLock:
             return True
 
     def _fast_access(self, accessing_obj: Object, name: str):
-        if getattr(self, "id", None) is not None and accessing_obj.id == self.id and name in ["delete", "get"]:
+        if getattr(self, "id", None) is not None and getattr(accessing_obj, "id", None) == self.id and name in ["delete", "get"]:
             return False
-        if accessing_obj.is_superuser:
+        if getattr(accessing_obj, "is_superuser", False):
             return True
         lock_list = self.locks.get(name, [])
         for lock in lock_list:

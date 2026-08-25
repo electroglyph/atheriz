@@ -26,17 +26,20 @@ def _setup_room():
     add_object(node)
 
     caller = Object.create(None, "caller", is_pc=True)
+    caller.is_connected = True
     caller.msg = MagicMock()
     caller.location = node
     node.add_object(caller)
 
     target = Object.create(None, "target", is_pc=True)
+    target.is_connected = True
     target.msg = MagicMock()
     target.location = node
     node.add_object(target)
 
     # A bystander in the room forces the broadcast path to actually run.
     bystander = Object.create(None, "bystander", is_pc=True)
+    bystander.is_connected = True
     bystander.msg = MagicMock()
     bystander.location = node
     node.add_object(bystander)

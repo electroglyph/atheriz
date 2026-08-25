@@ -179,18 +179,13 @@ class AsyncThreadPool:
                 task = self.task_queue.get()
             if task is None:  # kill signal
                 if relief:
-                    requeued = False
-                    for _ in range(5):
+                    try:
+                        self.task_queue.put_nowait(None)
+                    except queue.Full:
                         try:
-                            self.task_queue.put(None, timeout=0.1)
-                            requeued = True
-                            break
-                        except queue.Full:
-                            time.sleep(0.05)
-                    if not requeued:
-                        try:
+                            self.task_queue.get_nowait()
                             self.task_queue.put_nowait(None)
-                        except queue.Full:
+                        except (queue.Empty, queue.Full):
                             logger.warning("[AsyncThreadPool] relief failed to re-queue sentinel; queue full")
                     with self._busy_lock:
                         if self._stopped:
@@ -307,13 +302,17 @@ class AsyncThreadPool:
                 f"[AsyncThreadPool] async thread stop failed:\n{traceback.format_exc()}"
             )
         for _ in range(self.max_threads - 1):
-            while True:
+            try:
+                self.task_queue.put_nowait(None)
+            except queue.Full:
                 try:
-                    self.task_queue.put(None, timeout=0.5)
-                    break
+                    self.task_queue.get_nowait()
+                except queue.Empty:
+                    pass
+                try:
+                    self.task_queue.put_nowait(None)
                 except queue.Full:
-                    time.sleep(0.05)
-                    continue
+                    logger.warning("[AsyncThreadPool] stop failed to enqueue sentinel; queue still full")
         if wait:
             for t in self.threads[1:]:
                 t.join(timeout=timeout)
