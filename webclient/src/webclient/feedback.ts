@@ -8,6 +8,8 @@ export function settingFeedback(setting: 'fontsize' | 'fontfamily' | 'contrast' 
             return `\r\nMinimum contrast ratio is: ${value}.\r\n`;
         case 'scrollback':
             return `\r\nScrollback is: ${value}.\r\n`;
+        default:
+            return `\r\n${String(setting)} is: ${value}.\r\n`;
     }
 }
 

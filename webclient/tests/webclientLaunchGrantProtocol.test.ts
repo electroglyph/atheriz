@@ -25,7 +25,7 @@ class FakeSocket implements WebSocketLike {
     deliver(data: unknown) { this.onmessage?.(new MessageEvent('message', { data } as unknown as MessageEventInit)); }
 }
 
-describe('Section 1 regression – launch grant race & throttle', () => {
+describe('launch draw grant persistence and throttling', () => {
     beforeEach(() => {
         document.body.innerHTML = '<div id="left-terminal"></div>';
         localStorage.clear();
@@ -122,7 +122,7 @@ describe('Section 1 regression – launch grant race & throttle', () => {
     });
 });
 
-describe('Section 1 regression – connection binary & protocol', () => {
+describe('websocket binary frames and URL handling', () => {
     it('decodeWireData handles string', () => {
         expect(decodeWireData('["text", ["hi"], {}]')).toBe('["text", ["hi"], {}]');
     });
@@ -258,7 +258,7 @@ describe('Section 1 regression – connection binary & protocol', () => {
     });
 });
 
-describe('Section 1 regression – text & prompt width', () => {
+describe('prompt width and text color normalization', () => {
     it('promptVisibleLength counts surrogate pairs as one', () => {
         // 𜰵 is U+1CC35 (surrogate pair) – length 2 in JS .length but 1 codepoint
         const surrogate = '𜰵';
@@ -314,7 +314,7 @@ describe('Section 1 regression – text & prompt width', () => {
     });
 });
 
-describe('Section 1 regression – asBoolean & show_legend', () => {
+describe('payload boolean coercion and legend visibility', () => {
     it('asBoolean handles booleans', () => {
         expect(asBoolean(true)).toBe(true);
         expect(asBoolean(false)).toBe(false);
@@ -391,7 +391,7 @@ describe('Section 1 regression – asBoolean & show_legend', () => {
     });
 });
 
-describe('Section 1 regression – buffer stall protection (file content & functional)', () => {
+describe('buffer flush fallback and completion', () => {
     it('main.ts flushBuffer contains fallback timer', () => {
         const mainPath = path.resolve(import.meta.dirname, '../src/webclient/main.ts');
         const content = fs.readFileSync(mainPath, 'utf-8');
@@ -446,7 +446,7 @@ describe('Section 1 regression – buffer stall protection (file content & funct
     });
 });
 
-describe('Section 1 regression – idle handling & state', () => {
+describe('connection state and wire message validation', () => {
     it('WebSocketConnection initial state is idle', () => {
         const conn = new WebSocketConnection({ onMessage: () => undefined });
         expect(conn.getState()).toBe('idle');

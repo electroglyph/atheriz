@@ -55,19 +55,47 @@ export function wrapText(text: string, width: number): string {
         }
 
         if (word.includes('\n')) {
-            result += word;
-            const afterNewline = word.slice(word.lastIndexOf('\n') + 1).replace(ANSI_COLOR, '');
-            currentLineLength = afterNewline.length;
+            const parts = word.split('\n');
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (i > 0) {
+                    result += '\n';
+                    currentLineLength = 0;
+                }
+                if (!part) continue;
+                const visiblePart = part.replace(ANSI_COLOR, '');
+                const partLen = [...visiblePart].length;
+                const isWhitespacePart = /^\s*$/.test(visiblePart);
+                if (currentLineLength + partLen > width) {
+                    if (isWhitespacePart) {
+                        if (currentLineLength > 0) {
+                            result += `${RESET}\n${nextColor}`;
+                            currentLineLength = 0;
+                        }
+                    } else {
+                        if (currentLineLength > 0) {
+                            result += `${RESET}\n${currentColor}`;
+                            currentLineLength = 0;
+                        }
+                        result += part;
+                        currentLineLength += partLen;
+                    }
+                } else {
+                    result += part;
+                    currentLineLength += partLen;
+                }
+            }
             currentColor = nextColor;
             continue;
         }
 
         const visibleWord = word.replace(ANSI_COLOR, '');
-        const wordLength = visibleWord.length;
+        const wordLength = [...visibleWord].length;
+        const isWhitespace = /^\s+$/.test(visibleWord);
         if (currentLineLength + wordLength > width) {
-            if (/^\s+$/.test(word)) {
+            if (isWhitespace) {
                 if (currentLineLength > 0) {
-                    result += `${RESET}\n${currentColor}`;
+                    result += `${RESET}\n${nextColor}`;
                     currentLineLength = 0;
                 }
             } else {
