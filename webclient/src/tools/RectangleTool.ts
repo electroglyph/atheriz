@@ -1,6 +1,6 @@
 import { Tool, ToolContext } from './Tool';
 import { Point, Cell } from '../types';
-import { LIGHT_BOX, ROUNDED_BOX, DOUBLE_BOX } from '../utils/characters';
+import { LIGHT_BOX, ROUNDED_BOX, DOUBLE_BOX, HEAVY_BOX } from '../utils/characters';
 import { cellEquals } from '../utils/colors';
 
 export class RectangleTool implements Tool {
@@ -100,8 +100,9 @@ export class RectangleTool implements Tool {
         const bg = ctx.appState.bgColor;
         const selected = ctx.appState.selectedChar;
 
-        const charMap = mode === 'double' ? DOUBLE_BOX : 
-                        mode === 'rounded' ? ROUNDED_BOX : 
+        const charMap = mode === 'double' ? DOUBLE_BOX :
+                        mode === 'rounded' ? ROUNDED_BOX :
+                        mode === 'heavy' ? HEAVY_BOX :
                         LIGHT_BOX;
 
         // If regular mode, just draw the selected char around perimeter

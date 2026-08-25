@@ -11,8 +11,8 @@ export interface Cell {
 
 export type TypeStyle = "regular" | "bold" | "italic" | "underline";
 
-export type RectMode = "light" | "rounded" | "double" | "custom";
-export type OvalMode = "light" | "rounded" | "double" | "circle" | "custom";
+export type RectMode = "light" | "rounded" | "double" | "heavy" | "custom";
+export type OvalMode = "light" | "rounded" | "double" | "heavy" | "circle" | "custom";
 export type LineMode = "light" | "rounded" | "double" | "heavy" | "custom";
 export type GradientTarget = "foreground" | "background" | "both" | "luminance" | "inverse-luminance";
 export type EyedropperTarget = "fg-fg" | "fg-bg" | "bg-fg" | "bg-bg";

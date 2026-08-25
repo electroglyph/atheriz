@@ -335,6 +335,7 @@ export class SelectionTool implements Tool {
 
         const visited = new Set<string>();
         const queue: Point[] = [{ x: cell.x, y: cell.y }];
+        let qIdx = 0;
         visited.add(key(cell.x, cell.y));
 
         const match = (c: number, r: number): boolean => {
@@ -361,8 +362,8 @@ export class SelectionTool implements Tool {
             return cInkColor[0] === inkColor[0] && cInkColor[1] === inkColor[1] && cInkColor[2] === inkColor[2];
         };
 
-        while (queue.length > 0) {
-            const p = queue.shift()!;
+        while (qIdx < queue.length) {
+            const p = queue[qIdx++]!;
             for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
                 const nx = p.x + dx;
                 const ny = p.y + dy;
@@ -415,10 +416,11 @@ export class SelectionTool implements Tool {
 
         const visited = new Set<string>();
         const queue: Point[] = [{ x: cell.x, y: cell.y }];
+        let qIdx2 = 0;
         visited.add(key(cell.x, cell.y));
 
-        while (queue.length > 0) {
-            const p = queue.shift()!;
+        while (qIdx2 < queue.length) {
+            const p = queue[qIdx2++]!;
             for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]]) {
                 const nx = p.x + dx;
                 const ny = p.y + dy;

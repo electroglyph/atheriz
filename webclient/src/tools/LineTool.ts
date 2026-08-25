@@ -297,10 +297,6 @@ export class LineTool implements Tool {
                 case 'LL-LR': return '🯚'; // Lower-Left to Lower-Right via Center
                 case 'LL-UL': return '🯛'; // Lower-Left to Upper-Left via Center
 
-                // Additional 3-point bridge characters (U+1FBDC–U+1FBDF)
-                case 'ML-UR-LR': return '🯝'; // Upper-Right to Middle-Left to Lower-Right
-                case 'LL-MR-UL': return '🯟'; // Upper-Left to Middle-Right to Lower-Left
-
                 // Off-angle Corner-to-Middle (Short/Adjacent)
                 // Fallbacks prioritise the corner connection so the line never
                 // appears to stop short at a junction or turn.

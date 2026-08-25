@@ -23,10 +23,11 @@ export class FillTool implements Tool {
         const h = ctx.state.height;
         const visited = new Set<string>();
         const queue: Point[] = [start];
+        let qIdx = 0;
         let reachedBorder = false;
 
-        while (queue.length > 0) {
-            const p = queue.shift()!;
+        while (qIdx < queue.length) {
+            const p = queue[qIdx++]!;
             const k = `${p.x},${p.y}`;
 
             if (visited.has(k)) continue;
@@ -60,6 +61,7 @@ export class FillTool implements Tool {
         const outside = new Set<string>();
         const visited = new Set<string>();
         const queue: Point[] = [];
+        let qIdx = 0;
 
         for (let x = 0; x < w; x++) {
             queue.push({ x, y: 0 });
@@ -70,8 +72,8 @@ export class FillTool implements Tool {
             queue.push({ x: w - 1, y });
         }
 
-        while (queue.length > 0) {
-            const p = queue.shift()!;
+        while (qIdx < queue.length) {
+            const p = queue[qIdx++]!;
             const k = `${p.x},${p.y}`;
 
             if (visited.has(k)) continue;

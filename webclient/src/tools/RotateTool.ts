@@ -2,6 +2,16 @@ import { Tool, ToolContext } from './Tool';
 import { Point, Cell, RotateMode } from '../types';
 
 import { transformCharacter } from '../utils/transformMappings';
+import { measureCellMetrics } from '../utils/fontMetrics';
+
+function getCellAspect(fontFamily: string): number {
+    try {
+        const m = measureCellMetrics(fontFamily, 16);
+        return m.width / m.height;
+    } catch {
+        return 0.5;
+    }
+}
 
 export class RotateTool implements Tool {
     private anchor: Point | null = null;
@@ -191,10 +201,7 @@ export class RotateTool implements Tool {
     private updateFreeHover(ctx: ToolContext, theta: number) {
         const previewMap = new Map<string, { col: number, row: number, cell: Cell }>();
 
-        // To prevent extreme skewing during free rotation, we apply a 1:2 aspect ratio scaling, 
-        // as standard text monospace grids (e.g. 9x18) are rarely square. 
-        // While retrieving exact metrics would be perfect, W/H = 0.5 is a standard approximation.
-        const W = 0.5;
+        const W = getCellAspect(ctx.appState.fontFamily);
         const H = 1.0;
 
         // 1. Hide original positions
@@ -276,8 +283,7 @@ export class RotateTool implements Tool {
 
         ctx.undoStack.push(ctx.state);
 
-        // Regenerate reverse mapped output internally
-        const W = 0.5;
+        const W = getCellAspect(ctx.appState.fontFamily);
         const H = 1.0;
         const cosInv = Math.cos(-this.currentTheta);
         const sinInv = Math.sin(-this.currentTheta);

@@ -1,7 +1,7 @@
 import { Tool, ToolContext } from './Tool';
 import { Point, Cell } from '../types';
 import { getEllipsePerimeter } from '../utils/geometry';
-import { LIGHT_BOX, ROUNDED_BOX, DOUBLE_BOX } from '../utils/characters';
+import { LIGHT_BOX, ROUNDED_BOX, DOUBLE_BOX, HEAVY_BOX } from '../utils/characters';
 import { cellEquals } from '../utils/colors';
 
 export class OvalTool implements Tool {
@@ -158,8 +158,9 @@ export class OvalTool implements Tool {
             return updates;
         }
 
-        const charMap = mode === 'double' ? DOUBLE_BOX : 
-                        mode === 'rounded' ? ROUNDED_BOX : 
+        const charMap = mode === 'double' ? DOUBLE_BOX :
+                        mode === 'rounded' ? ROUNDED_BOX :
+                        mode === 'heavy' ? HEAVY_BOX :
                         LIGHT_BOX;
 
         // First map all points for quick neighbor lookups
