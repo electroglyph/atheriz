@@ -92,11 +92,21 @@ class ChannelCommand(Command):
                 caller.msg(f"Channel {args.channel} not found.")
                 return
             channel = result[0]
+            if getattr(channel, "is_deleted", False):
+                caller.msg(f"Channel {args.channel} not found.")
+                return
             with self._channel_cache_lock:
-                self._channel_cache[name] = channel
-                for k, v in list(self._channel_cache.items()):
-                    if k != name and v.id == channel.id:
-                        self._channel_cache.pop(k, None)
+                if getattr(channel, "is_deleted", False) or channel.name.lower() != name:
+                    caller.msg(f"Channel {args.channel} not found.")
+                    return
+                existing = self._channel_cache.get(name)
+                if existing is not None and not getattr(existing, "is_deleted", False) and existing.name.lower() == name:
+                    channel = existing
+                else:
+                    self._channel_cache[name] = channel
+                    for k, v in list(self._channel_cache.items()):
+                        if k != name and v.id == channel.id:
+                            self._channel_cache.pop(k, None)
         if args.unsubscribe:
             caller.unsubscribe(channel)
         elif args.subscribe:

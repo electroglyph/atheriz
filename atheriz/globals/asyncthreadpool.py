@@ -376,10 +376,26 @@ class AsyncThreadPool:
             args: func args
             kwargs: func kwargs
         """
+        try:
+            pool = get_async_threadpool()
+            loop = pool.loop
+        except Exception:
+            return
+
         async def _delayed_task():
             await asyncio.sleep(delay)
-            get_async_threadpool().add_task(func, *args, **kwargs)
-        _submit(_delayed_task(), get_async_threadpool().loop)
+            try:
+                import atheriz.globals.get as get_mod
+
+                if getattr(pool, "_stopped", False):
+                    return
+                if get_mod._ASYNC_THREAD_POOL is None or get_mod._ASYNC_THREAD_POOL is not pool:
+                    return
+                pool.add_task(func, *args, **kwargs)
+            except Exception:
+                pass
+
+        _submit(_delayed_task(), loop)
 
 
 class AsyncTicker:

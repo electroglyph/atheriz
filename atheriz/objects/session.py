@@ -110,7 +110,28 @@ class Session:
                 loop = asyncio.get_running_loop()
                 future = loop.create_future()
             except RuntimeError:
-                future = asyncio.Future()
+                loop = None
+                if self.connection is not None:
+                    try:
+                        loop = getattr(self.connection, "loop", None)
+                        if loop is None and hasattr(self.connection, "_resolve_loop"):
+                            try:
+                                loop = self.connection._resolve_loop()
+                            except Exception:
+                                loop = None
+                    except Exception:
+                        loop = None
+                if loop is None:
+                    try:
+                        from atheriz.globals.get import get_async_threadpool
+
+                        loop = get_async_threadpool().loop
+                    except Exception:
+                        loop = None
+                if loop is not None and hasattr(loop, "create_future"):
+                    future = loop.create_future()
+                else:
+                    future = asyncio.Future()
             if prev is not None and not prev.done():
                 if prev_masked and not mask:
                     need_restore = True

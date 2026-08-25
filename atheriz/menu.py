@@ -52,7 +52,7 @@ class MenuEngine:
         lines = [f"\n{self._current_text}"]
         for choice in self._current_choices.values():
             lines.append(f"  [{choice.key}] {choice.desc}")
-        return "\n".join(lines)
+        return "\r\n".join(lines)
 
     def handle_input(self, user_input: str) -> bool:
         if not self._current_choices:

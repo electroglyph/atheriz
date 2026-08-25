@@ -26,7 +26,10 @@ class DrawCommand(Command):
         if not loc:
             caller.msg("You must be in a valid location to open the map editor.")
             return
-        conn = caller.session.connection
+        conn = getattr(getattr(caller, "session", None), "connection", None)
+        if conn is None:
+            caller.msg("No active connection.")
+            return
         area, z = loc.coord.area, loc.coord.z
         mh = get_map_handler()
         mi = mh.get_mapinfo(area, z)
