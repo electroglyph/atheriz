@@ -1,10 +1,10 @@
 """End-to-end regression tests for editing gentown-style buildings in the
 map editor.
 
-Gentown buildings (grotto/world/building_gen.py) are stored as post_grid-only
+Gentown-style buildings are stored as post_grid-only
 MapInfo objects: final rendered glyphs (box-drawing walls, ANSI-wrapped door
-glyphs, counter, stairs) with an EMPTY pre_grid. atheriz tests must not import
-grotto (one-way dependency), so these tests replicate that output structure
+glyphs, counter, stairs) with an EMPTY pre_grid. Core tests must not import
+game-folder code (one-way dependency), so these tests replicate that output structure
 faithfully by hand.
 
 The bug this guards against had two halves:
@@ -19,7 +19,7 @@ The bug this guards against had two halves:
 """
 
 from threading import RLock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from atheriz.globals import mapedit
 from atheriz.globals.map import MapInfo
@@ -146,7 +146,16 @@ def client_diff(before: dict, delta: tuple[int, int]):
     return after, cells
 
 
+def _ensure_builder(conn):
+    puppet = getattr(getattr(conn, "session", None), "puppet", None)
+    if not puppet or not getattr(puppet, "is_builder", False):
+        p = MagicMock()
+        p.is_builder = True
+        conn.session.puppet = p
+
+
 def handshake(conn) -> str:
+    _ensure_builder(conn)
     key = mapedit.grant("10.0.0.1", AREA, Z)
     InputFuncs().map_edit(conn, [key, 0, []], {})
     return conn.sent[-1][1][1]
@@ -158,6 +167,7 @@ def test_building_moved_northeast_syncs_losslessly():
     mh.set_mapinfo(AREA, Z, mi)
     conn = FakeConnection()
     conn.client_host = "10.0.0.1"
+    _ensure_builder(conn)
 
     delta = (3, -2)
     before = dict(mi.post_grid)

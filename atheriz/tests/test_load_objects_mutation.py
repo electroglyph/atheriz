@@ -4,7 +4,7 @@ while running `resolve_relations()` hooks (objects.py:172-175).
 A tuple (node-coordinate) `location` lazily constructs `NodeHandler` during
 relation resolution, and `NodeHandler.load()` registers every node via
 `add_object()` — mutating the registry mid-iteration -> RuntimeError on
-startup (grotto game folder).
+startup (game folder).
 
 INTENT: `load_objects()` resolves relations against a snapshot; objects
 registered during the pass must not crash the load and must stay in the
