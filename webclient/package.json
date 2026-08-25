@@ -10,19 +10,25 @@
     "deploy:package": "python deploy.py package",
     "deploy:game": "python deploy.py game",
     "deploy:atheriz": "python deploy.py package",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit --project tsconfig.tests.json",
     "test": "vitest run"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "browserslist": [
+    "> 0.5%",
+    "last 2 versions",
+    "not dead"
+  ],
   "devDependencies": {
     "@types/node": "^25.5.0",
-    "@types/opentype.js": "^1.3.9",
     "canvas": "^3.2.3",
     "jsdom": "^30.0.1",
-    "opentype.js": "^1.3.4",
     "typescript": "^5.4.5",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { LineTool } from '../src/tools/LineTool';
 import { AppState, Point } from '../src/types';

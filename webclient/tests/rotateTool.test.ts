@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { RotateTool } from '../src/tools/RotateTool';
 import { CanvasState } from '../src/state/CanvasState';

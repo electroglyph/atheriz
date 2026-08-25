@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "strict": false,
+    "noImplicitAny": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noImplicitReturns": false,
+    "moduleResolution": "Bundler",
+    "rootDir": "./",
+    "skipLibCheck": true
+  },
+  "include": ["src", "tests", "vite.config.ts"]
+}

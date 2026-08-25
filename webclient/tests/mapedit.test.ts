@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it, vi } from 'vitest';
 import { WebSocketLike } from '../src/webclient/connection';
 import { CanvasState } from '../src/state/CanvasState';

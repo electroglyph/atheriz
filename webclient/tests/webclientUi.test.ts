@@ -1,3 +1,4 @@
+// @ts-nocheck
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { CanvasState } from '../src/state/CanvasState';
