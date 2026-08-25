@@ -18,7 +18,7 @@ describe('draw launch command', () => {
         const opened = vi.spyOn(window, 'open').mockReturnValue({} as Window);
         expect(launchDraw()).toBe(true);
         expect(opened).toHaveBeenCalledWith(
-            'http://localhost:3000/atheriz_draw/',
+            'http://localhost:3000/static/atheriz_draw/',
             '_blank',
             'noopener,noreferrer',
         );
@@ -28,7 +28,7 @@ describe('draw launch command', () => {
         vi.setSystemTime(3000);
         vi.spyOn(window, 'open').mockReturnValue(null);
         expect(launchDraw()).toBe(false);
-        expect(document.querySelector('a')?.href).toBe('http://localhost:3000/atheriz_draw/');
+        expect(document.querySelector('a')?.href).toBe('http://localhost:3000/static/atheriz_draw/');
         expect(document.querySelector('.popup-fallback')).not.toBeNull();
     });
 
@@ -41,7 +41,7 @@ describe('draw launch command', () => {
         clearDrawGrant();
         expect(readDrawGrant()).toBeNull();
         expect(opened).toHaveBeenCalledWith(
-            'http://localhost:3000/atheriz_draw/',
+            'http://localhost:3000/static/atheriz_draw/',
             '_blank',
             'noopener,noreferrer',
         );

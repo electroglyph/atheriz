@@ -1,4 +1,4 @@
-const DRAW_PATH = '/atheriz_draw/';
+const DRAW_PATH = '/static/atheriz_draw/';
 const GRANT_KEY = 'atheriz_draw_grant';
 const GRANT_TS_KEY = 'atheriz_draw_grant_ts';
 const GRANT_TTL_MS = 60000;

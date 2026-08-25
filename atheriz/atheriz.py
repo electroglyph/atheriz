@@ -328,6 +328,16 @@ async def read_webclient(request: Request):
     return templates.TemplateResponse(request, "webclient/index.html")
 
 
+@app.get("/atheriz_draw", response_class=HTMLResponse)
+@app.get("/atheriz_draw/", response_class=HTMLResponse)
+@app.get("/atheriz_draw/index.html", response_class=HTMLResponse)
+async def read_draw(request: Request):
+    compiled_draw = static_dir / "atheriz_draw" / "index.html"
+    if compiled_draw.is_file():
+        return FileResponse(compiled_draw, media_type="text/html")
+    return HTMLResponse("AtheriZ Draw not built", status_code=404)
+
+
 @app.post("/_internal/hot_reload")
 async def hot_reload_endpoint(request: Request):
     err = _check_admin(request, "reload")
