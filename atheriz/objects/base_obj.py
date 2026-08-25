@@ -1,10 +1,10 @@
 from __future__ import annotations
-from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_flags import Flags, FLAG_DEFAULTS
 from atheriz.globals.objects import save_objects
 from atheriz.utils import compress_whitespace, get_dir, word_replace
 from atheriz.settings import LOUDNESS_LEVELS
 from typing import Callable
-from atheriz.globals.objects import get, add_object, remove_object
+from atheriz.globals.objects import get, add_object, remove_object, delete_objects
 from atheriz.globals.get import (
     get_node_handler,
     get_map_handler,
@@ -290,24 +290,10 @@ class Object(Flags, DbOps, AccessLock):
         if not self.at_delete(caller):
             return None
 
-        ops = []
+        ops: list[tuple[str, tuple]] = []
+        to_delete: list[Object] = []
 
-        def _delete_object(obj: Object):
-            if obj.location:
-                obj.location.remove_object(obj)
-                obj.location = None
-
-            if obj.is_connected and obj.session and obj.session.connection:
-                obj.session.account.remove_character(obj)
-                obj.session.connection.close()
-            if getattr(obj, "_is_tickable", False):
-                get_async_ticker().remove_coro(obj.at_tick, obj._tick_seconds)
-            obj.is_deleted = True
-            if not obj.is_temporary:
-                ops.append(obj.get_del_ops())
-            remove_object(obj)
-
-        def _delete_recursive(root: Object):
+        def _collect_recursive(root: Object):
             seen: set[int] = set()
             stack: list[tuple[Object, int]] = [(root, 0)]
             order: list[Object] = []
@@ -324,7 +310,22 @@ class Object(Flags, DbOps, AccessLock):
                                 continue
                             stack.append((content, depth + 1))
             for obj in reversed(order):
-                _delete_object(obj)
+                to_delete.append(obj)
+                if not getattr(obj, "is_temporary", False):
+                    ops.append(obj.get_del_ops())
+
+        def _delete_object(obj: Object):
+            if obj.location:
+                obj.location.remove_object(obj)
+                obj.location = None
+
+            if obj.is_connected and obj.session and obj.session.connection:
+                obj.session.account.remove_character(obj)
+                obj.session.connection.close()
+            if getattr(obj, "_is_tickable", False):
+                get_async_ticker().remove_coro(obj.at_tick, obj._tick_seconds)
+            obj.is_deleted = True
+            remove_object(obj)
 
         def _move_contents(obj: Object, loc: Object | Node | None):
             if obj.contents:
@@ -336,13 +337,20 @@ class Object(Flags, DbOps, AccessLock):
                             except Exception:
                                 pass
                             content.location = None
-                        _delete_recursive(content)
-            _delete_object(obj)
+                        _collect_recursive(content)
+            to_delete.append(obj)
+            if not getattr(obj, "is_temporary", False):
+                ops.append(obj.get_del_ops())
 
         if recursive:
-            _delete_recursive(self)
+            _collect_recursive(self)
         else:
             _move_contents(self, self.location)
+
+        if ops:
+            delete_objects(ops)
+        for obj in to_delete:
+            _delete_object(obj)
 
         return ops
 
@@ -408,53 +416,53 @@ class Object(Flags, DbOps, AccessLock):
             state.pop("hooks", None)
             state.pop("group_channel", None)
             try:
-                loc = object.__getattribute__(self, "location")
+                loc_ref = object.__getattribute__(self, "location")
             except AttributeError:
-                loc = None
-            if loc is not None:
-                try:
-                    is_node = object.__getattribute__(loc, "is_node")
-                except AttributeError:
-                    is_node = False
-                if is_node:
-                    try:
-                        state["location"] = object.__getattribute__(loc, "coord")
-                    except AttributeError:
-                        state["location"] = None
-                else:
-                    try:
-                        state["location"] = object.__getattribute__(loc, "id")
-                    except AttributeError:
-                        state["location"] = None
+                loc_ref = None
             try:
-                home = object.__getattribute__(self, "home")
+                home_ref = object.__getattribute__(self, "home")
             except AttributeError:
-                home = None
-            if home is not None:
-                try:
-                    is_node = object.__getattribute__(home, "is_node")
-                except AttributeError:
-                    is_node = False
+                home_ref = None
+            try:
+                priv_level = int(state["privilege_level"])
+            except Exception:
+                priv_level = int(settings.Privilege.Guest)
+            restore = state.pop("_puppet_restore", None)
+        if loc_ref is not None:
+            try:
+                is_node = getattr(loc_ref, "is_node", False)
+            except Exception:
+                is_node = False
+            try:
                 if is_node:
-                    try:
-                        state["home"] = object.__getattribute__(home, "coord")
-                    except AttributeError:
-                        state["home"] = None
+                    state["location"] = getattr(loc_ref, "coord", None)
                 else:
-                    try:
-                        state["home"] = object.__getattribute__(home, "id")
-                    except AttributeError:
-                        state["home"] = None
-            # Store as plain int to avoid dill recursion on IntEnum metaclass
-            state["privilege_level"] = int(state["privilege_level"])
-            # While an object is being puppeted its is_pc/privilege_level (and
-            # any other _puppet_restore keys) are mutated in memory; never let
-            # that state reach the database — always persist the originals.
-            if (restore := state.pop("_puppet_restore", None)):
-                for key, orig in restore.items():
-                    state[key] = orig
+                    state["location"] = getattr(loc_ref, "id", None)
+            except Exception:
+                state["location"] = None
+        else:
+            state["location"] = None
+        if home_ref is not None:
+            try:
+                is_node = getattr(home_ref, "is_node", False)
+            except Exception:
+                is_node = False
+            try:
+                if is_node:
+                    state["home"] = getattr(home_ref, "coord", None)
+                else:
+                    state["home"] = getattr(home_ref, "id", None)
+            except Exception:
+                state["home"] = None
+        else:
+            state["home"] = None
+        state["privilege_level"] = priv_level
+        if restore:
+            for key, orig in restore.items():
+                state[key] = orig
+        state["is_connected"] = False
 
-            return state
+        return state
 
     def __setstate__(self, state):
         # this object.__setattr__ bullshit is for bypassing the thread-safety patch
@@ -468,6 +476,10 @@ class Object(Flags, DbOps, AccessLock):
         object.__setattr__(self, "session", None)
         object.__setattr__(self, "group_channel", None)
         object.__setattr__(self, "hooks", {})
+        object.__setattr__(self, "is_connected", False)
+        for _name, _default in FLAG_DEFAULTS.items():
+            if _name not in self.__dict__:
+                object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(

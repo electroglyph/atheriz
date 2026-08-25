@@ -1,24 +1,30 @@
 from __future__ import annotations
+
+FLAG_DEFAULTS: dict[str, object] = {
+    "is_pc": False,
+    "is_npc": False,
+    "is_item": False,
+    "is_mapable": False,
+    "is_container": False,
+    "is_script": False,
+    "_is_tickable": False,
+    "is_account": False,
+    "is_channel": False,
+    "is_node": False,
+    "is_modified": True,
+    "is_deleted": False,
+    "is_connected": False,
+    "is_temporary": False,
+    "is_banned": False,
+    "can_hear": False,
+    "tags": set,
+}
+
 class Flags:
     def __init__(self):
-        # skip thread-safety patch
-        object.__setattr__(self, "is_pc", False)
-        object.__setattr__(self, "is_npc", False)
-        object.__setattr__(self, "is_item", False)
-        object.__setattr__(self, "is_mapable", False)
-        object.__setattr__(self, "is_container", False)
-        object.__setattr__(self, "is_script", False)
-        object.__setattr__(self, "_is_tickable", False)
-        object.__setattr__(self, "is_account", False)
-        object.__setattr__(self, "is_channel", False)
-        object.__setattr__(self, "is_node", False)
-        object.__setattr__(self, "is_modified", True)
-        object.__setattr__(self, "is_deleted", False)
-        object.__setattr__(self, "is_connected", False)
-        object.__setattr__(self, "is_temporary", False)
-        object.__setattr__(self, "is_banned", False)
-        object.__setattr__(self, "can_hear", False)
-        object.__setattr__(self, "tags", set())
+        for name, default in FLAG_DEFAULTS.items():
+            value = default() if name == "tags" else default
+            object.__setattr__(self, name, value)
         super().__init__()
 
         

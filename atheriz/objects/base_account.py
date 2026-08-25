@@ -8,7 +8,7 @@ import hashlib
 import hmac
 import atheriz.settings as settings
 from threading import RLock
-from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_flags import Flags, FLAG_DEFAULTS
 from atheriz.objects.base_db_ops import DbOps
 from typing import TYPE_CHECKING
 
@@ -65,10 +65,11 @@ class Account(Flags, DbOps):
         if not self.at_delete(caller):
             return False
 
+        ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
+        if ops:
+            delete_objects(ops)
         with self.lock:
             self.is_deleted = True
-        ops = [self.get_del_ops()]
-        delete_objects(ops)
         remove_object(self)
         return True
 
@@ -118,6 +119,7 @@ class Account(Flags, DbOps):
         """
         with self.lock:
             self.characters.append(character.id)
+            self.is_modified = True
 
     def remove_character(self, character: Object) -> None:
         """
@@ -129,6 +131,7 @@ class Account(Flags, DbOps):
         with self.lock:
             try:
                 self.characters.remove(character.id)
+                self.is_modified = True
             except ValueError:
                 pass
 
@@ -198,10 +201,17 @@ class Account(Flags, DbOps):
                 for key in excludes:
                     state.pop(key, None)
             state.pop("lock", None)
+            state["logged_in"] = False
+            state["is_connected"] = False
             return state
 
     def __setstate__(self, state):
         object.__setattr__(self, "lock", RLock())
         self.__dict__.update(state)
+        object.__setattr__(self, "logged_in", False)
+        object.__setattr__(self, "is_connected", False)
+        for _name, _default in FLAG_DEFAULTS.items():
+            if _name not in self.__dict__:
+                object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)

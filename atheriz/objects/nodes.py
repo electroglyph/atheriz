@@ -23,7 +23,7 @@ from atheriz.utils import wrap_truecolor, ensure_thread_safe
 from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.objects.base_lock import AccessLock
-from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_flags import Flags, FLAG_DEFAULTS
 from atheriz.objects.base_obj import hookable
 from atheriz.utils import Coord
 
@@ -171,6 +171,9 @@ class Node(Flags, AccessLock):
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "hooks", {})
+        for _name, _default in FLAG_DEFAULTS.items():
+            if _name not in self.__dict__:
+                object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(

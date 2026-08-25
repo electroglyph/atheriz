@@ -72,6 +72,22 @@ def stop_autosave() -> None:
                 "Autosave was started but no registered interval is known; "
                 "the tick cannot be removed."
             )
+            try:
+                fallback = _interval_seconds()
+                if fallback:
+                    get_async_ticker().remove_coro(autosave_tick, fallback)
+            except Exception:
+                pass
+            try:
+                ticker = get_async_ticker()
+                with ticker.lock:
+                    for slot_interval, slot in list(ticker.slots.items()):
+                        with slot.lock:
+                            if autosave_tick in slot.coros:
+                                slot.remove_coro(autosave_tick)
+            except Exception:
+                pass
+            _registered_interval = None
         else:
             get_async_ticker().remove_coro(autosave_tick, interval)
             _registered_interval = None

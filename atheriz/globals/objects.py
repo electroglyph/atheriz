@@ -236,7 +236,7 @@ def load_objects():
 
 
 def _is_still_saveable(obj: Any) -> bool:
-    """Return True unless obj has been deleted or removed from the registry.
+    """Return True unless obj has been deleted, made temporary, or removed from the registry.
 
     Checked at execute time inside the save transaction so a delete racing the
     checkpoint cannot be resurrected by INSERT OR REPLACE.
@@ -250,6 +250,8 @@ def _is_still_saveable(obj: Any) -> bool:
             return False
     with obj.lock:
         if getattr(obj, "is_deleted", False):
+            return False
+        if getattr(obj, "is_temporary", False):
             return False
     return True
 

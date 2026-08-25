@@ -6,7 +6,7 @@ import time
 from atheriz.logger import logger
 from atheriz.globals.get import get_unique_id
 from atheriz.globals.objects import add_object, delete_objects, remove_object
-from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_flags import Flags, FLAG_DEFAULTS
 from atheriz.objects.base_db_ops import DbOps
 import atheriz.settings as settings
 from atheriz.utils import ensure_thread_safe
@@ -118,6 +118,9 @@ class Script(Flags, DbOps):
         Returns:
             bool: True upon successful deletion.
         """
+        ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
+        if ops:
+            delete_objects(ops)
         with self.lock:
             self.is_deleted = True
         child = self.child
@@ -128,9 +131,6 @@ class Script(Flags, DbOps):
                     child.scripts.remove(self.id)
                     child.is_modified = True
             object.__setattr__(self, "child", None)
-        if not self.is_temporary:
-            ops = [self.get_del_ops()]
-            delete_objects(ops)
         remove_object(self)
         return True
 
@@ -153,6 +153,9 @@ class Script(Flags, DbOps):
         # Preserve the live link during in-place hot reload; fresh deserialized
         # scripts still start without a child and are linked during resolution.
         object.__setattr__(self, "child", current_child)
+        for _name, _default in FLAG_DEFAULTS.items():
+            if _name not in self.__dict__:
+                object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(

@@ -9,7 +9,7 @@ from atheriz.globals.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
 from atheriz.objects.base_db_ops import DbOps
-from atheriz.objects.base_flags import Flags
+from atheriz.objects.base_flags import Flags, FLAG_DEFAULTS
 from atheriz.objects.base_lock import AccessLock
 from typing import TYPE_CHECKING
 
@@ -143,11 +143,11 @@ class Channel(Flags, DbOps, AccessLock):
         del unused
         if not self.at_delete(caller):
             return False
+        ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
+        if ops:
+            delete_objects(ops)
         with self.lock:
             self.is_deleted = True
-        if not self.is_temporary:
-            ops = [self.get_del_ops()]
-            delete_objects(ops)
         with self.lock:
             listeners = list(self.listeners.values())
             self.listeners.clear()
@@ -290,6 +290,9 @@ class Channel(Flags, DbOps, AccessLock):
         self.listeners = {}
         if not isinstance(self.history, deque):
             self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)
+        for _name, _default in FLAG_DEFAULTS.items():
+            if _name not in self.__dict__:
+                object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         # call __setstate__ for all parent classes
         mro = type(self).mro()
         current_idx = next(
