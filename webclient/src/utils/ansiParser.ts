@@ -3,7 +3,22 @@ import { CanvasState } from '../state/CanvasState';
 import { Terminal } from '@xterm/headless';
 import { LAYER_BOUNDARY_MARKER } from '../export/AnsiExporter';
 
-function colorFromXterm(cell: any, isFg: boolean): Color {
+interface XtermCell {
+    isFgRGB(): boolean;
+    isBgRGB(): boolean;
+    getFgColor(): number;
+    getBgColor(): number;
+    isFgPalette(): boolean;
+    isBgPalette(): boolean;
+    isInverse(): number;
+    isBold(): number;
+    isItalic(): number;
+    isUnderline(): number;
+    isBgDefault(): boolean;
+    getChars(): string;
+}
+
+function colorFromXterm(cell: XtermCell, isFg: boolean): Color {
     if (isFg ? cell.isFgRGB() : cell.isBgRGB()) {
         const raw = isFg ? cell.getFgColor() : cell.getBgColor();
         return [(raw >> 16) & 0xff, (raw >> 8) & 0xff, raw & 0xff];
@@ -15,7 +30,7 @@ function colorFromXterm(cell: any, isFg: boolean): Color {
     return isFg ? [204, 204, 204] : [0, 0, 0];
 }
 
-function extractCellColors(c: any): { fg: Color; bg: Color } {
+function extractCellColors(c: XtermCell): { fg: Color; bg: Color } {
     let fg = colorFromXterm(c, true);
     let bg = colorFromXterm(c, false);
     if (c.isInverse()) {

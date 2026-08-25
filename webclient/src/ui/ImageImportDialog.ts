@@ -89,7 +89,7 @@ export class ImageImportDialog {
                     select.appendChild(opt);
                 }
                 select.addEventListener('change', () => {
-                    (this.userConfig[key] as any) = select.value;
+                    (this.userConfig as unknown as Record<string, string>)[key] = select.value;
                 });
                 control = select;
             } else if (typeof val === 'boolean') {

@@ -1,4 +1,4 @@
-import { AppState, RectMode, OvalMode, LineMode, GradientTarget, TypeStyle, SelectMode, RotateMode, FillMode } from '../types';
+import { AppState, RectMode, OvalMode, LineMode, GradientTarget, TypeStyle, SelectMode, RotateMode, FillMode, EyedropperTarget } from '../types';
 import { UndoStack } from '../state/UndoStack';
 import { CanvasState } from '../state/CanvasState';
 
@@ -205,7 +205,7 @@ export class Toolbar {
         });
 
         this.eyedropperTargetSel.addEventListener('change', (e) => {
-            this.appState.eyedropperTarget = (e.target as HTMLSelectElement).value as any;
+            this.appState.eyedropperTarget = (e.target as HTMLSelectElement).value as EyedropperTarget;
             this.appState.activeToolId = 'eyedropper';
             this.updateToolButtons();
         });

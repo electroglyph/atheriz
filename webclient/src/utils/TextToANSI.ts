@@ -51,10 +51,11 @@ export async function renderTextToAnsiLayer(
   const w = sourceCanvas.width;
   const h = sourceCanvas.height;
 
-  ctx.font = previewFontString(cellMetrics.font);
-  const textMetrics = ctx.measureText("M");
-  const ascent = (textMetrics as any).actualBoundingBoxAscent ?? 80;
-  const descent = (textMetrics as any).actualBoundingBoxDescent ?? 20;
+   ctx.font = previewFontString(cellMetrics.font);
+   const textMetrics = ctx.measureText("M");
+   const metricsExt = textMetrics as unknown as { actualBoundingBoxAscent?: number; actualBoundingBoxDescent?: number };
+   const ascent = metricsExt.actualBoundingBoxAscent ?? 80;
+   const descent = metricsExt.actualBoundingBoxDescent ?? 20;
 
   const pixels = ctx.getImageData(0, 0, w, h).data;
 

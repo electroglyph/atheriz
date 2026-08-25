@@ -4,7 +4,7 @@ import { UndoStack } from './state/UndoStack';
 import { GridRenderer } from './canvas/GridRenderer';
 import { CanvasController } from './canvas/CanvasController';
 import { ToolManager } from './tools/ToolManager';
-import { AppState } from './types';
+import { AppState, Color } from './types';
 import { RectangleTool } from './tools/RectangleTool';
 import { OvalTool } from './tools/OvalTool';
 import { LineTool } from './tools/LineTool';
@@ -40,13 +40,13 @@ import { PreviewWindow } from './ui/PreviewWindow';
 import { GradientPicker } from './ui/GradientPicker';
 import { readDrawGrant, clearDrawGrant } from './webclient/launch';
 import { loadMapPayload, MapEditSession, MapEditPayload, MapEditOrigin, logRoomData } from './mapedit';
+import { toCssFontFamily } from './utils/cssFont';
 
-// Make sure fonts are loaded before we measure
 document.fonts.ready.then(() => {
-    initApp();
+    void initApp();
 });
 
-function initApp() {
+async function initApp() {
     const canvasEl = document.getElementById('main-canvas') as HTMLCanvasElement;
     if (!canvasEl) throw new Error("Canvas missing");
 
@@ -61,7 +61,7 @@ function initApp() {
         fgColor: [204, 204, 204],
         bgColor: [0, 0, 0],
         fontFamily: 'KreativeSquare',
-        gradientStops: [[0, 0, 0] as any, [255, 255, 255] as any],
+        gradientStops: [[0, 0, 0] as Color, [255, 255, 255] as Color],
         selectMode: 'rectangle',
         rotateMode: 'cw90',
         fillMode: 'brush',
@@ -90,6 +90,12 @@ function initApp() {
     undoStack.setCurrentState(canvasState);
 
     let currentFontSize = 18;
+    if (document.fonts) {
+        const family = toCssFontFamily(appState.fontFamily);
+        try { await document.fonts.load(`${currentFontSize}px ${family}`, ''); } catch {}
+        try { await document.fonts.load(`${currentFontSize}px ${family}`, 'M'); } catch {}
+        try { await document.fonts.ready; } catch {}
+    }
     let metrics = measureCellMetrics(appState.fontFamily, currentFontSize);
     const renderer = new GridRenderer(canvasEl, canvasState, metrics);
 
@@ -153,6 +159,13 @@ function initApp() {
     toolManager.addTool('rotate', rotateTool);
 
     const controller = new CanvasController(canvasEl, metrics, toolManager);
+    if (document.fonts && !document.fonts.check(`${currentFontSize}px ${toCssFontFamily(appState.fontFamily)}`)) {
+        void document.fonts.ready.then(() => {
+            const refreshed = measureCellMetrics(appState.fontFamily, currentFontSize);
+            controller.updateMetrics(refreshed);
+            renderer.updateMetrics(refreshed);
+        });
+    }
 
     canvasEl.addEventListener('mousedown', (e) => {
         if (e.button === 2) {
@@ -195,7 +208,7 @@ function initApp() {
         } else if (event.type === 'error') {
             console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
         } else if (event.type === 'saved') {
-            console.log('Saved to server.');
+            if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log('Saved to server.');
         } else if (event.type === 'moves_denied') {
             console.warn('Room move denied by server — snapping back.');
             const restored = undoStack.undo();
@@ -239,12 +252,17 @@ function initApp() {
         context.state = canvasState;
         renderer.updateState(canvasState);
         layerManager.updateState(canvasState);
-    }, (fontFamily: string) => {
+    }, async (fontFamily: string) => {
+        if (document.fonts) {
+            const fam = toCssFontFamily(fontFamily);
+            try { await document.fonts.load(`${currentFontSize}px ${fam}`, ''); } catch {}
+            try { await document.fonts.load(`${currentFontSize}px ${fam}`, 'M'); } catch {}
+        }
         metrics = measureCellMetrics(fontFamily, currentFontSize);
         controller.updateMetrics(metrics);
         renderer.updateMetrics(metrics);
         
-        document.documentElement.style.setProperty('--main-font', fontFamily);
+        document.documentElement.style.setProperty('--main-font', toCssFontFamily(fontFamily));
         charPalette.reRender();
     }, () => {
         textToolDialog.open();
@@ -457,7 +475,12 @@ function initApp() {
     const btnZoomIn = document.getElementById('btn-zoom-in');
     const btnZoomOut = document.getElementById('btn-zoom-out');
 
-    const updateFontMetrics = () => {
+    const updateFontMetrics = async () => {
+        if (document.fonts) {
+            const fam = toCssFontFamily(appState.fontFamily);
+            try { await document.fonts.load(`${currentFontSize}px ${fam}`, ''); } catch {}
+            try { await document.fonts.load(`${currentFontSize}px ${fam}`, 'M'); } catch {}
+        }
         metrics = measureCellMetrics(appState.fontFamily, currentFontSize);
         controller.updateMetrics(metrics);
         renderer.updateMetrics(metrics);
@@ -467,14 +490,14 @@ function initApp() {
     btnZoomIn?.addEventListener('click', () => {
         if (currentFontSize < 72) {
             currentFontSize += 2;
-            updateFontMetrics();
+            void updateFontMetrics();
         }
     });
 
     btnZoomOut?.addEventListener('click', () => {
         if (currentFontSize > 6) {
             currentFontSize -= 2;
-            updateFontMetrics();
+            void updateFontMetrics();
         }
     });
 }
