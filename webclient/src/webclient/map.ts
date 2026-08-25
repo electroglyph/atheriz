@@ -39,7 +39,7 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
         output.push(`\x1b[${mapStartRow + index};${mapStartColumn}H${line}`);
     });
     if (legend.length > 0) {
-        const legendStartRow = mapStartRow + visible.length + 1;
+        const legendStartRow = Math.min(mapStartRow + visible.length + 1, Math.max(1, rows - legend.length + 1));
         const legendColumn = Math.max(1, Math.floor((columns - Math.max(...legend.map(visibleLength))) / 2) + 1);
         legend.forEach((line, index) => {
             output.push(`\x1b[${legendStartRow + index};${legendColumn}H${line}`);
@@ -71,17 +71,18 @@ function applyBackground(lines: string[], payload: MapPayload): void {
 }
 
 function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: number, rows: number): string[] {
-    const values = payload.symbol
+    let legendValues = payload.symbol
         ? [{ symbol: stylePlayerSymbol(payload.symbol), desc: 'You' }, ...entries]
-        : entries;
-    if (values.length === 0) return [];
+        : [...entries];
+    if (legendValues.length === 0) return [];
     const availableHeight = Math.max(5, Math.floor(rows / 3));
-    const minColumns = Math.min(values.length, Math.max(1, Math.ceil(values.length / Math.max(1, availableHeight - 2))));
+    const maxRows = Math.max(1, availableHeight - 2);
+    const minColumns = Math.min(legendValues.length, Math.max(1, Math.ceil(legendValues.length / Math.max(1, availableHeight - 2))));
     const maxWidth = Math.max(1, columns - 4);
     let chosenColumns = 1;
-    let columnWidths = calculateLegendWidths(values, 1, maxWidth);
+    let columnWidths = calculateLegendWidths(legendValues, 1, maxWidth);
     for (let candidate = minColumns; candidate >= 1; candidate -= 1) {
-        const widths = calculateLegendWidths(values, candidate, maxWidth);
+        const widths = calculateLegendWidths(legendValues, candidate, maxWidth);
         if (legendWidth(widths, candidate) <= columns) {
             chosenColumns = candidate;
             columnWidths = widths;
@@ -89,7 +90,12 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
         }
     }
 
-    const rowCount = Math.ceil(values.length / chosenColumns);
+    let rowCount = Math.ceil(legendValues.length / chosenColumns);
+    if (rowCount > maxRows) {
+        legendValues = legendValues.slice(0, maxRows * chosenColumns);
+        rowCount = Math.ceil(legendValues.length / chosenColumns);
+        columnWidths = calculateLegendWidths(legendValues, chosenColumns, maxWidth);
+    }
     const title = payload.area ?? 'Legend';
     const minHeaderWidth = visibleLength(title) + 6;
     let totalWidth = legendWidth(columnWidths, chosenColumns);
@@ -104,7 +110,7 @@ function buildLegend(payload: MapPayload, entries: MapLegendEntry[], columns: nu
     for (let row = 0; row < rowCount; row += 1) {
         let line = '│';
         for (let column = 0; column < chosenColumns; column += 1) {
-            const item = values[column * rowCount + row];
+            const item = legendValues[column * rowCount + row];
             const width = columnWidths[column];
             const rawText = item ? `${item.symbol} = ${item.desc}` : '';
             const text = visibleLength(rawText) > maxWidth
@@ -134,7 +140,7 @@ function processLegend(entries: MapLegendEntry[], columns: number): MapLegendEnt
             seen.set(key, 131);
             return [{ ...entry, symbol: withReset(entry.symbol) }];
         }
-        seen.set(key, (hue + 57) % 360);
+        seen.set(key, (hue + 137) % 360);
         const [r, g, b] = hslToRgb(hue / 360, 1, 0.5);
         return [{ ...entry, symbol: `\x1b[38;2;${r};${g};${b}m${stripped}${RESET}` }];
     });
@@ -248,12 +254,14 @@ export function mergeBackgrounds(
     for (const item of incoming) {
         for (const coord of item.coords) entries.set(`${coord[0]},${coord[1]}`, { color: item.color, coord });
     }
-    const groups: MapBackground[] = [];
+    const groupMap = new Map<string, MapBackground>();
     for (const { color, coord } of entries.values()) {
-        const group = groups.find((candidate) => candidate.color.every((part, index) => part === color[index]));
+        const key = `${color[0]},${color[1]},${color[2]}`;
+        const group = groupMap.get(key);
         if (group) group.coords.push(coord);
-        else groups.push({ color, coords: [coord] });
+        else groupMap.set(key, { color, coords: [coord] });
     }
+    const groups = [...groupMap.values()];
     return groups.length === 1 ? groups[0] : groups;
 }
 
@@ -263,11 +271,12 @@ export function parseBackground(value: unknown): MapPayload['background'] | unde
     for (const entry of values) {
         if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
         const data = entry as { color?: unknown; coords?: unknown };
-        if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number')) continue;
+        if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number' && Number.isFinite(part) && part >= 0 && part <= 255)) continue;
         if (!Array.isArray(data.coords)) continue;
         const coords = data.coords.filter((coord): coord is [number, number] => {
-            return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number';
+            return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number' && Number.isFinite(coord[0]) && Number.isFinite(coord[1]);
         });
+        if (coords.length === 0) continue;
         backgrounds.push({ color: [data.color[0], data.color[1], data.color[2]], coords });
     }
     return backgrounds.length === 1 ? backgrounds[0] : backgrounds.length > 1 ? backgrounds : undefined;
