@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 
 
-def test_save_ops_clears_dirty_flag(global_test_env):
+def test_save_ops_preserves_dirty_flag(global_test_env):
     from atheriz.objects.base_obj import Object
 
     obj = Object.create(None, "m03test")
@@ -58,7 +58,6 @@ def test_every_minute_alarm_fires(global_test_env, monkeypatch):
         gt.ticks = 0
         gt.alarms.clear()
     gt.add_alarm("?", "?", obj, repeat=False, data={"x": 1})
-    # patch threadpool to execute immediately
     mock_atp = MagicMock()
 
     def immediate(func, *a, **kw):
@@ -106,7 +105,7 @@ def test_every_minute_alarm_repeats_when_repeat(global_test_env, monkeypatch):
 
 
 def test_install_hooks_only_decorated(global_test_env):
-    from atheriz.objects.base_script import Script, before, after
+    from atheriz.objects.base_script import Script, before
     from atheriz.coord import Coord
     from atheriz.objects.nodes import Node
 
@@ -185,18 +184,14 @@ def test_print_help_with_parser_still_works(global_test_env):
 def test_pad_accounts_for_wide_chars(global_test_env):
     from atheriz.objects.funcparser_helpers import pad, m_len
 
-    # wide char 漢 counts as 2
     assert m_len("漢") == 2
-    # pad "漢" (width 2) to 4 should add 2 spaces
     result = pad("漢", width=4, align="l")
     assert m_len(result) == 4
     assert result.startswith("漢")
     assert result == "漢  "
-    # center
     result_c = pad("漢", width=4, align="c")
     assert m_len(result_c) == 4
     assert "漢" in result_c
-    # already wide enough stays same
     result2 = pad("漢字", width=3, align="l")
     assert result2 == "漢字"
 
@@ -204,18 +199,12 @@ def test_pad_accounts_for_wide_chars(global_test_env):
 def test_crop_accounts_for_wide_chars(global_test_env):
     from atheriz.objects.funcparser_helpers import crop, m_len
 
-    # "漢" width2 each
     assert m_len("漢字") == 4
-    # crop to 3 should keep one wide char (2 width) plus maybe? suffix "[...]" width 5 -> width< suffix case
     result = crop("漢字漢字", width=3, suffix="...")
-    # suffix len 3, width 3 -> suffix fits exactly, text truncated to ""
-    # Our logic: lsuffix >= width -> _crop_to_width(text,width) => width 3 => one wide (2) + one narrow? but all wide
     assert m_len(result) <= 3
-    # ascii case same as before
     result2 = crop("a" * 100, width=10, suffix="...")
     assert len(result2) == 10
     assert result2.endswith("...")
-    # no suffix overflow
     result3 = crop("hi", width=10)
     assert result3 == "hi"
 
@@ -353,16 +342,13 @@ def test_unlock_when_already_unlocked_reports_failure(global_test_env):
         closed=False,
         locked=False,
     )
-    # give access
     door.add_lock("unlock", lambda o: True)
-    # already unlocked -> should return False and message
     msgs = []
     room.msg_contents = lambda *a, **kw: msgs.append(" ".join(str(x) for x in a) + str(kw))
     result = door.try_unlock(caller)
     assert result is False
     assert any("already unlocked" in m for m in msgs)
 
-    # locked then unlock succeeds -> True
     door.locked = True
     msgs.clear()
     result2 = door.try_unlock(caller)
@@ -399,9 +385,6 @@ def test_help_hides_guest_when_disabled(global_test_env, monkeypatch):
     monkeypatch.setattr(settings, "CHAR_CREATION_ENABLED", True)
     cs = UnloggedinCmdSet()
     assert cs.get("guest") is None
-    # help should not list guest
-    help_cmd = cs.get("help")
-    # help lists commands; ensure guest not in keys
     assert "guest" not in [k.lower() for k in cs.get_keys()]
 
     monkeypatch.setattr(settings, "GUEST_ENABLED", True)
@@ -435,22 +418,17 @@ def test_salt_file_utf8_roundtrip(global_test_env, monkeypatch, tmp_path):
     from pathlib import Path
     from atheriz.globals import salt as salt_mod
 
-    # force game folder condition
     monkeypatch.setattr(settings, "SECRET_PATH", str(tmp_path / "secret"))
     monkeypatch.setattr("atheriz.utils.is_in_game_folder", lambda: True)
     salt_mod._SALT = None
-    # ensure parent exists
     p = Path(settings.SECRET_PATH) / "salt.txt"
-    # write via our fixed code path
     from atheriz.globals.salt import get_salt
-    # First call creates file
+
     s = get_salt()
     assert s is not None
-    # file should be readable with utf-8
     content = p.read_text(encoding="utf-8")
     assert content.strip() == s
     salt_mod._SALT = None
-    # second call reads same
     s2 = get_salt()
     assert s2 == s
 
@@ -464,7 +442,6 @@ def test_channel_name_case_insensitive_unique(global_test_env):
         Channel.create("general", None)
     with pytest.raises(ValueError):
         Channel.create("GENERAL", None)
-    # lookup lowercased still finds it
     from atheriz.globals.objects import filter_by
 
     results = filter_by(lambda x: getattr(x, "is_channel", False) and x.name.lower() == "general")
