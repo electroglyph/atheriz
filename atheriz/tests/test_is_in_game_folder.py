@@ -59,3 +59,17 @@ def test_returns_true_without_save_dir(temp_cwd):
     from atheriz.utils import is_in_game_folder
 
     assert is_in_game_folder() is True
+
+
+def test_is_in_game_folder_windows_branch(temp_cwd, monkeypatch):
+    monkeypatch.setattr(os, "name", "nt")
+    (temp_cwd / "settings.py").write_text("# settings")
+    (temp_cwd / "__init__.py").write_text("")
+    from atheriz.utils import is_in_game_folder
+
+    assert is_in_game_folder() is True
+    (temp_cwd / "atheriz.py").write_text("# core")
+    assert is_in_game_folder() is False
+    monkeypatch.setattr(os, "name", "posix")
+    (temp_cwd / "atheriz.py").unlink()
+    assert is_in_game_folder() is True

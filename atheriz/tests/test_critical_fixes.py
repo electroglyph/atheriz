@@ -87,7 +87,7 @@ def test_subscribe_and_channel_delete_do_not_deadlock(global_test_env):
     from atheriz.objects.base_channel import Channel
     obj = Object.create(None, "player")
     chan = Channel.create("testchan")
-    barrier = threading.Barrier(2)
+    barrier = threading.Barrier(2, timeout=2)
     errors = []
 
     def subscriber():
@@ -118,8 +118,8 @@ def test_subscribe_and_channel_delete_do_not_deadlock(global_test_env):
     t2 = threading.Thread(target=deleter)
     t1.start()
     t2.start()
-    t1.join(timeout=5)
-    t2.join(timeout=5)
+    t1.join(timeout=2)
+    t2.join(timeout=2)
     assert not t1.is_alive(), "subscribe thread deadlocked"
     assert not t2.is_alive(), "delete thread deadlocked"
     assert not errors, f"errors in concurrent subscribe/delete: {errors}"
@@ -146,7 +146,7 @@ def test_subscribe_state_consistency_under_concurrent_race(global_test_env):
     from atheriz.objects.base_channel import Channel
     objs = [Object.create(None, f"p{i}") for i in range(3)]
     chan = Channel.create("racechan")
-    barrier = threading.Barrier(len(objs))
+    barrier = threading.Barrier(len(objs), timeout=2)
     errors = []
 
     def worker(o):
@@ -162,7 +162,7 @@ def test_subscribe_state_consistency_under_concurrent_race(global_test_env):
     for t in threads:
         t.start()
     for t in threads:
-        t.join(timeout=5)
+        t.join(timeout=2)
         assert not t.is_alive()
     assert not errors
     for o in objs:

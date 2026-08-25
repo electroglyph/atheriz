@@ -794,18 +794,15 @@ def test_node_save_post_snapshot_dirty_preserved(global_test_env):
     with handler.lock:
         handler._modified = True
 
-    barrier_a = threading.Barrier(2, timeout=5)
-    barrier_b = threading.Barrier(2, timeout=5)
+    barrier_a = threading.Barrier(2, timeout=2)
+    barrier_b = threading.Barrier(2, timeout=2)
 
     def patched(obj):
         is_area = isinstance(obj, NodeArea)
         res = orig_detach(obj)
         if is_area and obj.name == "PostSnap":
-            try:
-                barrier_a.wait(timeout=5)
-                barrier_b.wait(timeout=5)
-            except Exception:
-                pass
+            barrier_a.wait(timeout=2)
+            barrier_b.wait(timeout=2)
         return res
 
     def saver():
@@ -814,12 +811,12 @@ def test_node_save_post_snapshot_dirty_preserved(global_test_env):
 
     t = threading.Thread(target=saver)
     t.start()
-    barrier_a.wait(timeout=5)
+    barrier_a.wait(timeout=2)
     with node.lock:
         node.desc = "mutated_during_save"
         node.is_modified = True
-    barrier_b.wait(timeout=5)
-    t.join(timeout=5)
+    barrier_b.wait(timeout=2)
+    t.join(timeout=2)
     assert not t.is_alive(), "save deadlocked"
     assert node.is_modified is True, "post-snapshot dirty must not be cleared"
     assert node.desc == "mutated_during_save"
@@ -867,8 +864,8 @@ def test_node_save_clean_to_dirty_after_snapshot_preserved(global_test_env):
     assert node.is_modified is False
     assert node2.is_modified is True
 
-    barrier_a = threading.Barrier(2, timeout=5)
-    barrier_b = threading.Barrier(2, timeout=5)
+    barrier_a = threading.Barrier(2, timeout=2)
+    barrier_b = threading.Barrier(2, timeout=2)
     count = [0]
 
     def patched(obj):
@@ -877,11 +874,8 @@ def test_node_save_clean_to_dirty_after_snapshot_preserved(global_test_env):
         if is_area:
             count[0] += 1
             if count[0] == 1 and obj.name == "CleanSnap":
-                try:
-                    barrier_a.wait(timeout=5)
-                    barrier_b.wait(timeout=5)
-                except Exception:
-                    pass
+                barrier_a.wait(timeout=2)
+                barrier_b.wait(timeout=2)
         return res
 
     def saver():
@@ -890,12 +884,12 @@ def test_node_save_clean_to_dirty_after_snapshot_preserved(global_test_env):
 
     t = threading.Thread(target=saver)
     t.start()
-    barrier_a.wait(timeout=5)
+    barrier_a.wait(timeout=2)
     with node.lock:
         node.desc = "mutated_clean"
         node.is_modified = True
-    barrier_b.wait(timeout=5)
-    t.join(timeout=5)
+    barrier_b.wait(timeout=2)
+    t.join(timeout=2)
     assert not t.is_alive()
     assert node.is_modified is True, "clean->dirty after snapshot must stay dirty"
     assert node2.is_modified is False, "dirty at snapshot must be cleared"
@@ -933,18 +927,15 @@ def test_node_save_clears_only_snapshotted(global_test_env):
     with handler.lock:
         handler._modified = True
 
-    barrier_a = threading.Barrier(2, timeout=5)
-    barrier_b = threading.Barrier(2, timeout=5)
+    barrier_a = threading.Barrier(2, timeout=2)
+    barrier_b = threading.Barrier(2, timeout=2)
 
     def patched(obj):
         is_area = isinstance(obj, NodeArea) and obj.name == "SnapOnly"
         res = orig_detach(obj)
         if is_area:
-            try:
-                barrier_a.wait(timeout=5)
-                barrier_b.wait(timeout=5)
-            except Exception:
-                pass
+            barrier_a.wait(timeout=2)
+            barrier_b.wait(timeout=2)
         return res
 
     def saver():
@@ -953,7 +944,7 @@ def test_node_save_clears_only_snapshotted(global_test_env):
 
     t = threading.Thread(target=saver)
     t.start()
-    barrier_a.wait(timeout=5)
+    barrier_a.wait(timeout=2)
     new_area = NodeArea(name="NewAfterSnap")
     new_grid = NodeGrid(z=1)
     new_node = Node(coord=Coord("NewAfterSnap", 0, 0, 1), desc="new")
@@ -962,8 +953,8 @@ def test_node_save_clears_only_snapshotted(global_test_env):
     handler.add_area(new_area)
     assert new_node.is_modified is True
     assert new_area.is_modified is True
-    barrier_b.wait(timeout=5)
-    t.join(timeout=5)
+    barrier_b.wait(timeout=2)
+    t.join(timeout=2)
     assert not t.is_alive()
     assert new_node.is_modified is True, "new node added after snapshot must not be cleared"
     assert new_area.is_modified is True

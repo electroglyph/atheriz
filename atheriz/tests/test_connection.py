@@ -194,3 +194,16 @@ class TestIntegration:
 
         c.msg("hello")
         assert c.sent[2][1][0] == "hello\r\n"
+
+
+class TestConnectionMsg:
+    def test_msg_non_str_text_coerced(self, global_test_env):
+        c = ConcreteConn()
+        c.msg(123)
+        cmd, args, _ = c.sent[0]
+        assert cmd == "text"
+        assert args[0] == "123\r\n"
+
+    def test_msg_falsy_text_kwarg_no_crash(self, global_test_env):
+        c = ConcreteConn()
+        c.msg(text="")

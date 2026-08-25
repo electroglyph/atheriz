@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -231,3 +231,42 @@ class TestPrompt:
         asyncio.run(run())
         # msg was called with the prompt text
         assert conn.msg.call_args[0] == ("> ",)
+
+
+def test_session_prompt_binds_future_to_existing_loop(global_test_env):
+    loop = asyncio.new_event_loop()
+    conn = MagicMock()
+    conn.loop = loop
+    conn.send_command = MagicMock()
+    conn.msg = MagicMock()
+    sess = Session(connection=conn)
+
+    async def run_prompt():
+        with patch("atheriz.objects.session.asyncio.get_running_loop", side_effect=RuntimeError("no loop")):
+            coro = sess.prompt("hello")
+            with patch("atheriz.globals.get.get_async_threadpool") as mock_gtp:
+                mock_pool = MagicMock()
+                mock_pool.loop = loop
+                mock_gtp.return_value = mock_pool
+                task = loop.create_task(coro)
+                await asyncio.sleep(0.05)
+                fut = sess.input_future
+                assert fut is not None
+                try:
+                    fut_loop = fut.get_loop()
+                except RuntimeError:
+                    fut_loop = None
+                assert fut_loop is loop, f"future bound to {fut_loop} not {loop}"
+                if not fut.done():
+                    fut.set_result("answer")
+                try:
+                    result = await asyncio.wait_for(task, timeout=1)
+                    assert result == "answer"
+                except asyncio.TimeoutError:
+                    task.cancel()
+                    raise
+
+    try:
+        loop.run_until_complete(run_prompt())
+    finally:
+        loop.close()

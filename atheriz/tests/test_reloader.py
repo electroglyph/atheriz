@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import _thread
 import importlib
+import inspect
 import sys
 import threading
 from pathlib import Path
@@ -30,6 +32,30 @@ class _Lock:
         return self
 
     def __exit__(self, *a):
+        self.release()
+
+
+class _SpyLock:
+    """RLock wrapper that records acquire/release calls."""
+
+    def __init__(self):
+        self._lock = _thread.RLock()
+        self.acquire_calls = 0
+        self.release_calls = 0
+
+    def acquire(self, *args, **kwargs):
+        self.acquire_calls += 1
+        return self._lock.acquire(*args, **kwargs)
+
+    def release(self, *args, **kwargs):
+        self.release_calls += 1
+        return self._lock.release(*args, **kwargs)
+
+    def __enter__(self):
+        self.acquire()
+        return self
+
+    def __exit__(self, *args):
         self.release()
 
 
@@ -76,6 +102,54 @@ class NewSig(OldSig):
     def __init__(self, x, y=1):
         self.x = x
         self.y = y
+
+
+class _OldClass:
+    pass
+
+
+class _NewClass:
+    pass
+
+
+def _do_patch(obj, new_class):
+    """Replicate the critical mutation path from reloader._patch_object."""
+    state = obj.__dict__.copy()
+    lock = getattr(obj, "lock", None)
+    if lock:
+        lock.acquire()
+    try:
+        obj.__class__ = new_class
+        obj.__dict__.update(state)
+    finally:
+        if lock:
+            lock.release()
+
+
+_init_call_log = []
+
+
+class _InitSideEffectOld:
+    def __init__(self):
+        _init_call_log.append("old")
+        self.x = 42
+
+
+class _InitSideEffectNew:
+    def __init__(self):
+        _init_call_log.append("new")
+        self.x = 99
+
+
+class _InitChangedOld:
+    def __init__(self, a):
+        self.a = a
+
+
+class _InitChangedNew:
+    def __init__(self, a, b):
+        self.a = a
+        self.b = b
 
 
 class TestApplyPatchRollback:
@@ -187,6 +261,86 @@ class TestApplyPatchRollback:
         assert obj.command == "cmd"
 
 
+class TestPatchObjectAcquiresLock:
+    def test_acquires_and_releases_lock(self):
+        spy = _SpyLock()
+        obj = _OldClass()
+        obj.lock = spy
+        obj.id = 1
+
+        _do_patch(obj, _NewClass)
+
+        assert spy.acquire_calls == 1
+        assert spy.release_calls == 1
+        assert obj.__class__ is _NewClass
+
+    def test_no_lock_does_not_crash(self):
+        obj = _OldClass()
+        obj.id = 2
+
+        _do_patch(obj, _NewClass)
+
+        assert obj.__class__ is _NewClass
+
+    def test_lock_held_during_mutation(self):
+        """Verify no concurrent thread can see a half-patched object."""
+        spy = _SpyLock()
+        obj = _OldClass()
+        obj.lock = spy
+        obj.marker = "original"
+
+        seen_states = []
+        barrier = threading.Barrier(2)
+
+        def reader():
+            barrier.wait()
+            # read while patching — should be serialized by the lock
+            seen_states.append(getattr(obj, "__class__", None).__name__)
+
+        t = threading.Thread(target=reader)
+
+        # acquire lock to simulate the patch window
+        spy.acquire()
+        t.start()
+        barrier.wait()
+        obj.__class__ = _NewClass
+        spy.release()
+        t.join()
+
+        # reader either saw _OldClass or _NewClass, never a partial state
+        assert seen_states[0] in ("_OldClass", "_NewClass")
+
+
+class TestReloadSkipsInitWhenUnchanged:
+    def test_init_not_called_when_signature_unchanged(self):
+        """5.7: __init__ should be skipped when old and new class have the same __init__."""
+        _init_call_log.clear()
+        obj = _InitSideEffectOld()
+        assert obj.x == 42
+        assert _init_call_log == ["old"]
+
+        _apply_patch(obj, _InitSideEffectNew)
+
+        # after the fix, __init__ should NOT have been called again
+        assert _init_call_log == ["old"], (
+            f"__init__ was called during reload — side effect leaked: {_init_call_log}"
+        )
+        # state should still be restored from before the patch
+        assert obj.x == 42
+
+    def test_init_called_when_signature_changes(self):
+        """When __init__ signature changes, __init__ SHOULD be called."""
+        _init_call_log.clear()
+        obj = _InitChangedOld(a=1)
+        obj.lock = _SpyLock()
+
+        # signature changes from (a) to (a, b) — TypeError on __init__()
+        # the bare except catches it, which is fine
+        _apply_patch(obj, _InitChangedNew)
+
+        assert obj.a == 1  # state restored
+
+
 class TestIsUnder:
     def test_sibling_prefix_not_under(self, tmp_path):
         pkg = tmp_path / "atheriz"
@@ -281,6 +435,8 @@ class TestSecondPassErrors:
         import atheriz.reloader as R
 
         cwd = tmp_path
+        (cwd / "__init__.py").write_text("")
+        (cwd / "settings.py").write_text("")
         (cwd / "pkg").mkdir()
         (cwd / "pkg" / "__init__.py").write_text("")
         (cwd / "pkg" / "mod_a.py").write_text("x=1")
@@ -346,3 +502,92 @@ class TestSecondPassErrors:
                                 assert "second pass" in msg or any("second pass" in str(c) for c in mock_err.call_args_list)
 
         sys.modules.pop(fake_mod_name, None)
+
+
+def test_apply_patch_lockless_uses_fallback():
+    from atheriz.reloader import _apply_patch, _FALLBACK_PATCH_LOCK
+
+    class Old:
+        def __init__(self):
+            self.x = 1
+
+    class New(Old):
+        def new_method(self):
+            return 42
+
+    obj = Old()
+    assert not hasattr(obj, "lock")
+    assert _FALLBACK_PATCH_LOCK.acquire(blocking=False) is True
+    _FALLBACK_PATCH_LOCK.release()
+    _apply_patch(obj, New)
+    assert isinstance(obj, New)
+    assert obj.x == 1
+    assert obj.new_method() == 42
+
+    errors = []
+
+    def patch_concurrently():
+        try:
+            o = Old()
+            o.x = 99
+            _apply_patch(o, New)
+            assert isinstance(o, New)
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=patch_concurrently) for _ in range(20)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors
+
+
+def test_discover_new_module_creates_import(tmp_path, monkeypatch):
+    from atheriz import reloader
+    import types
+    import sys
+
+    fake_pkg = tmp_path / "atheriz_pkg"
+    fake_pkg.mkdir()
+    (fake_pkg / "commands").mkdir()
+    (fake_pkg / "commands" / "loggedin").mkdir(parents=True)
+    new_file = fake_pkg / "commands" / "loggedin" / "dummy_new.py"
+    new_file.write_text("value=42\n")
+    monkeypatch.setattr(reloader, "_get_atheriz_package_dir", lambda: fake_pkg)
+    called = []
+    orig = reloader.importlib.import_module
+
+    def fake_import(name):
+        called.append(name)
+        if name not in sys.modules:
+            mod = types.ModuleType(name)
+            sys.modules[name] = mod
+        return sys.modules[name]
+
+    monkeypatch.setattr(reloader.importlib, "import_module", fake_import)
+    sys.modules.pop("atheriz.commands.loggedin.dummy_new", None)
+    discovered = reloader._discover_new_atheriz_modules()
+    assert discovered >= 1
+    assert any("dummy_new" in n for n in called)
+    for n in called:
+        sys.modules.pop(n, None)
+
+
+def test_is_under_windows_symlink_branch(monkeypatch, tmp_path):
+    from atheriz.reloader import _is_under
+    import os as _os
+
+    monkeypatch.setattr(_os, "name", "nt")
+    parent = tmp_path / "parent"
+    parent.mkdir()
+    child = parent / "sub" / "file.py"
+    child.parent.mkdir(parents=True)
+    child.write_text("x")
+    assert _is_under(str(child), str(parent)) is True
+    sibling = tmp_path / "other"
+    sibling.mkdir()
+    other_file = sibling / "file.py"
+    other_file.write_text("x")
+    assert _is_under(str(other_file), str(parent)) is False
+    monkeypatch.setattr(_os, "name", "posix")

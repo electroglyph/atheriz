@@ -1,4 +1,4 @@
-"""Tests for loggedin commands: set, unset, put, get, drop, exam."""
+"""Tests for loggedin commands: put, get, drop, exam."""
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -9,7 +9,6 @@ from atheriz import settings
 from atheriz.commands.loggedin.exam import ExamineCommand, _format_value
 from atheriz.commands.loggedin.get import GetCommand
 from atheriz.commands.loggedin.put import PutCommand
-from atheriz.commands.loggedin.set import SetCommand, UnsetCommand
 from atheriz.commands.loggedin.drop import DropCommand
 from atheriz.globals.objects import add_object, get
 from atheriz.objects.base_obj import Object
@@ -33,116 +32,6 @@ def _make_room(coord=None):
     return r
 
 
-# ---------------------------------------------------------------------------
-# SetCommand / UnsetCommand
-# ---------------------------------------------------------------------------
-
-class TestSetCommand:
-    """INTENT: builder-only; set attribute on target via ast.literal_eval."""
-
-    def test_access_requires_builder(self):
-        c = _make_caller(builder=False)
-        assert SetCommand().access(c) is False
-
-    def test_access_allowed_for_builder(self):
-        c = _make_caller(builder=True)
-        assert SetCommand().access(c) is True
-
-    def test_no_args_shows_help(self):
-        c = _make_caller(builder=True)
-        SetCommand().run(c, None)
-        c.msg.assert_called_once()
-
-    def test_target_me(self):
-        c = _make_caller(builder=True)
-        args = MagicMock(target="me", attribute="my_attr", value="42")
-        SetCommand().run(c, args)
-        # ast.literal_eval("42") = 42
-        assert c.my_attr == 42
-
-    def test_target_here(self):
-        c = _make_caller(builder=True)
-        room = _make_room()
-        c.location = room
-        args = MagicMock(target="here", attribute="my_attr", value="'hello'")
-        SetCommand().run(c, args)
-        # literal_eval on a quoted string
-        assert room.my_attr == "hello"
-
-    def test_target_by_id(self):
-        c = _make_caller(builder=True)
-        target = Object.create(None, "Target")
-        target.id = 999  # ensure unique
-        add_object(target)
-        args = MagicMock(target="#999", attribute="x", value="1")
-        SetCommand().run(c, args)
-        assert target.x == 1
-
-    def test_target_by_id_invalid_format(self):
-        c = _make_caller(builder=True)
-        args = MagicMock(target="#abc", attribute="x", value="1")
-        SetCommand().run(c, args)
-        c.msg.assert_called_with("Invalid ID format. Use #<number>.")
-
-    def test_target_by_id_not_found(self):
-        c = _make_caller(builder=True)
-        args = MagicMock(target="#99999", attribute="x", value="1")
-        SetCommand().run(c, args)
-        c.msg.assert_called_with("No object found with ID 99999.")
-
-    def test_target_not_found(self):
-        c = _make_caller(builder=True)
-        c.search = MagicMock(return_value=[])
-        args = MagicMock(target="missing", attribute="x", value="1")
-        SetCommand().run(c, args)
-        c.msg.assert_called_with("No match found for 'missing'.")
-
-    def test_target_multiple_matches(self):
-        c = _make_caller(builder=True)
-        c.search = MagicMock(return_value=[Object.create(None, "A"), Object.create(None, "B")])
-        args = MagicMock(target="x", attribute="y", value="1")
-        SetCommand().run(c, args)
-        # Two messages: header + per-match line
-        assert any("Multiple matches" in str(call) for call in c.msg.call_args_list)
-
-    def test_falls_back_to_plain_string(self):
-        # INTENT: when literal_eval fails, value is a plain string
-        c = _make_caller(builder=True)
-        args = MagicMock(target="me", attribute="note", value="hello world")
-        SetCommand().run(c, args)
-        # The unquoted string is stored as a plain string
-        assert c.note == "hello world"
-
-    def test_warns_for_new_attribute(self):
-        c = _make_caller(builder=True)
-        args = MagicMock(target="me", attribute="brand_new", value="1")
-        SetCommand().run(c, args)
-        assert any("new attribute" in str(call) for call in c.msg.call_args_list)
-
-
-class TestUnsetCommand:
-    def test_access_requires_builder(self):
-        c = _make_caller(builder=False)
-        assert UnsetCommand().access(c) is False
-
-    def test_deletes_existing_attr(self):
-        c = _make_caller(builder=True)
-        c.foo = 1
-        args = MagicMock(target="me", attribute="foo")
-        UnsetCommand().run(c, args)
-        assert not hasattr(c, "foo")
-
-    def test_missing_attr_msg(self):
-        c = _make_caller(builder=True)
-        args = MagicMock(target="me", attribute="nope")
-        UnsetCommand().run(c, args)
-        c.msg.assert_called_with("Alice has no attribute 'nope'.")
-
-
-# ---------------------------------------------------------------------------
-# PutCommand
-# ---------------------------------------------------------------------------
-
 class TestPutCommand:
     """INTENT: move object from caller to a container; only if container has is_container."""
 
@@ -154,7 +43,6 @@ class TestPutCommand:
     def test_no_location_via_search(self):
         c = _make_caller()
         c.location = None
-        # container is searched, but if not found, msg
         c.search = MagicMock(return_value=[])
         args = MagicMock(object="apple", destination=["bag"])
         PutCommand().run(c, args)
@@ -164,7 +52,6 @@ class TestPutCommand:
         c = _make_caller()
         room = _make_room()
         c.location = room
-        # not a container
         target = MagicMock()
         target.is_container = False
         target.access = MagicMock(return_value=True)
@@ -181,7 +68,6 @@ class TestPutCommand:
         c = _make_caller()
         room = _make_room()
         c.location = room
-        # bag is a container
         bag = Object.create(None, "Bag")
         bag.is_container = True
         bag.access = MagicMock(return_value=True)
@@ -189,10 +75,8 @@ class TestPutCommand:
         apple = Object.create(None, "Apple")
         apple.move_to(c)
         c.search = MagicMock(side_effect=[[bag], [apple]])
-        # override the 2nd call: search for apple
         args = MagicMock(object="apple", destination=["bag"])
         PutCommand().run(c, args)
-        # Apple should now be in bag
         assert apple in bag.contents
 
     def test_at_pre_put_blocks_put(self):
@@ -243,7 +127,6 @@ class TestPutCommand:
         b.at_pre_put = MagicMock(return_value=True)
         room.msg_contents = MagicMock()
         c.search = MagicMock(return_value=[bag])
-        # put all in bag
         args = MagicMock(object="all", destination=["bag"])
         PutCommand().run(c, args)
         assert a not in bag.contents
@@ -266,10 +149,6 @@ class TestPutCommand:
         PutCommand().run(c, args)
         a.at_put.assert_called_once_with(c, bag)
 
-
-# ---------------------------------------------------------------------------
-# GetCommand
-# ---------------------------------------------------------------------------
 
 class TestGetCommand:
     """INTENT: pick up object(s) from location or container; respect at_pre_get hooks."""
@@ -317,7 +196,6 @@ class TestGetCommand:
         room.search = MagicMock(return_value=[apple])
         args = MagicMock(object="apple", source=[])
         GetCommand().run(c, args)
-        # Apple now in caller
         assert apple in c.contents
 
     def test_get_specific_not_found(self):
@@ -344,7 +222,6 @@ class TestGetCommand:
         assert b in c.contents
 
     def test_filters_out_from_in_source(self):
-        # INTENT: "get apple from bag" - "from" is filtered
         c = _make_caller()
         room = _make_room()
         c.location = room
@@ -354,13 +231,8 @@ class TestGetCommand:
         c.search = MagicMock(side_effect=[[], [apple]])
         room.search = MagicMock(return_value=[])
         GetCommand().run(c, args)
-        # We don't care that the result is empty; the point is the filter
-        assert True  # No crash
+        assert True
 
-
-# ---------------------------------------------------------------------------
-# DropCommand
-# ---------------------------------------------------------------------------
 
 class TestDropCommand:
     """INTENT: drop items from inventory into current location."""
@@ -396,7 +268,6 @@ class TestDropCommand:
         c.search = MagicMock(return_value=[apple])
         args = MagicMock(object=["apple"])
         DropCommand().run(c, args)
-        # Apple in room
         assert apple in room.contents
         c.msg.assert_called_with("You dropped: Apple")
 
@@ -423,10 +294,6 @@ class TestDropCommand:
         assert a in room.contents
         assert b in room.contents
 
-
-# ---------------------------------------------------------------------------
-# ExamineCommand
-# ---------------------------------------------------------------------------
 
 class TestExamineCommand:
     """INTENT: dump object attributes with formatted values."""
@@ -504,3 +371,69 @@ class TestFormatValue:
 
     def test_session_none(self):
         assert _format_value(None, hint_name="session") == "None"
+
+
+class TestExamineDoesNotMutate:
+    def test_examine_does_not_mutate_target(self, global_test_env):
+        c = Object.create(None, "Admin")
+        c.privilege_level = settings.Privilege.Admin
+        c.msg = MagicMock()
+
+        target = Object.create(None, "sword", is_item=True)
+        target.privilege_level = settings.Privilege.Player
+        add_object(target)
+
+        args = MagicMock(target=f"#{target.id}")
+        ExamineCommand().run(c, args)
+
+        live = vars(target)
+        assert "contents" not in live
+        assert "is_superuser" not in live
+        assert "is_builder" not in live
+        assert "is_tickable" not in live
+
+        assert target.is_superuser is False
+        assert target.contents == []
+
+    def test_examine_room_does_not_mutate_node(self, global_test_env):
+        c = Object.create(None, "Admin")
+        c.privilege_level = settings.Privilege.Admin
+        c.msg = MagicMock()
+
+        node = Node(coord=Coord("test", 0, 0, 0))
+        add_object(node)
+
+        args = MagicMock(target=f"#{node.id}")
+        ExamineCommand().run(c, args)
+
+        live = vars(node)
+        assert "contents" not in live
+
+
+class TestDropGetEdge:
+    def test_drop_empty_args_shows_help(self):
+        c = _make_caller()
+        c.location = _make_room()
+        DropCommand().run(c, None)
+        c.msg.assert_called_once()
+        assert "drop" in str(c.msg.call_args).lower() or "aliases" in str(c.msg.call_args).lower()
+
+    def test_get_empty_args_shows_help(self):
+        c = _make_caller()
+        GetCommand().run(c, None)
+        c.msg.assert_called_once()
+        assert "get" in str(c.msg.call_args).lower() or "aliases" in str(c.msg.call_args).lower()
+
+    def test_put_into_non_container_denied(self):
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        target = MagicMock()
+        target.is_container = False
+        target.access = MagicMock(return_value=True)
+        target.name = "Rock"
+        c.search = MagicMock(return_value=[target])
+        args = MagicMock(object="apple", destination=["rock"])
+        PutCommand().run(c, args)
+        c.msg.assert_called_once()
+        assert "can't put" in str(c.msg.call_args).lower()

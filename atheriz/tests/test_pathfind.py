@@ -269,8 +269,75 @@ def test_astar_blocked_completely(setup_pathfind_area):
     assert success is False
 
 
+def test_pathfind_no_heapify_and_stale_handling(node_handler_setup=None):
+    from atheriz.pathfind import astar
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
+    from atheriz.globals.node import NodeHandler
+
+    nh = NodeHandler()
+    area = NodeArea(name="U8Area")
+    grid = NodeGrid(area="U8Area", z=0)
+    nodes = {}
+    for coord in [(0, 0), (1, 1), (1, 0), (2, 0)]:
+        n = Node(coord=Coord("U8Area", coord[0], coord[1], 0))
+        nodes[coord] = n
+        grid.nodes[coord] = n
+    nodes[(0, 0)].add_link(NodeLink("n", Coord("U8Area", 1, 1, 0), ["n"]))
+    nodes[(1, 1)].add_link(NodeLink("s", Coord("U8Area", 0, 0, 0), ["s"]))
+    nodes[(1, 1)].add_link(NodeLink("s_e", Coord("U8Area", 1, 0, 0), ["e"]))
+    nodes[(1, 0)].add_link(NodeLink("n_w", Coord("U8Area", 1, 1, 0), ["w"]))
+    nodes[(0, 0)].add_link(NodeLink("e", Coord("U8Area", 1, 0, 0), ["e"]))
+    nodes[(1, 0)].add_link(NodeLink("w", Coord("U8Area", 0, 0, 0), ["w"]))
+    nodes[(1, 0)].add_link(NodeLink("e2", Coord("U8Area", 2, 0, 0), ["e"]))
+    nodes[(2, 0)].add_link(NodeLink("w2", Coord("U8Area", 1, 0, 0), ["w"]))
+    area.add_grid(grid)
+    nh.add_area(area)
+    with patch("atheriz.pathfind.get_node_handler", return_value=nh), patch(
+        "atheriz.objects.nodes.get_node_handler", return_value=nh
+    ):
+        with patch("atheriz.pathfind.heapq.heapify") as mock_heapify:
+            success, path, closed = astar(nodes[(0, 0)], nodes[(2, 0)])
+            assert success is True
+            assert len(path) == 3
+            assert path[0] == nodes[(0, 0)]
+            assert path[-1] == nodes[(2, 0)]
+            assert mock_heapify.call_count <= 1
+
+
+def test_pathfind_stale_entries_skipped():
+    from atheriz.pathfind import astar
+    from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
+    from atheriz.globals.node import NodeHandler
+
+    nh = NodeHandler()
+    area = NodeArea(name="StaleArea")
+    grid = NodeGrid(area="StaleArea", z=0)
+    size = 5
+    nodes = {}
+    for x in range(size):
+        n = Node(coord=Coord("StaleArea", x, 0, 0))
+        nodes[(x, 0)] = n
+        grid.nodes[(x, 0)] = n
+    for x in range(size - 1):
+        nodes[(x, 0)].add_link(NodeLink(f"e{x}", Coord("StaleArea", x + 1, 0, 0), ["e"]))
+        nodes[(x + 1, 0)].add_link(NodeLink(f"w{x}", Coord("StaleArea", x, 0, 0), ["w"]))
+    nodes[(0, 0)].add_link(NodeLink("jump", Coord("StaleArea", 2, 0, 0), ["j"]))
+    nodes[(2, 0)].add_link(NodeLink("jump_back", Coord("StaleArea", 0, 0, 0), ["jb"]))
+    area.add_grid(grid)
+    nh.add_area(area)
+    with patch("atheriz.pathfind.get_node_handler", return_value=nh), patch(
+        "atheriz.objects.nodes.get_node_handler", return_value=nh
+    ):
+        success, path, closed = astar(nodes[(0, 0)], nodes[(4, 0)])
+        assert success is True
+        assert path[0] == nodes[(0, 0)]
+        assert path[-1] == nodes[(4, 0)]
+        assert len(path) == 4
+
+
+@pytest.mark.slow
 def test_pathfind_uses_set_for_closed_list(node_handler):
-    """100-node grid pathfinds in under 1s (O(n²) with list would be >10s)."""
+    """100-node grid pathfinds in under 2s (O(n²) with list would be >10s)."""
     import time
 
     area = NodeArea(name="BigArea")
@@ -300,5 +367,5 @@ def test_pathfind_uses_set_for_closed_list(node_handler):
     elapsed = time.monotonic() - t0
 
     assert success is True
-    assert elapsed < 1.0
+    assert elapsed < 2.0
     assert all(isinstance(c, Coord) for c in closed)

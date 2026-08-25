@@ -187,3 +187,28 @@ def test_give_with_to_preposition():
     
     assert item.location == receiver
     giver.msg.assert_any_call("You give apple to receiver.")
+
+
+def test_give_to_self_fails():
+    giver, receiver, node = setup_give_scenario()
+    item = Object.create(None, "apple", is_item=True)
+    item.move_to(giver)
+    cmd = GiveCommand()
+    args = cmd.parser.parse_args(["apple", "giver"])
+    cmd.run(giver, args)
+    giver.msg.assert_called()
+    assert "already have" in str(giver.msg.call_args_list).lower()
+    assert item.location == giver
+
+
+def test_give_to_offline_char_fails():
+    giver, receiver, node = setup_give_scenario()
+    receiver.is_connected = False
+    item = Object.create(None, "apple", is_item=True)
+    item.move_to(giver)
+    cmd = GiveCommand()
+    args = cmd.parser.parse_args(["apple", "receiver"])
+    cmd.run(giver, args)
+    giver.msg.assert_called()
+    assert "could not find" in str(giver.msg.call_args_list).lower() or "offline" in str(giver.msg.call_args_list).lower()
+    assert item.location == giver

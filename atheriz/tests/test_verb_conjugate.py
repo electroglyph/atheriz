@@ -5,6 +5,7 @@ Pure-Python; no DB / network / async. Covers every public function.
 import pytest
 
 from atheriz.objects.verb_conjugation import conjugate as c
+from atheriz.objects.verb_conjugation.conjugate import verb_is_present, verb_is_past
 
 
 # ---------------------------------------------------------------------------
@@ -315,3 +316,34 @@ def test_verb_actor_stance_present_participle():
     you, them = c.verb_actor_stance_components("running")
     assert you == "running"
     assert them == "running"
+
+
+def test_verb_is_present_are_plural():
+    assert verb_is_present("are", "plural") is True
+    assert verb_is_present("are", "*") is True
+    assert verb_is_present("are", "2") is True
+    assert verb_is_present("are", "2nd") is True
+    assert verb_is_present("are", "1") is False
+    assert verb_is_present("are", "3") is False
+    assert verb_is_present("is", "3") is True
+    assert verb_is_present("is", "plural") is False
+    assert verb_is_present("is", "2") is False
+    assert verb_is_present("am", "") is True
+    assert verb_is_present("was", "") is False
+
+
+def test_verb_is_past_was_covers_both_singular():
+    assert verb_is_past("was", "1") is True
+    assert verb_is_past("was", "3") is True
+    assert verb_is_past("was", "2") is False
+    assert verb_is_past("was", "*") is False
+    assert verb_is_past("were", "2") is True
+    assert verb_is_past("were", "*") is True
+    assert verb_is_past("were", "1") is False
+
+
+def test_verb_is_present_past_negated():
+    assert verb_is_present("isn't", "3", negated=True) is True
+    assert verb_is_present("is", "3", negated=True) is False
+    assert verb_is_past("wasn't", "1", negated=True) is True
+    assert verb_is_past("was", "1", negated=True) is False

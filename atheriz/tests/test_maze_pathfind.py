@@ -1,41 +1,11 @@
 import pytest
 from atheriz.utils import Coord
-import tempfile
-import shutil
 from unittest.mock import MagicMock
 
 from atheriz.commands.loggedin.maze import gen_map_and_grid
 from atheriz.objects.nodes import NodeArea, NodeLink
 from atheriz.globals.get import get_node_handler
 from atheriz.pathfind import astar
-from atheriz.globals.objects import _ALL_OBJECTS
-from atheriz import database_setup, settings
-from atheriz.globals import get
-
-@pytest.fixture(autouse=True)
-def temp_env():
-    old_save_path = settings.SAVE_PATH
-    temp_dir = tempfile.mkdtemp()
-    settings.SAVE_PATH = temp_dir
-    
-    database_setup.do_setup()
-    get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
-    
-    yield
-    
-    import atheriz.database_setup as db_mod
-    if db_mod._DATABASE is not None:
-        db_mod._DATABASE.close()
-    db_mod._DATABASE = None
-
-    try:
-        shutil.rmtree(temp_dir)
-    except Exception:
-        pass
-    settings.SAVE_PATH = old_save_path
-    get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
 
 def test_maze_astar():
     nh = get_node_handler()

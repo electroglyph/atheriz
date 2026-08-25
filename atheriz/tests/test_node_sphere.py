@@ -1,7 +1,8 @@
-from atheriz.utils import Coord
 import time
+import pytest
+from atheriz.utils import Coord, get_dir, get_points_in_sphere, _MAX_SPHERE_RADIUS
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea
-from atheriz.utils import get_points_in_sphere, Coord
+from atheriz.objects.funcparser_helpers import _safe_pow, _safe_arith_eval
 
 
 def _build_sparse_area(name="SphereTest"):
@@ -129,3 +130,50 @@ def test_get_rays_in_sphere_center_no_crash():
     coords = {n.coord for n in flat}
     assert Coord("CenterRayTest", 1, 0, 0) in coords
     assert Coord("CenterRayTest", 0, 1, 0) in coords
+
+
+def test_get_dir_different_area_returns_empty():
+    assert get_dir(("AreaA", 0, 0, 0), ("AreaB", 1, 0, 0)) == ""
+    assert get_dir(("AreaA", 0, 0, 0), ("AreaA", 1, 0, 0)) == "east"
+    assert get_dir(Coord("A", 0, 0, 0), Coord("B", 5, 5, 0)) == ""
+    assert get_dir(Coord("A", 0, 0, 0), Coord("A", 0, 1, 0)) == "north"
+
+
+def test_get_dir_mixed_dims_and_same_area():
+    assert get_dir(("AreaA", 0, 0, 0), (0, 1, 0)) == ""
+    assert get_dir(("X", 0, 0, 0), ("X", 0, 1, 0)) == "north"
+    assert get_dir((0, 0, 0), (0, 1, 0)) == "east"
+
+
+def test_get_points_in_sphere_radius_guard():
+    with pytest.raises(ValueError):
+        get_points_in_sphere((0, 0, 0), -1)
+    with pytest.raises(ValueError):
+        get_points_in_sphere((0, 0, 0), _MAX_SPHERE_RADIUS + 1)
+    with pytest.raises(ValueError):
+        get_points_in_sphere((0, 0, 0), 1000)
+    pts = get_points_in_sphere((0, 0, 0), 0)
+    assert pts == [(0, 0, 0)]
+    pts2 = get_points_in_sphere((0, 0, 0), _MAX_SPHERE_RADIUS)
+    assert len(pts2) > 0
+
+
+def test_get_nodes_in_sphere_radius_guard():
+    area = NodeArea(name="TestSphere")
+    with pytest.raises(ValueError):
+        area.get_nodes_in_sphere((0, 0, 0), -5)
+    with pytest.raises(ValueError):
+        area.get_nodes_in_sphere((0, 0, 0), 500)
+    assert area.get_nodes_in_sphere((0, 0, 0), 5) == []
+
+
+def test_safe_pow_rejects_complex():
+    with pytest.raises(ValueError, match="complex"):
+        _safe_pow(-2, 0.5)
+    with pytest.raises(ValueError, match="complex"):
+        _safe_arith_eval("(-2)**0.5")
+    with pytest.raises(ValueError):
+        _safe_arith_eval("(-4)**0.5")
+    assert _safe_pow(2, 3) == 8
+    assert _safe_arith_eval("2**3") == 8
+    assert _safe_arith_eval("9**0.5") == 3.0

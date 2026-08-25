@@ -8,6 +8,7 @@ from typing import Any
 import types
 from atheriz.globals.objects import _ALL_OBJECTS, _ALL_OBJECTS_LOCK, filter_by
 from atheriz.logger import logger
+from atheriz.utils import is_in_game_folder
 
 # Core modules that should never be reloaded (would break server state)
 _EXCLUDED_MODULES = {
@@ -94,6 +95,8 @@ def _discover_new_game_modules():
     already in sys.modules. This ensures new files added by users
     (e.g. new commands) are picked up on reload.
     """
+    if not is_in_game_folder():
+        return 0
     cwd = Path.cwd().resolve()
     atheriz_dir = str(_get_atheriz_package_dir())
     pkg_name = cwd.name
@@ -105,7 +108,7 @@ def _discover_new_game_modules():
         if Path(root).resolve() == cwd:
             dirs[:] = [d for d in dirs if (Path(root) / d / "__init__.py").exists()]
         else:
-            dirs[:] = [d for d in dirs if d != "__pycache__"]
+            dirs[:] = [d for d in dirs if d != "__pycache__" and not d.startswith(".")]
 
         # Don't walk into the atheriz package itself
         if _is_under(Path(root), Path(atheriz_dir)):
@@ -143,6 +146,8 @@ def _reload_game_folder_modules():
     then re-run CLASS_INJECTIONS so that overridden classes are
     re-applied to their target modules.
     """
+    if not is_in_game_folder():
+        return 0, []
     from atheriz import settings
 
     # grab new game folder modules from disk
@@ -304,6 +309,8 @@ def reload_game_logic() -> str:
     Returns:
         str: A status message describing what was done.
     """
+    if not is_in_game_folder():
+        return "Not in a game folder; reload skipped."
     if not _reload_lock.acquire(blocking=False):
         return "Reload already in progress; skipping."
 

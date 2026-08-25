@@ -27,7 +27,7 @@ def _do_reload_with_externals_mocked():
          patch.object(ss, "save_objects"), \
          patch.object(ss, "start_autosave"), \
          patch.object(ss, "stop_autosave"), \
-         patch("atheriz.server_events"), \
+         patch("atheriz.server_events", create=True), \
          patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
          patch.object(ss.settings, "AUTOSAVE_ON_RELOAD", False):
         ss.do_reload()
@@ -160,7 +160,7 @@ class TestEngineCorosOnce:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
              patch.object(ss.settings, "AUTOSAVE_ON_RELOAD", False), \
              patch.object(ss, "start_autosave", side_effect=fake_start_autosave):

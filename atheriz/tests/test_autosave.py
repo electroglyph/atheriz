@@ -261,3 +261,79 @@ class TestAutosaveIntegration:
         autosave_mod._autosave_started = True
         assert autosave_mod._autosave_started is True
         # Fixture will reset
+
+
+@pytest.fixture(autouse=True)
+def _clean_autosave_state():
+    from atheriz.globals import autosave
+
+    autosave_mod.stop_autosave()
+    autosave._autosave_started = False
+    autosave._registered_interval = None
+    from atheriz.globals.get import get_async_ticker
+    from atheriz.globals.autosave import autosave_tick
+
+    ticker = get_async_ticker()
+    for interval in [float(m) * 60.0 for m in (1, 2, 5, 10)]:
+        ticker.remove_coro(autosave_tick, interval)
+    yield
+    autosave_mod.stop_autosave()
+    autosave._autosave_started = False
+    autosave._registered_interval = None
+    for interval in [float(m) * 60.0 for m in (1, 2, 5, 10)]:
+        ticker.remove_coro(autosave_tick, interval)
+
+
+def _slots_holding_tick() -> list[float]:
+    from atheriz.globals.autosave import autosave_tick
+    from atheriz.globals.get import get_async_ticker
+
+    return [
+        interval
+        for interval, slot in get_async_ticker().slots.items()
+        if autosave_tick in slot.coros
+    ]
+
+
+class TestStaleKeyRegression:
+    def test_stop_removes_old_interval_after_setting_change(self, monkeypatch):
+        from atheriz.globals.autosave import autosave_tick, start_autosave, stop_autosave
+
+        monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", 5)
+        start_autosave()
+        assert _slots_holding_tick() == [300.0]
+
+        monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", 10)
+        stop_autosave()
+        assert _slots_holding_tick() == []
+
+        start_autosave()
+        holding = _slots_holding_tick()
+        assert holding == [600.0]
+        assert len(holding) == 1
+
+    def test_repeated_reload_cycles_never_stack(self, monkeypatch):
+        from atheriz.globals.autosave import start_autosave, stop_autosave
+
+        for minutes in (1, 5, 2, 10):
+            monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", minutes)
+            stop_autosave()
+            start_autosave()
+            expected = float(minutes) * 60.0
+            assert _slots_holding_tick() == [expected]
+
+
+class TestDisabledTransition:
+    def test_disable_with_changed_setting_still_removes(self, monkeypatch):
+        from atheriz.globals.autosave import start_autosave, stop_autosave
+
+        monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", 5)
+        start_autosave()
+        assert _slots_holding_tick() == [300.0]
+
+        monkeypatch.setattr(settings, "AUTOSAVE_MINUTES", 0)
+        stop_autosave()
+        assert _slots_holding_tick() == []
+
+        start_autosave()
+        assert _slots_holding_tick() == []

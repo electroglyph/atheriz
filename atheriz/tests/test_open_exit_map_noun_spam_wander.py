@@ -354,6 +354,82 @@ class TestSpamCommand:
         # "skipping" message should have been emitted
         assert any("skipping" in str(call) for call in c.msg.call_args_list)
 
+    def test_spam_zero_count_shows_help(self, global_test_env):
+        c = _make_caller(superuser=True)
+        c.location = MagicMock()
+        args = MagicMock(count=0)
+        from atheriz import settings as s
+
+        save_path = global_test_env
+        with patch.object(s, "SAVE_PATH", str(save_path)), \
+             patch("atheriz.commands.loggedin.spam.get_node_handler") as mock_nh, \
+             patch("atheriz.commands.loggedin.spam.save_objects"):
+            mock_nh.return_value = MagicMock()
+            SpamCommand().run(c, args)
+        assert (s.SAVE_PATH and True)
+        creds = __import__("pathlib").Path(save_path) / "spam_accounts.txt"
+        assert creds.exists()
+        content = creds.read_text()
+        assert "# Account Name" in content
+        assert "Created 0 accounts" in str(c.msg.call_args_list)
+
+    def test_spam_1000_succeeds(self, global_test_env, fixed_salt):
+        c = _make_caller(superuser=True)
+        c.location = MagicMock()
+        args = MagicMock(count=1000)
+        from atheriz import settings as s
+
+        save_path = global_test_env
+
+        def fake_account(name, pw):
+            m = MagicMock()
+            m.name = name
+            return m
+
+        def fake_char(*args, **kwargs):
+            m = MagicMock()
+            m.move_to = MagicMock(return_value=True)
+            m.add_character = MagicMock()
+            return m
+
+        with patch.object(s, "SAVE_PATH", str(save_path)), \
+             patch("atheriz.commands.loggedin.spam.get_node_handler") as mock_nh, \
+             patch("atheriz.commands.loggedin.spam.save_objects"), \
+             patch("atheriz.commands.loggedin.spam.Account.create", side_effect=fake_account), \
+             patch("atheriz.commands.loggedin.spam.Object.create", side_effect=fake_char):
+            mock_nh.return_value = MagicMock()
+            SpamCommand().run(c, args)
+        creds = __import__("pathlib").Path(save_path) / "spam_accounts.txt"
+        assert creds.exists()
+        content = creds.read_text()
+        assert "account1000" in content
+        assert "char1000" in content
+        assert not any("Maximum count" in str(call) for call in c.msg.call_args_list)
+
+    def test_spam_1001_limit_denied(self):
+        c = _make_caller(superuser=True)
+        args = MagicMock(count=1001)
+        SpamCommand().run(c, args)
+        c.msg.assert_called_with("Maximum count is 1000.")
+
+    def test_spam_creates_accounts_file_content(self, global_test_env, fixed_salt):
+        c = _make_caller(superuser=True)
+        c.location = MagicMock()
+        args = MagicMock(count=1)
+        from atheriz import settings as s
+
+        save_path = global_test_env
+        with patch.object(s, "SAVE_PATH", str(save_path)), \
+             patch("atheriz.commands.loggedin.spam.get_node_handler") as mock_nh, \
+             patch("atheriz.commands.loggedin.spam.save_objects"):
+            mock_nh.return_value = MagicMock()
+            SpamCommand().run(c, args)
+        creds = __import__("pathlib").Path(save_path) / "spam_accounts.txt"
+        assert creds.exists()
+        content = creds.read_text()
+        assert content.startswith("# Account Name")
+        assert "account1|password1|char1" in content
+
 
 # ---------------------------------------------------------------------------
 # WanderCommand

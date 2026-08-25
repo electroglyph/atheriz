@@ -147,7 +147,9 @@ class TestLoggedinCmdSet:
     def test_exit_key_resolves_to_quit(self):
         cs = LoggedinCmdSet()
         cmd = cs.get("exit")
-        assert isinstance(cmd, QuitCommand)
+        assert cmd is not None
+        assert getattr(cmd, "key", None) == "quit"
+        assert "exit" in getattr(cmd, "aliases", [])
 
 
 # ---------------------------------------------------------------------------
@@ -484,51 +486,3 @@ class TestMoveCommand:
             mock_nh.return_value.get_node.return_value = node
             MoveCommand().run(c, Namespace(coord=["(area,5,6,7)"]))
         c.move_to.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# CmdSocials (additional intent tests)
-# ---------------------------------------------------------------------------
-
-class TestCmdSocialsExtra:
-    """INTENT: covers the 'socials' (literal) and 'no matching template' branches."""
-
-    def test_socials_command_lists_aliases(self):
-        c = _make_caller()
-        args = Namespace(cmdstring="socials", target=[])
-        CmdSocials().run(c, args)
-        c.msg.assert_called_once()
-        text = c.msg.call_args[0][0]
-        assert "smile" in text
-        assert "hug" in text
-
-    def test_unknown_cmdstring_uses_invocation_msg(self):
-        c = _make_caller()
-        c.location = MagicMock()
-        c.location.msg_contents = MagicMock()
-        args = Namespace(cmdstring="laugh", target=[])
-        CmdSocials().run(c, args)
-        c.location.msg_contents.assert_called_once()
-
-    def test_all_socials_have_two_templates(self):
-        for verb, templates in SOCIALS_DICT.items():
-            assert isinstance(templates, tuple), f"{verb} not tuple"
-            assert len(templates) == 2, f"{verb} does not have 2 templates"
-            assert "$You" in templates[0]
-            assert "$You" in templates[1]
-
-    def test_targeted_social_template_is_used(self):
-        c = _make_caller()
-        target = MagicMock()
-        target.id = 99
-        target.is_pc = True
-        target.is_npc = False
-        c.search = MagicMock(return_value=[target])
-        c.location = MagicMock()
-        c.location.msg_contents = MagicMock()
-        args = Namespace(cmdstring="wave", target=["Bob"])
-        CmdSocials().run(c, args)
-        c.location.msg_contents.assert_called_once()
-        kwargs = c.location.msg_contents.call_args.kwargs
-        assert "target" in kwargs["mapping"]
-        assert kwargs["mapping"]["target"] is target

@@ -13,6 +13,8 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock, patch
 
+import pytest
+
 import atheriz.globals.get as get_singleton
 import atheriz.globals.startstop as ss
 import atheriz.settings as settings
@@ -29,7 +31,7 @@ def _shutdown_with_externals_mocked():
          patch.object(ss, "msg_all"), \
          patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
          patch.object(ss.settings, "AUTOSAVE_ON_SHUTDOWN", False), \
-         patch("atheriz.server_events"):
+         patch("atheriz.server_events", create=True):
         do_shutdown()
 
 
@@ -88,7 +90,7 @@ class TestShutdownStepIsolation:
              patch.object(ss, "msg_all"), \
              patch.object(ss.settings, "TIME_SYSTEM_ENABLED", False), \
              patch.object(ss.settings, "AUTOSAVE_ON_SHUTDOWN", True), \
-             patch("atheriz.server_events") as mock_se:
+             patch("atheriz.server_events", create=True) as mock_se:
             mock_se.at_server_stop.side_effect = RuntimeError("boom")
             ss.do_shutdown()
         mock_save.assert_called_once()

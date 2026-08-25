@@ -179,3 +179,61 @@ def make_object(name: str = "foo", **attrs) -> Any:
     for k, v in attrs.items():
         setattr(obj, k, v)
     return obj
+
+
+def row_count(obj_id: int) -> int:
+    """Return row count for obj_id."""
+    from atheriz import database_setup
+
+    try:
+        db = database_setup.get_database()
+    except RuntimeError:
+        database_setup.reopen_database()
+        db = database_setup.get_database()
+    with db.lock:
+        cur = db.connection.cursor()
+        cur.execute("SELECT COUNT(*) FROM objects WHERE id = ?", (obj_id,))
+        return cur.fetchone()[0]
+
+
+def assert_persisted(obj_id: int, check_fn=None):
+    """Assert persisted row for obj_id exists; optionally run check_fn(loaded)."""
+    import dill as _dill
+    from atheriz import database_setup
+
+    try:
+        db = database_setup.get_database()
+    except RuntimeError:
+        database_setup.reopen_database()
+        db = database_setup.get_database()
+    with db.lock:
+        cur = db.connection.cursor()
+        cur.execute("SELECT data FROM objects WHERE id = ?", (obj_id,))
+        row = cur.fetchone()
+        assert row is not None, f"object {obj_id} not persisted"
+        loaded = _dill.loads(row[0])
+    if check_fn is not None:
+        check_fn(loaded)
+    return loaded
+
+
+def tracked_objects_snapshot():
+    """Snapshot of current tracked object ids."""
+    from atheriz.globals.objects import _ALL_OBJECTS
+
+    return set(_ALL_OBJECTS.keys())
+
+
+def assert_no_leak(before, after_additional=None):
+    """Assert no leak vs before snapshot; optionally allow after_additional ids."""
+    from atheriz.globals.objects import _ALL_OBJECTS
+
+    after = set(_ALL_OBJECTS.keys())
+    if after_additional is None:
+        assert after == before, f"leak: before {before} after {after}"
+        return
+    if isinstance(after_additional, int):
+        assert len(after) == len(before) + after_additional, f"leak: before {len(before)} after {len(after)} expected +{after_additional}"
+        return
+    expected = set(before) | set(after_additional)
+    assert after == expected, f"leak: expected {expected} got {after}"

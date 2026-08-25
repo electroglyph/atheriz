@@ -1,15 +1,22 @@
-"""Tests for atheriz.network.telnet — TelnetConnection and TelnetProtocol."""
+"""Merged telnet tests — TelnetConnection, lifespan, line cap, TLS."""
 from __future__ import annotations
 
+import asyncio
+import socket
+import ssl
+import subprocess
+import threading
+import time
+from contextlib import asynccontextmanager
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-import threading
-import time
 import telnetlib3
 
-from atheriz.network.telnet import TelnetConnection, TelnetProtocol, _clamp_naws
 import atheriz.settings as settings
+from atheriz.network.telnet import TelnetConnection, TelnetProtocol, _clamp_naws, read_capped_lines, build_telnet_ssl_context
+from fastapi import FastAPI
 
 
 def _make_writer(host="1.2.3.4"):
@@ -27,7 +34,89 @@ def _make_conn_with_writer(host="1.2.3.4", loop=None):
     return conn, w
 
 
-class TestTelnetConnection:
+class _FakeReader:
+    def __init__(self, chunks):
+        self._chunks = list(chunks)
+
+    async def read(self, n):
+        return self._chunks.pop(0) if self._chunks else ""
+
+
+def _collect(chunks, max_line=32):
+    async def run():
+        return [line async for line in read_capped_lines(_FakeReader(chunks), max_line)]
+
+    return asyncio.run(run())
+
+
+def _make_self_signed(tmp_path) -> tuple[Path, Path, Path]:
+    key = tmp_path / "key.pem"
+    cert = tmp_path / "cert.pem"
+    try:
+        subprocess.run(
+            [
+                "openssl", "req", "-x509", "-newkey", "rsa:2048",
+                "-keyout", str(key), "-out", str(cert),
+                "-days", "1", "-nodes", "-subj", "/CN=localhost",
+            ],
+            check=True, capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        pytest.skip("openssl not available")
+    combined = tmp_path / "combined.pem"
+    combined.write_text(cert.read_text() + key.read_text())
+    return key, cert, combined
+
+
+class _LifespanServerStub:
+    def __init__(self):
+        self._closed = False
+
+    def close(self):
+        self._closed = True
+
+    async def wait_closed(self):
+        return None
+
+
+async def _lifespan_fake_create_server(*args, **kwargs):
+    return _LifespanServerStub()
+
+
+class _TlsServerStub:
+    def __init__(self):
+        self._closed = False
+
+    def close(self):
+        self._closed = True
+
+    async def wait_closed(self):
+        return None
+
+
+async def _tls_fake_create_server(*args, **kwargs):
+    return _TlsServerStub(), kwargs
+
+
+def _mount(app):
+    @asynccontextmanager
+    async def original(app):
+        yield
+
+    app.router.lifespan_context = original
+    TelnetProtocol.setup(app)
+    return app.router.lifespan_context
+
+
+def _run_lifespan(lifespan, app):
+    async def run():
+        async with lifespan(app):
+            pass
+
+    asyncio.run(run())
+
+
+class TestTelnetProtocol:
     def test_init_stores_reader_writer(self, global_test_env):
         r, w = MagicMock(), _make_writer()
         conn = TelnetConnection(r, w)
@@ -55,8 +144,6 @@ class TestTelnetConnection:
         assert conn._pending_bytes == 0
         assert conn._closing is False
 
-
-class TestTelnetConnectionSendCommand:
     def test_text_command_writes(self, global_test_env):
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
@@ -115,8 +202,6 @@ class TestTelnetConnectionSendCommand:
             w.write.assert_called_once_with("hello")
             assert conn._pending_bytes == 0
 
-
-class TestTelnetConnectionClose:
     def test_close_calls_writer_close(self, global_test_env):
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
@@ -154,8 +239,6 @@ class TestTelnetConnectionClose:
         w.write.assert_not_called()
         w.close.assert_not_called()
 
-
-class TestGetWriteBufferSize:
     def test_prefers_writer_transport(self, global_test_env):
         w = _make_writer()
         tr = MagicMock()
@@ -203,25 +286,13 @@ class TestGetWriteBufferSize:
         assert conn._get_write_buffer_size() is None
 
     def test_returns_none_when_writer_missing_attr(self, global_test_env):
-        w = MagicMock()
-        w.get_extra_info.return_value = ("1.2.3.4", 23)
-        # no transport attrs
-        del w.transport
-        del w._transport
-        if hasattr(w, "get_write_buffer_size"):
-            del w.get_write_buffer_size
+        class W:
+            def get_extra_info(self, *a, **kw):
+                return ("1.2.3.4", 23)
+        w = W()
         conn = TelnetConnection(MagicMock(), w)
-        # MagicMock will create attrs on access, so force real missing by using spec
-        w2 = _make_writer()
-        w2.transport = None
-        if hasattr(w2, "get_write_buffer_size"):
-            del w2.get_write_buffer_size
-        w2._transport = None
-        conn.writer = w2
         assert conn._get_write_buffer_size() is None
 
-
-class TestTelnetBackpressureOnLoop:
     def test_on_loop_pre_buffer_exceeds_closes(self, global_test_env):
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
@@ -283,8 +354,6 @@ class TestTelnetBackpressureOnLoop:
         w.write.assert_called_once()
         assert conn._pending_bytes == 999999
 
-
-class TestTelnetBackpressureOffLoop:
     def test_offloop_reserves_and_schedules(self, global_test_env):
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
@@ -310,7 +379,6 @@ class TestTelnetBackpressureOffLoop:
         mock_loop = MagicMock()
         with patch.object(conn, "_resolve_loop", return_value=mock_loop):
             conn.send_command("text", "hello")
-        # exceeded pending → close() schedules writer.close, not _offloop_write
         assert mock_loop.call_soon_threadsafe.call_count == 1
         assert mock_loop.call_soon_threadsafe.call_args[0][0] is w.close
         assert conn._closing is True
@@ -388,7 +456,6 @@ class TestTelnetBackpressureOffLoop:
                 assert conn._pending_bytes == 10
                 conn.send_command("text", "12345")
                 assert conn._closing is True
-                # 2 writes + 1 close
                 assert mock_loop.call_soon_threadsafe.call_count == 3
                 assert mock_loop.call_soon_threadsafe.call_args_list[0][0][0].__name__ == "_offloop_write"
                 assert mock_loop.call_soon_threadsafe.call_args_list[1][0][0].__name__ == "_offloop_write"
@@ -396,8 +463,6 @@ class TestTelnetBackpressureOffLoop:
         finally:
             settings.TELNET_MAX_PENDING_BYTES = orig
 
-
-class TestTelnetPromptMaskedEchoOn:
     def test_prompt_masked_on_loop_writes_iac_and_text(self, global_test_env):
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
@@ -425,7 +490,6 @@ class TestTelnetPromptMaskedEchoOn:
         calls = []
         def rec(func, *args):
             calls.append(func.__name__)
-            # for _offloop_write decrement pending, mock buffer
             with patch.object(conn, "_get_write_buffer_size", return_value=0):
                 func(*args)
         mock_loop.call_soon_threadsafe.side_effect = rec
@@ -444,7 +508,6 @@ class TestTelnetPromptMaskedEchoOn:
         mock_loop = MagicMock()
         with patch.object(conn, "_resolve_loop", return_value=mock_loop):
             conn.send_command("prompt_masked", "hello")
-        # exceeded → close() schedules writer.close, not iac/write
         assert mock_loop.call_soon_threadsafe.call_count == 1
         assert mock_loop.call_soon_threadsafe.call_args[0][0] is w.close
         assert conn._closing is True
@@ -458,7 +521,6 @@ class TestTelnetPromptMaskedEchoOn:
         with patch.object(conn, "_resolve_loop", return_value=mock_loop):
             with patch.object(conn, "_get_write_buffer_size", return_value=0):
                 conn.send_command("prompt_masked", "")
-                # No pending increment for empty text
                 assert conn._pending_bytes == 0
         assert mock_loop.call_soon_threadsafe.call_count == 1
         assert mock_loop.call_soon_threadsafe.call_args[0][0].__name__ == "_offloop_iac"
@@ -497,8 +559,6 @@ class TestTelnetPromptMaskedEchoOn:
         w.iac.assert_not_called()
         w.write.assert_not_called()
 
-
-class TestTelnetProtocolSetup:
     def test_setup_skipped_when_disabled(self, global_test_env):
         app = MagicMock()
         with patch("atheriz.settings.TELNET_ENABLED", False):
@@ -516,8 +576,6 @@ class TestTelnetProtocolSetup:
             TelnetProtocol.setup(app)
         assert callable(app.router.lifespan_context)
 
-
-class TestClampNaws:
     def test_normal_values_pass_through(self):
         assert _clamp_naws(24, 80) == (24, 80)
 
@@ -543,3 +601,252 @@ class TestClampNaws:
             settings.TELNET_NAWS_MAX_COLS = original_max_cols
             settings.TELNET_NAWS_MIN_ROWS = original_min_rows
             settings.TELNET_NAWS_MAX_ROWS = original_max_rows
+
+
+class TestTelnetLifespan:
+    def test_mounting_telnet_preserves_previous_lifespan(self, global_test_env):
+        """INTENT: telnet's lifespan must be composed with an existing one, not
+        replace it. Today `app.router.lifespan_context` is overwritten so the
+        sentinel lifespan's start/stop hooks never run -> FAIL."""
+        app = FastAPI()
+        calls = []
+
+        @asynccontextmanager
+        async def original(app):
+            calls.append("start")
+            yield
+            calls.append("stop")
+
+        app.router.lifespan_context = original
+
+        with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_lifespan_fake_create_server):
+            TelnetProtocol.setup(app)
+
+            installed = app.router.lifespan_context
+
+            async def run():
+                async with installed(app):
+                    pass
+
+            asyncio.run(run())
+
+        assert calls == ["start", "stop"], (
+            f"the pre-installed lifespan was dropped by {TelnetProtocol.__name__}.setup; calls={calls}"
+        )
+
+    def test_setup_composes_server_lifecycle_with_previous(self, global_test_env):
+        """INTENT: an existing lifespan keeps running AND the telnet server
+        starts/stops inside it; the server task must not be a class attribute
+        shared across app instances."""
+        app = FastAPI()
+        calls = []
+
+        @asynccontextmanager
+        async def original(app):
+            calls.append("start")
+            yield
+            calls.append("stop")
+
+        app.router.lifespan_context = original
+
+        with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_lifespan_fake_create_server):
+            TelnetProtocol.setup(app)
+
+            installed = app.router.lifespan_context
+
+            async def run():
+                async with installed(app):
+                    calls.append("inside")
+
+            asyncio.run(run())
+
+        assert calls == ["start", "inside", "stop"], (
+            f"composed lifespan ran out of order; calls={calls}"
+        )
+        assert not hasattr(TelnetProtocol, "_server_task"), (
+            "server task must be per-app (closure), not a class attribute"
+        )
+
+
+class TestTelnetLineCap:
+    def test_lines_pass_through_without_terminators(self):
+        assert _collect(["hello\r\n", "wor", "ld\n"]) == ["hello", "world"]
+
+    def test_cr_nul_and_bare_cr_are_terminators(self):
+        assert _collect(["a\r\x00b\n", "c\r"]) == ["a", "b", "c"]
+
+    def test_partial_line_at_eof_is_yielded(self):
+        assert _collect(["part"]) == ["part"]
+
+    def test_empty_input_yields_nothing(self):
+        assert _collect([""]) == []
+
+    def test_single_overlong_line_dropped(self):
+        assert _collect(["x" * 40 + "\n", "ok\n"]) == [None, "ok"]
+
+    def test_terminatorless_flood_stays_bounded_and_dropped(self):
+        """INTENT: the failing case for readline() — many chunks with no
+        terminator. Buffering must stay capped and the line must be dropped
+        once the terminator arrives."""
+        chunks = ["x" * 40, "y" * 40, "z" * 40, "\n", "ok\n"]
+        assert _collect(chunks) == [None, "ok"]
+
+    def test_max_line_boundary_is_kept(self):
+        assert _collect(["x" * 32 + "\n"]) == ["x" * 32]
+        assert _collect(["x" * 33 + "\n"]) == [None]
+
+    def test_following_line_unaffected_by_drop(self):
+        assert _collect(["A" * 50 + "\r\n", "fine\n"]) == [None, "fine"]
+
+
+class TestTelnetTLS:
+    def test_none_when_cert_unset(self, monkeypatch):
+        monkeypatch.setattr(settings, "SSL_CERTFILE", None)
+        assert build_telnet_ssl_context() is None
+
+    def test_none_when_cert_missing(self, monkeypatch):
+        monkeypatch.setattr(settings, "SSL_CERTFILE", "/nonexistent/cert.pem")
+        assert build_telnet_ssl_context() is None
+
+    def test_loads_combined_pem(self, monkeypatch, tmp_path):
+        _, _, combined = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(combined))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", None)
+        context = build_telnet_ssl_context()
+        assert context is not None
+        assert isinstance(context, ssl.SSLContext)
+
+    def test_loads_separate_key(self, monkeypatch, tmp_path):
+        key, cert, _ = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(cert))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", str(key))
+        context = build_telnet_ssl_context()
+        assert context is not None
+
+    def test_none_when_key_missing(self, monkeypatch, tmp_path):
+        key, cert, _ = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(cert))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", str(tmp_path / "missing.key"))
+        assert build_telnet_ssl_context() is None
+
+    def test_passes_ssl_and_tls_auto_when_enabled(self, monkeypatch, tmp_path, global_test_env):
+        _, _, combined = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "TELNET_TLS_ENABLED", True)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(combined))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", None)
+        captured = {}
+
+        async def _fake(*args, **kwargs):
+            captured.update(kwargs)
+            return _TlsServerStub()
+
+        with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_fake):
+            app = FastAPI()
+            lifespan = _mount(app)
+            _run_lifespan(lifespan, app)
+        assert isinstance(captured.get("ssl"), ssl.SSLContext)
+        assert captured.get("tls_auto") is True
+
+    def test_no_ssl_kwargs_when_disabled(self, monkeypatch, tmp_path, global_test_env):
+        _, _, combined = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "TELNET_TLS_ENABLED", False)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(combined))
+        captured = {}
+
+        async def _fake(*args, **kwargs):
+            captured.update(kwargs)
+            return _TlsServerStub()
+
+        with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_fake):
+            app = FastAPI()
+            lifespan = _mount(app)
+            _run_lifespan(lifespan, app)
+        assert "ssl" not in captured
+        assert "tls_auto" not in captured
+
+    def test_warns_and_plaintext_when_cert_missing(self, monkeypatch, global_test_env):
+        monkeypatch.setattr(settings, "TELNET_TLS_ENABLED", True)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", "/nonexistent/cert.pem")
+        captured = {}
+
+        async def _fake(*args, **kwargs):
+            captured.update(kwargs)
+            return _TlsServerStub()
+
+        with patch("atheriz.network.telnet.telnetlib3.create_server", side_effect=_fake):
+            app = FastAPI()
+            lifespan = _mount(app)
+            _run_lifespan(lifespan, app)
+        assert "ssl" not in captured
+        assert "tls_auto" not in captured
+
+    def _free_port(self):
+        s = socket.socket()
+        s.bind(("127.0.0.1", 0))
+        port = s.getsockname()[1]
+        s.close()
+        return port
+
+    def test_tls_and_plaintext_coexist_on_same_port(self, monkeypatch, tmp_path, global_test_env):
+        _, _, combined = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(combined))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", None)
+        port = self._free_port()
+
+        async def shell(reader, writer):
+            writer.write("hello from secure server\n")
+            await asyncio.wait_for(reader.readline(), 10)
+
+        async def run():
+            server = await telnetlib3.create_server(
+                host="127.0.0.1", port=port, shell=shell,
+                ssl=build_telnet_ssl_context(), tls_auto=True,
+            )
+            try:
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                reader, writer = await telnetlib3.open_connection(
+                    "127.0.0.1", port, ssl=ctx)
+                line = await asyncio.wait_for(reader.readline(), 10)
+                assert "hello" in line, f"TLS client failed: {line!r}"
+                writer.close()
+                reader2, writer2 = await telnetlib3.open_connection("127.0.0.1", port)
+                line2 = await asyncio.wait_for(reader2.readline(), 10)
+                assert "hello" in line2, f"plain client failed: {line2!r}"
+                writer2.close()
+            finally:
+                server.close()
+                await server.wait_closed()
+
+        asyncio.run(run())
+
+    def test_bad_tls_handshake_does_not_kill_server(self, monkeypatch, tmp_path, global_test_env):
+        _, _, cert = _make_self_signed(tmp_path)
+        monkeypatch.setattr(settings, "SSL_CERTFILE", str(cert))
+        monkeypatch.setattr(settings, "SSL_KEYFILE", None)
+        port = self._free_port()
+
+        async def shell(reader, writer):
+            writer.write("still alive\n")
+            await asyncio.sleep(3)
+
+        async def run():
+            server = await telnetlib3.create_server(
+                host="127.0.0.1", port=port, shell=shell,
+                ssl=build_telnet_ssl_context(), tls_auto=True,
+            )
+            try:
+                raw = socket.create_connection(("127.0.0.1", port))
+                raw.sendall(b"\x16\x03\x01\x00\x10" + b"\x00" * 16)
+                raw.close()
+                await asyncio.sleep(0.3)
+                reader, writer = await telnetlib3.open_connection("127.0.0.1", port)
+                line = await asyncio.wait_for(reader.readline(), 10)
+                assert "still alive" in line, line
+                writer.close()
+            finally:
+                server.close()
+                await server.wait_closed()
+
+        asyncio.run(run())

@@ -109,10 +109,13 @@ class TestEmoteCommand:
 
     def test_no_location_falls_through(self):
         c = _make_caller()
-        c.location = None
-        args = MagicMock(text=["waves"])
-        EmoteCommand().run(c, args)
-        c.msg.assert_called_once()  # help
+        room = _make_room()
+        with patch.object(room, "msg_contents") as mock_msg:
+            c.location = None
+            args = MagicMock(text=["waves"])
+            EmoteCommand().run(c, args)
+            c.msg.assert_called_once()  # help
+            mock_msg.assert_not_called()
 
     def test_broadcasts_to_location(self):
         c = _make_caller()

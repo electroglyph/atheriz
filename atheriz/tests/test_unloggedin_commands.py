@@ -456,3 +456,39 @@ class TestNewCharacterCommand:
             CREATION_COOLDOWNS.clear()
             settings.CHAR_CREATION_ENABLED = old
             settings.CREATION_COOLDOWN = old_cooldown
+
+
+class TestGuestEdge:
+    def test_guest_disabled_denied(self, global_test_env):
+        old = settings.GUEST_ENABLED
+        settings.GUEST_ENABLED = False
+        try:
+            caller = MagicMock()
+            caller.session = MagicMock()
+            caller.msg = MagicMock()
+            import asyncio as _aio
+            _aio.run(GuestCommand().run(caller, None))
+            caller.msg.assert_called_with("Guest accounts are not enabled.")
+        finally:
+            settings.GUEST_ENABLED = old
+
+    def test_guest_gender_menu_callback(self):
+        from atheriz.commands.unloggedin.guest import _gender_menu
+
+        title, choices = _gender_menu(None)
+        assert "gender" in title.lower()
+        assert len(choices) == 4
+        ctx = MagicMock()
+        ctx.state = {}
+        male = next(c for c in choices if c.key == "M")
+        male.callback(ctx)
+        assert ctx.state.get("gender") == "Male"
+        female = next(c for c in choices if c.key == "F")
+        female.callback(ctx)
+        assert ctx.state.get("gender") == "Female"
+        nb = next(c for c in choices if c.key == "N")
+        nb.callback(ctx)
+        assert ctx.state.get("gender") == "Non-binary"
+        custom = next(c for c in choices if c.key == "C")
+        custom.callback(ctx)
+        assert ctx.state.get("custom_gender") is True

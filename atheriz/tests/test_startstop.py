@@ -30,7 +30,7 @@ class TestDoStartup:
     def test_calls_load_objects(self, reset_singletons):
         with patch.object(ss, "load_objects") as mock_load, \
              patch.object(ss, "start_autosave") as mock_start, \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -43,7 +43,7 @@ class TestDoStartup:
     def test_initializes_threadpool_map_node_ticker(self, reset_singletons):
         with patch.object(ss, "load_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()) as m_tp, \
              patch.object(ss, "get_map_handler", return_value=MagicMock()) as m_mh, \
              patch.object(ss, "get_node_handler", return_value=MagicMock()) as m_nh, \
@@ -59,7 +59,7 @@ class TestDoStartup:
     def test_calls_at_server_start(self, reset_singletons):
         with patch.object(ss, "load_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -72,7 +72,7 @@ class TestDoStartup:
     def test_starts_game_time_when_enabled(self, reset_singletons):
         with patch.object(ss, "load_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -85,7 +85,7 @@ class TestDoStartup:
     def test_does_not_start_game_time_when_disabled(self, reset_singletons):
         with patch.object(ss, "load_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -99,7 +99,7 @@ class TestDoStartup:
     def test_starts_autosave(self, reset_singletons):
         with patch.object(ss, "load_objects"), \
              patch.object(ss, "start_autosave") as mock_start_auto, \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_threadpool", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -114,7 +114,7 @@ class TestDoStartup:
         order = []
         with patch.object(ss, "load_objects", side_effect=lambda: order.append("load")) as mock_load, \
              patch.object(ss, "start_autosave", side_effect=lambda: order.append("auto")), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_async_threadpool", side_effect=lambda: order.append("tp") or MagicMock()), \
              patch.object(ss, "get_map_handler", side_effect=lambda: order.append("mh") or MagicMock()), \
              patch.object(ss, "get_node_handler", side_effect=lambda: order.append("nh") or MagicMock()), \
@@ -136,7 +136,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=chan), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -155,7 +155,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -171,7 +171,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -190,7 +190,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects") as mock_save, \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=mh), \
              patch.object(ss, "get_node_handler", return_value=nh), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -211,7 +211,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects") as mock_save, \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=mh), \
              patch.object(ss, "get_node_handler", return_value=nh), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -232,7 +232,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave") as mock_stop_auto, \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=ticker), \
@@ -253,7 +253,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -271,7 +271,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -288,7 +288,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -306,7 +306,7 @@ class TestDoShutdown:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -326,7 +326,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=chan), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -346,7 +346,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -361,7 +361,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -373,7 +373,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -386,7 +386,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=ticker), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -400,7 +400,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects") as mock_save, \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=mh), \
              patch.object(ss, "get_node_handler", return_value=nh), \
@@ -416,7 +416,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects") as mock_save, \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=mh), \
              patch.object(ss, "get_node_handler", return_value=nh), \
@@ -430,7 +430,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave") as mock_start, \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -444,7 +444,7 @@ class TestDoReload:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "start_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_async_ticker", return_value=ticker), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
@@ -463,7 +463,7 @@ class TestLifecycleOrder:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects"), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events") as mock_se, \
+             patch("atheriz.server_events", create=True) as mock_se, \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
@@ -489,7 +489,7 @@ class TestLifecycleOrder:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects", side_effect=lambda: order.append("save_obj")), \
              patch.object(ss, "stop_autosave"), \
-             patch("atheriz.server_events"), \
+             patch("atheriz.server_events", create=True), \
              patch.object(ss, "get_map_handler", return_value=MagicMock()), \
              patch.object(ss, "get_node_handler", return_value=MagicMock()), \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()), \

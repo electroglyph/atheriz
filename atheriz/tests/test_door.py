@@ -2,10 +2,15 @@ import pytest
 from atheriz.utils import Coord
 from unittest.mock import MagicMock, patch, PropertyMock
 from atheriz.commands.loggedin.door import DoorCommand
+from atheriz.commands.loggedin.exit import ExitCommand
+from atheriz.globals.get import get_node_handler
+from atheriz.objects.base_obj import Object
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_door import Door
 from atheriz import settings
+from atheriz.tests.fakes import MockCaller as FakesMockCaller
+from atheriz.tests.fakes import make_args as fakes_make_args
 
 
 class MockCaller:
@@ -764,3 +769,248 @@ def test_nodehandler_remove_door():
 def test_nodehandler_get_doors_empty():
     nh = NodeHandler()
     assert nh.get_doors(Coord("A", 0, 0, 0)) is None
+
+
+class TestDoorMapGlyph:
+    def test_map_close_without_to_coord(self, global_test_env):
+        """INTENT: closing a door that has no to_coord must not crash."""
+        d = Door(
+            from_coord=Coord("test", 0, 0, 0),
+            from_exit="east",
+            to_coord=None,
+            to_exit=None,
+            symbol_coord=(5, 5),
+        )
+        with patch("atheriz.settings.MAP_ENABLED", True):
+            d.map_close()
+
+    def test_map_open_without_to_coord(self, global_test_env):
+        """INTENT: opening a door that has no to_coord must not crash."""
+        d = Door(
+            from_coord=Coord("test", 0, 0, 0),
+            from_exit="east",
+            to_coord=None,
+            to_exit=None,
+            symbol_coord=(5, 5),
+        )
+        with patch("atheriz.settings.MAP_ENABLED", True):
+            d.map_open()
+
+
+class _Door:
+    name = "iron_door"
+    closed = True
+    locked = False
+
+    def try_open(self, caller):
+        return True
+
+    def try_close(self, caller):
+        return None
+
+
+def _make_area(nh: NodeHandler):
+    src = Node(coord=Coord("a", 0, 0, 0))
+    dest = Node(coord=Coord("a", 0, 1, 0))
+    grid = NodeGrid(area="a", z=0)
+    grid.add_node(src)
+    grid.add_node(dest)
+    area = NodeArea(name="a")
+    area.add_grid(grid)
+    nh.add_area(area)
+    return src, dest
+
+
+class TestDoorFollow:
+    def test_door_passage_clears_following(self, global_test_env, monkeypatch):
+        """INTENT: passing through an open door clears following, exactly like a
+        plain exit does. Today the door branch drops the follower's following
+        stays set -> the follower keeps tracking the leader through the wall."""
+        nh = NodeHandler()
+        src, dest = _make_area(nh)
+        door = _Door()
+        nh.doors[Coord("a", 0, 0, 0)] = {"iron_door": door}
+
+        leader = Object.create(None, "Leader")
+        follower = Object.create(None, "Follower")
+        follower.move_to(src)
+
+        monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
+
+        follower.following = leader.id
+        leader.followers = {follower.id}
+
+        ex = ExitCommand()
+        ex.caller_id = follower.id
+        ex.location = Coord("a", 0, 0, 0)
+        ex.destination = Coord("a", 0, 1, 0)
+        ex.name = "iron_door"
+        ex.do_move()
+
+        assert follower.following is None, (
+            "door passage must clear following the same way a plain exit does"
+        )
+
+    def test_open_door_passage_clears_following(self, global_test_env, monkeypatch):
+        """INTENT: passing through an already-open door must clear following too."""
+        nh = NodeHandler()
+        src, dest = _make_area(nh)
+        door = _Door()
+        door.closed = False
+        nh.doors[Coord("a", 0, 0, 0)] = {"iron_door": door}
+
+        leader = Object.create(None, "Leader")
+        follower = Object.create(None, "Follower")
+        follower.move_to(src)
+
+        monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
+
+        follower.following = leader.id
+        leader.followers = {follower.id}
+
+        ex = ExitCommand()
+        ex.caller_id = follower.id
+        ex.location = Coord("a", 0, 0, 0)
+        ex.destination = Coord("a", 0, 1, 0)
+        ex.name = "iron_door"
+        ex.do_move()
+
+        assert follower.following is None
+
+    def test_locked_door_keeps_following(self, global_test_env, monkeypatch):
+        """INTENT: when the door refuses passage the follower does not move, so
+        following must be preserved."""
+        nh = NodeHandler()
+        src, dest = _make_area(nh)
+        door = _Door()
+        door.try_open = lambda caller: False
+        nh.doors[Coord("a", 0, 0, 0)] = {"iron_door": door}
+
+        leader = Object.create(None, "Leader")
+        follower = Object.create(None, "Follower")
+        follower.move_to(src)
+
+        monkeypatch.setattr("atheriz.commands.loggedin.exit.get_node_handler", lambda: nh)
+
+        follower.following = leader.id
+        leader.followers = {follower.id}
+
+        ex = ExitCommand()
+        ex.caller_id = follower.id
+        ex.location = Coord("a", 0, 0, 0)
+        ex.destination = Coord("a", 0, 1, 0)
+        ex.name = "iron_door"
+        ex.do_move()
+
+        assert follower.following == leader.id
+        assert follower.id in leader.followers
+
+
+class TestDoorOrphan:
+    def test_door_creation_relocates_player_on_replaced_node(self, global_test_env):
+        """INTENT: a player standing on the node that becomes a door must not
+        be stranded; their location must still resolve to a live node."""
+        nh = get_node_handler()
+        origin = Node(Coord("test", 0, 0, 0))
+        door_node = Node(Coord("test", 0, 1, 0))
+        dest = Node(Coord("test", 0, 2, 0))
+        for n in (origin, door_node, dest):
+            nh.add_node(n)
+
+        player = Object.create(None, "stranded", is_pc=True)
+        player.location = door_node
+        door_node.add_object(player)
+
+        caller = FakesMockCaller(name="builder", location=origin)
+
+        cmd = DoorCommand()
+        cmd.run(
+            caller,
+            fakes_make_args(
+                north=True,
+                south=False,
+                east=False,
+                west=False,
+                up=False,
+                down=False,
+                remove=False,
+            ),
+        )
+
+        assert nh.get_node(player.location.coord) is player.location
+
+
+def test_door_broadcast_does_not_hold_lock(global_test_env):
+    from atheriz.objects.base_obj import Object
+    from unittest.mock import MagicMock
+    import threading
+
+    door = Door.create(
+        from_coord=Coord("TestArea", 0, 0, 0),
+        from_exit="n",
+        to_coord=Coord("TestArea", 0, 1, 0),
+        to_exit="s",
+        symbol_coord=(0, 0),
+        closed_symbol="C",
+        open_symbol="O",
+        closed=True,
+        locked=False,
+    )
+    from_node = Node(coord=Coord("TestArea", 0, 0, 0))
+    to_node = Node(coord=Coord("TestArea", 0, 1, 0))
+    from atheriz.globals.get import get_node_handler
+    nh = get_node_handler()
+    nh.add_node(from_node)
+    nh.add_node(to_node)
+    caller = Object.create(None, "DoorUser")
+    caller.location = from_node
+    orig_msg = Node.msg_contents
+    captured_locked = []
+
+    def spy_msg(self, *a, **kw):
+        try:
+            is_locked = door.lock._is_owned()
+        except Exception:
+            is_locked = False
+            holder = []
+            def try_acquire():
+                acquired = door.lock.acquire(blocking=False)
+                holder.append(acquired)
+                if acquired:
+                    door.lock.release()
+            t = threading.Thread(target=try_acquire)
+            t.start()
+            t.join(timeout=1)
+            if holder and not holder[0]:
+                is_locked = True
+        captured_locked.append(is_locked)
+        return orig_msg(self, *a, **kw)
+
+    with patch.object(Node, "msg_contents", spy_msg):
+        with patch("atheriz.objects.base_door.get_map_handler") as mock_mh:
+            mock_mi = MagicMock()
+            mock_mi.lock = threading.RLock()
+            mock_mi.post_grid = {}
+            mock_mi.pre_grid = {}
+            mock_mi.map_changed = False
+            mock_mi.render = MagicMock()
+            mock_mh.return_value.get_mapinfo.return_value = mock_mi
+            result = door.try_open(caller)
+            assert result is True
+    assert len(captured_locked) >= 1
+    assert not any(captured_locked), f"door lock held during broadcast: {captured_locked}"
+
+    captured_locked.clear()
+    door.closed = False
+    with patch.object(Node, "msg_contents", spy_msg):
+        with patch("atheriz.objects.base_door.get_map_handler") as mock_mh:
+            mock_mi = MagicMock()
+            mock_mi.lock = threading.RLock()
+            mock_mi.post_grid = {}
+            mock_mi.pre_grid = {}
+            mock_mi.map_changed = False
+            mock_mi.render = MagicMock()
+            mock_mh.return_value.get_mapinfo.return_value = mock_mi
+            result = door.try_close(caller)
+            assert result is True
+    assert not any(captured_locked)

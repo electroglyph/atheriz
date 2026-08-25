@@ -20,7 +20,7 @@ def superuser():
     su.privilege_level = settings.Privilege.Admin # Ensure superuser status
     return su
 
-def test_save_load_object(db_setup):
+def test_save_load_object(global_test_env):
     # Create an object
     obj = Object.create(None, "Test Object", "A test object")
     obj_id = obj.id
@@ -60,7 +60,7 @@ def test_save_load_object(db_setup):
     loaded_temp = get(temp_obj_id)
     assert len(loaded_temp) == 0
 
-def test_delete_object(db_setup, superuser):
+def test_delete_object(global_test_env, superuser):
     # Create an object
     obj = Object.create(None, "Object to Delete")
     obj_id = obj.id
@@ -94,7 +94,7 @@ def test_delete_object(db_setup, superuser):
     assert cursor.fetchone()[0] == 0
     conn.close()
 
-def test_recursive_delete(db_setup, superuser):
+def test_recursive_delete(global_test_env, superuser):
     # Create container and item
     container = Object.create(None, "Container", is_container=True)
     item = Object.create(None, "Item", is_item=True)
@@ -129,7 +129,7 @@ def test_recursive_delete(db_setup, superuser):
     assert cursor.fetchone()[0] == 0
     conn.close()
 
-def test_map_handler_persistence(db_setup):
+def test_map_handler_persistence(global_test_env):
     from atheriz.globals.map import MapHandler, MapInfo
     
     # Initialize handler (loads from empty DB)
@@ -156,7 +156,7 @@ def test_map_handler_persistence(db_setup):
     assert ("TestArea", 0) in mh2.data
     assert mh2.data[("TestArea", 0)].name == "TestArea"
 
-def test_node_handler_persistence(db_setup):
+def test_node_handler_persistence(global_test_env):
     from atheriz.globals.node import NodeHandler
     from atheriz.objects.nodes import NodeArea, NodeGrid, NodeLink, Transition
     from atheriz.objects.base_door import Door
@@ -206,7 +206,7 @@ def test_node_handler_persistence(db_setup):
     assert Coord("TestArea", 5, 5, 0) in nh2.doors
     assert "exit" in nh2.doors[Coord("TestArea", 5, 5, 0)]
 
-def test_save_snapshots_are_deep_copies(db_setup):
+def test_save_snapshots_are_deep_copies(global_test_env):
     from atheriz.globals.node import NodeHandler
     from atheriz.objects.nodes import Transition
     from atheriz.objects.base_door import Door
@@ -231,7 +231,7 @@ def test_save_snapshots_are_deep_copies(db_setup):
     assert t not in dumped
     assert door not in dumped
 
-def test_loaded_objects_threadsafe(db_setup):
+def test_loaded_objects_threadsafe(global_test_env):
     """
     Test to determine if ensure_threadsafe is applied after a database load.
     """

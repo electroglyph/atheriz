@@ -90,6 +90,9 @@ class TestSetupProtocols:
 
         app_mock = MagicMock()
 
+        class _Sentinel(BaseException):
+            pass
+
         def inject_game_settings():
             monkeypatch.setattr(atheriz.settings, "WEBSOCKET_ENABLED", False)
             monkeypatch.setattr(
@@ -100,8 +103,8 @@ class TestSetupProtocols:
 
         with patch.object(atheriz, "app", app_mock), \
              patch.object(atheriz, "setup_game_folder", side_effect=inject_game_settings), \
-             patch.object(atheriz, "do_startup", side_effect=KeyboardInterrupt):
-            with pytest.raises(KeyboardInterrupt):
+             patch.object(atheriz, "do_startup", side_effect=_Sentinel):
+            with pytest.raises(_Sentinel):
                 atheriz.start_server()
 
         app_mock.websocket.assert_not_called()
@@ -354,7 +357,7 @@ class TestCreateAccountEndpoint:
         assert result["status"] == "error"
 
 
-BLOCK_SECONDS = 0.4
+BLOCK_SECONDS = 0.6
 PROBE_SECONDS = 0.05
 STALL_THRESHOLD = 0.3
 
@@ -403,9 +406,8 @@ class TestInternalAdminEndpointsBlockLoop:
         (tmp_path / "admin.token").write_text("real-token")
         blocking = self._make_blocking()
         with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
-             patch("atheriz.atheriz.do_reload", blocking), \
-             patch("atheriz.atheriz.reloader.reload_game_logic", blocking), \
-             patch("atheriz.reloader._reload_game_logic", blocking):
+              patch("atheriz.atheriz.do_reload", blocking), \
+              patch("atheriz.reloader.reload_game_logic", blocking):
             delay = self._ordered_measure(
                 lambda: hot_reload_endpoint(
                     _FakeRequest(token="real-token", host="127.0.0.1")

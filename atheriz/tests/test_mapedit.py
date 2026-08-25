@@ -1,6 +1,9 @@
 import pytest
 from threading import RLock
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+from atheriz.objects.base_obj import Object
+from atheriz.objects.session import Session
 
 from atheriz import settings
 from atheriz.commands.loggedin.mapedit import DrawCommand
@@ -645,3 +648,75 @@ def test_map_validate_moves_retry_replays_verdict_with_context():
     assert conn.sent[2] == conn.sent[1]
     chain = mapedit._chains[verdict_key]
     assert chain.validation == []
+
+
+def _make_builder(name: str):
+    from atheriz.objects.base_obj import Object
+    import atheriz.settings as settings
+
+    obj = Object.create(None, name)
+    obj.privilege_level = settings.Privilege.Builder
+    return obj
+
+
+def test_mapedit_handles_missing_session_gracefully(global_test_env):
+    caller = _make_builder("Builder")
+    caller.session = None
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    from atheriz.globals.get import get_node_handler
+
+    nh = get_node_handler()
+    nh.add_node(node)
+    caller.location = node
+    msgs = []
+    caller.msg = lambda *a, **kw: msgs.append(" ".join(str(x) for x in a))
+    cmd = DrawCommand()
+    cmd.run(caller, MagicMock())
+    assert any("No active connection" in m for m in msgs)
+
+
+def test_mapedit_handles_none_connection_gracefully(global_test_env):
+    caller = _make_builder("Builder2")
+    sess = Session(connection=None)
+    caller.session = sess
+    node = Node(coord=Coord("TestArea", 1, 0, 0))
+    from atheriz.globals.get import get_node_handler
+
+    nh = get_node_handler()
+    nh.add_node(node)
+    caller.location = node
+    caller.session.connection = None
+    msgs = []
+    caller.msg = lambda *a, **kw: msgs.append(" ".join(str(x) for x in a))
+    cmd = DrawCommand()
+    cmd.run(caller, MagicMock())
+    assert any("No active connection" in m for m in msgs)
+
+
+def test_mapedit_evict_lru_and_ttl(monkeypatch):
+    import time as _time
+    from atheriz.globals import mapedit
+    import atheriz.settings as s
+
+    mapedit._chains.clear()
+    mapedit._previous.clear()
+    monkeypatch.setattr(s, "MAPEDIT_CHAIN_TTL", 0.01)
+    monkeypatch.setattr(s, "MAPEDIT_MAX_CHAINS", 2)
+    now = _time.monotonic()
+    k1 = mapedit.grant("1.1.1.1", "A", 0)
+    k2 = mapedit.grant("1.1.1.1", "A", 0)
+    assert len(mapedit._chains) == 2
+    for ch in mapedit._chains.values():
+        ch.created = now - 100
+    mapedit._evict(now)
+    assert len(mapedit._chains) == 0
+    assert len(mapedit._previous) == 0
+    k3 = mapedit.grant("1.1.1.1", "A", 0)
+    k4 = mapedit.grant("1.1.1.1", "A", 0)
+    k5 = mapedit.grant("1.1.1.1", "A", 0)
+    assert len(mapedit._chains) <= 2
+    assert k3 not in mapedit._chains
+    mapedit._chains.clear()
+    mapedit._previous.clear()
+    monkeypatch.setattr(s, "MAPEDIT_CHAIN_TTL", 180.0)
+    monkeypatch.setattr(s, "MAPEDIT_MAX_CHAINS", 256)

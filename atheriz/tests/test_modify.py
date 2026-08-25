@@ -1,64 +1,27 @@
 import pytest
-import os
-import shutil
-import tempfile
 from atheriz.objects.base_obj import Object
 from atheriz.globals.objects import save_objects, load_objects, get
-from atheriz import settings, database_setup
+from atheriz import database_setup
 
-@pytest.fixture
-def db_setup():
-    # Setup temp dir for database and saves
-    old_save_path = settings.SAVE_PATH
-    temp_dir = tempfile.mkdtemp()
-    settings.SAVE_PATH = temp_dir
-    
-    # Re-initialize database singleton
-    if database_setup._DATABASE:
-        database_setup._DATABASE.close()
-    else:
-        database_setup._DATABASE = None
-    database_setup._CLOSED = False
-    database_setup.do_setup()
-    
-    # Reload objects (clears memory and loads from empty DB)
-    from atheriz.globals.objects import _ALL_OBJECTS
-    _ALL_OBJECTS.clear()
-    load_objects()
-    
-    yield
-    
-    # Teardown: Close connection and remove DB file
-    if database_setup._DATABASE:
-        database_setup._DATABASE.close()
-    
-    try:
-        shutil.rmtree(temp_dir)
-    except Exception:
-        pass
-    
-    settings.SAVE_PATH = old_save_path
-    _ALL_OBJECTS.clear()
-
-def test_init_is_modified(db_setup):
+def test_init_is_modified(global_test_env):
     """Test that Object() initializes with is_modified = True."""
     obj = Object()
     assert obj.is_modified is True
 
-def test_create_is_modified(db_setup):
+def test_create_is_modified(global_test_env):
     """Test that Object.create() results in an object with is_modified = True."""
     obj = Object.create(None, "Test Obj")
     assert obj.id is not None
     assert obj.is_modified is True
 
-def test_save_resets_is_modified(db_setup):
+def test_save_resets_is_modified(global_test_env):
     """Test that save_objects() resets is_modified to False."""
     obj = Object.create(None, "Test Obj")
     assert obj.is_modified is True
     save_objects()
     assert obj.is_modified is False
 
-def test_attribute_change_sets_is_modified(db_setup):
+def test_attribute_change_sets_is_modified(global_test_env):
     """Test that changing an attribute sets is_modified to True via the thread-safe patcher."""
     obj = Object.create(None, "Test Obj")
     save_objects()
@@ -82,7 +45,7 @@ def test_attribute_change_sets_is_modified(db_setup):
     obj.symbol = "Y"
     assert obj.is_modified is True
 
-def test_save_optimization_logic(db_setup):
+def test_save_optimization_logic(global_test_env):
     """Test that multiple objects track modification independently."""
     obj1 = Object.create(None, "Obj 1")
     obj2 = Object.create(None, "Obj 2")
@@ -101,7 +64,7 @@ def test_save_optimization_logic(db_setup):
     assert obj1.is_modified is False
     assert obj2.is_modified is False
 
-def test_load_is_modified_false(db_setup):
+def test_load_is_modified_false(global_test_env):
     """Test that objects loaded from the database have is_modified = False."""
     obj = Object.create(None, "Persistent Obj")
     obj_id = obj.id
@@ -118,7 +81,7 @@ def test_load_is_modified_false(db_setup):
     assert loaded_obj.name == "Persistent Obj"
     assert loaded_obj.is_modified is False
 
-def test_move_is_modified(db_setup):
+def test_move_is_modified(global_test_env):
     """Test that move_to() sets is_modified for the object and involved containers."""
     obj = Object.create(None, "Mobile Obj")
     container1 = Object.create(None, "Container 1", is_container=True)

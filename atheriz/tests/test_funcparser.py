@@ -489,13 +489,11 @@ class TestParseUnknown:
 
 
 class TestParseRaiseErrors:
+    @pytest.mark.xfail(reason="permissive parse bug")
     def test_malformed_left_as_is_even_with_raise(self, global_test_env):
-        # INTENT/BUG: An unclosed paren currently doesn't raise even with
-        # raise_errors=True. The malformed function is silently left as-is.
-        # This documents the current (somewhat permissive) behavior.
         parser = FuncParser({})
-        result = parser.parse("$unclosed(", raise_errors=True)
-        assert result == "$unclosed("
+        with pytest.raises(ParsingError):
+            parser.parse("$unclosed(", raise_errors=True)
 
     def test_raises_on_unknown_when_requested(self, global_test_env):
         parser = FuncParser({})

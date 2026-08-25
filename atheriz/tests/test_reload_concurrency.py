@@ -27,8 +27,16 @@ CHILD = r"""
 import sys
 import threading
 import time
+import tempfile
+import os
+from pathlib import Path
 
 sys.path.insert(0, {repo_root!r})
+
+tmp = tempfile.mkdtemp()
+Path(tmp, "settings.py").write_text("")
+Path(tmp, "__init__.py").write_text("")
+os.chdir(tmp)
 
 import atheriz.reloader as R
 
@@ -103,7 +111,7 @@ def test_reloads_are_serialized(global_test_env):
     assert max_overlap <= 1, f"concurrent reloads overlapped {max_overlap} deep"
 
 
-def test_http_vs_ingame_reload_not_interleaved(global_test_env, tmp_path):
+def test_http_vs_ingame_reload_not_interleaved(global_test_env, tmp_path, monkeypatch):
     """INTENT: `5.5` — `hot_reload_endpoint` (`asyncio.Lock` → `threading.Lock`
     across `do_reload` + `_reload_game_logic`) vs `reload_game_logic()` (only
     `threading.Lock`) must not interleave `do_reload`'s `ticker.clear` with
@@ -119,6 +127,10 @@ def test_http_vs_ingame_reload_not_interleaved(global_test_env, tmp_path):
 
     import atheriz.atheriz as AZ
     import atheriz.reloader as R
+
+    (tmp_path / "__init__.py").write_text("")
+    (tmp_path / "settings.py").write_text("")
+    monkeypatch.chdir(tmp_path)
 
     (tmp_path / "admin.token").write_text("real-token")
 

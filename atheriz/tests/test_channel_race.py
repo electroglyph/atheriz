@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import threading
 
+import pytest
+
 from atheriz.commands.loggedin.channel import ChannelCommand
 from atheriz.objects.base_channel import Channel
 from atheriz.tests.fakes import MockCaller, make_args

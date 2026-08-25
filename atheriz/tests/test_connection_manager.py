@@ -278,7 +278,8 @@ class TestDispatch:
 
 
 class TestThreadSafety:
-    def test_concurrent_register(self, manager):
+    def test_concurrent_register(self, manager, monkeypatch):
+        monkeypatch.setattr(mgr_module.settings, "MAX_CONNECTIONS_PER_IP", 0)
         errors = []
 
         def worker(i):
@@ -371,3 +372,42 @@ class TestDispatchStripsEscapes:
             manager.dispatch(conn, "cmd", [42, "text\x1b[1m", True], {})
 
         assert _wait(lambda: received == [42, "text", True])
+
+
+class TestBroadcastEdge:
+    def test_manager_broadcast_one_raises_others_still_get(self, manager):
+        c1 = FakeConnection()
+        c1.client_host = "1.1.1.1"
+        c2 = FakeConnection()
+        c2.client_host = "1.1.1.2"
+
+        def boom(text):
+            raise RuntimeError("boom")
+
+        c1.msg = boom
+        c1.sent = []
+        manager.register_connection("c1", c1)
+        manager.register_connection("c2", c2)
+        manager.broadcast("hello")
+        assert len(c2.sent) == 1
+        assert "hello" in str(c2.sent)
+
+    def test_handle_command_malformed_long_raw_throttled(self, manager):
+        c = FakeConnection()
+        c.client_host = "1.2.3.4"
+        long_raw = "x" * 200 + "{ bad json"
+        import atheriz.network.manager as mgr
+        mgr._malformed_last.clear()
+        with patch.object(mgr, "logger") as mock_log:
+            manager.handle_command(c, long_raw)
+            assert mock_log.warning.called
+            call_msg = str(mock_log.warning.call_args)
+            assert len(call_msg) < 500
+            summarized = mgr._summarize_raw(long_raw)
+            assert len(summarized) <= 85
+            mock_log.reset_mock()
+            manager.handle_command(c, long_raw)
+            mock_log.warning.assert_not_called()
+            summarized2 = mgr._summarize_raw(long_raw, limit=80)
+            assert summarized2 == summarized
+            assert mgr._should_log_malformed("1.2.3.4") is False

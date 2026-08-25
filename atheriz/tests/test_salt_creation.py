@@ -51,3 +51,32 @@ def test_salt_created_with_absolute_path(temp_cwd, reset_salt, monkeypatch):
         salt = reset_salt.get_salt()
         assert salt is not None
         assert (abs_secret_path / "salt.txt").exists(), "Secret folder SHOULD be created with absolute SECRET_PATH"
+
+
+def test_salt_concurrent_race_returns_same(temp_cwd, reset_salt, monkeypatch):
+    import threading
+    import importlib
+    import atheriz.globals.salt as salt_module
+
+    monkeypatch.setattr(settings, "SECRET_PATH", str(temp_cwd / "secret"))
+    importlib.reload(salt_module)
+    salt_module._SALT = None
+    results = []
+    errors = []
+
+    def worker():
+        try:
+            results.append(salt_module.get_salt())
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(timeout=2)
+    assert not errors
+    assert len(results) == 2
+    assert results[0] == results[1]
+    assert (temp_cwd / "secret" / "salt.txt").exists()
+    salt_module._SALT = None

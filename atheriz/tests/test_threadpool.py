@@ -3,8 +3,11 @@ import time
 import threading
 import asyncio
 import functools
+import queue
 from typing import NoReturn
+from unittest.mock import MagicMock, patch
 from atheriz.globals.asyncthreadpool import AsyncThreadPool, AsyncTicker
+import atheriz.settings as settings
 
 
 class TestAsyncThreadPool:
@@ -311,7 +314,7 @@ def test_do_shutdown_resets_global_threadpool(global_test_env):
 
     with patch.object(ss, "get_server_channel", return_value=None), \
          patch.object(ss, "stop_autosave"), \
-         patch("atheriz.server_events"), \
+         patch("atheriz.server_events", create=True), \
          patch.object(ss, "get_async_ticker", return_value=MagicMock()), \
          patch.object(ss, "get_game_time"), \
          patch.object(ss, "get_database", return_value=MagicMock()), \
@@ -336,3 +339,195 @@ def test_do_shutdown_resets_global_threadpool(global_test_env):
         time.sleep(0.01)
     assert got == ["ok"]
 
+
+def _occupy_workers(atp, block):
+    """Block every sync worker on `block` and return once all are busy.
+
+    Workers read self.task_queue once per loop iteration, so the queue can
+    only be safely swapped for a small test queue while all workers are
+    busy executing (not parked in queue.get()).
+    """
+    n_workers = atp.max_threads - 1
+    started = threading.Semaphore(0)
+
+    def blocker():
+        started.release()
+        block.wait(5)
+
+    for _ in range(n_workers):
+        atp.add_task(blocker)
+    for _ in range(n_workers):
+        assert started.acquire(timeout=2), "worker did not pick up blocker"
+    return n_workers
+
+
+class TestThreadpoolQueue:
+    def test_task_queue_is_bounded(self, global_test_env):
+        """INTENT: the task queue has a finite maxsize of at least 10,000 so
+        a flood of commands cannot grow it unboundedly."""
+        atp = AsyncThreadPool()
+        try:
+            assert atp.task_queue.maxsize == settings.THREADPOOL_QUEUE_LIMIT
+            assert atp.task_queue.maxsize >= 10_000
+        finally:
+            atp.stop(True, 10)
+
+    def test_add_task_rejects_fast_when_full(self, global_test_env, monkeypatch):
+        """INTENT: when the queue is full, add_task returns False quickly
+        rather than blocking the producing thread. Elasticity is disabled so
+        the zero-relief backpressure contract is isolated."""
+        monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
+        atp = AsyncThreadPool()
+        block = threading.Event()
+        try:
+            _occupy_workers(atp, block)
+            atp.task_queue = queue.Queue(maxsize=2)
+            assert atp.add_task(lambda: None) is True
+            assert atp.add_task(lambda: None) is True
+            t0 = time.monotonic()
+            assert atp.add_task(lambda: None) is False
+            assert time.monotonic() - t0 < 0.5
+        finally:
+            block.set()
+            atp.stop(False, 5)
+
+    def test_accepted_tasks_run_rejected_do_not(self, global_test_env, monkeypatch):
+        """INTENT: already accepted tasks still execute (FIFO); only the
+        rejected newest tasks never run. Elasticity is disabled so the queue
+        fills deterministically."""
+        monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
+        atp = AsyncThreadPool()
+        block = threading.Event()
+        ran = []
+        try:
+            _occupy_workers(atp, block)
+            atp.task_queue = queue.Queue(maxsize=3)
+            for i in range(3):
+                assert atp.add_task(ran.append, i) is True
+            assert atp.add_task(ran.append, 99) is False
+            block.set()
+            deadline = time.time() + 3
+            while time.time() < deadline and len(ran) < 3:
+                time.sleep(0.01)
+            assert sorted(ran) == [0, 1, 2]
+        finally:
+            block.set()
+            atp.stop(False, 5)
+
+
+class TestThreadpoolDrain:
+    def test_stop_completes_and_delivers_sentinels_when_full(self, global_test_env):
+        """INTENT: stop() on a flooded queue does not hang; it discards
+        pending work so every worker still receives a sentinel and exits."""
+        atp = AsyncThreadPool()
+        block = threading.Event()
+        try:
+            n_workers = _occupy_workers(atp, block)
+            # capacity exactly fits the sentinels (max_threads) once every
+            # junk task is discarded
+            atp.task_queue = queue.Queue(maxsize=atp.max_threads)
+            for _ in range(atp.max_threads):
+                atp.task_queue.put_nowait((lambda: None, (), {}))
+            t0 = time.monotonic()
+            atp.stop(False, 5)
+            assert time.monotonic() - t0 < 5, "stop() hung on a full queue"
+            # the queue was full of junk; it now holds sentinels (max_threads-1) plus possibly one leftover junk
+            assert atp.task_queue.qsize() == atp.max_threads
+            # prove every worker got a sentinel: they all exit after unblock
+            block.set()
+            for t in atp.threads[1:]:
+                t.join(timeout=3)
+                assert not t.is_alive(), f"worker {t.name} never received a sentinel"
+            # max_threads-1 sentinels went in, workers took them; all junk was discarded or processed
+            leftover = []
+            while True:
+                try:
+                    leftover.append(atp.task_queue.get_nowait())
+                except queue.Empty:
+                    break
+            assert leftover == [] or leftover == [None]
+        finally:
+            block.set()
+
+
+def test_delay_does_not_resurrect_pool_after_shutdown(global_test_env):
+    import atheriz.globals.get as get_mod
+    from atheriz.globals.get import get_async_threadpool
+
+    pool = get_async_threadpool()
+    calls = []
+    orig_add = pool.add_task
+    pool.add_task = lambda func, *a, **kw: calls.append((func, a, kw)) or True
+
+    captured = {}
+
+    def fake_submit(coro, target_loop):
+        captured["coro"] = coro
+        captured["loop"] = target_loop
+        return MagicMock()
+
+    with patch("atheriz.globals.asyncthreadpool._submit", side_effect=fake_submit):
+        pool.delay(0.1, lambda: None)
+
+    assert "coro" in captured
+    coro = captured["coro"]
+
+    pool._stopped = True
+    with get_mod._SINGLETON_LOCK:
+        saved = get_mod._ASYNC_THREAD_POOL
+        get_mod._ASYNC_THREAD_POOL = None
+
+    async def instant_sleep(delay):
+        return
+
+    async def run_coro():
+        with patch("atheriz.globals.asyncthreadpool.asyncio.sleep", instant_sleep):
+            await coro
+
+    tmp_loop = asyncio.new_event_loop()
+    try:
+        tmp_loop.run_until_complete(run_coro())
+    finally:
+        tmp_loop.close()
+
+    assert len(calls) == 0, f"add_task called after shutdown: {calls}"
+    assert get_mod._ASYNC_THREAD_POOL is None, "delay resurrected pool after shutdown"
+
+    pool.add_task = orig_add
+    pool._stopped = False
+    with get_mod._SINGLETON_LOCK:
+        if get_mod._ASYNC_THREAD_POOL is None:
+            get_mod._ASYNC_THREAD_POOL = saved
+
+
+def test_ticker_clear_while_timer_running():
+    import atheriz.globals.get as get_mod
+    from atheriz.globals.asyncthreadpool import AsyncTicker, AsyncThreadPool
+
+    old = get_mod._ASYNC_THREAD_POOL
+    atp = AsyncThreadPool(max_threads=2)
+    get_mod._ASYNC_THREAD_POOL = atp
+    ticker = AsyncTicker()
+    counter = 0
+
+    async def tick():
+        nonlocal counter
+        counter += 1
+
+    try:
+        ticker.add_coro(tick, 0.05)
+        time.sleep(0.12)
+        assert 0.05 in ticker.slots
+        assert ticker.slots[0.05].running is True
+        ticker.clear()
+        assert ticker.slots == {}
+        before = counter
+        time.sleep(0.2)
+        assert counter <= before + 1
+        ticker.add_coro(tick, 0.05)
+        time.sleep(0.08)
+        assert counter > before
+    finally:
+        ticker.clear()
+        atp.stop(wait=True, timeout=5)
+        get_mod._ASYNC_THREAD_POOL = old

@@ -6,11 +6,13 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from atheriz import database_setup
 from atheriz.commands.loggedin.channel import ChannelCommand as GlobalChannelCommand
-from atheriz.globals.objects import _ALL_OBJECTS, add_object
+from atheriz.globals.objects import _ALL_OBJECTS, add_object, get, load_objects, save_objects
 from atheriz.objects.base_channel import BaseChannelCommand, Channel
 from atheriz.objects.base_obj import Object
 from atheriz.tests.fakes import make_object
+import atheriz.settings as settings
 
 
 class MockArgs:
@@ -79,17 +81,15 @@ def test_channel_send_message(caller, channel):
 
 
 def test_channel_no_message_no_flags(caller, channel):
-    """Test 'channel' with no arguments does nothing or shows status (depending on implementation)."""
-    # The user removed the 'Currently targeting' msg in channel.py,
-    # but base_channel.py still has it.
     cmd = GlobalChannelCommand()
     cmd.id = channel.id
     cmd._channel = channel
 
     args = MockArgs()
     cmd.run(caller, args)
-    # If the logic doesn't call msg, this test might need adjustment
-    # caller.msg.assert_called()
+    caller.msg.assert_called_once()
+    out = " ".join(str(c.args[0]) for c in caller.msg.call_args_list)
+    assert "usage:" in out.lower()
 
 
 def test_channel_target_and_message(caller, channel):
@@ -734,4 +734,192 @@ class TestBaseChannelCommand:
         new_cmd = BaseChannelCommand()
         new_cmd.__setstate__(state)
         assert new_cmd._channel is None
+
+
+class TestChannelHistoryEdge:
+    def test_channel_property_roundtrip_after_state_transfer(self, global_test_env):
+        """INTENT: after __getstate__/__setstate__ drops `_channel`, the lazy
+        fallback must still resolve the channel by id."""
+        ch = Channel.create("testchan", None)
+        cmd = ch.get_command()
+        state = cmd.__getstate__()
+        restored = BaseChannelCommand()
+        restored.__setstate__(state)
+        restored.id = ch.id
+        assert restored.channel is ch
+
+    def test_get_history_zero_is_empty(self, global_test_env):
+        """INTENT: requesting 0 history entries must return nothing. The current
+        `list[-0:]` slice returns the entire history instead."""
+        ch = Channel.create("testchan", None)
+        ch.msg("hello")
+        ch.msg("world")
+        assert ch.get_history(0) == ""
+
+    def test_get_history_respects_count(self, global_test_env):
+        ch = Channel.create("testchan", None)
+        ch.msg("one")
+        ch.msg("two")
+        ch.msg("three")
+        out = ch.get_history(1)
+        assert "three" in out
+        assert "one" not in out
+
+    def test_get_history_zero_does_not_affect_default(self, global_test_env):
+        """INTENT: the count==0 guard must not break the default (full) call."""
+        ch = Channel.create("testchan", None)
+        ch.msg("one")
+        ch.msg("two")
+        assert ch.get_history(0) == ""
+        out = ch.get_history()
+        assert "one" in out
+        assert "two" in out
+
+
+def _simulate_restart():
+    """Close the database, allow a fresh connection, and reload all objects."""
+    database_setup._DATABASE.close()
+    database_setup._CLOSED = False
+    load_objects()
+
+
+class TestChannelHistoryPersistence:
+    def test_channel_broadcast_marks_channel_modified(self, global_test_env):
+        channel = Channel.create("announce")
+        save_objects()
+        assert channel.is_modified is False
+
+        channel.msg("hello there")
+
+        assert channel.is_modified is True
+
+    def test_channel_msg_with_sender_marks_modified(self, global_test_env):
+        channel = Channel.create("announce")
+        sender = Object.create(None, "S")
+        save_objects()
+        assert channel.is_modified is False
+
+        channel.msg("hello there", sender)
+
+        assert channel.is_modified is True
+
+    def test_channel_history_persists_across_restart(self, global_test_env):
+        channel = Channel.create("announce")
+        save_objects()
+        channel.msg("hello there")
+        channel_id = channel.id
+
+        save_objects()
+        _simulate_restart()
+
+        reloaded = get(channel_id)
+        assert reloaded is not None
+        history = list(reloaded[0].history)
+        assert len(history) == 1
+        timestamp, sender, message = history[0]
+        assert message == "hello there"
+        assert sender == ""
+        assert isinstance(timestamp, int)
+        assert "hello there" in reloaded[0].get_history()
+
+    def test_channel_history_cap_survives_restart(self, global_test_env):
+        channel = Channel.create("announce")
+        save_objects()
+        total = settings.CHANNEL_HISTORY_LIMIT + 5
+        for i in range(total):
+            channel.msg(f"message {i}")
+        channel_id = channel.id
+
+        save_objects()
+        _simulate_restart()
+
+        reloaded = get(channel_id)
+        history = list(reloaded[0].history)
+        assert len(history) == settings.CHANNEL_HISTORY_LIMIT
+        assert history[0][2] == f"message {total - settings.CHANNEL_HISTORY_LIMIT}"
+        assert history[-1][2] == f"message {total - 1}"
+
+    def test_channel_clear_history_marks_modified_and_persists(self, global_test_env):
+        channel = Channel.create("announce")
+        save_objects()
+        channel.msg("hello there")
+        save_objects()
+        assert channel.is_modified is False
+        channel_id = channel.id
+
+        channel.clear_history()
+        assert channel.is_modified is True
+
+        save_objects()
+        _simulate_restart()
+
+        reloaded = get(channel_id)
+        assert list(reloaded[0].history) == []
+
+
+def test_get_history_negative_count_returns_empty():
+    ch = Channel()
+    ch.name = "testchan"
+    ch.id = 999999
+    with ch.lock:
+        ch.history.clear()
+    ch.msg("hello")
+    ch.msg("world")
+    ch.msg("third")
+    h = ch.get_history(count=2)
+    assert "world" in h or "third" in h
+    assert ch.get_history(count=-5) == ""
+    assert ch.get_history(count=-1) == ""
+    assert ch.get_history(count=0) == ""
+    over = settings.CHANNEL_HISTORY_LIMIT + 100
+    hist = ch.get_history(count=over)
+    assert hist.count("hello") == 1 or "hello" in hist
+
+
+def test_channel_cache_skips_deleted_entry(global_test_env):
+    chan = Channel.create("CacheTestChan")
+    chan.desc = "desc"
+    cmd = GlobalChannelCommand()
+    name = chan.name.lower()
+    cmd._channel_cache[name] = chan
+    chan.is_deleted = True
+    with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[]):
+        caller = MagicMock()
+        caller.msg = MagicMock()
+        args = MagicMock()
+        args.channel = chan.name
+        args.list = False
+        args.unsubscribe = False
+        args.subscribe = False
+        args.replay = False
+        args.message = None
+        cmd.run(caller, args)
+        assert name not in cmd._channel_cache
+        caller.msg.assert_called()
+        assert "not found" in str(caller.msg.call_args[0][0]).lower()
+    chan.is_deleted = False
+
+
+def test_channel_cache_revalidates_name_mismatch(global_test_env):
+    chan = Channel.create("ValidChan")
+    chan.desc = "desc"
+    cmd = GlobalChannelCommand()
+    name = chan.name.lower()
+    other = Channel.create("OtherChan")
+    other.desc = "desc2"
+    cmd._channel_cache[name] = other
+    with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]) as mock_filter:
+        caller = MagicMock()
+        caller.msg = MagicMock()
+        caller.unsubscribe = MagicMock()
+        args = MagicMock()
+        args.channel = chan.name
+        args.list = False
+        args.unsubscribe = True
+        args.subscribe = False
+        args.replay = False
+        args.message = None
+        cmd.run(caller, args)
+        mock_filter.assert_called()
+        assert cmd._channel_cache.get(name) is chan
 

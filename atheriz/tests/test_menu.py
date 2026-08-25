@@ -279,3 +279,16 @@ def test_run_menu_multi_step():
         fut.result(timeout=2)
 
     _stop_loop(loop, t)
+
+
+def _menu_node(ctx):
+    return "Hello", [Choice(key="1", desc="One", goto=None)]
+
+
+def test_menu_display_uses_crlf_for_telnet():
+    engine = MenuEngine("player", _menu_node)
+    display = engine.get_display()
+    assert "\r\n" in display
+    assert display.count("\r\n") >= 1
+    parts = display.split("\r\n")
+    assert len(parts) >= 2

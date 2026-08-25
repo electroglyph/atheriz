@@ -118,8 +118,9 @@ class Account(Flags, DbOps):
             character (Object): The character to add.
         """
         with self.lock:
-            self.characters.append(character.id)
-            self.is_modified = True
+            if character.id not in self.characters:
+                self.characters.append(character.id)
+                self.is_modified = True
 
     def remove_character(self, character: Object) -> None:
         """

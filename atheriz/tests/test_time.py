@@ -8,9 +8,9 @@ settings configurations, including fractional TICK_MINUTES values.
 import sys
 import pytest
 import json
-import shutil
+import threading
+import time
 import dill
-from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 # ---------------------------------------------------------------------------
@@ -53,18 +53,6 @@ for m, val in _original_modules.items():
         sys.modules[m] = val
 
 # ========================== Helpers / Fixtures ==============================
-
-TEST_SAVE_DIR = Path("test_time_save_data")
-
-
-@pytest.fixture(autouse=True)
-def _clean_save_dir():
-    """Ensure a clean save directory for every test."""
-    if TEST_SAVE_DIR.exists():
-        shutil.rmtree(TEST_SAVE_DIR)
-    yield
-    if TEST_SAVE_DIR.exists():
-        shutil.rmtree(TEST_SAVE_DIR)
 
 
 def _make_gt(ticks: int = 0) -> GameTime:
@@ -778,12 +766,11 @@ class TestSaveLoad:
         assert data["ticks"] == 100
         assert data["alarms"] == {("8", "0"): [(5, False, None)]}
 
-    def test_load_migrates_legacy_time_file(self):
+    def test_load_migrates_legacy_time_file(self, tmp_path):
         """A legacy SAVE_PATH/time JSON file is migrated into the database on
         first load and then removed."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-            time_path = TEST_SAVE_DIR / "time"
+        with patch("atheriz.settings.SAVE_PATH", str(tmp_path)):
+            time_path = tmp_path / "time"
             time_path.write_text(
                 json.dumps({"ticks": 42, "alarms": {"('9', '0')": [[3, False, None]]}})
             )
@@ -794,11 +781,10 @@ class TestSaveLoad:
             assert gt.alarms == {("9", "0"): [(3, False, None)]}
             assert not time_path.exists(), "legacy time file was not removed"
 
-    def test_load_corrupt_json_resets_to_defaults(self):
+    def test_load_corrupt_json_resets_to_defaults(self, tmp_path):
         """Corrupt legacy JSON should reset to defaults, not crash."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-            time_path = TEST_SAVE_DIR / "time"
+        with patch("atheriz.settings.SAVE_PATH", str(tmp_path)):
+            time_path = tmp_path / "time"
             time_path.write_text("not valid json {{{")
             with patch.object(GameTime, "load"):
                 gt = GameTime()
@@ -806,11 +792,10 @@ class TestSaveLoad:
             assert gt.ticks == 0
             assert gt.alarms == {}
 
-    def test_load_empty_file_resets_to_defaults(self):
+    def test_load_empty_file_resets_to_defaults(self, tmp_path):
         """Empty legacy file should reset to defaults."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-            time_path = TEST_SAVE_DIR / "time"
+        with patch("atheriz.settings.SAVE_PATH", str(tmp_path)):
+            time_path = tmp_path / "time"
             time_path.write_text("")
             with patch.object(GameTime, "load"):
                 gt = GameTime()
@@ -818,11 +803,10 @@ class TestSaveLoad:
             assert gt.ticks == 0
             assert gt.alarms == {}
 
-    def test_load_missing_ticks_key_defaults_to_zero(self):
+    def test_load_missing_ticks_key_defaults_to_zero(self, tmp_path):
         """Legacy JSON missing 'ticks' key should default to 0."""
-        with patch("atheriz.settings.SAVE_PATH", str(TEST_SAVE_DIR)):
-            TEST_SAVE_DIR.mkdir(parents=True, exist_ok=True)
-            time_path = TEST_SAVE_DIR / "time"
+        with patch("atheriz.settings.SAVE_PATH", str(tmp_path)):
+            time_path = tmp_path / "time"
             time_path.write_text(json.dumps({"alarms": {}}))
             with patch.object(GameTime, "load"):
                 gt = GameTime()
@@ -981,3 +965,98 @@ class TestTimeEvents:
         assert before_phase == "new"
         assert after_phase == "waxing crescent"
         mock_character.at_lunar_event.assert_called_with(f"A {after_phase.lower()} moon rises.")
+
+
+class TestGameTimeReload:
+    def test_restart_after_stop_re_registers_clock(self, global_test_env):
+        from atheriz.globals.get import get_async_ticker, get_game_time
+
+        gt = get_game_time()
+        gt.start()
+
+        ticker = get_async_ticker()
+        slot = ticker.slots.get(settings.TIME_UPDATE_SECONDS)
+        assert slot is not None
+        assert gt.on_tick in slot.coros
+
+        gt.stop()
+        gt.start()
+
+        ticker = get_async_ticker()
+        slot = ticker.slots.get(settings.TIME_UPDATE_SECONDS)
+        assert slot is not None
+        assert gt.on_tick in slot.coros
+
+    def test_non_repeat_wildcard_alarm_is_removed(self, global_test_env):
+        from atheriz.globals.get import get_game_time
+        from atheriz.globals.objects import add_object
+        from atheriz.objects.base_obj import Object
+
+        gt = get_game_time()
+        obj = Object.create(None, "alarmee")
+        add_object(obj)
+
+        gt.ticks = 1
+        minute = str(gt.get_time()["minute"])
+        gt.ticks = 0
+        gt.add_alarm("?", minute, obj, repeat=False)
+
+        gt.on_tick()
+
+        assert gt.alarms.get(("?", minute)) == []
+
+
+class TestGameTimeSaveRobustness:
+    def test_non_dict_alarm_data_is_rejected(self, global_test_env):
+        from atheriz.objects.base_obj import Object
+
+        gt = GameTime()
+        caller = Object.create(None, "timer")
+
+        with pytest.raises(TypeError):
+            gt.add_alarm("7", "0", caller, repeat=True, data=object())
+
+        assert gt.alarms == {}
+
+    def test_dict_alarm_data_saves_without_error(self, global_test_env):
+        from atheriz.database_setup import get_database
+        from atheriz.objects.base_obj import Object
+
+        gt = GameTime()
+        caller = Object.create(None, "timer")
+        gt.add_alarm("7", "0", caller, repeat=True, data={"key": "val"})
+
+        gt.save()
+
+        db = get_database()
+        with db.lock:
+            cursor = db.connection.cursor()
+            cursor.execute("SELECT data FROM gametime WHERE id = 0")
+            assert cursor.fetchone() is not None
+
+    def test_save_must_serialize_with_alarm_mutations(self, global_test_env):
+        from atheriz.objects.base_obj import Object
+
+        gt = GameTime()
+        caller = Object.create(None, "timer")
+        gt.add_alarm("7", "0", caller, repeat=True)
+
+        errors = []
+
+        def do_save():
+            try:
+                gt.save()
+            except Exception as exc:
+                errors.append(exc)
+
+        with gt.lock:
+            t = threading.Thread(target=do_save)
+            t.start()
+            time.sleep(0.2)
+            finished_while_locked = not t.is_alive()
+        t.join(timeout=5)
+
+        assert errors == []
+        assert finished_while_locked is False, (
+            "save() completed while another thread held the game-time lock"
+        )

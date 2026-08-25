@@ -2,17 +2,9 @@
 Tests for lock functionality in Object class.
 """
 
-import pytest
 from unittest.mock import patch
 from atheriz.objects.base_obj import Object
-from atheriz.globals import objects as obj_singleton
 import atheriz.settings as settings
-
-
-@pytest.fixture(autouse=True)
-def cleanup():
-    """Reset object singleton state before each test."""
-    obj_singleton._ALL_OBJECTS.clear()
 
 
 class MockObject(Object):

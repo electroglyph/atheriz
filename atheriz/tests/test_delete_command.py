@@ -6,47 +6,11 @@ from atheriz.objects.nodes import Node
 from atheriz.commands.loggedin.delete import DeleteCommand
 from atheriz.globals.objects import get, _ALL_OBJECTS
 from atheriz.globals.node import NodeHandler
-from atheriz import settings, database_setup
+from atheriz import settings
 
-import tempfile
-import shutil
-import os
-from atheriz.database_setup import do_setup, get_database
 from atheriz.globals.get import get_node_handler
 
 from atheriz.utils import strip_ansi
-
-@pytest.fixture(autouse=True)
-def temp_env():
-    # Setup temp dir for database and saves
-    old_save_path = settings.SAVE_PATH
-    temp_dir = tempfile.mkdtemp()
-    settings.SAVE_PATH = temp_dir
-    
-    # Initialize DB schema
-    do_setup()
-    
-    # Clear globals to ensure fresh state
-    from atheriz.globals import get
-    get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
-    
-    yield
-    
-    # Cleanup: close DB before removing temp dir (Windows file locks)
-    from atheriz.database_setup import _DATABASE
-    import atheriz.database_setup as db_mod
-    if db_mod._DATABASE is not None:
-        db_mod._DATABASE.close()
-    db_mod._DATABASE = None
-    
-    try:
-        shutil.rmtree(temp_dir)
-    except Exception:
-        pass  # Best-effort cleanup on Windows
-    settings.SAVE_PATH = old_save_path
-    get._NODE_HANDLER = None
-    _ALL_OBJECTS.clear()
 
 @pytest.fixture
 def caller():

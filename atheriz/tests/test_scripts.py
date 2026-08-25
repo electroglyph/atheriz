@@ -315,7 +315,7 @@ def test_get_scripts_by_type():
     assert script3 in returned_scripts
 
 
-def test_temporary_script_not_saved(db_setup):
+def test_temporary_script_not_saved(global_test_env):
     """Temporary scripts should be excluded from DB save and load."""
     script = DummyBeforeScript.create(None, "TempScript")
     script.is_temporary = True

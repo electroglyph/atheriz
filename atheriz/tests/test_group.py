@@ -10,7 +10,7 @@ class MockArgs:
         self.args = list(args)
 
 @pytest.fixture
-def test_objects(db_setup):
+def test_objects(global_test_env):
     leader = Object.create(None, "Leader", is_npc=True)
     follower = Object.create(None, "Follower", is_npc=True)
     target = Object.create(None, "Target", is_npc=True)

@@ -1,12 +1,13 @@
 import pytest
 from atheriz.utils import Coord
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 from argparse import Namespace
 
+from atheriz import settings
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_obj import Object
-from atheriz.commands.loggedin.socials import CmdSocials
+from atheriz.commands.loggedin.socials import CmdSocials, SOCIALS_DICT
 
 @pytest.fixture
 def test_env():
@@ -117,3 +118,64 @@ def test_missing_target_social(test_env):
     assert not bob.msg.called
     msg = alice.msg.call_args[0][0] if alice.msg.call_args[0] else ""
     assert "Could not find" in msg
+
+
+def _make_caller(name="Alice", builder=False, screenreader=False, term_width=80):
+    c = MagicMock(spec=Object)
+    c.name = name
+    c.id = 1
+    c.privilege_level = settings.Privilege.Builder if builder else settings.Privilege.Player
+    c.quelled = False
+    c.no_follow = False
+    c.following = None
+    c.followers = set()
+    c.group_channel = None
+    c.session = MagicMock()
+    c.session.screenreader = screenreader
+    c.session.term_width = term_width
+    c.msg = MagicMock()
+    c.location = None
+    c.contents = []
+    return c
+
+
+class TestCmdSocialsExtra:
+    def test_socials_command_lists_aliases(self):
+        c = _make_caller()
+        args = Namespace(cmdstring="socials", target=[])
+        CmdSocials().run(c, args)
+        c.msg.assert_called_once()
+        text = c.msg.call_args[0][0]
+        assert "smile" in text
+        assert "hug" in text
+
+    def test_unknown_cmdstring_uses_invocation_msg(self):
+        c = _make_caller()
+        c.location = MagicMock()
+        c.location.msg_contents = MagicMock()
+        args = Namespace(cmdstring="laugh", target=[])
+        CmdSocials().run(c, args)
+        c.location.msg_contents.assert_called_once()
+
+    def test_all_socials_have_two_templates(self):
+        for verb, templates in SOCIALS_DICT.items():
+            assert isinstance(templates, tuple), f"{verb} not tuple"
+            assert len(templates) == 2, f"{verb} does not have 2 templates"
+            assert "$You" in templates[0]
+            assert "$You" in templates[1]
+
+    def test_targeted_social_template_is_used(self):
+        c = _make_caller()
+        target = MagicMock()
+        target.id = 99
+        target.is_pc = True
+        target.is_npc = False
+        c.search = MagicMock(return_value=[target])
+        c.location = MagicMock()
+        c.location.msg_contents = MagicMock()
+        args = Namespace(cmdstring="wave", target=["Bob"])
+        CmdSocials().run(c, args)
+        c.location.msg_contents.assert_called_once()
+        kwargs = c.location.msg_contents.call_args.kwargs
+        assert "target" in kwargs["mapping"]
+        assert kwargs["mapping"]["target"] is target

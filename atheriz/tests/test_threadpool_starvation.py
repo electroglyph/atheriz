@@ -212,3 +212,45 @@ class TestSentinelShortage:
             gate.set()
             if not pool._stopped:
                 pool.stop(wait=False, timeout=5)
+
+
+def test_threadpool_relief_cooldown_respects_limit(monkeypatch):
+    import atheriz.settings as settings
+    import atheriz.globals.asyncthreadpool as mod
+    from unittest.mock import MagicMock, patch
+
+    monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
+    pool = AsyncThreadPool(max_threads=2)
+    try:
+        mock_q = MagicMock()
+        mock_q.qsize.return_value = 1
+        orig_q = pool.task_queue
+        pool.task_queue = mock_q
+        pool._busy = 1
+        pool._stopped = False
+        pool._relief_count = 0
+        pool._last_relief_spawn = 0
+        with patch.object(mod.time, "monotonic", return_value=1000.0):
+            pool._maybe_spawn_relief_worker()
+            assert pool._relief_count == 0
+            monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 1)
+            pool._last_relief_spawn = 1000.0
+            with patch.object(mod, "Thread") as MockThread:
+                MockThread.return_value.start = MagicMock()
+                pool._maybe_spawn_relief_worker()
+                assert pool._relief_count == 0
+                assert MockThread.call_count == 0
+            with patch.object(mod.time, "monotonic", return_value=1001.1):
+                with patch.object(mod, "Thread") as MockThread2:
+                    MockThread2.return_value.start = MagicMock()
+                    pool._maybe_spawn_relief_worker()
+                    assert pool._relief_count == 1
+                    assert MockThread2.call_count == 1
+        pool.task_queue = orig_q
+        try:
+            while True:
+                pool.task_queue.get_nowait()
+        except Exception:
+            pass
+    finally:
+        pool.stop(wait=True, timeout=5)

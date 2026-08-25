@@ -72,10 +72,10 @@ def test_every_minute_alarm_fires(global_test_env, monkeypatch):
         assert ("?", "?") not in gt.alarms or not gt.alarms.get(("?", "?"))
 
 
-def test_every_minute_alarm_repeats_when_repeat(global_test_env, monkeypatch):
+def test_every_minute_alarm_repeats_when_repeat(global_test_env):
     from atheriz.globals.get import get_game_time
     from atheriz.objects.base_obj import Object
-    from unittest.mock import MagicMock
+    import time
 
     gt = get_game_time()
     obj = Object.create(None, "m05rep")
@@ -86,19 +86,17 @@ def test_every_minute_alarm_repeats_when_repeat(global_test_env, monkeypatch):
 
     obj.at_alarm = at_alarm
     with gt.lock:
-        gt.ticks = 0
+        gt.ticks = 60
         gt.alarms.clear()
     gt.add_alarm("?", "?", obj, repeat=True)
-    mock_atp = MagicMock()
-
-    def immediate(func, *a, **kw):
-        func(*a, **kw)
-        return True
-
-    mock_atp.add_task.side_effect = immediate
-    monkeypatch.setattr("atheriz.globals.time.get_async_threadpool", lambda: mock_atp)
     gt.on_tick()
+    with gt.lock:
+        gt.ticks = 120
     gt.on_tick()
+    for _ in range(20):
+        if len(called) >= 2:
+            break
+        time.sleep(0.05)
     assert len(called) == 2
     with gt.lock:
         assert ("?", "?") in gt.alarms

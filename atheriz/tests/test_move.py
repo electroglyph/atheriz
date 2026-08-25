@@ -3,14 +3,7 @@ from atheriz.utils import Coord
 from atheriz.objects.nodes import Node, NodeGrid, NodeArea, NodeLink
 from atheriz.globals.node import NodeHandler
 from atheriz.objects.base_obj import Object
-from atheriz.globals import objects as obj_singleton
-from atheriz.database_setup import get_database
-from atheriz import settings
-from pathlib import Path
-import shutil
 from unittest.mock import MagicMock
-
-TEST_SAVE_DIR = Path("test_move_data")
 
 def test_npc_move_announcements():
     # 1. Setup Area, Grid, Nodes

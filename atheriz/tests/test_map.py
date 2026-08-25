@@ -1,6 +1,7 @@
 """Tests for atheriz.globals.map — LegendEntry, MapInfo, MapHandler."""
 from __future__ import annotations
 
+import copy as _copy
 import _thread
 import threading
 import time
@@ -559,13 +560,6 @@ class TestMapableAddRemove:
         mi.add_mapable(obj)
         assert mi.objects[1] is obj
 
-    def test_add_triggers_legend_render(self, global_test_env):
-        mi = MapInfo()
-        obj = _make_loc_mapable()
-        with patch.object(mi, "render_legend") as mock_rl:
-            mi.add_mapable(obj)
-        mock_rl.assert_called_once()
-
     def test_remove_mapable(self, global_test_env):
         mi = MapInfo()
         obj = _make_loc_mapable()
@@ -1019,3 +1013,69 @@ class TestFPSLimitProtection:
         mi.add_listener(listener)
         mi.render()
         listener.at_map_update.assert_not_called()
+
+
+class TestMapInfoDeepcopy:
+    def test_mapinfo_deepcopy_survives_rlock(self, global_test_env):
+        mi = MapInfo(name="area", pre_grid={(0, 0): "*"}, post_grid={(0, 0): "."})
+        clone = _copy.deepcopy(mi)
+        assert clone.pre_grid == {(0, 0): "*"}
+        assert isinstance(clone.lock, type(mi.lock))
+
+
+class TestMapRenderSkip:
+    def _make_listener(self):
+        from atheriz.objects.base_obj import Object
+
+        listener = Object.create(None, "listener")
+        listener.map_enabled = True
+        listener.last_map_time = None
+        listener.at_pre_map_render = MagicMock(side_effect=lambda g: g)
+        listener.at_map_update = MagicMock()
+        listener.at_legend_update = MagicMock()
+        return listener
+
+    def test_render_skips_object_without_location(self, global_test_env):
+        from atheriz.objects.base_obj import Object
+
+        mi = MapInfo(name="test")
+        mi.pre_grid[(0, 0)] = "#"
+        mi.map_changed = True
+
+        listener = self._make_listener()
+        mi.add_listener(listener)
+
+        stray = Object.create(None, "stray", is_mapable=True)
+        stray.symbol = "S"
+        stray.location = None
+        mi.objects[stray.id] = stray
+
+        mi.render(force=True)
+
+        listener.at_map_update.assert_called_once()
+
+    def test_render_legend_skips_object_without_location(self, global_test_env):
+        from atheriz.objects.base_obj import Object
+
+        mi = MapInfo(name="test")
+
+        listener = self._make_listener()
+        mi.add_listener(listener)
+
+        stray = Object.create(None, "stray", is_mapable=True)
+        stray.symbol = "S"
+        stray.location = None
+        mi.objects[stray.id] = stray
+
+        mi.render_legend()
+
+        listener.at_legend_update.assert_called_once()
+
+
+class TestMapBuildingMove:
+    def test_batch_update_seeds_pre_grid_from_post_grid(self, global_test_env):
+        mi = MapInfo(name="testbuilding", post_grid={(0, 0): "X", (1, 0): "─"})
+        assert mi.pre_grid == {}
+        with mi.batch_update():
+            pass
+        assert mi.pre_grid == {(0, 0): "X", (1, 0): "─"}

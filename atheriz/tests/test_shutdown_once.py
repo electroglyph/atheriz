@@ -21,7 +21,7 @@ class TestDoShutdownIsIdempotent:
         with patch.object(ss, "get_server_channel", return_value=None), \
              patch.object(ss, "save_objects") as m_save, \
              patch.object(ss, "stop_autosave") as m_stop_auto, \
-             patch("atheriz.server_events") as m_se, \
+             patch("atheriz.server_events", create=True) as m_se, \
              patch.object(ss, "get_map_handler", return_value=MagicMock()) as m_mh, \
              patch.object(ss, "get_node_handler", return_value=MagicMock()) as m_nh, \
              patch.object(ss, "get_async_ticker", return_value=MagicMock()) as m_ticker, \

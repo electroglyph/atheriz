@@ -229,3 +229,70 @@ class TestSaveCommand:
             mock_gt.return_value.save.assert_called_once()
         finally:
             settings.TIME_SYSTEM_ENABLED = old
+
+
+class TestSaveCommandEdge:
+    def test_save_command_access_denied(self, global_test_env):
+        c = _make_caller(superuser=False)
+        assert SaveCommand().access(c) is False
+        from atheriz.inputfuncs import dispatch_loggedin
+
+        c.msg = MagicMock()
+        dispatch_loggedin(c, "save")
+        c.msg.assert_called_once()
+        assert "can't do that" in str(c.msg.call_args).lower() or "permission" in str(c.msg.call_args).lower() or "denied" in str(c.msg.call_args).lower()
+
+    def test_save_message_includes_time_if_enabled(self, monkeypatch):
+        c = _make_caller(superuser=True)
+        monkeypatch.setattr(settings, "TIME_SYSTEM_ENABLED", True)
+        times = [1000.0, 1000.5]
+        orig_time = __import__("time").time
+
+        def fake_time():
+            if times:
+                return times.pop(0)
+            return orig_time()
+
+        monkeypatch.setattr("atheriz.commands.loggedin.save.time.time", fake_time)
+        with patch("atheriz.commands.loggedin.save.save_objects"), \
+             patch("atheriz.commands.loggedin.save.get_map_handler") as mock_mh, \
+             patch("atheriz.commands.loggedin.save.get_node_handler") as mock_nh, \
+             patch("atheriz.commands.loggedin.save.get_game_time") as mock_gt:
+            mock_mh.return_value.save = MagicMock()
+            mock_nh.return_value.save = MagicMock()
+            mock_gt.return_value.save = MagicMock()
+            SaveCommand().run(c, None)
+        mock_gt.return_value.save.assert_called_once()
+        combined = " ".join(str(call) for call in c.msg.call_args_list).lower()
+        assert "saved in" in combined
+        assert "millisecond" in combined
+
+    def test_save_with_time_system_disabled(self, monkeypatch):
+        c = _make_caller(superuser=True)
+        monkeypatch.setattr(settings, "TIME_SYSTEM_ENABLED", False)
+        with patch("atheriz.commands.loggedin.save.save_objects"), \
+             patch("atheriz.commands.loggedin.save.get_map_handler") as mock_mh, \
+             patch("atheriz.commands.loggedin.save.get_node_handler") as mock_nh, \
+             patch("atheriz.commands.loggedin.save.get_game_time") as mock_gt:
+            mock_mh.return_value.save = MagicMock()
+            mock_nh.return_value.save = MagicMock()
+            mock_gt.return_value.save = MagicMock()
+            SaveCommand().run(c, None)
+        mock_gt.return_value.save.assert_not_called()
+        assert c.msg.called
+
+
+class TestQuellEdge:
+    def test_quell_already_quelled(self):
+        c = _make_caller(builder=True)
+        c.quelled = True
+        QuellCommand().run(c, None)
+        c.msg.assert_called_once()
+        assert "already quelled" in str(c.msg.call_args).lower()
+
+    def test_unquell_not_quelled(self):
+        c = _make_caller(builder=True)
+        c.quelled = False
+        UnquellCommand().run(c, None)
+        c.msg.assert_called_once()
+        assert "not quelled" in str(c.msg.call_args).lower()

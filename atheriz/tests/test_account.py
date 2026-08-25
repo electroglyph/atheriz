@@ -18,9 +18,10 @@ import pytest
 
 import atheriz.settings as settings
 from atheriz.globals.get import get_unique_id
-from atheriz.globals.objects import _ALL_OBJECTS
+from atheriz.globals.objects import _ALL_OBJECTS, add_object
 from atheriz.globals.salt import get_salt
 from atheriz.objects.base_account import Account
+from atheriz.objects.base_obj import Object
 from atheriz.tests.fakes import make_object
 
 
@@ -247,13 +248,11 @@ class TestAccountCharacterManagement:
         assert acc.characters == [1, 2]
 
     def test_add_character_appends_idempotently(self, fixed_salt, global_test_env):
-        # INTENT: the implementation does not de-dupe. If you add the same
-        # character twice, the id appears twice. Documenting this behavior.
         acc = _make_account("ruby", "pw")
         char = make_object("c1", is_pc=True); char.id = 5
         acc.add_character(char)
         acc.add_character(char)
-        assert acc.characters == [5, 5]
+        assert acc.characters == [5]
 
     def test_remove_character_removes_first_occurrence(self, fixed_salt, global_test_env):
         acc = _make_account("sam", "pw")
@@ -261,7 +260,7 @@ class TestAccountCharacterManagement:
         acc.add_character(c)
         acc.add_character(c)
         acc.remove_character(c)
-        assert acc.characters == [7]  # one removed, one left
+        assert acc.characters == []
 
     def test_remove_character_missing_is_noop(self, fixed_salt, global_test_env):
         # INTENT: removing a character that isn't in the list must be a no-op
@@ -308,14 +307,23 @@ class TestAccountPasswords:
         assert all(c in "0123456789abcdef" for c in h)
 
     def test_hash_password_uses_key_stretching(self, fixed_salt, global_test_env):
-        # INTENT: PBKDF2 with 600k iterations should take measurable time
+        from unittest.mock import patch
+
+        with patch("atheriz.objects.base_account.hashlib.pbkdf2_hmac") as mock_pbkdf2:
+            mock_pbkdf2.return_value.hex.return_value = "00" * 32
+            Account.hash_password("test-password")
+            mock_pbkdf2.assert_called_once()
+            assert mock_pbkdf2.call_args.args[3] == 600000
+            assert mock_pbkdf2.call_args.args[0] == "sha256"
+
+    @pytest.mark.slow
+    def test_hash_password_uses_key_stretching_timing(self, fixed_salt, global_test_env):
         import time
+
         start = time.monotonic()
         Account.hash_password("test-password")
         elapsed = time.monotonic() - start
-        # With 600k iterations, this should take at least a few ms
-        # On fast hardware it might be ~50ms, on slow ~500ms
-        assert elapsed > 0.001  # at least 1ms
+        assert elapsed > 0.001
 
     def test_check_password_uses_constant_time_compare(self, fixed_salt, global_test_env):
         # INTENT: check_password must use hmac.compare_digest to prevent
@@ -562,3 +570,42 @@ class TestAccountIntegration:
             assert a.delete() is True
         finally:
             VetoAccount.at_delete = orig
+
+
+class TestAccountRemoveCharacter:
+    def test_remove_missing_character_is_noop(self, global_test_env, fixed_salt):
+        """INTENT: removing a character that was never added must be a no-op,
+        not raise ValueError from list.remove."""
+        account = Account.create("bob", "pw1")
+        other = Object.create(None, "other")
+        add_object(other)
+        account.remove_character(other)
+
+    def test_remove_added_character_works(self, global_test_env, fixed_salt):
+        account = Account.create("bob", "pw1")
+        char = Object.create(None, "hero", is_pc=True)
+        add_object(char)
+        account.add_character(char)
+        account.remove_character(char)
+        assert char.id not in account.characters
+
+
+class TestAccountDisconnect:
+    def test_failed_login_clears_logged_in(self, global_test_env, fixed_salt):
+        """INTENT: after a successful login, a subsequent failed login must not
+        leave the account marked as logged in."""
+        account = Account.create("bob", "pw1")
+        assert account.login("bob", "pw1") is True
+        assert account.logged_in is True
+
+        assert account.login("bob", "wrong") is False
+        assert account.logged_in is False
+
+    def test_disconnect_clears_logged_in(self, global_test_env, fixed_salt):
+        """INTENT: disconnecting clears the stale logged_in flag so it isn't
+        persisted forever."""
+        account = Account.create("bob", "pw1")
+        assert account.login("bob", "pw1") is True
+        assert account.logged_in is True
+        account.at_disconnect()
+        assert account.logged_in is False
