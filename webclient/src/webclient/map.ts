@@ -5,6 +5,7 @@ const RESET = '\x1b[0m';
 export const MAP_CLEAR_SEQUENCE = '\x1b[2J\x1b[3J\x1b[H';
 
 export function renderMap(payload: MapPayload, columns: number, rows: number): string {
+    if (columns <= 0 || rows <= 0) return '';
     let lines = payload.map.split(/\r?\n/);
     applyBackground(lines, payload);
 

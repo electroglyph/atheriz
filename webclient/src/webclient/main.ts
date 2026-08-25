@@ -347,7 +347,6 @@ function handleMessage(message: WireMessage): void {
             break;
         case 'map_enable':
             setMapVisibility(!screenReaderEnabled);
-            if (mapEnabled) fitAndReportSize();
             break;
         case 'map_disable':
             setMapVisibility(false);
@@ -356,14 +355,29 @@ function handleMessage(message: WireMessage): void {
         case 'get_map_size':
             if (mapEnabled) connection.send('map_size', [right.cols, Math.max(1, right.rows - 1)]);
             break;
-        case 'map':
+        case 'map': {
             mapPayload = asMapPayload(message.args[0]);
             if (pendingBackground) {
                 mapPayload.background = mergeBackgrounds(mapPayload.background, pendingBackground);
                 pendingBackground = undefined;
             }
+            const fonts = (document as unknown as { fonts?: { status?: string; ready?: Promise<void> } }).fonts;
+            const fontsNotReady = !!fonts && fonts.status !== 'loaded';
+            if (right.cols <= 0 || right.rows <= 0 || elements.rightTerminal.hidden || fontsNotReady) {
+                requestAnimationFrame(() => {
+                    fitAndReportSize();
+                    if (mapEnabled && mapPayload) renderMap();
+                });
+                if (fontsNotReady && fonts?.ready) {
+                    void fonts.ready.then(() => {
+                        if (mapEnabled && mapPayload) fitAndReportSize();
+                    });
+                }
+                break;
+            }
             renderMap();
             break;
+        }
         case 'legend':
             if (mapPayload) {
                 const legendData = message.args[0];
@@ -671,6 +685,15 @@ function setMapVisibility(enabled: boolean): void {
     elements.divider.hidden = layout.dividerHidden;
     elements.leftTerminal.style.width = layout.leftWidth;
     if (changed && recorder.active) recorder.layoutEvent(enabled ? 'show_right' : 'hide_right');
+    if (enabled) {
+        requestAnimationFrame(() => fitAndReportSize());
+        const fonts = (document as unknown as { fonts?: { status?: string; ready?: Promise<void> } }).fonts;
+        if (fonts && fonts.status !== 'loaded' && fonts.ready) {
+            void fonts.ready.then(() => {
+                if (mapEnabled && mapPayload) fitAndReportSize();
+            });
+        }
+    }
 }
 
 function saveDividerPosition(): void {
