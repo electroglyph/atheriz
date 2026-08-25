@@ -173,10 +173,10 @@ class WebSocketProtocol(BaseProtocol):
             try:
                 while True:
                     raw_message = await websocket.receive_text()
-                    if len(raw_message) > settings.WEBSOCKET_MAX_MESSAGE_SIZE:
+                    if len(raw_message.encode("utf-8")) > settings.WEBSOCKET_MAX_MESSAGE_SIZE:
                         if _should_log_oversize(client_host):
                             logger.warning(
-                                f"[WebSocket] Message too large from {client_host} ({len(raw_message)} bytes > {settings.WEBSOCKET_MAX_MESSAGE_SIZE} bytes)"
+                                f"[WebSocket] Message too large from {client_host} ({len(raw_message.encode('utf-8'))} bytes > {settings.WEBSOCKET_MAX_MESSAGE_SIZE} bytes)"
                             )
                         try:
                             await websocket.close(code=1009, reason="Message too large")

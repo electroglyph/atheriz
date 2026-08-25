@@ -408,6 +408,19 @@ async def create_account_endpoint(request: Request):
             "message": "account_name, char_name and password are required.",
         }
 
+    from atheriz.commands.unloggedin.validation import (
+        validate_account_name,
+        validate_character_name,
+        validate_password,
+    )
+
+    if err := validate_account_name(account_name):
+        return {"status": "error", "message": err}
+    if err := validate_character_name(char_name):
+        return {"status": "error", "message": err}
+    if err := validate_password(password):
+        return {"status": "error", "message": err}
+
     import io
     import contextlib
 

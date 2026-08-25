@@ -49,8 +49,12 @@ def test_connections_from_different_hosts_allowed(global_test_env):
 def test_unknown_host_never_limited(global_test_env):
     manager = ConnectionManager()
     with _cap(2):
-        for i in range(3):
-            assert manager.register_connection(f"c{i}", FakeConnection()) is True
+        assert manager.register_connection("c0", FakeConnection()) is True
+        assert manager.register_connection("c1", FakeConnection()) is True
+        third = FakeConnection()
+        with patch.object(third, "close") as close_spy:
+            assert manager.register_connection("c2", third) is False
+            close_spy.assert_called_once()
 
 
 def test_slot_freed_after_disconnect(global_test_env):

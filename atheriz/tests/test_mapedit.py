@@ -50,6 +50,8 @@ class MockCaller:
 def make_conn(ip="10.0.0.1"):
     conn = FakeConnection()
     conn.client_host = ip
+    builder = MockCaller(is_builder=True)
+    conn.session.puppet = builder
     return conn
 
 

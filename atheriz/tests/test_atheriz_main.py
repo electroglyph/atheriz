@@ -324,12 +324,12 @@ class TestCreateAccountEndpoint:
                 create_account_endpoint(
                     _FakeRequest(
                         token="real-token",
-                        body={"account_name": "alice", "char_name": "Bob", "password": "secret"},
+                        body={"account_name": "alice", "char_name": "Bob", "password": "secret123"},
                     )
                 )
             )
         assert result["status"] == "ok"
-        mock_char.assert_called_once_with("alice", "Bob", "secret")
+        mock_char.assert_called_once_with("alice", "Bob", "secret123")
 
     def test_rejects_missing_body_fields(self, global_test_env, tmp_path):
         from atheriz.atheriz import create_account_endpoint

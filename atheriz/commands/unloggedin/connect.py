@@ -90,7 +90,7 @@ class ConnectCommand(Command):
     async def run(self, caller: Connection, args):
         account_name = args.account_name
         password = args.password
-        accounts = filter_by(lambda x: x.is_account and x.name == account_name)
+        accounts = filter_by(lambda x: x.is_account and x.name.lower() == account_name.lower())
 
         if not accounts:
             # don't say "account not found" for security reasons
@@ -103,6 +103,11 @@ class ConnectCommand(Command):
             return
 
         account: Account = accounts[0]
+
+        if account.is_banned:
+            caller.msg(f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}")
+            caller.close()
+            return
 
         if not account.check_password(password):
             host = getattr(caller, "client_host", "?")
@@ -135,10 +140,6 @@ class ConnectCommand(Command):
         except Exception:
             pass
 
-        if account.is_banned:
-            caller.msg(f"You have been banned from this server. Reason: {account.ban_reason or 'None specified'}")
-            caller.close()
-            return
         caller.session.account = account
         caller.send_command("logged_in")
         await char_selection(caller, account)

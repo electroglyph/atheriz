@@ -81,7 +81,7 @@ class ConnectionManager:
                 except Exception:
                     pass
                 return False
-            if limit > 0 and host != "?":
+            if limit > 0:
                 same_host = sum(
                     1
                     for c in self._connections.values()
