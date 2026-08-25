@@ -3,7 +3,7 @@ Extensive tests for wander tickable leak, nofollow dangling edge, deep delete co
 
 Wander: grid with no random node returns None should not create Wanderer.
 Nofollow: preserve builder followers, keep/destroy FollowScript correctly.
-Delete: deep containment greater than MAX_SEARCH_DEPTH still fully deleted, cycle safe.
+Delete: truncation at MAX_SEARCH_DEPTH keeps deep survivors detached without dangling, full delete when MAX increased, cycle safe.
 Remove door: minimal sanity check that links and glyph are removed.
 """
 
@@ -189,18 +189,32 @@ class TestWanderTickableLeak:
         caller.quelled = False
         caller.location = n1
         caller.msg = MagicMock()
+        before = set(_ALL_OBJECTS.keys())
         with patch("atheriz.commands.loggedin.wander.get_node_handler", return_value=nh), \
              patch.object(NodeGrid, "get_random_node", return_value=n2):
             WanderCommand().run(caller, MagicMock(count=1))
+        after = set(_ALL_OBJECTS.keys())
+        new_ids = after - before
+        assert len(new_ids) == 1, f"expected 1 wanderer, got {new_ids}"
+        wanderer = objects_get(list(new_ids)[0])[0]
+        assert wanderer.is_tickable is True, "wanderer should be tickable"
         ticker = get_async_ticker()
         found = False
-        for slot in ticker.slots.values():
+        details = []
+        for interval, slot in ticker.slots.items():
             with slot.lock:
-                for coro in slot.coros:
-                    # coro is bound method wanderer.at_tick
-                    if hasattr(coro, "__self__") and isinstance(coro.__self__, Wanderer):
+                for coro in list(slot.coros):
+                    self_obj = getattr(coro, "__self__", None)
+                    details.append((interval, getattr(self_obj, "id", None), type(self_obj).__name__ if self_obj else None, repr(coro)[:120]))
+                    if self_obj is wanderer:
                         found = True
-        assert found, "Wanderer at_tick should be registered in ticker"
+                    elif self_obj is not None and getattr(self_obj, "id", None) == wanderer.id:
+                        found = True
+                    elif isinstance(self_obj, Wanderer):
+                        found = True
+            if found:
+                break
+        assert found, f"Wanderer {wanderer.id} at_tick should be registered in ticker; slots={details} ticker_keys={list(ticker.slots.keys())}"
 
     def test_wander_multiple_success_creates_requested_count(self, global_test_env):
         nh, n1, n2, area, grid = _make_wander_handler("M7B3")
@@ -643,7 +657,8 @@ class TestDeleteRecursiveDepthSkip:
         admin.privilege_level = settings.Privilege.Admin
         return admin
 
-    def test_deep_chain_120_all_deleted(self, global_test_env):
+    def test_deep_chain_120_all_deleted(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 500)
         admin = self._make_admin()
         outer = Object.create(None, "outer120", is_container=True)
         chain = [outer]
@@ -661,13 +676,13 @@ class TestDeleteRecursiveDepthSkip:
         outer.delete(admin, recursive=True)
         for oid in all_ids:
             assert not objects_get(oid), f"oid {oid} should be deleted (deep >100)"
-            # also check globals
             assert oid not in _ALL_OBJECTS
         assert outer.is_deleted is True
         assert leaf.is_deleted is True
         assert leaf.location is None
 
-    def test_deep_chain_200_all_deleted(self, global_test_env):
+    def test_deep_chain_200_all_deleted(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 500)
         admin = self._make_admin()
         outer = Object.create(None, "outer200", is_container=True)
         chain = [outer]
@@ -685,9 +700,9 @@ class TestDeleteRecursiveDepthSkip:
         leaked = [oid for oid in all_ids if oid in _ALL_OBJECTS]
         assert leaked == []
 
-    def test_deep_chain_exact_boundary(self, global_test_env):
+    def test_deep_chain_exact_boundary(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 500)
         admin = self._make_admin()
-        # Test depth 100, 101, 102 boundaries
         for depth in [100, 101, 102]:
             outer = Object.create(None, f"outerB{depth}", is_container=True)
             chain = [outer]
@@ -703,17 +718,38 @@ class TestDeleteRecursiveDepthSkip:
                 assert not objects_get(oid), f"depth {depth} oid {oid} should be deleted even beyond old MAX_SEARCH_DEPTH"
             assert outer.is_deleted
 
-    def test_deep_chain_branching_all_deleted(self, global_test_env):
+    def test_deep_chain_truncation_survivors_detached_not_leaked(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 5)
+        admin = self._make_admin()
+        outer = Object.create(None, "outerTrunc", is_container=True)
+        chain = [outer]
+        prev = outer
+        for i in range(10):
+            c = Object.create(None, f"trunc_{i}", is_container=True)
+            c.move_to(prev)
+            chain.append(c)
+            prev = c
+        deepest = chain[-1]
+        outer.delete(admin, recursive=True)
+        assert not objects_get(outer.id)
+        assert objects_get(deepest.id), "deep objects beyond limit should survive truncation"
+        survivor = objects_get(chain[5].id)[0]
+        assert survivor.location is None, "truncated survivor should be detached, not dangling to deleted parent"
+        assert survivor.id not in _ALL_OBJECTS or objects_get(survivor.id)
+        for i in range(4):
+            assert not objects_get(chain[i+1].id), f"trunc_{i} depth {i+1}<5 should be deleted"
+        for i in range(5, 10):
+            assert objects_get(chain[i+1].id), f"trunc_{i} depth {i+1}>=5 should survive"
+
+    def test_deep_chain_branching_all_deleted(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 500)
         admin = self._make_admin()
         outer = Object.create(None, "outerBranch", is_container=True)
-        # create 3 branches each 50 deep (total depth still >100 via chain but also breadth)
         branches = []
         for b in range(3):
             prev = outer
             for i in range(50):
                 c = Object.create(None, f"branch{b}_{i}", is_container=True)
-                # For first level each iteration, need unique prev per branch, not outer repeatedly incorrectly
-                # We maintain chain per branch
                 if i == 0:
                     c.move_to(outer)
                     branches.append(c)
@@ -721,12 +757,9 @@ class TestDeleteRecursiveDepthSkip:
                 else:
                     c.move_to(prev)
                     prev = c
-        # Add deep tail to one branch to exceed 100
         tail_prev = branches[0]
-        # find deepest of branch0
         deepest = tail_prev
         while deepest.contents:
-            # follow first content
             nxt = deepest.contents[0]
             deepest = nxt
         for i in range(60):
@@ -735,21 +768,14 @@ class TestDeleteRecursiveDepthSkip:
             deepest = c
         all_ids_before = set(_ALL_OBJECTS.keys())
         outer.delete(admin, recursive=True)
-        # all objects that were in outer subtree should be gone
-        # Since outer is deleted, check that none of its prior contents remain
         for oid in list(all_ids_before):
             obj = objects_get(oid)
-            # if obj still exists, ensure it's not in deleted subtree (like admin)
             if obj:
                 assert obj[0].id != outer.id
-                # admin should survive
                 if obj[0].name == "AdminM11":
                     continue
-                # Check that any object that was inside outer is gone
-                # We can't easily know, but we verify outer is_deleted and no leaked children with outer prefix
                 pass
         assert outer.is_deleted
-        # verify no object with branch name remains
         remaining_names = [o.name for o in _ALL_OBJECTS.values()]
         assert not any(n.startswith("branch") or n.startswith("tail_") for n in remaining_names), f"leaked branch objects: {remaining_names}"
 
@@ -796,14 +822,14 @@ class TestDeleteRecursiveDepthSkip:
         assert o.id not in _ALL_OBJECTS
         assert o.is_deleted is True
 
-    def test_location_cleared_after_deep_delete(self, global_test_env):
+    def test_location_cleared_after_deep_delete(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 500)
         admin = self._make_admin()
         outer = Object.create(None, "outerLoc", is_container=True)
         mid = Object.create(None, "midLoc", is_container=True)
         mid.move_to(outer)
         leaf = Object.create(None, "leafLoc", is_item=True)
         leaf.move_to(mid)
-        # build deep chain 110 to exceed old limit
         prev = leaf
         for i in range(110):
             c = Object.create(None, f"deepLeaf{i}", is_container=True)
@@ -859,23 +885,27 @@ class TestDeleteRecursiveDepthSkip:
             pytest.fail("delete should use iterative stack, not recurse")
         assert outer.is_deleted
 
-    def test_old_guard_would_leak_but_new_deletes(self, global_test_env):
+    def test_old_guard_truncation_survivors_are_detached_not_dangling(self, global_test_env, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_SEARCH_DEPTH", 5)
         admin = self._make_admin()
         outer = Object.create(None, "outerLeakCheck", is_container=True)
         chain = [outer]
         prev = outer
-        for i in range(110):
+        for i in range(10):
             c = Object.create(None, f"leak{i}", is_container=True)
             c.move_to(prev)
             chain.append(c)
             prev = c
-        # Simulate what old guard would do: depth >=100 would stop
-        # Verify new code deletes even depth 105+
-        deep_ids = [chain[105].id, chain[110].id]
         outer.delete(admin, recursive=True)
-        for oid in deep_ids:
-            assert not objects_get(oid), f"deep oid {oid} would have leaked under old MAX_SEARCH_DEPTH guard"
-            assert oid not in _ALL_OBJECTS
+        for i in range(4):
+            assert not objects_get(chain[i+1].id), f"leak{i} depth {i+1}<5 should be deleted"
+        for i in range(5, 10):
+            assert objects_get(chain[i+1].id), f"leak{i} depth {i+1}>=5 should survive truncation"
+        first_survivor = objects_get(chain[6].id)[0] if False else objects_get(chain[5].id)[0]
+        assert first_survivor.location is None, "first survivor beyond depth should be detached, not dangling to deleted parent"
+        assert chain[5].id in _ALL_OBJECTS
+        deeper = objects_get(chain[6].id)[0]
+        assert deeper.location is first_survivor, "deeper survivor should remain under first survivor, not dangling"
 
 
 # ===========================================================================

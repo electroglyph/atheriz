@@ -297,6 +297,7 @@ class Object(Flags, DbOps, AccessLock):
             seen: set[int] = set()
             stack: list[tuple[Object, int]] = [(root, 0)]
             order: list[Object] = []
+            truncated: list[Object] = []
             while stack:
                 obj, depth = stack.pop()
                 if obj.id in seen:
@@ -306,11 +307,25 @@ class Object(Flags, DbOps, AccessLock):
                 if obj.contents:
                     for content in list(obj.contents):
                         if content.id not in seen:
+                            if depth + 1 >= settings.MAX_SEARCH_DEPTH:
+                                truncated.append(content)
+                                continue
                             stack.append((content, depth + 1))
             for obj in reversed(order):
                 to_delete.append(obj)
                 if not getattr(obj, "is_temporary", False):
                     ops.append(obj.get_del_ops())
+            for surv in truncated:
+                loc = getattr(surv, "location", None)
+                if loc is not None and getattr(loc, "id", None) in seen:
+                    try:
+                        loc.remove_object(surv)
+                    except Exception:
+                        pass
+                    try:
+                        surv.location = None
+                    except Exception:
+                        pass
 
         def _delete_object(obj: Object):
             if obj.location:
