@@ -342,6 +342,17 @@ def get_dir(origin: tuple, dest: tuple) -> str:
     get map direction between two coords.
     returns '' if origin == dest
     """
+    try:
+        o_area = origin[0] if len(origin) >= 4 else None
+        d_area = dest[0] if len(dest) >= 4 else None
+        if isinstance(o_area, str) or isinstance(d_area, str):
+            if o_area != d_area:
+                return ""
+        elif len(origin) >= 4 or len(dest) >= 4:
+            if origin[0] != dest[0]:
+                return ""
+    except Exception:
+        pass
     ns_vec = abs(origin[2] - dest[2])
     if origin[2] > dest[2]:
         ns_vec *= -1
@@ -393,9 +404,14 @@ def word_replace(input: str, replace_freq: float, replacement: str = "..."):
     return " ".join(words)
 
 
+_MAX_SPHERE_RADIUS = 100
+
+
 def get_points_in_sphere(
     center: tuple[int, int, int], radius: float, ignore_center: bool = False
 ) -> list[tuple[int, int, int]]:
+    if radius < 0 or radius > _MAX_SPHERE_RADIUS:
+        raise ValueError(f"radius {radius} out of bounds [0, {_MAX_SPHERE_RADIUS}]")
     cx, cy, cz = center
     points = []
     r2 = radius * radius

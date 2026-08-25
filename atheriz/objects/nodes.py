@@ -1230,6 +1230,10 @@ class NodeArea:
     def get_nodes_in_sphere(
         self, center: tuple[int, int, int], radius: float, ignore_center: bool = False
     ) -> list[Node]:
+        from atheriz.utils import _MAX_SPHERE_RADIUS
+
+        if radius < 0 or radius > _MAX_SPHERE_RADIUS:
+            raise ValueError(f"radius {radius} out of bounds [0, {_MAX_SPHERE_RADIUS}]")
         cx, cy, cz = center
         r2 = radius * radius
         ri = int(radius)

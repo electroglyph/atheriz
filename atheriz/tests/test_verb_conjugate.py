@@ -248,10 +248,9 @@ def test_verb_is_present_negated():
 
 
 def test_verb_is_past():
-    # "was" is in both 1sg and 3sg past positions. The first match wins,
-    # which is 1st singular past — so "was" + person="3" returns False.
+    # "was" appears in both 1st and 3rd singular past — both should be true.
     assert c.verb_is_past("was", "1")
-    assert not c.verb_is_past("was", "3")
+    assert c.verb_is_past("was", "3")
     assert c.verb_is_past("were", "2")
     assert c.verb_is_past("am", "1") is False
     assert c.verb_is_past("is", "3") is False

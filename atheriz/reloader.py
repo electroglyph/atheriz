@@ -237,6 +237,9 @@ def _reload_game_folder_modules():
     return reloaded, errors
 
 
+_FALLBACK_PATCH_LOCK = threading.RLock()
+
+
 def _apply_patch(obj, new_class):
     """Patch a single live object to use new_class, preserving state.
 
@@ -248,8 +251,9 @@ def _apply_patch(obj, new_class):
     saved_command = getattr(obj, "command", None)
 
     lock = getattr(obj, "lock", None)
-    if lock:
-        lock.acquire()
+    if lock is None:
+        lock = _FALLBACK_PATCH_LOCK
+    lock.acquire()
     try:
         orig_dict = obj.__dict__.copy()
         orig_class = obj.__class__

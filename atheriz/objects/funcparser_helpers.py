@@ -361,7 +361,10 @@ def _safe_pow(base, exponent):
         )
     if base and int(exponent * math.log10(abs(base))) + 1 > _MAX_POW_DIGITS:
         raise ValueError(f"estimated size exceeds safe limit {_MAX_POW_DIGITS}")
-    return base ** exponent
+    result = base ** exponent
+    if isinstance(result, complex):
+        raise ValueError("complex result not allowed")
+    return result
 
 
 def _safe_arith_eval(inp):

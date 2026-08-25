@@ -143,17 +143,15 @@ def astar(
             existing = open_by_pos.get(child.position.coord)
             if existing:
                 if child.g < existing.g:
-                    existing.g = child.g
-                    existing.f = child.f
-                    existing.parent = child.parent
-                    heapq.heapify(open_list)
+                    heapq.heappush(open_list, child)
+                    open_by_pos[child.position.coord] = child
             else:
                 heapq.heappush(open_list, child)
                 open_by_pos[child.position.coord] = child
         if len(open_list) == 0:
             return False, [], list(closed_set)
         current_node = heapq.heappop(open_list)
-        while current_node.position.coord not in open_by_pos:
+        while open_by_pos.get(current_node.position.coord) is not current_node:
             if not open_list:
                 return False, [], list(closed_set)
             current_node = heapq.heappop(open_list)

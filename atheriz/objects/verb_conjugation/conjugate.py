@@ -297,14 +297,24 @@ def verb_is_present(verb, person="", negated=False):
 
     """
 
-    person = str(person).replace("*", "plural")
-    tense = verb_tense(verb)
-    if tense is not None:
-        if "present" in tense and person in tense:
-            if not negated:
+    person_norm = str(person).replace("pl", "*").strip("stndrgural")
+    mapping = {
+        "1": "1st singular present",
+        "2": "2nd singular present",
+        "3": "3rd singular present",
+        "*": "present plural",
+    }
+    infinitive = verb_infinitive(verb)
+    if person_norm == "":
+        for tense in mapping.values():
+            if verb == verb_conjugate(infinitive, tense, negate=negated):
                 return True
-            elif "n't" in verb or " not" in verb:
-                return True
+        return False
+    if person_norm in mapping:
+        expected = verb_conjugate(infinitive, mapping[person_norm], negate=negated)
+        if expected == "":
+            return False
+        return verb == expected
     return False
 
 
@@ -338,15 +348,24 @@ def verb_is_past(verb, person="", negated=False):
 
     """
 
-    person = str(person).replace("*", "plural")
-    tense = verb_tense(verb)
-    if tense is not None:
-        if "past" in tense and person in tense:
-            if not negated:
+    person_norm = str(person).replace("pl", "*").strip("stndrgural")
+    mapping = {
+        "1": "1st singular past",
+        "2": "2nd singular past",
+        "3": "3rd singular past",
+        "*": "past plural",
+    }
+    infinitive = verb_infinitive(verb)
+    if person_norm == "":
+        for tense in list(mapping.values()) + ["past"]:
+            if verb == verb_conjugate(infinitive, tense, negate=negated):
                 return True
-            elif "n't" in verb or " not" in verb:
-                return True
-
+        return False
+    if person_norm in mapping:
+        expected = verb_conjugate(infinitive, mapping[person_norm], negate=negated)
+        if expected != "":
+            return verb == expected
+        return verb == verb_conjugate(infinitive, "past", negate=negated)
     return False
 
 
