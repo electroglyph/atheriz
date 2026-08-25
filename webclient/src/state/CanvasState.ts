@@ -181,7 +181,7 @@ export class CanvasState {
                 name: layer.name,
                 visible: layer.visible,
                 cells: newCells,
-                overflowCells: layer.overflowCells ? new Map(layer.overflowCells) : new Map()
+                overflowCells: layer.overflowCells ? new Map(Array.from(layer.overflowCells.entries()).map(([k, cell]) => [k, { char: cell.char, fg: [...cell.fg] as [number, number, number], bg: [...cell.bg] as [number, number, number], bold: cell.bold, italic: cell.italic, underline: cell.underline }])) : new Map()
             });
         }
         return copy;
@@ -206,8 +206,9 @@ export class CanvasState {
 
         for (let i = 0; i < this.layers.length; i++) {
             const layer = this.layers[i];
-            const isBgLayer = (i === 0);
-            const defaultBg = isBgLayer ? [0, 0, 0] : [-1, -1, -1];
+            const sampleBg = layer.cells[0]?.[0]?.bg;
+            const isOpaqueBgLayer = sampleBg ? sampleBg[0] !== -1 : i === 0;
+            const defaultBg = isOpaqueBgLayer ? [0, 0, 0] : [-1, -1, -1];
 
             const newCells: Cell[][] = Array.from({ length: newHeight }, () =>
                 Array.from({ length: newWidth }, () => ({

@@ -1,4 +1,5 @@
 import { CanvasState } from '../state/CanvasState';
+import { UndoStack } from '../state/UndoStack';
 import { AppState } from '../types';
 import { renderTextToAnsiLayer } from '../utils/TextToANSI';
 import { ChafaConfig, DEFAULT_CHAFA_OPTIONS } from '../utils/chafaDefaults';
@@ -31,12 +32,14 @@ export class TextToolDialog {
     private appState: AppState;
     private canvasState: CanvasState;
     private getCellMetrics: () => CellMetrics;
+    private undoStack: UndoStack | null = null;
 
-    constructor(appState: AppState, canvasState: CanvasState, onConfirm: (state: CanvasState) => void, getCellMetrics: () => CellMetrics) {
+    constructor(appState: AppState, canvasState: CanvasState, onConfirm: (state: CanvasState) => void, getCellMetrics: () => CellMetrics, undoStack?: UndoStack) {
         this.appState = appState;
         this.canvasState = canvasState;
         this.onConfirm = onConfirm;
         this.getCellMetrics = getCellMetrics;
+        this.undoStack = undoStack ?? null;
 
         this.modal = document.getElementById('text-tool-modal') as HTMLElement;
         this.input = document.getElementById('text-tool-input') as HTMLTextAreaElement;
@@ -82,7 +85,7 @@ export class TextToolDialog {
 
             
             try {
-                // Generate the new layer
+                if (this.undoStack) this.undoStack.push(this.canvasState);
                 await renderTextToAnsiLayer(
                     text,
                     maxWidth,

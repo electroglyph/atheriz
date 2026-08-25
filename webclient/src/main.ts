@@ -132,12 +132,11 @@ function initApp() {
 
 
     const textToolDialog = new TextToolDialog(appState, canvasState, (newState) => {
-        undoStack.push(canvasState);
         canvasState = newState;
         context.state = canvasState;
         undoStack.setCurrentState(canvasState);
         renderer.updateState(canvasState);
-    }, () => metrics);
+    }, () => metrics, undoStack);
 
     const toolManager = new ToolManager(context);
     toolManager.addTool('rect', new RectangleTool());

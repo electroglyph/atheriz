@@ -61,8 +61,8 @@ export class AnsiExporter {
             }
         }
 
-        // Overlay Layers: Exported sparsely. 
-        // To minimize file size and avoid overwriting lower layers unnecessarily, 
+        // Overlay Layers: Exported sparsely.
+        // To minimize file size and avoid overwriting lower layers unnecessarily,
         // we only emit cursor jumps and ANSI sequences for non-transparent cells.
         for (let li = 1; li < layers.length; li++) {
             out += LAYER_BOUNDARY_MARKER;
@@ -85,6 +85,14 @@ export class AnsiExporter {
                     if (hasBg) {
                         out += `\x1b[48;2;${cell.bg[0]};${cell.bg[1]};${cell.bg[2]}m`;
                         currentBg = cell.bg;
+                    } else if (hasChar) {
+                        const composite = state.getCompositeCell(c, r);
+                        const underlyingBg: Color = composite ? composite.bg : [0, 0, 0];
+                        const bgChanged = !currentBg || currentBg[0] !== underlyingBg[0] || currentBg[1] !== underlyingBg[1] || currentBg[2] !== underlyingBg[2];
+                        if (bgChanged) {
+                            out += `\x1b[48;2;${underlyingBg[0]};${underlyingBg[1]};${underlyingBg[2]}m`;
+                            currentBg = underlyingBg;
+                        }
                     }
 
                     const char = cell.char || ' ';

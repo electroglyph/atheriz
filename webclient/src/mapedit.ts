@@ -96,6 +96,7 @@ export function loadMapPayload(canvas: CanvasState, payload: MapEditPayload): Ma
 }
 
 export function logRoomData(payload: MapEditPayload): void {
+    if (!(import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) return;
     console.log(`Room data for ${payload.area} (z=${payload.z}):`);
     const rooms = payload.rooms ?? [];
     if (rooms.length === 0) {

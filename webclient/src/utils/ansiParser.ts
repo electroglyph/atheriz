@@ -64,7 +64,9 @@ export function detectAnsiDimensions(ansiString: string): { width: number; heigh
 
     // Fallback: strip ANSI escapes and measure the plain-text content
     const stripped = ansiString.replace(/\x1b\[[\d;]*[a-zA-Z]/g, '');
-    const lines = stripped.split(/\r?\n/);
+    const rawLines = stripped.split(/\r?\n/);
+    while (rawLines.length > 1 && rawLines[rawLines.length - 1] === '') rawLines.pop();
+    const lines = rawLines;
     const height = Math.max(1, lines.length);
     const width = Math.max(1, ...lines.map(l => l.length));
     return { width, height };
