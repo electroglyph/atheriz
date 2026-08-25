@@ -97,7 +97,10 @@ class NodeHandler:
             except Exception as e:
                 logger.error(f"Error resolving area {getattr(area, 'name', '?')}: {e}")
         if max_node_id:
-            set_id(max(get_id(), max_node_id))
+            import atheriz.globals.get as get_mod
+
+            with get_mod._ID_LOCK:
+                get_mod._ID = max(get_mod._ID, max_node_id)
 
     def _is_dirty(self):
         with self.lock:
@@ -542,21 +545,26 @@ class NodeHandler:
                 mi.render(True)
 
     def add_node(self, node: Node):
-        area = self.get_area(node.coord.area)
-        if area:
-            grid = area.get_grid(node.coord.z)
-            if grid:
-                grid.add_node(node)
-            else:
-                grid = NodeGrid(node.coord.area, node.coord.z)
-                grid.add_node(node)
-                area.add_grid(grid)
-        else:
-            area = NodeArea(node.coord.area)
-            grid = NodeGrid(node.coord.area, node.coord.z)
+        with self.lock:
+            area = self.areas.get(node.coord.area)
+            if area is None:
+                area = NodeArea(node.coord.area)
+                self.areas[area.name] = area
+                self._modified = True
+            # area exists now; handle grid under area.lock
+        # double-checked grid creation under area lock
+        grid = area.get_grid(node.coord.z)
+        if grid:
             grid.add_node(node)
-            area.add_grid(grid)
-            self.add_area(area)
+        else:
+            with area.lock:
+                grid = area.grids.get(node.coord.z)
+                if grid is None:
+                    grid = NodeGrid(node.coord.area, node.coord.z)
+                    grid.add_node(node)
+                    area.add_grid(grid)
+                else:
+                    grid.add_node(node)
         with self.lock:
             self._modified = True
 

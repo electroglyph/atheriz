@@ -275,7 +275,6 @@ def save_objects(force: bool = False):
         and not getattr(o, "is_node", False)
         and not getattr(o, "is_deleted", False)
     ]
-    to_save = snapshot if settings.ALWAYS_SAVE_ALL or force else [s for s in snapshot if getattr(s, "is_modified", False)]
     with db.lock:
         if getattr(db, "_closed", False) is True:
             logger.warning("save_objects: database closed, skipping")
@@ -288,7 +287,9 @@ def save_objects(force: bool = False):
             return
         attempted = []
         try:
-            for obj in to_save:
+            for obj in snapshot:
+                if not settings.ALWAYS_SAVE_ALL and not force and not getattr(obj, "is_modified", False):
+                    continue
                 if not _is_still_saveable(obj):
                     continue
                 attempted.append(obj)

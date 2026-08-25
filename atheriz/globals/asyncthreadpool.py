@@ -307,7 +307,7 @@ class AsyncThreadPool:
             logger.warning(
                 f"[AsyncThreadPool] async thread stop failed:\n{traceback.format_exc()}"
             )
-        for _ in range(self.max_threads):
+        for _ in range(self.max_threads - 1):
             while True:
                 try:
                     self.task_queue.put_nowait(None)

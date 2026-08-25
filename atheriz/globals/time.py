@@ -24,15 +24,43 @@ class GameTime:
             )
 
     def save(self) -> None:
-        self._ensure_table()
-        db = get_database()
         with self.lock:
-            blob = dill.dumps({"ticks": self.ticks, "alarms": self.alarms})
+            ticks = self.ticks
+            alarms = dill.dumps({"ticks": ticks, "alarms": self.alarms})
+            blob = alarms
+        try:
+            db = get_database()
+        except RuntimeError:
+            logger.warning("GameTime.save: database closed, skipping")
+            return
         with db.lock:
-            cursor = db.connection.cursor()
-            cursor.execute(
-                "INSERT OR REPLACE INTO gametime (id, data) VALUES (0, ?)", (blob,)
-            )
+            if getattr(db, "_closed", False) is True:
+                logger.warning("GameTime.save: database closed, skipping")
+                return
+            try:
+                cursor = db.connection.cursor()
+                cursor.execute("CREATE TABLE IF NOT EXISTS gametime (id INTEGER PRIMARY KEY, data BLOB)")
+                cursor.execute("BEGIN TRANSACTION")
+                cursor.execute(
+                    "INSERT OR REPLACE INTO gametime (id, data) VALUES (0, ?)", (blob,)
+                )
+                cursor.execute("COMMIT")
+            except Exception as e:
+                try:
+                    cursor.execute("ROLLBACK")
+                except Exception:
+                    pass
+                # ProgrammingError means DB closed; other errors still propagate after logging
+                try:
+                    import sqlite3
+
+                    if isinstance(e, sqlite3.ProgrammingError):
+                        logger.warning(f"GameTime.save: database closed ({e}), skipping")
+                        return
+                except Exception:
+                    pass
+                logger.error(f"GameTime.save failed: {e}")
+                raise
 
     def load(self) -> None:
         self._ensure_table()

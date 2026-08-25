@@ -226,10 +226,7 @@ class BuildCommand(Command):
                 aliases = [alias] if alias else []
                 new_node.add_link_if_absent(back_link_name, lambda: NodeLink(back_link_name, loc.coord, aliases))
 
-            mi = mh.get_mapinfo(new_coord.area, new_coord.z)
-            if not mi:
-                mi = MapInfo(name=new_coord.area)
-                mh.set_mapinfo(new_coord.area, new_coord.z, mi)
+            mi = mh._get_or_create(new_coord.area, new_coord.z)
 
             with mi.batch_update():
                 # place map tile(s) for this target

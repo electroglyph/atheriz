@@ -409,9 +409,22 @@ class MapHandler:
         except Exception as e:
             logger.error(f"Error loading map data from DB: {e}")
 
-    def save(self):
-        db = get_database()
-
+    def save(self, force: bool = False):
+        if not force and not settings.ALWAYS_SAVE_ALL:
+            try:
+                with self.lock:
+                    if not any(
+                        getattr(mi, "map_changed", False) or getattr(mi, "is_modified", False)
+                        for mi in self.data.values()
+                    ):
+                        return
+            except Exception:
+                pass
+        try:
+            db = get_database()
+        except RuntimeError:
+            logger.warning("MapHandler.save: database closed, skipping")
+            return
         try:
             with self.lock:
                 refs = list(self.data.items())
@@ -438,8 +451,15 @@ class MapHandler:
                 logger.error(f"Error preparing map save for {k}: {e}")
 
         with db.lock:
-            cursor = db.connection.cursor()
-            cursor.execute("BEGIN TRANSACTION")
+            if getattr(db, "_closed", False) is True:
+                logger.warning("MapHandler.save: database closed, skipping")
+                return
+            try:
+                cursor = db.connection.cursor()
+                cursor.execute("BEGIN TRANSACTION")
+            except Exception as e:
+                logger.warning(f"MapHandler.save: database closed ({e}), skipping")
+                return
             try:
                 for (area, z), mi in snapshot:
                     cursor.execute(
@@ -448,7 +468,10 @@ class MapHandler:
                     )
                 cursor.execute("COMMIT")
             except Exception as e:
-                cursor.execute("ROLLBACK")
+                try:
+                    cursor.execute("ROLLBACK")
+                except Exception:
+                    pass
                 logger.error(f"Error saving map data to DB: {e}")
 
     def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo):

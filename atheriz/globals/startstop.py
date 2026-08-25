@@ -62,6 +62,8 @@ def do_shutdown():
         import atheriz.server_events as server_events
     _shutdown_step("at_server_stop", server_events.at_server_stop)
     _shutdown_step("stop_autosave", stop_autosave)
+    if settings.TIME_SYSTEM_ENABLED:
+        _shutdown_step("game_time_stop", get_game_time().stop)
     _shutdown_step("ticker_stop", get_async_ticker().stop)
     _shutdown_step("threadpool_stop", get_async_threadpool().stop, True, 10)
     if settings.AUTOSAVE_ON_SHUTDOWN:
@@ -70,8 +72,6 @@ def do_shutdown():
         _shutdown_step("node_save", get_node_handler().save)
     _shutdown_step("msg_all", msg_all, "Server is shutting down NOW!")
     logger.info("Shutdown sequence completed.")
-    if settings.TIME_SYSTEM_ENABLED:
-        _shutdown_step("game_time_stop", get_game_time().stop)
     # the pool and ticker are single-use: anything that touches them after
     # shutdown must get a fresh one (e.g. a server booted and torn down
     # inside a test process). This must come last: earlier steps (e.g.

@@ -982,17 +982,21 @@ class NodeGrid:
             old = self.nodes.get((node.coord.x, node.coord.y))
             self.nodes[(node.coord.x, node.coord.y)] = node
             self.is_modified = True
-        if old is not None and old is not node:
+            needs_remove = old is not None and old is not node
+            needs_transition = bool(node.links)
+            links_snapshot = list(node.links) if needs_transition else []
+            coord_snapshot = node.coord
+        if needs_remove:
             remove_object(old)
             logger.warning(
                 f"Overwriting node at area {self.area} z {self.z} "
-                f"({node.coord.x},{node.coord.y}): id {old.id} replaced by id {node.id}"
+                f"({coord_snapshot.x},{coord_snapshot.y}): id {old.id} replaced by id {node.id}"
             )
-        if node.links:
+        if needs_transition:
             nh = get_node_handler()
-            for l in node.links:
-                if self.area != l.coord.area:  # does this have an exit leading to a different area?
-                    nh.add_transition(Transition(node.coord, l.coord, l.name))
+            for l in links_snapshot:
+                if self.area != l.coord.area:
+                    nh.add_transition(Transition(coord_snapshot, l.coord, l.name))
 
     def remove_node(self, coord: tuple[int, int]):
         with self.lock:
