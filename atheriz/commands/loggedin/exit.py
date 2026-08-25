@@ -49,8 +49,34 @@ class ExitCommand(Command):
             if door:
                 if door.closed and door.try_open(c):
                     self._clear_following(c)
-                    if c.move_to(dest, self.name):
+                    try:
+                        moved = c.move_to(dest, self.name)
+                    except Exception:
+                        try:
+                            closed_ok = door.try_close(c)
+                        except Exception:
+                            closed_ok = False
+                        if not closed_ok:
+                            with door.lock:
+                                if not door.closed:
+                                    door.closed = True
+                            try:
+                                door.map_close()
+                            except Exception:
+                                pass
+                        raise
+                    if moved:
                         door.try_close(c)
+                    else:
+                        try:
+                            closed_ok = door.try_close(c)
+                        except Exception:
+                            closed_ok = False
+                        if not closed_ok:
+                            with door.lock:
+                                if not door.closed:
+                                    door.closed = True
+                            door.map_close()
                     return
                 elif not door.closed:
                     self._clear_following(c)

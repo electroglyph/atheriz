@@ -65,13 +65,12 @@ class WanderCommand(Command):
         
         start = time.time()
         for i in range(count):
-            # Create a unique name for each wanderer to avoid collisions if called multiple times
+            random_node = grid.get_random_node()
+            if not random_node:
+                continue
             name = f"Wanderer {random.randint(1000, 9999)}"
             npc = Wanderer.create(caller=caller, name=name, is_npc=True, is_mapable=True, is_tickable=True)
             if npc:
-                random_node = grid.get_random_node()
-                if not random_node:
-                    continue
                 npc.move_to(random_node)
         end = time.time()
         caller.msg(f"Spawned {count} NPCs across area '{loc.coord.area}' in {(end - start) * 1000:.2f} milliseconds")

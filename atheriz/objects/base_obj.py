@@ -306,8 +306,6 @@ class Object(Flags, DbOps, AccessLock):
                 if obj.contents:
                     for content in list(obj.contents):
                         if content.id not in seen:
-                            if depth + 1 >= settings.MAX_SEARCH_DEPTH:
-                                continue
                             stack.append((content, depth + 1))
             for obj in reversed(order):
                 to_delete.append(obj)
@@ -1025,6 +1023,21 @@ class Object(Flags, DbOps, AccessLock):
                     self.location = None
             self.at_post_move(destination, to_exit, **kwargs)
             return True
+        if destination is not None and not getattr(destination, "is_node", False):
+            _cur = destination
+            _seen = set()
+            while _cur is not None:
+                if _cur is self or getattr(_cur, "id", None) == self.id:
+                    return False
+                if id(_cur) in _seen:
+                    break
+                _seen.add(id(_cur))
+                if len(_seen) > 100:
+                    break
+                _nxt = getattr(_cur, "location", None)
+                if _nxt is None or getattr(_nxt, "is_node", False):
+                    break
+                _cur = _nxt
         with self.lock:
             loc = self.location
 
@@ -1068,6 +1081,21 @@ class Object(Flags, DbOps, AccessLock):
             grids.sort(key=lambda g: (g.area, g.z))
 
             def _do_with_nodes():
+                if not getattr(destination, "is_node", False):
+                    _cur = destination
+                    _seen = set()
+                    while _cur is not None:
+                        if _cur is self or getattr(_cur, "id", None) == self.id:
+                            return False
+                        if id(_cur) in _seen:
+                            break
+                        _seen.add(id(_cur))
+                        if len(_seen) > 100:
+                            break
+                        _nxt = getattr(_cur, "location", None)
+                        if _nxt is None or getattr(_nxt, "is_node", False):
+                            break
+                        _cur = _nxt
                 if getattr(destination, "is_deleted", False):
                     return False
                 if getattr(destination, "is_node", False) and dest_grid is not None:
@@ -1077,7 +1105,13 @@ class Object(Flags, DbOps, AccessLock):
                     if loc.is_node:
                         if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
                             return False
+                    if getattr(destination, "is_node", False):
+                        if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
+                            return False
+                    if loc.is_node:
                         loc.at_object_leave(destination, to_exit, **kwargs)
+                    if getattr(destination, "is_node", False):
+                        destination.at_object_receive(loc, to_exit, **kwargs)
                     loc._contents.discard(self.id)
                     destination._contents.add(self.id)
                     object.__setattr__(loc, "is_modified", True)
@@ -1174,10 +1208,12 @@ class Object(Flags, DbOps, AccessLock):
                 if loc and loc.is_node:
                     if not loc.at_pre_object_leave(destination, to_exit, **kwargs):
                         return False
-                    loc.at_object_leave(destination, to_exit, **kwargs)
                 if destination.is_node:
                     if not destination.at_pre_object_receive(loc, to_exit, **kwargs):
                         return False
+                if loc and loc.is_node:
+                    loc.at_object_leave(destination, to_exit, **kwargs)
+                if destination.is_node:
                     destination.at_object_receive(loc, to_exit, **kwargs)
                 if loc:
                     loc._contents.discard(self.id)

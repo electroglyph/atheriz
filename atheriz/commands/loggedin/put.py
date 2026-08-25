@@ -45,7 +45,27 @@ class PutCommand(Command):
         if obj_name == "all":
             for obj in list(caller.contents):
                 if obj.id == dest[0].id:
-                    continue  # don't put container in itself
+                    caller.msg(f"You can't put {obj.name} in {dest[0].name} - it would create a containment loop.")
+                    continue
+                _cur = dest[0]
+                _seen = set()
+                _is_loop = False
+                while _cur is not None and not getattr(_cur, "is_node", False):
+                    if _cur is obj or getattr(_cur, "id", None) == obj.id:
+                        _is_loop = True
+                        break
+                    if id(_cur) in _seen:
+                        break
+                    _seen.add(id(_cur))
+                    if len(_seen) > 100:
+                        break
+                    _nxt = getattr(_cur, "location", None)
+                    if _nxt is None or getattr(_nxt, "is_node", False):
+                        break
+                    _cur = _nxt
+                if _is_loop:
+                    caller.msg(f"You can't put {obj.name} in {dest[0].name} - it would create a containment loop.")
+                    continue
                 if not obj.at_pre_put(caller, dest[0]):
                     continue
                 if not obj.move_to(dest[0]):
@@ -68,6 +88,28 @@ class PutCommand(Command):
             return
 
         for obj in found_obj:
+            if obj.id == dest[0].id:
+                caller.msg(f"You can't put {obj.name} in {dest[0].name} - it would create a containment loop.")
+                continue
+            _cur = dest[0]
+            _seen = set()
+            _is_loop = False
+            while _cur is not None and not getattr(_cur, "is_node", False):
+                if _cur is obj or getattr(_cur, "id", None) == obj.id:
+                    _is_loop = True
+                    break
+                if id(_cur) in _seen:
+                    break
+                _seen.add(id(_cur))
+                if len(_seen) > 100:
+                    break
+                _nxt = getattr(_cur, "location", None)
+                if _nxt is None or getattr(_nxt, "is_node", False):
+                    break
+                _cur = _nxt
+            if _is_loop:
+                caller.msg(f"You can't put {obj.name} in {dest[0].name} - it would create a containment loop.")
+                continue
             if not obj.at_pre_put(caller, dest[0]):
                 caller.msg(f"You can't put {obj.name} in {dest[0].name}.")
                 continue

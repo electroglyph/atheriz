@@ -83,10 +83,13 @@ def astar(
                     except AttributeError:
                         closed = d.closed
                         locked = d.locked
-                    if closed and not d.access(caller, "open"):
-                        continue
-                    if locked and not d.access(caller, "unlock"):
-                        continue
+                    if not closed:
+                        pass
+                    else:
+                        if locked and not d.access(caller, "unlock"):
+                            continue
+                        if not d.access(caller, "open"):
+                            continue
             n = nh.get_node(l.coord)
             if n:
                 result.append(n)

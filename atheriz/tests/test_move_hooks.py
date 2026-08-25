@@ -61,7 +61,7 @@ class TestNodeMoveHooks:
             ok = obj.move_to(n2, announce=False)
 
         assert ok is True
-        assert calls == ["pre_leave", "leave", "pre_receive", "receive"]
+        assert calls == ["pre_leave", "pre_receive", "leave", "receive"]
 
     def test_pre_leave_false_aborts_node_move(self, global_test_env):
         """INTENT: if the source node's at_pre_object_leave returns False, the

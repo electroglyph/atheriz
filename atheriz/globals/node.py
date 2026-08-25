@@ -530,6 +530,20 @@ class NodeHandler:
                 for k in rem_keys:
                     del d[k]
             self._modified3 = True
+        if door.from_coord is not None:
+            from_node = self.get_node(door.from_coord)
+            if from_node:
+                try:
+                    from_node.remove_link(door.from_exit)
+                except Exception:
+                    pass
+        if door.to_coord is not None:
+            to_node = self.get_node(door.to_coord)
+            if to_node:
+                try:
+                    to_node.remove_link(door.to_exit)
+                except Exception:
+                    pass
         mh = get_map_handler()
         seen = set()
         for coord in (door.from_coord, door.to_coord):

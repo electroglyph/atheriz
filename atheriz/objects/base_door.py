@@ -208,6 +208,8 @@ class Door(AccessLock):
         with self.lock:
             if not self.access(caller, "lock"):
                 status = "no_access"
+            elif not self.closed:
+                status = "not_closed"
             elif self.locked:
                 status = "already_locked"
             else:
@@ -217,6 +219,14 @@ class Door(AccessLock):
             if loc:
                 loc.msg_contents(
                     f"$You(target) $conj(try) to lock the door, but an unknown force prevents it.",
+                    mapping={"target": caller},
+                    from_obj=caller,
+                )
+            return False
+        if status == "not_closed":
+            if loc:
+                loc.msg_contents(
+                    f"$You(target) $conj(try) to lock the door, but You can't lock an open door.",
                     mapping={"target": caller},
                     from_obj=caller,
                 )

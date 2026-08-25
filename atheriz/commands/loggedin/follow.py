@@ -1,7 +1,7 @@
 from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from typing import TYPE_CHECKING
-from atheriz.objects.base_script import Script, after
+from atheriz.objects.base_script import Script, after, before
 from atheriz.globals.objects import get
 from contextlib import nullcontext
 
@@ -14,6 +14,16 @@ class FollowScript(Script):
     def __init__(self):
         super().__init__()
         self.is_temporary = True
+        self._old_loc = None
+
+    @before
+    def at_pre_move(
+        self, destination: Node | Object | None, to_exit: str | None = None, **kwargs
+    ) -> None:
+        try:
+            self._old_loc = self.child.location if self.child else None
+        except Exception:
+            self._old_loc = None
 
     @after
     def at_post_move(
@@ -27,11 +37,20 @@ class FollowScript(Script):
         if not self.child.followers:
             self.delete()
             return
+        old_loc = getattr(self, "_old_loc", None)
+        try:
+            self._old_loc = None
+        except Exception:
+            pass
+        if old_loc is None:
+            return
         with self.child.lock:
             followers = list(self.child.followers)
         for id in followers:
             follower = get(id)
             if follower:
+                if follower[0].location is not old_loc:
+                    continue
                 success = follower[0].move_to(destination, to_exit)
                 if not success:
                     follower[0].msg(f"You can't follow {self.child.name} there!")
@@ -117,10 +136,12 @@ class NoFollowCommand(Command):
             caller.msg("You will no longer allow others to follow you.")
             _cl = getattr(caller, "lock", None)
             with (_cl if _cl is not None and hasattr(_cl, "__enter__") else nullcontext()):
-                for id in caller.followers:
+                keep = set()
+                for id in list(caller.followers):
                     follower = get(id)
                     if follower:
                         if follower[0].is_builder:
+                            keep.add(id)
                             continue
                         _fl = getattr(follower[0], "lock", None)
                         with (_fl if _fl is not None and hasattr(_fl, "__enter__") else nullcontext()):
@@ -130,8 +151,10 @@ class NoFollowCommand(Command):
                         if follower[0].access(caller, "view"):
                             caller.msg(f"You are no longer leading {follower[0].get_display_name(caller)}.")
                 caller.followers.clear()
-                for script in caller.get_scripts_by_type("FollowScript"):
-                    script.delete()
+                caller.followers.update(keep)
+                if not caller.followers:
+                    for script in caller.get_scripts_by_type("FollowScript"):
+                        script.delete()
         else:
             caller.msg("You will now allow others to follow you.")
 
