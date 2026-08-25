@@ -43,15 +43,8 @@ def at_char_create(account_name: str, char_name: str, password: str):
                         f"Account '{account_name}' already has {settings.MAX_CHARACTERS} characters..."
                     )
                     return
-            character = Object.create(None, char_name, is_pc=True)
-            character.home = home
-            with r.lock:
-                if len(r.characters) >= settings.MAX_CHARACTERS:
-                    remove_object(character)
-                    print(
-                        f"Account '{account_name}' already has {settings.MAX_CHARACTERS} characters..."
-                    )
-                    return
+                character = Object.create(None, char_name, is_pc=True)
+                character.home = home
                 r.characters.append(character.id)
             character.move_to(home)
             save_objects()
