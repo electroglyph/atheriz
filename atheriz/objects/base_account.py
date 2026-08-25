@@ -44,7 +44,7 @@ class Account(Flags, DbOps):
         account.characters = []
         add_object_unique(
             account,
-            lambda x: x.is_account and x.name == name,
+            lambda x: x.is_account and x.name.lower() == name.lower(),
             f"Account with this name ({name}) already exists.",
         )
         account.at_create()
@@ -183,7 +183,7 @@ class Account(Flags, DbOps):
             bool: True on successful authentication, False otherwise.
         """
         with self.lock:
-            if self.name == name and self.check_password(password):
+            if self.name.lower() == name.lower() and self.check_password(password):
                 self.logged_in = True
                 return True
             self.logged_in = False

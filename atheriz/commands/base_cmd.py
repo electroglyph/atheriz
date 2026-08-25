@@ -129,6 +129,8 @@ class Command:
         """
         a = [x for x in self.aliases]
         a.insert(0, self.key)
+        if self.parser is None:
+            return f"aliases: {', '.join(a)}\n" + self.extra_desc
         return self.parser.format_help() + f"\naliases: {', '.join(a)}\n" + self.extra_desc
 
     def run(self, caller: Object | Connection, args) -> Any:

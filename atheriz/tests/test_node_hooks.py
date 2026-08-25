@@ -93,9 +93,11 @@ def test_node_unmarked_hook_raises():
     script.id = 305
     node.add_script(script)
 
-    with pytest.raises(ValueError) as exc:
-        node.at_desc()
-    assert "has hooks but none are marked" in str(exc.value)
+    # After fix, undecorated at_* is not installed, so no error and no hook
+    # Previously this raised ValueError because unmarked hook was polluted
+    assert "at_desc" not in node.hooks or len(node.hooks.get("at_desc", set())) == 0
+    # calling should not raise
+    node.at_desc()
 
 
 def test_node_at_tick_before_hook():

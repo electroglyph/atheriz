@@ -18,7 +18,8 @@ class UnloggedinCmdSet(CmdSet):
             self.add(CreateCommand())
         if settings.CHAR_CREATION_ENABLED:
             self.add(NewCharacterCommand())
-        self.add(GuestCommand())
+        if settings.GUEST_ENABLED:
+            self.add(GuestCommand())
         self.add(NoneCommand())
         self.add(ScreenReaderCommand())
         self.add(HelpCommand())

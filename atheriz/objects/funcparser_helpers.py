@@ -131,6 +131,18 @@ def m_len(target):
     return len(target)
 
 
+def _crop_to_width(text: str, width: int) -> str:
+    cur = 0
+    out: list[str] = []
+    for ch in text:
+        w = 2 if east_asian_width(ch) in ("W", "F") else 1
+        if cur + w > width:
+            break
+        out.append(ch)
+        cur += w
+    return "".join(out)
+
+
 # --- End Evennia code ---
 
 
@@ -144,11 +156,17 @@ def pad(text, width=None, align="c", fillchar=" "):
     width = min(width, _MAX_TEXT_WIDTH)
     align = align if align in ("c", "l", "r") else "c"
     fillchar = fillchar[0] if fillchar else " "
+    w = m_len(text)
+    if w >= width:
+        return text
+    pad_len = width - w
     if align == "l":
-        return text.ljust(width, fillchar)
+        return text + fillchar * pad_len
     elif align == "r":
-        return text.rjust(width, fillchar)
-    return text.center(width, fillchar)
+        return fillchar * pad_len + text
+    left = pad_len // 2
+    right = pad_len - left
+    return fillchar * left + text + fillchar * right
 
 
 def crop(text, width=None, suffix="[...]"):
@@ -157,13 +175,13 @@ def crop(text, width=None, suffix="[...]"):
     """
     from atheriz.settings import CLIENT_DEFAULT_WIDTH
     width = width if width else CLIENT_DEFAULT_WIDTH
-    ltext = len(text)
+    ltext = m_len(text)
     if ltext <= width:
         return text
-    lsuffix = len(suffix)
+    lsuffix = m_len(suffix)
     if lsuffix >= width:
-        return text[:width]
-    return f"{text[: width - lsuffix]}{suffix}"
+        return _crop_to_width(text, width)
+    return f"{_crop_to_width(text, width - lsuffix)}{suffix}"
 
 
 # --- End Evennia code ---

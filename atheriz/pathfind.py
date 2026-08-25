@@ -106,6 +106,7 @@ def astar(
     max_iterations = settings.MAX_ASTAR_ITERATIONS
     heapq.heapify(open_list)
     heapq.heappush(open_list, start_node)
+    open_by_pos[start.coord] = start_node
     current_node = start_node
     while True:
         iterations += 1

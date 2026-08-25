@@ -217,6 +217,12 @@ class GameTime:
                     ((str(after_time["hour"]), "?"), id, repeat, data)
                     for id, repeat, data in c
                 )
+            # alarms that match (?, ?) go off every minute
+            c = self.alarms.get(("?", "?"))
+            if c:
+                callers.extend(
+                    (("?", "?"), id, repeat, data) for id, repeat, data in c
+                )
         if callers:
             atp = get_async_threadpool()
             for key, id, repeat, data in callers:

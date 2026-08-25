@@ -123,7 +123,7 @@ class Channel(Flags, DbOps, AccessLock):
         c.created_by = caller.id if caller else -1
         add_object_unique(
             c,
-            lambda x: x.is_channel and x.name == name,
+            lambda x: x.is_channel and x.name.lower() == name.lower(),
             f"Channel {name} already exists.",
         )
         c.at_create()

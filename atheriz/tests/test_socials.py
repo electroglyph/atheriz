@@ -107,11 +107,13 @@ def test_targeted_social_multiple_matches(test_env):
 def test_missing_target_social(test_env):
     room, alice, bob = test_env
     cmd = CmdSocials()
-    
+
     alice.search = MagicMock(return_value=None)
-    
+
     args = Namespace(cmdstring="hug", target=["Charlie"])
     cmd.run(alice, args)
-    
-    assert not alice.msg.called
+
+    assert alice.msg.called
     assert not bob.msg.called
+    msg = alice.msg.call_args[0][0] if alice.msg.call_args[0] else ""
+    assert "Could not find" in msg

@@ -242,7 +242,14 @@ class Door(AccessLock):
                         mapping={"target": caller},
                         from_obj=caller,
                     )
-            return True
+                return True
+            if loc:
+                loc.msg_contents(
+                    f"$You(target) $conj(try) to unlock the door, but it is already unlocked.",
+                    mapping={"target": caller},
+                    from_obj=caller,
+                )
+            return False
 
     def map_close(self):
         if settings.MAP_ENABLED and self.symbol_coord and self.from_coord and self.to_coord:

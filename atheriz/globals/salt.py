@@ -35,7 +35,7 @@ def get_salt() -> str:
                     salt_file.chmod(0o600)
                 except OSError:
                     pass
-                raw = salt_file.read_text().strip()
+                raw = salt_file.read_text(encoding="utf-8").strip()
                 if not raw:
                     raise RuntimeError(
                         f"Corrupt salt file {salt_file}: empty/whitespace. "
@@ -57,13 +57,13 @@ def get_salt() -> str:
                 finally:
                     os.close(fd)
             except FileExistsError:
-                raw = salt_file.read_text().strip()
+                raw = salt_file.read_text(encoding="utf-8").strip()
                 if not raw:
                     raise RuntimeError(f"Corrupt salt file {salt_file} after concurrent create.")
                 _SALT = raw
                 return _SALT
             except OSError:
-                salt_file.write_text(salt_val)
+                salt_file.write_text(salt_val, encoding="utf-8")
                 try:
                     salt_file.chmod(0o600)
                 except OSError:

@@ -105,6 +105,7 @@ class CmdSocials(Command):
         else:
             targets = caller.search(target_name)
             if not targets:
+                caller.msg(f"Could not find '{target_name}'.")
                 return
             target = targets[0]
             

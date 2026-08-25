@@ -124,9 +124,10 @@ def test_unmarked_hook_raises_error():
     script.id = 105
     obj.add_script(script)
 
-    with pytest.raises(ValueError) as exc:
-        obj.at_test_hook("foo", kwarg1="bar")
-    assert "has hooks but none are marked" in str(exc.value)
+    # After fix, undecorated at_* is not installed, so no hook pollution and no error
+    assert "at_test_hook" not in obj.hooks or len(obj.hooks.get("at_test_hook", set())) == 0
+    # calling should not raise
+    obj.at_test_hook("foo", kwarg1="bar")
 
 def test_script_at_install():
     obj = DummyObj.create(None, "TestObj")

@@ -191,7 +191,16 @@ class Script(Flags, DbOps):
             child (Object | Node): The target object experiencing the method injection.
         """
         self.child = child
-        at_funcs = [(d, getattr(self, d)) for d in dir(self) if d.startswith("at_")]
+        at_funcs = [
+            (d, getattr(self, d))
+            for d in dir(self)
+            if d.startswith("at_")
+            and (
+                getattr(getattr(self, d), "is_before", False)
+                or getattr(getattr(self, d), "is_after", False)
+                or getattr(getattr(self, d), "is_replace", False)
+            )
+        ]
         with child.lock:
             for name, func in at_funcs:
                 s = child.hooks.get(name, set())
@@ -211,7 +220,16 @@ class Script(Flags, DbOps):
         if child is None:
             logger.error(f"Script has invalid child object, script id: {self.id}")
             return
-        at_funcs = [(d, getattr(self, d)) for d in dir(self) if d.startswith("at_")]
+        at_funcs = [
+            (d, getattr(self, d))
+            for d in dir(self)
+            if d.startswith("at_")
+            and (
+                getattr(getattr(self, d), "is_before", False)
+                or getattr(getattr(self, d), "is_after", False)
+                or getattr(getattr(self, d), "is_replace", False)
+            )
+        ]
         with child.lock:
             for name, func in at_funcs:
                 s = child.hooks.get(name, set())

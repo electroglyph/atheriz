@@ -8,8 +8,16 @@ import atheriz.settings as settings
 if TYPE_CHECKING:
     from atheriz.objects.base_obj import Object
 
-GUEST_TEXT = "enter 'guest' to create a temporary character" if settings.GUEST_ENABLED else ""
-CREATE_TEXT = "enter 'create' to make a new account" if settings.ACCOUNT_CREATION_ENABLED else ""
+def _guest_text() -> str:
+    return "enter 'guest' to create a temporary character" if settings.GUEST_ENABLED else ""
+
+
+def _create_text() -> str:
+    return "enter 'create' to make a new account" if settings.ACCOUNT_CREATION_ENABLED else ""
+
+
+GUEST_TEXT = _guest_text()
+CREATE_TEXT = _create_text()
 
 SCREEN = r"""
    _____   __  .__                 .____________
@@ -75,13 +83,13 @@ def render(session=None):
             version=_version(),
             known=f"{online[1]}",
             online=f"{online[0]}",
-            CREATE_TEXT=CREATE_TEXT,
-            GUEST_TEXT=GUEST_TEXT,
+            CREATE_TEXT=_create_text(),
+            GUEST_TEXT=_guest_text(),
         )
     return SCREEN.format(
         version=_version(),
         known=f"{online[1]}",
         online=f"{online[0]}",
-        CREATE_TEXT=CREATE_TEXT,
-        GUEST_TEXT=GUEST_TEXT,
+        CREATE_TEXT=_create_text(),
+        GUEST_TEXT=_guest_text(),
     )
