@@ -1,3 +1,5 @@
+import { closeOtherModals } from './modalHelper';
+
 export class NewCanvasDialog {
     private modal: HTMLElement;
     private btnNew: HTMLButtonElement;
@@ -26,6 +28,7 @@ export class NewCanvasDialog {
 
     private bindEvents() {
         this.btnNew.addEventListener('click', () => {
+            closeOtherModals('new-canvas-modal');
             this.modal.classList.remove('hidden');
         });
 

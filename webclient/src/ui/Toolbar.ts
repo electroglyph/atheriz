@@ -8,6 +8,7 @@ export class Toolbar {
     
     private fontSelect: HTMLSelectElement;
     private systemFontsLoaded = false;
+    private systemFontsLoading = false;
     
     private btnBrush: HTMLButtonElement;
     private btnErase: HTMLButtonElement;
@@ -348,8 +349,8 @@ export class Toolbar {
     }
 
     private async loadSystemFonts() {
-        if (this.systemFontsLoaded) return;
-        this.systemFontsLoaded = true; // Mark as started
+        if (this.systemFontsLoaded || this.systemFontsLoading) return;
+        this.systemFontsLoading = true;
 
         try {
             if ('queryLocalFonts' in window) {
@@ -393,10 +394,11 @@ export class Toolbar {
                     this.fontSelect.appendChild(opt);
                 }
             }
+            this.systemFontsLoaded = true;
         } catch (e) {
             console.error('Failed to load system fonts:', e);
-            // Might have been denied permission
-            this.systemFontsLoaded = false;
+        } finally {
+            this.systemFontsLoading = false;
         }
     }
 }

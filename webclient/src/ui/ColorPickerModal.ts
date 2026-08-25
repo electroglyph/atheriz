@@ -1,5 +1,6 @@
 import { Color } from '../types';
 import { rgbToHex, hexToRgb, cssColor } from '../utils/colors';
+import { closeOtherModals } from './modalHelper';
 
 function hsvToRgb(h: number, s: number, v: number): Color {
     s /= 100;
@@ -107,6 +108,7 @@ export class ColorPickerModal {
 
     open(initialColor: Color): Promise<Color | null> {
         return new Promise((resolve) => {
+            closeOtherModals('color-picker-modal');
             this.resolve = resolve;
             const [h, s, v] = rgbToHsv(initialColor[0], initialColor[1], initialColor[2]);
             this.hue = h;

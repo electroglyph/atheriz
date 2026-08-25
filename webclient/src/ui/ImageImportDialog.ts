@@ -1,4 +1,5 @@
 import { ChafaConfig, DEFAULT_CHAFA_OPTIONS } from '../utils/chafaDefaults';
+import { closeOtherModals } from './modalHelper';
 
 export class ImageImportDialog {
     private modal: HTMLElement;
@@ -167,10 +168,8 @@ export class ImageImportDialog {
             img.onload = () => {
                 this.origWidth = img.naturalWidth || 1;
                 this.origHeight = img.naturalHeight || 1;
-                // Automatically deduce the starting dimensions. Because terminal glyphs typically 
-                // have a 1:2 aspect ratio (twice as tall as they are wide), we have to inject an 
-                // anisotropic scaling factor to prevent initially uploaded images from looking stretched.
                 this.computeDims();
+                closeOtherModals('image-import-modal');
                 this.modal.classList.remove('hidden');
                 URL.revokeObjectURL(url);
             };

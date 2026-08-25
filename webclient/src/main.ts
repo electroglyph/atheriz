@@ -35,7 +35,6 @@ import { convertImageToAnsi } from './utils/imageLoader';
 import { parseAnsiToCells, parseAnsiToState, detectAnsiDimensions } from './utils/ansiParser';
 import { AnsiExporter } from './export/AnsiExporter';
 import { CharMapDialog } from './ui/CharMapDialog';
-import { CHAR_GROUPS } from './utils/characters';
 import { LayerManager } from './ui/LayerManager';
 import { PreviewWindow } from './ui/PreviewWindow';
 import { GradientPicker } from './ui/GradientPicker';
@@ -171,15 +170,7 @@ function initApp() {
     });
 
     charMapDialog = new CharMapDialog((chars: string[]) => {
-        const customGroup = CHAR_GROUPS.find(g => g.name === 'Custom');
-        if (customGroup) {
-            for (const c of chars) {
-                if (!customGroup.chars.includes(c)) {
-                    customGroup.chars.push(c);
-                }
-            }
-            charPalette.reRender();
-        }
+        charPalette.addCustomChars(chars);
     });
 
     new ColorPicker('fg-picker-container', true, appState, () => {
@@ -267,8 +258,8 @@ function initApp() {
         textToolDialog.updateCanvasState(canvasState);
     };
 
-    new SidebarResizer('sidebar', 'sidebar-resizer');
-    new SidebarResizer('right-sidebar', 'right-sidebar-resizer', true);
+    const leftResizer = new SidebarResizer('sidebar', 'sidebar-resizer');
+    const rightResizer = new SidebarResizer('right-sidebar', 'right-sidebar-resizer', true);
 
     const previewWindow = new PreviewWindow(
         () => canvasState,
@@ -276,6 +267,13 @@ function initApp() {
     );
     document.getElementById('btn-preview')?.addEventListener('click', () => {
         previewWindow.open();
+    });
+
+    window.addEventListener('beforeunload', () => {
+        leftResizer.destroy();
+        rightResizer.destroy();
+        previewWindow.destroy();
+        toolbarInst.destroy();
     });
 
     let roomVisible = true;

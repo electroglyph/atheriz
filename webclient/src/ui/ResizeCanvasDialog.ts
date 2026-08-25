@@ -1,4 +1,5 @@
 import { CanvasState } from '../state/CanvasState';
+import { closeOtherModals } from './modalHelper';
 
 export class ResizeCanvasDialog {
     private modal: HTMLElement;
@@ -28,6 +29,7 @@ export class ResizeCanvasDialog {
 
     private bindEvents() {
         this.btnResize.addEventListener('click', () => {
+            closeOtherModals('resize-canvas-modal');
             const state = this.getStateCallback();
             if (state) {
                 this.inputW.value = state.width.toString();

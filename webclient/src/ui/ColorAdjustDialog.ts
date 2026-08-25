@@ -1,4 +1,5 @@
 import { ColorAdjustOptions } from '../utils/colors';
+import { closeOtherModals } from './modalHelper';
 
 export class ColorAdjustDialog {
     private modal: HTMLElement;
@@ -174,6 +175,7 @@ export class ColorAdjustDialog {
     }
 
     public open() {
+        closeOtherModals('color-adjust-modal');
         const win = this.modal.querySelector('.modal-content') as HTMLElement;
         if (win) {
             win.style.position = '';

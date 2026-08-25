@@ -1,14 +1,14 @@
-import { Color } from '../types';
+import { Color, AppState } from '../types';
 import { cssColor, sampleGradient, colorEquals } from '../utils/colors';
 import { ColorPickerModal } from './ColorPickerModal';
 
 export class GradientPicker {
-    private appState: any;
+    private appState: AppState;
     private container: HTMLElement;
     private previewBar!: HTMLElement;
     private stopsContainer!: HTMLElement;
 
-    constructor(containerId: string, appState: any) {
+    constructor(containerId: string, appState: AppState) {
         this.container = document.getElementById(containerId)!;
         this.appState = appState;
 

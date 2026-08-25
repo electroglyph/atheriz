@@ -22,6 +22,8 @@ export class SidebarResizer {
         this.resizer.addEventListener('mousedown', this.boundResizerMouseDown);
         document.addEventListener('mousemove', this.boundDocumentMouseMove);
         document.addEventListener('mouseup', this.boundDocumentMouseUp);
+        window.addEventListener('beforeunload', this.destroy.bind(this));
+        window.addEventListener('pagehide', this.destroy.bind(this));
     }
 
     public destroy() {

@@ -179,6 +179,45 @@ export class LayerManager {
             }
         }
 
+        if (upper.overflowCells && upper.overflowCells.size > 0) {
+            if (!lower.overflowCells) lower.overflowCells = new Map();
+            for (const [key, src] of upper.overflowCells.entries()) {
+                const existing = lower.overflowCells.get(key);
+                if (src.char && src.char.trim() !== '') {
+                    if (existing) {
+                        existing.char = src.char;
+                        existing.fg = [...src.fg] as [number, number, number];
+                        existing.bold = src.bold;
+                        existing.italic = src.italic;
+                        existing.underline = src.underline;
+                        if (src.bg[0] !== -1) existing.bg = [...src.bg] as [number, number, number];
+                    } else {
+                        lower.overflowCells.set(key, {
+                            char: src.char,
+                            fg: [...src.fg] as [number, number, number],
+                            bg: src.bg[0] === -1 ? ([-1, -1, -1] as [number, number, number]) : ([...src.bg] as [number, number, number]),
+                            bold: src.bold,
+                            italic: src.italic,
+                            underline: src.underline,
+                        });
+                    }
+                } else if (src.bg[0] !== -1) {
+                    if (existing) {
+                        existing.bg = [...src.bg] as [number, number, number];
+                    } else {
+                        lower.overflowCells.set(key, {
+                            char: '',
+                            fg: [...src.fg] as [number, number, number],
+                            bg: [...src.bg] as [number, number, number],
+                            bold: src.bold,
+                            italic: src.italic,
+                            underline: src.underline,
+                        });
+                    }
+                }
+            }
+        }
+
         this.state.layers.splice(index, 1);
         if (this.state.activeLayerIndex === index) {
             this.state.activeLayerIndex = index - 1;

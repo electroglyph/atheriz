@@ -6,6 +6,7 @@ import { ChafaConfig, DEFAULT_CHAFA_OPTIONS } from '../utils/chafaDefaults';
 import { CellMetrics } from '../utils/fontMetrics';
 import { GoogleFontPicker } from './GoogleFontPicker';
 import { loadFontFull, fontNameToCSS } from '../utils/googleFontLoader';
+import { closeOtherModals } from './modalHelper';
 
 export class TextToolDialog {
     private modal: HTMLElement;
@@ -27,6 +28,8 @@ export class TextToolDialog {
     private userConfig!: ChafaConfig;
 
     private systemFontsLoaded = false;
+    private systemFontsLoading = false;
+    private localFontsAdded = false;
     private googleFontPicker: GoogleFontPicker;
     private onConfirm: (state: CanvasState) => void;
     private appState: AppState;
@@ -206,7 +209,8 @@ export class TextToolDialog {
     }
 
     private initFonts() {
-        if (this.fontSelect.options.length > 0) return;
+        if (this.localFontsAdded) return;
+        this.localFontsAdded = true;
 
         const localFonts = [
             { name: 'Unifont', val: 'Unifont' },
@@ -235,8 +239,8 @@ export class TextToolDialog {
     }
 
     private async loadSystemFonts() {
-        if (this.systemFontsLoaded) return;
-        this.systemFontsLoaded = true;
+        if (this.systemFontsLoaded || this.systemFontsLoading) return;
+        this.systemFontsLoading = true;
 
         try {
             if ('queryLocalFonts' in window) {
@@ -260,9 +264,11 @@ export class TextToolDialog {
                     this.fontSelect.appendChild(opt);
                 }
             }
+            this.systemFontsLoaded = true;
         } catch (e) {
             console.error('Failed to load system fonts for Text tool:', e);
-            this.systemFontsLoaded = false;
+        } finally {
+            this.systemFontsLoading = false;
         }
     }
 
@@ -291,14 +297,17 @@ export class TextToolDialog {
     }
 
     public async open() {
+        closeOtherModals('text-tool-modal');
         this.initFonts();
+        const matchingOption = Array.from(this.fontSelect.options).find((option) => option.value === this.appState.fontFamily);
+        if (matchingOption) this.fontSelect.value = this.appState.fontFamily;
         this.input.value = '';
         this.maxWidthInput.max = this.canvasState.width.toString();
         this.maxWidthInput.value = this.canvasState.width.toString();
         this.maxWidthVal.innerText = this.canvasState.width.toString();
         this.stretchInput.value = '100';
         this.stretchVal.innerText = '100%';
-        await this.updatePreview(); // Wait for initial blank preview to render
+        await this.updatePreview();
         this.modal.classList.remove('hidden');
         this.input.focus();
     }

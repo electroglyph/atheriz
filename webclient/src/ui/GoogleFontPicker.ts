@@ -1,9 +1,17 @@
 import { GOOGLE_FONTS, GOOGLE_FONT_CATEGORIES, GoogleFontCategory } from '../data/googleFonts';
 import { loadFontPreview, preloadManifest } from '../utils/googleFontLoader';
+import { closeOtherModals } from './modalHelper';
 
 const PAGE_SIZE = 40;
 // Max concurrent preview loads to avoid flooding the dev server
 const PREVIEW_CONCURRENCY = 4;
+
+function escapeCss(value: string): string {
+    if (typeof CSS !== 'undefined' && typeof (CSS as unknown as { escape?: (s: string) => string }).escape === 'function') {
+        return (CSS as unknown as { escape: (s: string) => string }).escape(value);
+    }
+    return value.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+}
 
 const CATEGORY_TABS: { label: string; category: GoogleFontCategory | 'all' }[] = [
     { label: 'All', category: 'all' },
@@ -180,7 +188,7 @@ export class GoogleFontPicker {
             Promise.resolve().then(() => {
                 loadFontPreview(family);
                 // Once the stylesheet is injected, apply fontFamily to the item element
-                const item = this.listContainer.querySelector(`[data-family="${CSS.escape(family)}"]`) as HTMLElement | null;
+                const item = this.listContainer.querySelector(`[data-family="${escapeCss(family)}"]`) as HTMLElement | null;
                 if (item) item.style.fontFamily = `"${family}", sans-serif`;
             }).finally(() => {
                 this.previewInFlight--;
@@ -190,6 +198,7 @@ export class GoogleFontPicker {
     }
 
     public open() {
+        closeOtherModals('google-font-picker-modal');
         preloadManifest();
         this.searchInput.value = '';
         this.searchQuery = '';

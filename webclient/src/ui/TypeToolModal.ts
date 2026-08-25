@@ -1,3 +1,5 @@
+import { closeOtherModals } from './modalHelper';
+
 export class TypeToolModal {
     private modal: HTMLDivElement;
     private input: HTMLInputElement;
@@ -38,6 +40,7 @@ export class TypeToolModal {
 
     open(): Promise<string | null> {
         return new Promise((resolve) => {
+            closeOtherModals('type-tool-modal');
             this.resolve = resolve;
             this.input.value = '';
             this.modal.classList.remove('hidden');

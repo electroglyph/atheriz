@@ -7,19 +7,54 @@ export class CharPalette {
     private charCells: Map<string, HTMLElement> = new Map();
     private onChangeAction: () => void;
     private onAddCustomChar?: () => void;
+    private groups: { name: string; chars: string[] }[] = CHAR_GROUPS.map((group) => ({ name: group.name, chars: [...group.chars] }));
 
     constructor(containerId: string, appState: AppState, onChange: () => void, onAddCustomChar?: () => void) {
         this.container = document.getElementById(containerId)!;
         this.appState = appState;
         this.onChangeAction = onChange;
         this.onAddCustomChar = onAddCustomChar;
+        try {
+            const stored = localStorage.getItem('atheriz_custom_chars');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (Array.isArray(parsed)) {
+                    const customGroup = this.groups.find((group) => group.name === 'Custom');
+                    if (customGroup) {
+                        for (const char of parsed) {
+                            if (typeof char === 'string' && char.length > 0 && !customGroup.chars.includes(char)) {
+                                customGroup.chars.push(char);
+                            }
+                        }
+                    }
+                }
+            }
+        } catch {}
         this.render();
+    }
+
+    public addCustomChars(chars: string[]): void {
+        const customGroup = this.groups.find((group) => group.name === 'Custom');
+        if (!customGroup) return;
+        let added = false;
+        for (const char of chars) {
+            if (!customGroup.chars.includes(char)) {
+                customGroup.chars.push(char);
+                added = true;
+            }
+        }
+        if (added) {
+            try {
+                localStorage.setItem('atheriz_custom_chars', JSON.stringify(customGroup.chars));
+            } catch {}
+            this.reRender();
+        }
     }
 
     private render() {
         this.container.innerHTML = '';
         
-        for (const group of CHAR_GROUPS) {
+        for (const group of this.groups) {
             const label = document.createElement('div');
             label.className = 'palette-group-label';
             label.textContent = group.name;
@@ -79,13 +114,16 @@ export class CharPalette {
     }
 
     private removeCustomChar(char: string) {
-        const customGroup = CHAR_GROUPS.find(g => g.name === 'Custom');
+        const customGroup = this.groups.find((group) => group.name === 'Custom');
         if (!customGroup) return;
         const idx = customGroup.chars.indexOf(char);
         if (idx === -1) return;
         customGroup.chars.splice(idx, 1);
+        try {
+            localStorage.setItem('atheriz_custom_chars', JSON.stringify(customGroup.chars));
+        } catch {}
         if (this.appState.selectedChar === char) {
-            this.appState.selectedChar = customGroup.chars[0] || CHAR_GROUPS[0].chars[0];
+            this.appState.selectedChar = customGroup.chars[0] || this.groups[0].chars[0];
         }
         this.reRender();
     }

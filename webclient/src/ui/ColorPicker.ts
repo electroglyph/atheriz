@@ -1,9 +1,9 @@
-import { Color } from '../types';
+import { Color, AppState } from '../types';
 import { rgbToHex, hexToRgb, colorEquals, cssColor } from '../utils/colors';
 import { ColorPickerModal } from './ColorPickerModal';
 
 export class ColorPicker {
-    private appState: any;
+    private appState: AppState;
     private isForeground: boolean;
     private container: HTMLElement;
     private onChangeAction: () => void;
@@ -17,14 +17,15 @@ export class ColorPicker {
 
     private history: Color[] = [];
 
-    private boundColorPicked = (e: any) => {
-        if (e.detail.isFg === this.isForeground) {
-            this.setColor(e.detail.color);
-            this.commitToHistory(e.detail.color);
+    private boundColorPicked = (e: Event) => {
+        const detail = (e as CustomEvent).detail as { isFg: boolean; color: Color };
+        if (detail.isFg === this.isForeground) {
+            this.setColor(detail.color);
+            this.commitToHistory(detail.color);
         }
     };
 
-    constructor(containerId: string, isFg: boolean, appState: any, onChange: () => void) {
+    constructor(containerId: string, isFg: boolean, appState: AppState, onChange: () => void) {
         this.container = document.getElementById(containerId)!;
         this.isForeground = isFg;
         this.appState = appState;

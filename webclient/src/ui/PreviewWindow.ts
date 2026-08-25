@@ -3,6 +3,7 @@ import '@xterm/xterm/css/xterm.css';
 import { CanvasState } from '../state/CanvasState';
 import { buildCompositeAnsiPreview } from '../export/AnsiPreview';
 import { measureCellMetrics, CellMetrics } from '../utils/fontMetrics';
+import { closeOtherModals } from './modalHelper';
 
 const PREVIEW_MAX_FONT_SIZE = 20;
 const PREVIEW_MIN_FONT_SIZE = 2;
@@ -199,6 +200,7 @@ export class PreviewWindow {
     }
 
     public open() {
+        closeOtherModals('preview-window');
         const state = this.getState();
         const fontFamily = this.getFont();
 
@@ -224,12 +226,12 @@ export class PreviewWindow {
         // fonts into mush and the preview colors no longer match the editor.
         const fontSize = pickPreviewFontSize((fs) => measureCellMetrics(fontFamily, fs), state.width, state.height, availW, availH);
 
-        // Tear down previous terminal
         if (this.terminal) {
             this.terminal.dispose();
             this.terminal = null;
+        } else {
+            this.termContainer.innerHTML = '';
         }
-        this.termContainer.innerHTML = '';
 
         const term = new Terminal({
             cols: state.width,
@@ -264,7 +266,6 @@ export class PreviewWindow {
         if (this.terminal) {
             this.terminal.dispose();
             this.terminal = null;
-            this.termContainer.innerHTML = '';
         }
     }
 }

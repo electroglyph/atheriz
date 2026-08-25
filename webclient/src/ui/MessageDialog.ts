@@ -1,7 +1,15 @@
+import { closeOtherModals } from './modalHelper';
+
 export class MessageDialog {
     private container: HTMLElement;
     private messageEl: HTMLElement;
     private okButton: HTMLButtonElement;
+    private boundKeyDown = (e: KeyboardEvent) => {
+        if (e.key === 'Escape' && this.isVisible()) this.hide();
+    };
+    private boundBackdropClick = (e: MouseEvent) => {
+        if (e.target === this.container) this.hide();
+    };
 
     constructor(containerId: string) {
         const container = document.getElementById(containerId);
@@ -14,9 +22,17 @@ export class MessageDialog {
         if (!okButton) throw new Error(`Missing dialog button #${containerId}-ok`);
         this.okButton = okButton;
         this.okButton.addEventListener('click', () => this.hide());
+        this.container.addEventListener('click', this.boundBackdropClick);
+        window.addEventListener('keydown', this.boundKeyDown);
+    }
+
+    public destroy(): void {
+        this.container.removeEventListener('click', this.boundBackdropClick);
+        window.removeEventListener('keydown', this.boundKeyDown);
     }
 
     public show(message: string): void {
+        closeOtherModals(this.container.id);
         this.messageEl.textContent = message;
         this.container.classList.remove('hidden');
     }

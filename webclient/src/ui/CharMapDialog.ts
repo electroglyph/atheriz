@@ -1,4 +1,12 @@
 import { GlyphScanner } from '../utils/GlyphScanner';
+import { closeOtherModals } from './modalHelper';
+
+function escapeCss(value: string): string {
+    if (typeof CSS !== 'undefined' && typeof (CSS as unknown as { escape?: (s: string) => string }).escape === 'function') {
+        return (CSS as unknown as { escape: (s: string) => string }).escape(value);
+    }
+    return value.replace(/[^a-zA-Z0-9_-]/g, (ch) => `\\${ch}`);
+}
 
 export class CharMapDialog {
     private modal: HTMLElement;
@@ -43,6 +51,7 @@ export class CharMapDialog {
     }
 
     public async open(fontFamily: string) {
+        closeOtherModals('char-map-modal');
         this.selectedChars.clear();
         this.updatePreview();
         this.modal.classList.remove('hidden');
@@ -118,6 +127,7 @@ export class CharMapDialog {
                 try {
                     const char = String.fromCodePoint(codePoint);
                     cellEl.textContent = char;
+                    cellEl.dataset.char = char;
                     
                     if (this.selectedChars.has(char)) {
                         cellEl.classList.add('selected');
@@ -166,14 +176,10 @@ export class CharMapDialog {
             badge.addEventListener('click', () => {
                 this.selectedChars.delete(char);
                 this.updatePreview();
-                // We also need to unselect it in the visually rendered rows
+                const escaped = escapeCss(char);
                 for (const rowEl of this.activeRows.values()) {
-                    // This is slightly expensive to iterate but quick enough for a few dozen visible rows
-                    for (const cell of Array.from(rowEl.children)) {
-                        if (cell.textContent === char) {
-                            cell.classList.remove('selected');
-                        }
-                    }
+                    const cell = rowEl.querySelector(`[data-char="${escaped}"]`);
+                    if (cell) cell.classList.remove('selected');
                 }
             });
             this.selectedPreview.appendChild(badge);
