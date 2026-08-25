@@ -47,7 +47,7 @@ const terminalOptions = {
 };
 
 const left = new Terminal(terminalOptions);
-const right = new Terminal({ ...terminalOptions, cursorBlink: false, cursorStyle: 'bar', screenReaderMode: screenReaderEnabled, fontFamily: 'KreativeSquare' });
+const right = new Terminal({ ...terminalOptions, customGlyphs: false, cursorBlink: false, cursorStyle: 'bar', screenReaderMode: screenReaderEnabled, fontFamily: 'KreativeSquare' });
 const leftFit = new FitAddon();
 const rightFit = new FitAddon();
 let mapEnabled = false;
@@ -503,7 +503,6 @@ function handleInternalCommand(command: string): boolean {
         case ':glyphs': {
             const enabled = !(left.options.customGlyphs ?? true);
             left.options.customGlyphs = enabled;
-            right.options.customGlyphs = enabled;
             safeSet('glyphs', String(enabled));
             write(`\r\nCustom glyphs are ${enabled ? 'ON' : 'OFF'}.\r\n`);
             return true;
