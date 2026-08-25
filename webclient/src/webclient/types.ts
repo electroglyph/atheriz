@@ -48,7 +48,7 @@ export function parseWireMessage(raw: string): WireMessage | null {
         return null;
     }
 
-    if (!Array.isArray(value) || typeof value[0] !== 'string') return null;
+    if (!Array.isArray(value) || typeof value[0] !== 'string' || value[0].length === 0) return null;
     const args = value.length > 1 ? value[1] : [];
     const kwargs = value.length > 2 ? value[2] : {};
     if (!Array.isArray(args) || !isJsonObject(kwargs)) return null;

@@ -42,6 +42,30 @@ def copy_file(source: Path, destination: Path) -> None:
     shutil.copy2(source, destination)
 
 
+def _patch_html_assets(html_path: Path) -> None:
+    if not html_path.is_file():
+        return
+    try:
+        text = html_path.read_text(encoding="utf-8")
+    except Exception:
+        return
+    original = text
+    text = text.replace('href="/assets/', 'href="/static/assets/')
+    text = text.replace('src="/assets/', 'src="/static/assets/')
+    text = text.replace('url("/assets/', 'url("/static/assets/')
+    text = text.replace("url('/assets/", "url('/static/assets/")
+    text = text.replace('href="/fonts/', 'href="/static/fonts/')
+    text = text.replace('src="/fonts/', 'src="/static/fonts/')
+    text = text.replace('href="/chafa.wasm', 'href="/static/chafa.wasm')
+    text = text.replace('src="/chafa.wasm', 'src="/static/chafa.wasm')
+    text = text.replace('"/chafa.wasm"', '"/static/chafa.wasm"')
+    text = text.replace("'/chafa.wasm'", "'/static/chafa.wasm'")
+    text = text.replace('"/gfonts/', '"/static/gfonts/')
+    text = text.replace("'/gfonts/", "'/static/gfonts/")
+    if text != original:
+        html_path.write_text(text, encoding="utf-8")
+
+
 def clean_generated_output(
     static_root: Path, *, remove_legacy_webclient: bool = False
 ) -> None:
@@ -74,7 +98,8 @@ def deploy(
         )
 
     copy_tree(DIST_ROOT / "assets", static_root / "assets")
-    copy_tree(PROJECT_ROOT / "fonts", static_root / "fonts")
+    if (PROJECT_ROOT / "fonts").is_dir():
+        copy_tree(PROJECT_ROOT / "fonts", static_root / "fonts")
     copy_file(
         DIST_ROOT / "webclient" / "index.html",
         static_root / "webclient" / "index.html",
@@ -83,8 +108,19 @@ def deploy(
         DIST_ROOT / "index.html",
         static_root / "atheriz_draw" / "index.html",
     )
-    copy_file(DIST_ROOT / "chafa.wasm", static_root / "chafa.wasm")
-    copy_tree(DIST_ROOT / "gfonts", static_root / "gfonts")
+    chafa_src = DIST_ROOT / "chafa.wasm"
+    if chafa_src.is_file():
+        copy_file(chafa_src, static_root / "chafa.wasm")
+    elif not (static_root / "chafa.wasm").exists():
+        candidates = list((DIST_ROOT / "assets").glob("chafa*.wasm"))
+        if candidates:
+            copy_file(candidates[0], static_root / "chafa.wasm")
+    gfonts_src = DIST_ROOT / "gfonts"
+    if gfonts_src.is_dir():
+        copy_tree(gfonts_src, static_root / "gfonts")
+
+    for html_name in ["webclient/index.html", "atheriz_draw/index.html"]:
+        _patch_html_assets(static_root / html_name)
 
     print(f"Deployed frontend artifacts to {static_root}")
     print(f"  webclient: {static_root / 'webclient' / 'index.html'}")

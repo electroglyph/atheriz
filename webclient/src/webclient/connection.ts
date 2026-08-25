@@ -31,7 +31,18 @@ export function websocketUrl(locationLike?: Pick<Location, 'protocol' | 'host'>)
             : window.location
     );
     const protocol = currentLocation.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${currentLocation.host}/ws`;
+    const host = currentLocation.host || 'localhost';
+    return `${protocol}//${host}/ws`;
+}
+
+export function decodeWireData(data: unknown): string | null {
+    if (typeof data === 'string') return data;
+    if (data instanceof ArrayBuffer) return new TextDecoder().decode(data);
+    if (typeof ArrayBuffer !== 'undefined' && Object.prototype.toString.call(data) === '[object ArrayBuffer]') {
+        return new TextDecoder().decode(data as ArrayBuffer);
+    }
+    if (ArrayBuffer.isView(data as ArrayBufferView)) return new TextDecoder().decode(data as ArrayBufferView);
+    return null;
 }
 
 export class WebSocketConnection {
@@ -62,8 +73,9 @@ export class WebSocketConnection {
     }
 
     connect(): void {
+        const wasManuallyClosed = this.manuallyClosed;
         this.manuallyClosed = false;
-        if (this.state === 'failed') this.reconnectAttempt = 0;
+        if (this.state === 'failed' || wasManuallyClosed) this.reconnectAttempt = 0;
         this.clearReconnectTimer();
         if (this.socket?.readyState === OPEN_STATE || this.state === 'connecting') return;
 
@@ -77,7 +89,12 @@ export class WebSocketConnection {
         };
         socket.onmessage = (event) => {
             if (this.socket !== socket) return;
-            const message = parseWireMessage(event.data);
+            const raw = decodeWireData(event.data);
+            if (raw === null) {
+                this.onInvalidMessage?.();
+                return;
+            }
+            const message = parseWireMessage(raw);
             if (message) this.onMessage(message);
             else this.onInvalidMessage?.();
         };

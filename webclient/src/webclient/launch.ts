@@ -5,6 +5,10 @@ const GRANT_TTL_MS = 60000;
 
 let lastLaunchAt = 0;
 
+export function __resetLaunchThrottleForTests(): void {
+    lastLaunchAt = 0;
+}
+
 export interface DrawGrant {
     key: string;
     payload: unknown;
@@ -12,18 +16,21 @@ export interface DrawGrant {
 
 export function launchDraw(key?: string, payload?: unknown): boolean {
     const now = Date.now();
-    if (now - lastLaunchAt < 1000) return true;
+    if (now - lastLaunchAt < 1000) return false;
     lastLaunchAt = now;
 
     if (key && payload) {
-        localStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
-        localStorage.setItem(GRANT_TS_KEY, String(now));
+        try {
+            localStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
+            localStorage.setItem(GRANT_TS_KEY, String(now));
+        } catch {
+            // Storage is optional (private mode, quota, etc.) – launch still proceeds.
+        }
     }
 
     const drawUrl = new URL(DRAW_PATH, window.location.origin).href;
     const opened = window.open(drawUrl, '_blank', 'noopener,noreferrer');
     if (opened) {
-        clearDrawGrant();
         return true;
     }
 
@@ -45,7 +52,7 @@ export function readDrawGrant(): DrawGrant | null {
     const raw = localStorage.getItem(GRANT_KEY);
     if (!raw) return null;
     const tsRaw = localStorage.getItem(GRANT_TS_KEY);
-    if (tsRaw !== null && Date.now() - Number(tsRaw) > GRANT_TTL_MS) {
+    if (tsRaw === null || Number.isNaN(Number(tsRaw)) || Date.now() - Number(tsRaw) > GRANT_TTL_MS) {
         clearDrawGrant();
         return null;
     }
@@ -64,7 +71,7 @@ export function clearDrawGrant(): void {
 }
 
 function isDrawGrant(value: unknown): value is DrawGrant {
-    if (typeof value !== 'object' || value === null) return false;
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
     const candidate = value as Record<string, unknown>;
-    return typeof candidate.key === 'string' && typeof candidate.payload === 'object' && candidate.payload !== null;
+    return typeof candidate.key === 'string' && typeof candidate.payload === 'object' && candidate.payload !== null && !Array.isArray(candidate.payload);
 }

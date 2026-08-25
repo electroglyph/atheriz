@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { clearDrawGrant, launchDraw, readDrawGrant } from '../src/webclient/launch';
+import { clearDrawGrant, launchDraw, readDrawGrant, __resetLaunchThrottleForTests } from '../src/webclient/launch';
 
 describe('draw launch command', () => {
     beforeEach(() => {
@@ -8,6 +8,7 @@ describe('draw launch command', () => {
         localStorage.clear();
         vi.restoreAllMocks();
         vi.useFakeTimers();
+        __resetLaunchThrottleForTests();
     });
 
     afterEach(() => vi.useRealTimers());
@@ -31,11 +32,13 @@ describe('draw launch command', () => {
         expect(document.querySelector('.popup-fallback')).not.toBeNull();
     });
 
-    it('stores a grant before opening and clears it after', () => {
+    it('stores a grant before opening and keeps it until reader clears', () => {
         vi.setSystemTime(5000);
         const opened = vi.spyOn(window, 'open').mockReturnValue({} as Window);
         const payload = { area: 'TestArea', z: 0, grid: [] };
         expect(launchDraw('secret-key', payload)).toBe(true);
+        expect(readDrawGrant()).toEqual({ key: 'secret-key', payload });
+        clearDrawGrant();
         expect(readDrawGrant()).toBeNull();
         expect(opened).toHaveBeenCalledWith(
             'http://localhost:3000/atheriz_draw/',
@@ -65,18 +68,32 @@ describe('draw launch command', () => {
         const opened = vi.spyOn(window, 'open').mockReturnValue({} as Window);
         expect(launchDraw()).toBe(true);
         vi.setSystemTime(11500);
-        expect(launchDraw()).toBe(true);
+        expect(launchDraw()).toBe(false);
         expect(opened).toHaveBeenCalledTimes(1);
+        vi.setSystemTime(12001);
+        expect(launchDraw()).toBe(true);
+        expect(opened).toHaveBeenCalledTimes(2);
     });
 
     it('round-trips grants and rejects malformed ones', () => {
+        vi.setSystemTime(20000);
         localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: { area: 'a' } }));
+        localStorage.setItem('atheriz_draw_grant_ts', String(Date.now()));
         expect(readDrawGrant()).toEqual({ key: 'k', payload: { area: 'a' } });
         localStorage.setItem('atheriz_draw_grant', 'not json');
         expect(readDrawGrant()).toBeNull();
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: [] }));
+        localStorage.setItem('atheriz_draw_grant_ts', String(Date.now()));
+        expect(readDrawGrant()).toBeNull();
         localStorage.setItem('atheriz_draw_grant', JSON.stringify({ payload: { area: 'a' } }));
+        localStorage.setItem('atheriz_draw_grant_ts', String(Date.now()));
         expect(readDrawGrant()).toBeNull();
         localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: null }));
+        localStorage.setItem('atheriz_draw_grant_ts', String(Date.now()));
+        expect(readDrawGrant()).toBeNull();
+        // missing timestamp is treated as expired (corrupt lives forever fix)
+        localStorage.setItem('atheriz_draw_grant', JSON.stringify({ key: 'k', payload: { area: 'a' } }));
+        localStorage.removeItem('atheriz_draw_grant_ts');
         expect(readDrawGrant()).toBeNull();
         clearDrawGrant();
         expect(readDrawGrant()).toBeNull();

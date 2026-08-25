@@ -16,7 +16,7 @@ export function renderMap(payload: MapPayload, columns: number, rows: number): s
         placeVisual(lines, payload.pos, stylePlayerSymbol(payload.symbol));
     }
 
-    const legend = payload.show_legend === false ? [] : buildLegend(payload, processedLegend, columns, rows);
+    const legend = payload.show_legend === false || (payload.show_legend as unknown) === 0 || (payload.show_legend as unknown) === '' || (payload.show_legend as unknown) === null || (payload.show_legend as unknown) === '0' || (typeof payload.show_legend === 'string' && (payload.show_legend as string).trim().toLowerCase() === 'false') ? [] : buildLegend(payload, processedLegend, columns, rows);
     const availableRows = Math.max(1, rows - (legend.length > 0 ? legend.length + 1 : 0));
     const mapWidth = Math.max(0, ...lines.map(visibleLength));
     const mapHeight = lines.length;

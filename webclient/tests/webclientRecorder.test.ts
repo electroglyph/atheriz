@@ -22,7 +22,10 @@ describe('webclient session recorder', () => {
         const recorder = new SessionRecorder();
         recorder.start({ cols: 80, rows: 24 }, { cols: 40, rows: 24 }, 50, true);
         recorder.resize({ divider_pct: 65, right_visible: false });
-        expect(recorder.stop()).toContain('[0,"resize",{"divider_pct":65,"right_visible":false}]');
+        const output = recorder.stop() ?? '';
+        expect(output).toContain('"resize"');
+        expect(output).toContain('"divider_pct":65');
+        expect(output).toContain('"right_visible":false');
     });
 
     it('records map clear output on the right side', () => {

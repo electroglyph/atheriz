@@ -4,7 +4,8 @@ import path from 'node:path';
 export default defineConfig({
   // Both pages are mounted below the AtheriZ static root. Shared absolute
   // assets keep /webclient/ and /atheriz_draw/ compatible with one build.
-  base: '/',
+  // Assets are served via FastAPI's /static mount, so base must be /static/.
+  base: '/static/',
   resolve: {
     alias: {
       '@xterm/headless': path.resolve(import.meta.dirname, 'node_modules/@xterm/headless/lib-headless/xterm-headless.mjs'),

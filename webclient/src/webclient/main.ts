@@ -19,7 +19,11 @@ import { BUFFER_FINAL_SEQUENCE } from './buffer';
 import { playAudio as playAudioElement } from './audio';
 import { screenReaderFeedback, settingFeedback } from './feedback';
 import { shouldResetSession } from './session';
+import { asBoolean, asMapPayload, asLegend, asPosition, asString } from './payload';
 import './style.css';
+
+export { asBoolean, asMapPayload };
+export { normalizeShowLegend } from './payload';
 
 const elements = getElements();
 if (elements.rightTerminal.hidden) {
@@ -82,6 +86,7 @@ const connection = new WebSocketConnection({
         const wasConnected = connected;
         connected = state === 'open';
         if (shouldResetSession(wasConnected, state)) resetSessionState();
+        if (state === 'idle') return;
         if (state === 'connecting') write('\n======== Connecting...\n');
         if (state === 'closed') {
             write('\n======== Connection lost. Retrying...\n');
@@ -606,51 +611,6 @@ function safeSet(key: string, value: string): void {
     }
 }
 
-function asString(value: unknown): string {
-    return typeof value === 'string' ? value : '';
-}
-
-function asBoolean(value: unknown): boolean {
-    return typeof value === 'boolean' ? value : value === 'true';
-}
-
-function asPosition(value: unknown): [number, number] | undefined {
-    return Array.isArray(value) && typeof value[0] === 'number' && typeof value[1] === 'number' ? [value[0], value[1]] : undefined;
-}
-
-function asLegend(value: unknown): MapPayload['legend'] {
-    if (!Array.isArray(value)) return [];
-    return value.flatMap((entry) => {
-        if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
-            const coords = asPosition(entry[2]);
-            return [{ symbol: entry[0], desc: entry[1], coords }];
-        }
-        if (typeof entry === 'object' && entry !== null &&
-            typeof (entry as { symbol?: unknown }).symbol === 'string' &&
-            typeof (entry as { desc?: unknown }).desc === 'string') {
-            const data = entry as { symbol: string; desc: string; coords?: unknown };
-            return [{ symbol: data.symbol, desc: data.desc, coords: asPosition(data.coords) }];
-        }
-        return [];
-    });
-}
-
-function asMapPayload(value: unknown): MapPayload {
-    if (typeof value !== 'object' || value === null) return { map: '' };
-    const data = value as Partial<MapPayload>;
-    return {
-        map: typeof data.map === 'string' ? data.map : '',
-        pos: asPosition(data.pos),
-        symbol: typeof data.symbol === 'string' ? data.symbol : undefined,
-        legend: asLegend(data.legend),
-        min_x: typeof data.min_x === 'number' ? data.min_x : 0,
-        max_y: typeof data.max_y === 'number' ? data.max_y : 0,
-        area: typeof data.area === 'string' ? data.area : undefined,
-        show_legend: data.show_legend !== false,
-        background: parseBackground(data.background),
-    };
-}
-
 function renderMap(): void {
     if (!mapEnabled || !mapPayload) return;
     right.scrollToBottom();
@@ -675,11 +635,20 @@ function flushBuffer(): void {
         bufferWriting = false;
         return;
     }
-    left.write(chunk, () => {
+    let settled = false;
+    const done = () => {
+        if (settled) return;
+        settled = true;
         bufferWriting = false;
         if (bufferQueue.length > 0) flushBuffer();
         else write(BUFFER_FINAL_SEQUENCE);
-    });
+    };
+    try {
+        left.write(chunk, done);
+    } catch {
+        done();
+    }
+    setTimeout(done, 100);
     recorder.output('o', chunk);
 }
 
