@@ -77,7 +77,7 @@ right.open(elements.rightTerminal);
 installWebgl(left);
 installWebgl(right);
 write('\x1b[1;97mxtermia3\x1b[0m terminal emulator (made with xterm.js)\n');
-write('revision \x1b[1;97m2\x1b[0m\n');
+write(`revision \x1b[1;97m${__WEBCLIENT_REVISION__}\x1b[0m\n`);
 write('Enter :help for a list of \x1b[1;97mxtermia2\x1b[0m commands');
 
 const connection = new WebSocketConnection({
