@@ -320,7 +320,11 @@ def reload_game_logic() -> str:
         _reload_lock.release()
 
 
-_reload_lock = threading.Lock()
+try:
+    from atheriz.globals.startstop import _WORLD_LOCK as _SHARED_WORLD_LOCK
+    _reload_lock = _SHARED_WORLD_LOCK
+except Exception:
+    _reload_lock = threading.Lock()
 
 
 def _reload_game_logic() -> str:

@@ -107,7 +107,8 @@ class Node(Flags, AccessLock):
     @property
     def contents(self) -> list[Object]:
         with self.lock:
-            return get(self._contents)
+            ids = set(self._contents)
+        return get(ids)
 
     def for_contents(self, func, exclude=None, **kwargs):
         contents = self.contents

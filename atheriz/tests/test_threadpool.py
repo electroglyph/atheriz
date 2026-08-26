@@ -639,7 +639,7 @@ def test_add_task_and_stop_do_not_interleave_without_lock(global_test_env):
             for i in range(20):
                 def task(n=i):
                     pass
-                task._id = n  # type: ignore
+                task._id = i  # type: ignore
                 if atp.add_task(task):
                     with lock:
                         accepted.append(task)

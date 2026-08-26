@@ -248,11 +248,13 @@ class Object(Flags, DbOps, AccessLock):
         with self.lock:
             if not self.scripts:
                 return False
-            return any(
-                script_type.lower() in scripts[0].__class__.__name__.lower()
-                for script_id in self.scripts
-                if (scripts := get(script_id))
-            )
+            ids = set(self.scripts)
+        needle = script_type.lower()
+        for script_id in ids:
+            if (scripts := get(script_id)):
+                if needle in scripts[0].__class__.__name__.lower():
+                    return True
+        return False
 
     def get_scripts_by_type(self, script_type: str) -> list[Script]:
         """
@@ -264,17 +266,17 @@ class Object(Flags, DbOps, AccessLock):
         Returns:
             list[Script]: A list of Script objects matching the given type.
         """
-        matching_scripts = []
         with self.lock:
             if not self.scripts:
-                return matching_scripts
-
-            for script_id in self.scripts:
-                if scripts := get(script_id):
-                    script = scripts[0]
-                    if script_type.lower() in script.__class__.__name__.lower():
-                        matching_scripts.append(script)
-
+                return []
+            ids = list(self.scripts)
+        matching_scripts: list[Script] = []
+        needle = script_type.lower()
+        for script_id in ids:
+            if scripts := get(script_id):
+                script = scripts[0]
+                if needle in script.__class__.__name__.lower():
+                    matching_scripts.append(script)
         return matching_scripts
 
     def delete(self, caller: Object, recursive: bool = True) -> list[tuple[str, tuple]] | None:
@@ -774,7 +776,8 @@ class Object(Flags, DbOps, AccessLock):
     def contents(self) -> list[Object]:
         """list[Object]: The list of objects currently stored within this object."""
         with self.lock:
-            return get(self._contents)
+            ids = set(self._contents)
+        return get(ids)
 
     @property
     def is_superuser(self) -> bool:

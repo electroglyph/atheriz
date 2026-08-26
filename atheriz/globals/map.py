@@ -393,17 +393,19 @@ class MapHandler:
         self.lock = RLock()
         self.data: dict[tuple[str, int], MapInfo] = {}
         buffer: dict[tuple[str, int], MapInfo] = {}
+        rows: list[tuple[str, int, bytes]] = []
         try:
             db = get_database()
             with db.lock:
                 cursor = db.connection.cursor()
                 cursor.execute("SELECT area, z, data FROM mapdata")
-                for area, z, blob in cursor:
-                    try:
-                        mi = dill.loads(blob)
-                        buffer[(area, z)] = mi
-                    except Exception as e:
-                        logger.error(f"Error loading map chunk {area}:{z}: {e}")
+                rows = cursor.fetchall()
+            for area, z, blob in rows:
+                try:
+                    mi = dill.loads(blob)
+                    buffer[(area, z)] = mi
+                except Exception as e:
+                    logger.error(f"Error loading map chunk {area}:{z}: {e}")
             with self.lock:
                 self.data.update(buffer)
         except Exception as e:
@@ -432,9 +434,11 @@ class MapHandler:
             logger.error(f"Error preparing map save: {e}")
             return
         snapshot: list[tuple[tuple[str, int], MapInfo]] = []
+        to_clear: dict[tuple[str, int], MapInfo] = {}
         for k, mi in refs:
             try:
                 with mi.lock:
+                    was_changed = bool(getattr(mi, "map_changed", False) or getattr(mi, "is_modified", False))
                     mi_state = mi.__dict__.copy()
                     mi_state["pre_grid"] = dict(mi_state.get("pre_grid", {}))
                     mi_state["post_grid"] = dict(mi_state.get("post_grid", {}))
@@ -447,9 +451,17 @@ class MapHandler:
                 mi_copy.__dict__.update(mi_state)
                 mi_copy.lock = RLock()
                 snapshot.append((k, mi_copy))
+                if was_changed:
+                    to_clear[k] = mi
             except Exception as e:
                 logger.error(f"Error preparing map save for {k}: {e}")
 
+        blobs: list[tuple[str, int, bytes]] = []
+        for (area, z), mi in snapshot:
+            try:
+                blobs.append((area, z, dill.dumps(mi)))
+            except Exception as e:
+                logger.error(f"Error serializing map chunk {area}:{z}: {e}")
         with db.lock:
             if getattr(db, "_closed", False) is True:
                 logger.warning("MapHandler.save: database closed, skipping")
@@ -461,12 +473,22 @@ class MapHandler:
                 logger.warning(f"MapHandler.save: database closed ({e}), skipping")
                 return
             try:
-                for (area, z), mi in snapshot:
+                for area, z, blob in blobs:
                     cursor.execute(
                         "INSERT OR REPLACE INTO mapdata (area, z, data) VALUES (?, ?, ?)",
-                        (area, z, dill.dumps(mi))
+                        (area, z, blob)
                     )
                 cursor.execute("COMMIT")
+                committed_keys = {(a, z) for a, z, _ in blobs}
+                for k, mi in to_clear.items():
+                    if k in committed_keys:
+                        with mi.lock:
+                            mi.map_changed = False
+                            if hasattr(mi, "is_modified"):
+                                try:
+                                    object.__setattr__(mi, "is_modified", False)
+                                except Exception:
+                                    mi.is_modified = False
             except Exception as e:
                 try:
                     cursor.execute("ROLLBACK")

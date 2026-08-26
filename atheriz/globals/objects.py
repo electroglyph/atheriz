@@ -180,10 +180,16 @@ def add_object_unique(
     Raises:
         ValueError: If an already-registered object satisfies ``predicate``.
     """
-    with _ALL_OBJECTS_LOCK:
-        if any(predicate(r) for r in _ALL_OBJECTS.values()):
+    while True:
+        with _ALL_OBJECTS_LOCK:
+            snapshot = list(_ALL_OBJECTS.values())
+        if any(predicate(r) for r in snapshot):
             raise ValueError(error)
-        add_object(obj)
+        with _ALL_OBJECTS_LOCK:
+            current = list(_ALL_OBJECTS.values())
+            if current == snapshot:
+                add_object(obj)
+                return
 
 
 def remove_object(obj: Object | Channel | Script | Account) -> None:
@@ -203,6 +209,7 @@ def load_objects():
         return
     objects = {}
     max_id = -1
+    rows: list[tuple[int, bytes]] = []
     with db.lock:
         if getattr(db, "_closed", False) is True:
             logger.warning("load_objects: database closed, skipping")
@@ -210,17 +217,18 @@ def load_objects():
         try:
             cursor = db.connection.cursor()
             cursor.execute("SELECT id, data FROM objects")
+            rows = cursor.fetchall()
         except sqlite3.ProgrammingError as e:
             logger.warning(f"load_objects: database closed ({e}), skipping")
             return
-        for obj_id, blob in cursor:
-            try:
-                obj = dill.loads(blob)
-            except Exception as e:
-                logger.error(f"Error loading object {obj_id}: {e}")
-                continue
-            objects[obj_id] = obj
-            max_id = max(max_id, obj_id)
+    for obj_id, blob in rows:
+        try:
+            obj = dill.loads(blob)
+        except Exception as e:
+            logger.error(f"Error loading object {obj_id}: {e}")
+            continue
+        objects[obj_id] = obj
+        max_id = max(max_id, obj_id)
     with _ALL_OBJECTS_LOCK:
         _ALL_OBJECTS.clear()
         _ALL_OBJECTS.update(objects)
@@ -275,30 +283,49 @@ def save_objects(force: bool = False):
         return
     with _ALL_OBJECTS_LOCK:
         snapshot = list(_ALL_OBJECTS.values())
-    snapshot = [
-        o
-        for o in snapshot
-        if not getattr(o, "is_temporary", False)
-        and not getattr(o, "is_node", False)
-        and not getattr(o, "is_deleted", False)
-    ]
+    filtered = []
+    for o in snapshot:
+        with o.lock:
+            if getattr(o, "is_temporary", False) or getattr(o, "is_node", False) or getattr(o, "is_deleted", False):
+                continue
+        filtered.append(o)
+    snapshot = filtered
+    pending: list[tuple[Any, tuple[str, tuple]]] = []
+    cleared: list[Any] = []
+    for obj in snapshot:
+        if not _is_still_saveable(obj, for_save=True, force=force):
+            continue
+        try:
+            ops = obj.get_save_ops_clearing()
+        except Exception:
+            for c in cleared:
+                with c.lock:
+                    object.__setattr__(c, "is_modified", True)
+            raise
+        pending.append((obj, ops))
+        cleared.append(obj)
     with db.lock:
         if getattr(db, "_closed", False) is True:
             logger.warning("save_objects: database closed, skipping")
+            for obj in cleared:
+                with obj.lock:
+                    object.__setattr__(obj, "is_modified", True)
             return
         try:
             cursor = db.connection.cursor()
             cursor.execute("BEGIN TRANSACTION")
         except sqlite3.ProgrammingError as e:
             logger.warning(f"save_objects: database closed ({e}), skipping")
+            for obj in cleared:
+                with obj.lock:
+                    object.__setattr__(obj, "is_modified", True)
             return
-        attempted = []
+        attempted: list[Any] = []
         try:
-            for obj in snapshot:
-                if not _is_still_saveable(obj, for_save=True, force=force):
+            for obj, ops in pending:
+                if not _is_still_saveable(obj, for_save=False, force=force):
                     continue
                 attempted.append(obj)
-                ops = obj.get_save_ops_clearing()
                 cursor.execute(ops[0], ops[1])
             cursor.execute("COMMIT")
         except Exception:
@@ -309,6 +336,10 @@ def save_objects(force: bool = False):
             for obj in attempted:
                 with obj.lock:
                     object.__setattr__(obj, "is_modified", True)
+            for obj, _ in pending:
+                if obj not in attempted:
+                    with obj.lock:
+                        object.__setattr__(obj, "is_modified", True)
             raise
 
 

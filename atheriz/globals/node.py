@@ -143,20 +143,14 @@ class NodeHandler:
         with self.lock:
             area_refs = list(self.areas.values())
             handler_was = self._modified
-            if handler_was:
-                self._modified = False
         handler_cleared = handler_was
         with self.lock2:
             trans_refs = list(self.transitions.values())
             trans_was = self._modified2
-            if trans_was:
-                self._modified2 = False
         trans_cleared = trans_was
         with self.lock3:
             doors_refs = [(k, dict(v)) for k, v in self.doors.items()]
             doors_was = self._modified3
-            if doors_was:
-                self._modified3 = False
         doors_cleared = doors_was
         transitions_snapshot = []
         for t in trans_refs:
@@ -374,6 +368,24 @@ class NodeHandler:
                 except Exception:
                     pass
             return
+        area_blobs: list[tuple[str, bytes]] = []
+        for area in areas_snapshot:
+            try:
+                area_blobs.append((area.name, dill.dumps(area)))
+            except Exception as e:
+                logger.error(f"Error serializing area {getattr(area, 'name', '?')}: {e}")
+        trans_blobs: list[tuple[str, int, int, int, bytes]] = []
+        for t in transitions_snapshot:
+            try:
+                trans_blobs.append((t.to_coord.area, t.to_coord.x, t.to_coord.y, t.to_coord.z, dill.dumps(t)))
+            except Exception as e:
+                logger.error(f"Error serializing transition {t}: {e}")
+        doors_blobs: list[tuple[str, int, int, int, bytes]] = []
+        for coord, doors_dict in doors_snapshot:
+            try:
+                doors_blobs.append((coord.area, coord.x, coord.y, coord.z, dill.dumps(doors_dict)))
+            except Exception as e:
+                logger.error(f"Error serializing doors at {coord}: {e}")
         with db.lock:
             if getattr(db, "_closed", False) is True:
                 logger.warning("NodeHandler.save: database closed, skipping")
@@ -427,22 +439,31 @@ class NodeHandler:
                         pass
                 return
             try:
-                for area in areas_snapshot:
+                for name, blob in area_blobs:
                     cursor.execute(
                         "INSERT OR REPLACE INTO areas (name, data) VALUES (?, ?)",
-                        (area.name, dill.dumps(area)),
+                        (name, blob),
                     )
-                for t in transitions_snapshot:
+                for area, x, y, z, blob in trans_blobs:
                     cursor.execute(
                         "INSERT OR REPLACE INTO transitions (to_area, to_x, to_y, to_z, data) VALUES (?, ?, ?, ?, ?)",
-                        (t.to_coord.area, t.to_coord.x, t.to_coord.y, t.to_coord.z, dill.dumps(t)),
+                        (area, x, y, z, blob),
                     )
-                for coord, doors_dict in doors_snapshot:
+                for area, x, y, z, blob in doors_blobs:
                     cursor.execute(
                         "INSERT OR REPLACE INTO doors (area, x, y, z, data) VALUES (?, ?, ?, ?, ?)",
-                        (coord.area, coord.x, coord.y, coord.z, dill.dumps(doors_dict)),
+                        (area, x, y, z, blob),
                     )
                 cursor.execute("COMMIT")
+                if handler_cleared:
+                    with self.lock:
+                        self._modified = False
+                if trans_cleared:
+                    with self.lock2:
+                        self._modified2 = False
+                if doors_cleared:
+                    with self.lock3:
+                        self._modified3 = False
             except Exception as e:
                 try:
                     cursor.execute("ROLLBACK")

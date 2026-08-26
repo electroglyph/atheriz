@@ -240,6 +240,8 @@ def test_shutdown_and_reload_do_not_overlap(global_test_env):
             try:
                 barrier.wait(timeout=5)
             except Exception:
+                with overlap_lock:
+                    active.discard(tid)
                 return
             time.sleep(0.15)
             with overlap_lock:
@@ -254,6 +256,8 @@ def test_shutdown_and_reload_do_not_overlap(global_test_env):
             try:
                 barrier.wait(timeout=5)
             except Exception:
+                with overlap_lock:
+                    active.discard(tid)
                 return
             time.sleep(0.15)
             with overlap_lock:

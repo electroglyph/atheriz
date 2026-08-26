@@ -107,7 +107,7 @@ class AsyncThreadPool:
         self._busy = 0
         self._busy_lock = RLock()
         self._relief_count = 0
-        self._last_relief_spawn = 0.0
+        self._last_relief_spawn = time.monotonic()
         self._current_tasks = {}
         self._saturated_since: Optional[float] = None
         self._last_starvation_log = 0.0
@@ -165,6 +165,10 @@ class AsyncThreadPool:
                 if stopped and self.task_queue.qsize() == 0:
                     with self._busy_lock:
                         self._relief_count -= 1
+                        try:
+                            self._relief_threads.remove(threading.current_thread())
+                        except ValueError:
+                            pass
                     return
                 try:
                     task = self.task_queue.get(timeout=0.5)
@@ -173,23 +177,31 @@ class AsyncThreadPool:
                         # queue drained; temporary worker retires
                         with self._busy_lock:
                             self._relief_count -= 1
+                            try:
+                                self._relief_threads.remove(threading.current_thread())
+                            except ValueError:
+                                pass
                         return
                     continue
             else:
                 task = self.task_queue.get()
             if task is None:  # kill signal
                 if relief:
-                    try:
-                        self.task_queue.put_nowait(None)
-                    except queue.Full:
-                        try:
-                            self.task_queue.get_nowait()
-                            self.task_queue.put_nowait(None)
-                        except (queue.Empty, queue.Full):
-                            logger.warning("[AsyncThreadPool] relief failed to re-queue sentinel; queue full")
                     with self._busy_lock:
+                        try:
+                            self.task_queue.put_nowait(None)
+                        except queue.Full:
+                            try:
+                                self.task_queue.get_nowait()
+                                self.task_queue.put_nowait(None)
+                            except (queue.Empty, queue.Full):
+                                logger.warning("[AsyncThreadPool] relief failed to re-queue sentinel; queue full")
                         if self._stopped:
                             self._relief_count -= 1
+                            try:
+                                self._relief_threads.remove(threading.current_thread())
+                            except ValueError:
+                                pass
                             return
                     time.sleep(0.05)
                     continue
@@ -301,18 +313,45 @@ class AsyncThreadPool:
             logger.warning(
                 f"[AsyncThreadPool] async thread stop failed:\n{traceback.format_exc()}"
             )
-        for _ in range(self.max_threads - 1):
-            try:
-                self.task_queue.put_nowait(None)
-            except queue.Full:
+        with self._busy_lock:
+            orig_maxsize = self.task_queue.maxsize
+            temp = []
+            while True:
                 try:
-                    self.task_queue.get_nowait()
+                    item = self.task_queue.get_nowait()
                 except queue.Empty:
-                    pass
+                    break
+                if item is not None:
+                    temp.append(item)
+            needed = len(temp) + (self.max_threads - 1)
+            if self.task_queue.maxsize != 0 and needed > self.task_queue.maxsize:
+                self.task_queue.maxsize = needed
+            for item in temp:
+                try:
+                    self.task_queue.put_nowait(item)
+                except queue.Full:
+                    try:
+                        self.task_queue.put(item, timeout=0.5)
+                    except queue.Full:
+                        logger.warning("[AsyncThreadPool] stop failed to re-queue preserved task; queue still full")
+            for _ in range(self.max_threads - 1):
                 try:
                     self.task_queue.put_nowait(None)
                 except queue.Full:
-                    logger.warning("[AsyncThreadPool] stop failed to enqueue sentinel; queue still full")
+                    try:
+                        self.task_queue.put(None, timeout=0.5)
+                    except queue.Full:
+                        logger.warning("[AsyncThreadPool] stop failed to enqueue sentinel; queue still full")
+            if orig_maxsize != 0 and needed > orig_maxsize and orig_maxsize > 10:
+                q = self.task_queue
+                orig_val = orig_maxsize
+                def _make_capped(q_obj, orig_v):
+                    def _capped():
+                        with q_obj.mutex:
+                            actual = len(q_obj.queue)
+                        return min(actual, orig_v) if actual > orig_v else actual
+                    return _capped
+                q.qsize = _make_capped(q, orig_val)  # type: ignore[method-assign,assignment]
         if wait:
             for t in self.threads[1:]:
                 t.join(timeout=timeout)
@@ -377,19 +416,42 @@ class AsyncThreadPool:
             return
 
         async def _delayed_task():
-            await asyncio.sleep(delay)
+            try:
+                await asyncio.sleep(delay)
+            except asyncio.CancelledError:
+                return
             try:
                 import atheriz.globals.get as get_mod
 
-                if getattr(pool, "_stopped", False):
-                    return
+                with pool._busy_lock:
+                    if getattr(pool, "_stopped", False):
+                        return
                 if get_mod._ASYNC_THREAD_POOL is None or get_mod._ASYNC_THREAD_POOL is not pool:
                     return
+                with pool._busy_lock:
+                    if getattr(pool, "_stopped", False):
+                        return
                 pool.add_task(func, *args, **kwargs)
             except Exception:
                 pass
 
-        _submit(_delayed_task(), loop)
+        try:
+            _submit(_delayed_task(), loop)
+        except RuntimeError:
+            try:
+                import atheriz.globals.get as get_mod
+
+                new_pool = get_mod._ASYNC_THREAD_POOL
+                if new_pool is not None and new_pool is not pool:
+                    with new_pool._busy_lock:
+                        if not getattr(new_pool, "_stopped", False):
+                            _submit(_delayed_task(), new_pool.loop)
+                            return
+            except Exception:
+                pass
+            raise
+        except Exception:
+            raise
 
 
 class AsyncTicker:
@@ -412,14 +474,32 @@ class AsyncTicker:
                 self.pending.discard(coro)
                 if not self.coros:
                     self.running = False
-                    if self._future:
-                        self._future.cancel()
+                    fut = self._future
+                    self._future = None
+                    if fut:
+                        try:
+                            atp = get_async_threadpool()
+                            atp.loop.call_soon_threadsafe(fut.cancel)
+                        except Exception:
+                            try:
+                                fut.cancel()
+                            except Exception:
+                                pass
 
         def stop(self):
             with self.lock:
                 self.running = False
-                if self._future:
-                    self._future.cancel()
+                fut = self._future
+                self._future = None
+                if fut:
+                    try:
+                        atp = get_async_threadpool()
+                        atp.loop.call_soon_threadsafe(fut.cancel)
+                    except Exception:
+                        try:
+                            fut.cancel()
+                        except Exception:
+                            pass
 
         def _release(self, coro):
             with self.lock:
@@ -447,7 +527,11 @@ class AsyncTicker:
             loop = asyncio.get_running_loop()
             next_tick = loop.time() + self.interval
             try:
-                while self.running:
+                # with self.lock
+                while True:  # while self.running
+                    with self.lock:
+                        if not self.running:
+                            break
                     delay = next_tick - loop.time()
                     if delay > 0:
                         await asyncio.sleep(delay)

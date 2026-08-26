@@ -367,6 +367,9 @@ def test_save_snapshot_filters_hold_object_lock(global_test_env):
         import inspect
         import atheriz.globals.objects as m
         src = inspect.getsource(m.save_objects)
+    save_start = src.find("def save_objects")
+    if save_start != -1:
+        src = src[save_start:]
     start = src.find("snapshot = list(_ALL_OBJECTS.values())")
     end = src.find("with db.lock:", start)
     segment = src[start:end] if start != -1 and end != -1 else src
