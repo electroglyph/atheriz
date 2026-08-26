@@ -360,6 +360,10 @@ class InputFuncs:
         """
         if len(args) < 3:
             return
+        puppet = getattr(getattr(connection, "session", None), "puppet", None)
+        if not puppet or not getattr(puppet, "is_builder", False):
+            connection.send_command("map_edit_reject", "Builder permission required.")
+            return
         key, seq, cells = args[0], args[1], args[2]
         if not (isinstance(key, str) and isinstance(seq, int) and isinstance(cells, list)):
             return
@@ -380,10 +384,6 @@ class InputFuncs:
             if len(cell) == 6:
                 if not _is_color(cell[3]) or not _is_color(cell[4]) or not _is_attrs(cell[5]):
                     return
-        puppet = getattr(getattr(connection, "session", None), "puppet", None)
-        if not puppet or not getattr(puppet, "is_builder", False):
-            connection.send_command("map_edit_reject", "Builder permission required.")
-            return
         ip = getattr(connection, "client_host", "?")
         result = mapedit.consume(key, ip, seq)
         if result.status == mapedit.REJECT:
@@ -446,6 +446,10 @@ class InputFuncs:
         """
         if len(args) < 3 or len(args) > 4:
             return
+        puppet = getattr(getattr(connection, "session", None), "puppet", None)
+        if not puppet or not getattr(puppet, "is_builder", False):
+            connection.send_command("map_edit_reject", "Builder permission required.")
+            return
         key, seq, moves = args[0], args[1], args[2]
         if not (isinstance(key, str) and isinstance(seq, int) and isinstance(moves, list)):
             return
@@ -466,10 +470,6 @@ class InputFuncs:
                 ):
                     return
                 context.append(((ctx_move[0], ctx_move[1]), (ctx_move[2], ctx_move[3])))
-        puppet = getattr(getattr(connection, "session", None), "puppet", None)
-        if not puppet or not getattr(puppet, "is_builder", False):
-            connection.send_command("map_edit_reject", "Builder permission required.")
-            return
         ip = getattr(connection, "client_host", "?")
         result = mapedit.consume(key, ip, seq)
         if result.status == mapedit.REJECT:

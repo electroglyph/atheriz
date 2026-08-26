@@ -44,7 +44,7 @@ class ChannelCommand(Command):
         self.id = channel.id
 
     def setup_parser(self):
-        self.parser.add_argument("message", type=str, nargs="?", help="Message to send")
+        self.parser.add_argument("message", type=str, nargs="*", help="Message to send")
         self.parser.add_argument("-l", "--list", action="store_true", help="List all channels")
         self.parser.add_argument("-c", "--channel", type=str, help="Channel to target")
         self.parser.add_argument(
@@ -120,7 +120,12 @@ class ChannelCommand(Command):
                 return
             caller.msg(channel.get_history())
         elif args.message:
+            # args.message is list due to nargs="*" — join for multi-word
+            message = " ".join(args.message) if isinstance(args.message, list) else args.message
+            if not message:
+                caller.msg(self.print_help())
+                return
             if not channel.access(caller, "send"):
                 caller.msg("You do not have permission to send to this channel.")
                 return
-            channel.msg(args.message, caller)
+            channel.msg(message, caller)

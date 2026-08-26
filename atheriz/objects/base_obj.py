@@ -174,10 +174,10 @@ class Object(Flags, DbOps, AccessLock):
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
         obj.is_modified = True
-        add_object(obj)
         coro_added = False
         try:
             obj.at_create()
+            add_object(obj)
             if is_tickable:
                 get_async_ticker().add_coro(obj.at_tick, tick_seconds)
                 coro_added = True
@@ -1012,6 +1012,10 @@ class Object(Flags, DbOps, AccessLock):
             - player2 will see: 'The First girl attacks Player2'
 
         """
+        if text is None:
+            text = ""
+        elif not isinstance(text, str):
+            text = str(text)
         mapping = mapping or {}
         you = from_obj or self
 

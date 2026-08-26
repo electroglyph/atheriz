@@ -116,6 +116,13 @@ class Door(AccessLock):
             else:
                 self.closed = False
                 status = "opened"
+        if status == "opened":
+            try:
+                nh = get_node_handler()
+                with nh.lock3:
+                    nh._modified3 = True
+            except Exception:
+                pass
         if status == "already_open":
             if from_node:
                 from_node.msg_contents(
@@ -166,6 +173,13 @@ class Door(AccessLock):
             else:
                 self.closed = True
                 status = "closed"
+        if status == "closed":
+            try:
+                nh = get_node_handler()
+                with nh.lock3:
+                    nh._modified3 = True
+            except Exception:
+                pass
         if status == "already_closed":
             if loc:
                 loc.msg_contents(
@@ -215,6 +229,13 @@ class Door(AccessLock):
             else:
                 self.locked = True
                 status = "locked"
+        if status == "locked":
+            try:
+                nh = get_node_handler()
+                with nh.lock3:
+                    nh._modified3 = True
+            except Exception:
+                pass
         if status == "no_access":
             if loc:
                 loc.msg_contents(
@@ -258,6 +279,13 @@ class Door(AccessLock):
                 status = "unlocked"
             else:
                 status = "already_unlocked"
+        if status == "unlocked":
+            try:
+                nh = get_node_handler()
+                with nh.lock3:
+                    nh._modified3 = True
+            except Exception:
+                pass
         if status == "no_access":
             if loc:
                 loc.msg_contents(

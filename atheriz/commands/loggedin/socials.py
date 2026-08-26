@@ -104,6 +104,11 @@ class CmdSocials(Command):
             caller.location.msg_contents(msg, from_obj=caller, mapping={"you": caller}, msg_type="emote")
         else:
             targets = caller.search(target_name)
+            if not targets and getattr(caller, "location", None):
+                try:
+                    targets = caller.location.search(target_name, looker=caller)
+                except Exception:
+                    targets = []
             if not targets:
                 caller.msg(f"Could not find '{target_name}'.")
                 return

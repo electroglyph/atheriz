@@ -14,6 +14,7 @@ PROTECTED_ATTRIBUTES = frozenset(
         "session",
         "lock",
         "locks",
+        "access",
         "internal_cmdset",
         "external_cmdset",
         "scripts",
@@ -48,6 +49,8 @@ PROTECTED_ATTRIBUTES = frozenset(
         "_contents",
         "group_channel",
         "contents",
+        "tags",
+        "name",
     }
 )
 

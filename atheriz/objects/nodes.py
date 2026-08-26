@@ -511,6 +511,7 @@ class Node(Flags, AccessLock):
                 if k.lower() == low and k != low:
                     self.nouns.pop(k, None)
             self.nouns[low] = desc
+            self.is_modified = True
 
     def remove_noun(self, noun: str):
         """
@@ -525,6 +526,7 @@ class Node(Flags, AccessLock):
             for k in list(self.nouns.keys()):
                 if k.lower() == noun.lower():
                     self.nouns.pop(k, None)
+            self.is_modified = True
 
     def get_noun(self, noun: str) -> str | None:
         """
@@ -661,8 +663,10 @@ class Node(Flags, AccessLock):
         with self.lock:
             if self.links and link not in self.links:
                 self.links.append(link)
+                self.is_modified = True
             elif not self.links:
                 self.links = [link]
+                self.is_modified = True
             for o in self.contents:
                 self.add_exits(o)
 
@@ -698,6 +702,7 @@ class Node(Flags, AccessLock):
                         break
                 if index != -1:
                     found = self.links.pop(index)
+                    self.is_modified = True
         if found:
             if self.coord.area != found.coord.area:  # need to remove a transition too
                 nh = get_node_handler()
@@ -784,6 +789,10 @@ class Node(Flags, AccessLock):
             msg_type (str | None, optional): The type of message. Defaults to None.
             **kwargs: additional keyword arguments to pass to msg
         """
+        if text is None:
+            text = ""
+        elif not isinstance(text, str):
+            text = str(text)
         mapping = mapping or {}
         you = from_obj or self
 
@@ -982,6 +991,7 @@ class NodeGrid:
         """save arbitrary data for this grid... make sure it can be pickled"""
         with self.lock:
             self.data[key] = value
+            self.is_modified = True
 
     def get_data(self, key):
         """load arbitrary data for this grid... make sure it can be pickled"""
@@ -1132,6 +1142,7 @@ class NodeGrid:
                             other.links[i] = NodeLink(name=link.name, coord=hit, aliases=link.aliases)
                             rewritten = True
                     if rewritten:
+                        other.is_modified = True
                         affected[id(other)] = other
         # re-key doors registered on the moved coords
         nh = get_node_handler()
@@ -1336,6 +1347,7 @@ class NodeArea:
         """save arbitrary data for this area... make sure it can be pickled"""
         with self.lock:
             self.data[key] = value
+            self.is_modified = True
 
     def get_data(self, key):
         """load arbitrary data for this node... make sure it can be pickled"""
@@ -1345,12 +1357,14 @@ class NodeArea:
     def remove_data(self, key):
         with self.lock:
             self.data.pop(key, None)
+            self.is_modified = True
 
     def remove_linked_area(self, area: str):
         removed = False
         with self.lock:
             if self.linked_areas and area in self.linked_areas:
                 self.linked_areas.remove(area)
+                self.is_modified = True
                 removed = True
         if removed:
             nh = get_node_handler()
@@ -1363,9 +1377,11 @@ class NodeArea:
         with self.lock:
             if self.linked_areas is None:
                 self.linked_areas = {area}
+                self.is_modified = True
                 added = True
             elif area not in self.linked_areas:
                 self.linked_areas.add(area)
+                self.is_modified = True
                 added = True
         if added:
             nh = get_node_handler()

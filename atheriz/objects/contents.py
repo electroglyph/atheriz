@@ -31,12 +31,35 @@ if TYPE_CHECKING:
 
 
 def _term_matches(obj, term: str) -> bool:
-    term_l = term.lower()
-    name_l = obj.name.lower()
+    if not isinstance(term, str):
+        return False
+    try:
+        term_l = term.lower()
+    except Exception:
+        return False
+    try:
+        name = getattr(obj, "name", "")
+        if not isinstance(name, str):
+            name_l = ""
+        else:
+            name_l = name.lower()
+    except Exception:
+        name_l = ""
     if term_l == name_l or term_l in name_l.split():
         return True
-    for alias in obj.aliases:
-        alias_l = alias.lower()
+    try:
+        aliases = getattr(obj, "aliases", [])
+    except Exception:
+        aliases = []
+    if not isinstance(aliases, (list, tuple, set)):
+        aliases = []
+    for alias in aliases:
+        if not isinstance(alias, str):
+            continue
+        try:
+            alias_l = alias.lower()
+        except Exception:
+            continue
         if term_l == alias_l or term_l in alias_l.split():
             return True
     return False
@@ -150,7 +173,12 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
             direct contents.
         looker (Object | None): The object doing the looking; used to check view locks on containers.
     """
-    query = query.lower().strip()
+    if not isinstance(query, str):
+        return []
+    try:
+        query = query.lower().strip()
+    except Exception:
+        return []
     if query == "me":
         return [obj]
     # Self-target via "me" is intentional.

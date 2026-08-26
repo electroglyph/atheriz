@@ -351,11 +351,13 @@ class MapInfo:
     def add_legend_entry(self, entry: LegendEntry):
         with self.lock:
             self.legend_entries.append(entry)
+            self.map_changed = True
         self.render_legend()
 
     def remove_legend_entry(self, entry: LegendEntry):
         with self.lock:
             self.legend_entries.remove(entry)
+            self.map_changed = True
         self.render_legend()
 
     def add_listener(self, listener: Object, notify: bool = False):
@@ -452,14 +454,27 @@ class MapHandler:
                     mi_state["listeners"] = {}
                     mi_state["_batch_update"] = 0
                     mi_state["_legend_suppressed"] = False
+                    if was_changed:
+                        mi.map_changed = False
+                        if hasattr(mi, "is_modified"):
+                            try:
+                                object.__setattr__(mi, "is_modified", False)
+                            except Exception:
+                                mi.is_modified = False
+                        to_clear[k] = mi
                 mi_copy = MapInfo.__new__(MapInfo)
                 mi_copy.__dict__.update(mi_state)
                 mi_copy.lock = RLock()
                 snapshot.append((k, mi_copy))
-                if was_changed:
-                    to_clear[k] = mi
             except Exception as e:
                 logger.error(f"Error preparing map save for {k}: {e}")
+                # rollback already-cleared flag for this chunk if needed
+                if was_changed:
+                    try:
+                        with mi.lock:
+                            mi.map_changed = True
+                    except Exception:
+                        pass
 
         blobs: list[tuple[str, int, bytes]] = []
         for (area, z), mi in snapshot:
@@ -467,15 +482,34 @@ class MapHandler:
                 blobs.append((area, z, dill.dumps(mi)))
             except Exception as e:
                 logger.error(f"Error serializing map chunk {area}:{z}: {e}")
+                k = (area, z)
+                if k in to_clear:
+                    try:
+                        with to_clear[k].lock:
+                            to_clear[k].map_changed = True
+                    except Exception:
+                        pass
         with db.lock:
             if getattr(db, "_closed", False) is True:
                 logger.warning("MapHandler.save: database closed, skipping")
+                for _, mi in to_clear.items():
+                    try:
+                        with mi.lock:
+                            mi.map_changed = True
+                    except Exception:
+                        pass
                 return
             try:
                 cursor = db.connection.cursor()
                 cursor.execute("BEGIN TRANSACTION")
             except Exception as e:
                 logger.warning(f"MapHandler.save: database closed ({e}), skipping")
+                for _, mi in to_clear.items():
+                    try:
+                        with mi.lock:
+                            mi.map_changed = True
+                    except Exception:
+                        pass
                 return
             try:
                 for area, z, blob in blobs:
@@ -484,21 +518,18 @@ class MapHandler:
                         (area, z, blob)
                     )
                 cursor.execute("COMMIT")
-                committed_keys = {(a, z) for a, z, _ in blobs}
-                for k, mi in to_clear.items():
-                    if k in committed_keys:
-                        with mi.lock:
-                            mi.map_changed = False
-                            if hasattr(mi, "is_modified"):
-                                try:
-                                    object.__setattr__(mi, "is_modified", False)
-                                except Exception:
-                                    mi.is_modified = False
+                # flags already cleared optimistically; no post-commit wipe (avoids lost-update)
             except Exception as e:
                 try:
                     cursor.execute("ROLLBACK")
                 except Exception:
                     pass
+                for _, mi in to_clear.items():
+                    try:
+                        with mi.lock:
+                            mi.map_changed = True
+                    except Exception:
+                        pass
                 logger.error(f"Error saving map data to DB: {e}")
 
     def set_mapinfo(self, area: str, z: int, mapinfo: MapInfo):

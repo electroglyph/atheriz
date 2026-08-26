@@ -109,6 +109,10 @@ class FollowCommand(Command):
         _tl = getattr(target, "lock", None)
         with (_tl if _tl is not None and hasattr(_tl, "__enter__") else nullcontext()):
             target.followers.add(caller.id)
+            try:
+                object.__setattr__(target, "is_modified", True)
+            except Exception:
+                pass
             if not target.get_scripts_by_type("FollowScript"):
                 s = FollowScript.create(caller, f"FollowScript_for_{caller.id}")
                 target.add_script(s)
@@ -152,6 +156,10 @@ class NoFollowCommand(Command):
                             caller.msg(f"You are no longer leading {follower[0].get_display_name(caller)}.")
                 caller.followers.clear()
                 caller.followers.update(keep)
+                try:
+                    object.__setattr__(caller, "is_modified", True)
+                except Exception:
+                    pass
                 if not caller.followers:
                     for script in caller.get_scripts_by_type("FollowScript"):
                         script.delete()
@@ -174,6 +182,10 @@ class UnfollowCommand(Command):
         if leader:
             with leader[0].lock:
                 leader[0].followers.discard(caller.id)
+                try:
+                    object.__setattr__(leader[0], "is_modified", True)
+                except Exception:
+                    pass
             if caller.access(leader[0], "view"):
                 leader[0].msg(f"{caller.get_display_name(leader[0])} is no longer following you.")
         caller.following = None

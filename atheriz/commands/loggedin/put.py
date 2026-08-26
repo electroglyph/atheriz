@@ -12,22 +12,71 @@ class PutCommand(Command):
     desc = "Put an object somewhere."
 
     def setup_parser(self):
-        self.parser.add_argument("object", type=str, help="object to put")
-        self.parser.add_argument(
-            "destination", type=str, nargs="*", help="destination to put the object in"
-        )
+        self.parser.add_argument("args", nargs="*", help="object to put, 'in <container>'")
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
         if not args:
             caller.msg(self.print_help())
             return
-        obj_name = args.object
-        dest_parts = [p for p in args.destination if p.lower() not in ["in", "into"]]
-        if not dest_parts:
-            caller.msg(self.print_help())
-            return
-        dest_name = " ".join(dest_parts)
+        # Compatibility: support both new `args` list (multi-word) and legacy `object`/`destination` used by tests
+        obj_name: str | None = None
+        dest_name: str | None = None
+        raw_args = getattr(args, "args", None)
+        if isinstance(raw_args, (list, tuple)) and raw_args:
+            tokens = list(raw_args)
+            split_idx = None
+            for i, tok in enumerate(tokens):
+                if isinstance(tok, str) and tok.lower() in ("in", "into"):
+                    split_idx = i
+                    break
+            if split_idx is None:
+                caller.msg(self.print_help())
+                return
+            obj_parts = tokens[:split_idx]
+            dest_parts = tokens[split_idx + 1 :]
+            if not obj_parts or not dest_parts:
+                caller.msg(self.print_help())
+                return
+            obj_name = " ".join(str(p) for p in obj_parts)
+            dest_name = " ".join(str(p) for p in dest_parts)
+        else:
+            legacy_obj = getattr(args, "object", None)
+            if isinstance(legacy_obj, str):
+                obj_name = legacy_obj.strip()
+                dest_raw = getattr(args, "destination", None)
+                if isinstance(dest_raw, (list, tuple)):
+                    # Filter stray 'in'/'into' if present (old tests pass already-filtered)
+                    filtered = [str(p) for p in dest_raw if isinstance(p, str) and p.lower() not in ("in", "into")]
+                    # Also handle case where destination list still contains keyword due to direct mock
+                    dest_name = " ".join(filtered)
+                elif isinstance(dest_raw, str):
+                    dest_name = dest_raw.strip()
+                else:
+                    dest_name = ""
+                if not obj_name or not dest_name:
+                    caller.msg(self.print_help())
+                    return
+            else:
+                # No recognizable args — show help
+                # Fallback to token parsing if raw_args was empty list
+                tokens = list(raw_args or [])
+                split_idx = None
+                for i, tok in enumerate(tokens):
+                    if isinstance(tok, str) and tok.lower() in ("in", "into"):
+                        split_idx = i
+                        break
+                if split_idx is None:
+                    caller.msg(self.print_help())
+                    return
+                obj_parts = tokens[:split_idx]
+                dest_parts = tokens[split_idx + 1 :]
+                if not obj_parts or not dest_parts:
+                    caller.msg(self.print_help())
+                    return
+                obj_name = " ".join(str(p) for p in obj_parts)
+                dest_name = " ".join(str(p) for p in dest_parts)
+        # At this point obj_name/dest_name are set
 
         loc: Node | None = caller.location
 

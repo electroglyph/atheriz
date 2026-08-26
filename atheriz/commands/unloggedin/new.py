@@ -6,9 +6,8 @@ from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
 from atheriz.commands.unloggedin.guest import _gender_menu
 from atheriz.globals.objects import (
-    CREATION_COOLDOWN_LOCK,
-    CREATION_COOLDOWNS,
     apply_creation_cooldown,
+    clear_creation_cooldown,
     filter_by,
     try_reserve_creation_cooldown,
 )
@@ -48,8 +47,7 @@ class NewCharacterCommand(Command):
         name = await caller.session.prompt("Enter a name for your character:")
         name = name.strip()
         if err := validate_character_name(name):
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(err)
             return
 
@@ -69,13 +67,11 @@ class NewCharacterCommand(Command):
             gender = await caller.session.prompt("Enter your character's gender:")
             gender = gender.strip()
             if not gender:
-                with CREATION_COOLDOWN_LOCK:
-                    CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+                clear_creation_cooldown(rate_key)
                 caller.msg("Gender cannot be empty.")
                 return
         elif not gender:
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg("Gender selection is required.")
             return
 
@@ -85,8 +81,7 @@ class NewCharacterCommand(Command):
         desc = desc.strip()
 
         if filter_by(lambda o: getattr(o, "is_pc", False) and isinstance(getattr(o, "name", None), str) and o.name.lower() == name.lower()):
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(f"Character with this name ({name}) already exists.")
             return
 
@@ -102,8 +97,7 @@ class NewCharacterCommand(Command):
                     _ALL_OBJECTS.pop(character.id, None)
                     raise ValueError(f"Character with this name ({name}) already exists.")
         except ValueError as e:
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(str(e))
             try:
                 with character.lock:

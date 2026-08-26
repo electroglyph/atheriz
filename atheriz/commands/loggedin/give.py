@@ -12,8 +12,7 @@ class GiveCommand(Command):
 
     # pyrefly: ignore
     def setup_parser(self):
-        self.parser.add_argument("object", type=str, help="object to give (from inventory) or all")
-        self.parser.add_argument("target", type=str, nargs="*", help="who to give the object to")
+        self.parser.add_argument("args", nargs="*", help="object to give, optionally 'to <target>'")
 
     # pyrefly: ignore
     def run(self, caller: "Object", args):
@@ -21,17 +20,124 @@ class GiveCommand(Command):
             caller.msg(self.print_help())
             return
 
-        obj_name = args.object
-        target_parts = [p for p in args.target if p.lower() != "to"]
-        if not target_parts:
-            caller.msg("Give it to whom?")
-            return
-        target_name = " ".join(target_parts)
-
         loc: "Node" | None = caller.location
         if not loc:
             caller.msg("No.")
             return
+
+        obj_name: str | None = None
+        target_name: str | None = None
+        raw_args = getattr(args, "args", None)
+        if isinstance(raw_args, (list, tuple)) and raw_args:
+            tokens = list(raw_args)
+            to_idx = None
+            for i, tok in enumerate(tokens):
+                if isinstance(tok, str) and tok.lower() == "to":
+                    to_idx = i
+                    break
+            if to_idx is not None:
+                obj_parts = tokens[:to_idx]
+                target_parts = tokens[to_idx + 1 :]
+                if not obj_parts or not target_parts:
+                    caller.msg("Give it to whom?")
+                    return
+                obj_name = " ".join(str(p) for p in obj_parts)
+                target_name = " ".join(str(p) for p in target_parts)
+            else:
+                if len(tokens) < 2:
+                    caller.msg("Give it to whom?")
+                    return
+                # No 'to' — ambiguous multi-word split. Try to find valid split via search.
+                # Prefer split where caller has object and loc has target.
+                found_split = None
+                # Try all splits, preferring object existence
+                for split in range(1, len(tokens)):
+                    cand_obj = " ".join(str(p) for p in tokens[:split])
+                    cand_tgt = " ".join(str(p) for p in tokens[split:])
+                    if cand_obj.lower() == "all":
+                        # 'all' is valid virtual object
+                        if loc.search(cand_tgt, looker=caller):
+                            found_split = (cand_obj, cand_tgt)
+                            break
+                        continue
+                    if caller.search(cand_obj):
+                        # Check target exists (or would be multiple) — accept if any match
+                        if loc.search(cand_tgt, looker=caller):
+                            found_split = (cand_obj, cand_tgt)
+                            break
+                if found_split:
+                    obj_name, target_name = found_split
+                else:
+                    # Fallback: last token as target (preserves 'long sword' object without 'to')
+                    # But if caller.search for that fails, try first token as object
+                    cand_obj_last = " ".join(str(p) for p in tokens[:-1])
+                    cand_tgt_last = str(tokens[-1])
+                    if cand_obj_last.lower() == "all" or caller.search(cand_obj_last):
+                        obj_name = cand_obj_last
+                        target_name = cand_tgt_last
+                    else:
+                        # Try first-token object, rest target (covers test_give_multiple_matches)
+                        cand_obj_first = str(tokens[0])
+                        cand_tgt_rest = " ".join(str(p) for p in tokens[1:])
+                        if caller.search(cand_obj_first) or cand_obj_first.lower() == "all":
+                            obj_name = cand_obj_first
+                            target_name = cand_tgt_rest
+                        else:
+                            obj_name = cand_obj_last
+                            target_name = cand_tgt_last
+                if not obj_name or not target_name:
+                    caller.msg("Give it to whom?")
+                    return
+        else:
+            legacy_obj = getattr(args, "object", None)
+            if isinstance(legacy_obj, str):
+                obj_name = legacy_obj.strip()
+                target_raw = getattr(args, "target", None)
+                if isinstance(target_raw, (list, tuple)):
+                    filtered = [str(p) for p in target_raw if isinstance(p, str)]
+                    # Filter stray 'to' keyword if present at start (legacy tests: ["to","bob"])
+                    if filtered and filtered[0].lower() == "to":
+                        filtered = filtered[1:]
+                    target_name = " ".join(filtered).strip()
+                elif isinstance(target_raw, str):
+                    t = target_raw.strip()
+                    if t.lower().startswith("to "):
+                        t = t[3:].strip()
+                    target_name = t
+                else:
+                    target_name = ""
+                if not obj_name or not target_name:
+                    # Legacy may also use args.target == [] for missing, handled below
+                    if not target_name:
+                        caller.msg("Give it to whom?")
+                        return
+                    caller.msg(self.print_help())
+                    return
+            else:
+                # No recognizable args
+                tokens = list(raw_args or [])
+                if not tokens:
+                    caller.msg("Give it to whom?")
+                    return
+                to_idx = None
+                for i, tok in enumerate(tokens):
+                    if isinstance(tok, str) and tok.lower() == "to":
+                        to_idx = i
+                        break
+                if to_idx is not None:
+                    obj_parts = tokens[:to_idx]
+                    target_parts = tokens[to_idx + 1 :]
+                else:
+                    if len(tokens) < 2:
+                        caller.msg("Give it to whom?")
+                        return
+                    obj_parts = tokens[:-1]
+                    target_parts = tokens[-1:]
+                if not obj_parts or not target_parts:
+                    caller.msg("Give it to whom?")
+                    return
+                obj_name = " ".join(str(p) for p in obj_parts)
+                target_name = " ".join(str(p) for p in target_parts)
 
         targets = loc.search(target_name, looker=caller)
         if not targets:

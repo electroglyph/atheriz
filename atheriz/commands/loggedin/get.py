@@ -12,8 +12,7 @@ class GetCommand(Command):
     desc = "Get an object."
 
     def setup_parser(self):
-        self.parser.add_argument("object", type=str, help="object to get or all")
-        self.parser.add_argument("source", type=str, nargs="*", help="container to get from")
+        self.parser.add_argument("args", nargs="*", help="object to get, optionally 'from <container>'")
 
     # pyrefly: ignore
     def run(self, caller: Object, args):
@@ -25,10 +24,68 @@ class GetCommand(Command):
             caller.msg("No.")
             return
 
-        obj_name = args.object
-        # Filter out 'from' from source args (handles "get foo from bar")
-        source_parts = [p for p in args.source if p.lower() != "from"]
-        source_name = " ".join(source_parts) if source_parts else None
+        obj_name: str | None = None
+        source_name: str | None = None
+        raw_args = getattr(args, "args", None)
+        if isinstance(raw_args, (list, tuple)) and raw_args:
+            tokens = list(raw_args)
+            from_idx = None
+            for i, tok in enumerate(tokens):
+                if isinstance(tok, str) and tok.lower() == "from":
+                    from_idx = i
+                    break
+            if from_idx is not None:
+                obj_parts = tokens[:from_idx]
+                source_parts = tokens[from_idx + 1 :]
+            else:
+                obj_parts = tokens
+                source_parts = []
+            if not obj_parts:
+                caller.msg(self.print_help())
+                return
+            obj_name = " ".join(str(p) for p in obj_parts)
+            source_name = " ".join(str(p) for p in source_parts) if source_parts else None
+        else:
+            legacy_obj = getattr(args, "object", None)
+            if isinstance(legacy_obj, str):
+                obj_name = legacy_obj.strip()
+                source_raw = getattr(args, "source", None)
+                if isinstance(source_raw, (list, tuple)):
+                    # Legacy source may be [] or ["from","bag"] or ["bag"]
+                    filtered = [str(p) for p in source_raw if isinstance(p, str)]
+                    # Strip leading 'from' if present
+                    if filtered and filtered[0].lower() == "from":
+                        filtered = filtered[1:]
+                    source_name = " ".join(filtered) if filtered else None
+                elif isinstance(source_raw, str):
+                    s = source_raw.strip()
+                    if s.lower().startswith("from "):
+                        s = s[5:].strip()
+                    source_name = s if s else None
+                else:
+                    source_name = None
+                if not obj_name:
+                    caller.msg(self.print_help())
+                    return
+            else:
+                # Fallback empty
+                tokens = list(raw_args or [])
+                from_idx = None
+                for i, tok in enumerate(tokens):
+                    if isinstance(tok, str) and tok.lower() == "from":
+                        from_idx = i
+                        break
+                if from_idx is not None:
+                    obj_parts = tokens[:from_idx]
+                    source_parts = tokens[from_idx + 1 :]
+                else:
+                    obj_parts = tokens
+                    source_parts = []
+                if not obj_parts:
+                    caller.msg(self.print_help())
+                    return
+                obj_name = " ".join(str(p) for p in obj_parts)
+                source_name = " ".join(str(p) for p in source_parts) if source_parts else None
 
         if obj_name == "all":
             # Get all from a container or from the room

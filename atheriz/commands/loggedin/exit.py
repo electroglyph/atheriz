@@ -93,6 +93,10 @@ class ExitCommand(Command):
             if leader:
                 with leader[0].lock:
                     leader[0].followers.discard(c.id)
+                    try:
+                        object.__setattr__(leader[0], "is_modified", True)
+                    except Exception:
+                        pass
                 if c.access(leader[0], "view"):
                     leader[0].msg(f"{c.get_display_name(leader[0])} is no longer following you.")
                 if leader[0].access(c, "view"):

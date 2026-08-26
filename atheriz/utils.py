@@ -398,7 +398,7 @@ def word_replace(input: str, replace_freq: float, replacement: str = "..."):
     words = [w for w in input.split()]
     for i in range(len(words)):
         u = uniform(0.0, 1.0)
-        if u <= replace_freq:
+        if u < replace_freq:
             words[i] = replacement
     return " ".join(words)
 
@@ -579,17 +579,20 @@ def iter_to_str(iterable, sep=",", endsep=", and", addquote=False):
     else:
         iterable = tuple(str(val) for val in iterable)
 
+    # Normalize - strip surrounding whitespace for robust handling
+    sep = str(sep).strip() if isinstance(sep, str) else str(sep)
+    endsep = str(endsep).strip() if isinstance(endsep, str) and endsep else endsep
     if endsep:
         if endsep.startswith(sep) and endsep != sep:
             # oxford comma alternative
             endsep = endsep[1:] if len_iter < 3 else endsep
-        elif endsep[0] not in punctuation:
+        elif endsep and endsep[0] not in punctuation:
             # add a leading space if endsep is a word
             endsep = " " + str(endsep).strip()
 
     # also add a leading space if separator is a word
     if sep not in punctuation:
-        sep = " " + sep
+        sep = " " + str(sep).strip()
 
     if len_iter == 1:
         return str(iterable[0])
@@ -654,15 +657,18 @@ def _build_signature_from_code(func) -> "Any":
 
         n_pos = code.co_argcount
         n_kw = code.co_kwonlyargcount
+        n_posonly = getattr(code, "co_posonlyargcount", 0)
         has_varargs = bool(code.co_flags & CO_VARARGS)
         has_varkw = bool(code.co_flags & CO_VARKEYWORDS)
         varnames = code.co_varnames
 
+        # Correct order is: posonly + pos (n_pos total), kwonly, *varargs, **varkw
         pos_names = varnames[:n_pos]
-        varargs_name = varnames[n_pos] if has_varargs else None
-        kwonly_start = n_pos + (1 if has_varargs else 0)
-        kwonly_names = varnames[kwonly_start : kwonly_start + n_kw]
-        varkw_name = varnames[kwonly_start + n_kw] if has_varkw else None
+        kwonly_names = varnames[n_pos : n_pos + n_kw]
+        varargs_idx = n_pos + n_kw
+        varargs_name = varnames[varargs_idx] if has_varargs else None
+        varkw_idx = varargs_idx + (1 if has_varargs else 0)
+        varkw_name = varnames[varkw_idx] if has_varkw else None
 
         defaults = func.__defaults__ or ()
         kwdefaults = func.__kwdefaults__ or {}
@@ -672,9 +678,8 @@ def _build_signature_from_code(func) -> "Any":
         for i, pname in enumerate(pos_names):
             default_idx = i - (n_pos - n_defaults)
             default = defaults[default_idx] if default_idx >= 0 else inspect.Parameter.empty
-            params.append(
-                inspect.Parameter(pname, kind=inspect.Parameter.POSITIONAL_OR_KEYWORD, default=default)
-            )
+            kind = inspect.Parameter.POSITIONAL_ONLY if i < n_posonly else inspect.Parameter.POSITIONAL_OR_KEYWORD
+            params.append(inspect.Parameter(pname, kind=kind, default=default))
 
         if varargs_name:
             params.append(inspect.Parameter(varargs_name, kind=inspect.Parameter.VAR_POSITIONAL))

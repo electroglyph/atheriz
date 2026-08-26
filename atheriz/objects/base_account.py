@@ -42,12 +42,12 @@ class Account(Flags, DbOps):
         account.name = name
         account.password = Account.hash_password(password)
         account.characters = []
+        account.at_create()
         add_object_unique(
             account,
             lambda x: x.is_account and x.name.lower() == name.lower(),
             f"Account with this name ({name}) already exists.",
         )
-        account.at_create()
         return account
 
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:

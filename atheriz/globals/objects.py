@@ -82,10 +82,15 @@ FAILED_LOGIN_ATTEMPTS: dict[str, int] = _BoundedDict()
 FAILED_LOGIN_ATTEMPTS_LOCK = RLock()
 
 
+def _cooldown_key(host: str) -> str:
+    return host
+
+
 def creation_cooldown_active(op: str, host: str, now: float) -> bool:
+    # op is kept for API compat — cooldown is unified per host across all ops
     if host == "?":
         return False
-    key = host
+    key = _cooldown_key(host)
     with CREATION_COOLDOWN_LOCK:
         expires = CREATION_COOLDOWNS.get(key)
         if expires is None:
@@ -101,13 +106,13 @@ def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> 
         return
     if cooldown > 0:
         with CREATION_COOLDOWN_LOCK:
-            CREATION_COOLDOWNS[host] = now + cooldown
+            CREATION_COOLDOWNS[_cooldown_key(host)] = now + cooldown
 
 
 def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> bool:
     if host == "?":
         return True
-    key = host
+    key = _cooldown_key(host)
     with CREATION_COOLDOWN_LOCK:
         expires = CREATION_COOLDOWNS.get(key)
         if expires is not None and expires > now:
@@ -115,6 +120,13 @@ def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: floa
         if cooldown > 0:
             CREATION_COOLDOWNS[key] = now + cooldown
         return True
+
+
+def clear_creation_cooldown(host: str) -> None:
+    if host == "?":
+        return
+    with CREATION_COOLDOWN_LOCK:
+        CREATION_COOLDOWNS.pop(_cooldown_key(host), None)
 
 # key = id, value = object
 # only access via the lock

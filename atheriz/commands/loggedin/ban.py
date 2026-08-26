@@ -138,6 +138,16 @@ class BanCommand(Command):
             if account is None:
                 caller.msg(f"Could not find the account owning {target.name}; banning character only.")
                 scope = "character"
+            else:
+                # Check all characters on the account — banning a Guest alt must not ban its Admin
+                account_chars = get(account.characters) if account.characters else []
+                for ch in account_chars:
+                    try:
+                        if getattr(ch, "privilege_level", 0) >= caller.privilege_level:
+                            caller.msg("You cannot ban someone of equal or higher privilege.")
+                            return
+                    except Exception:
+                        continue
 
         ip_host = None
         if args.ip:
@@ -231,6 +241,15 @@ class UnbanCommand(Command):
             if account is None:
                 caller.msg(f"Could not find the account owning {target.name}; unbanning character only.")
                 scope = "character"
+            else:
+                account_chars_check = get(account.characters) if account.characters else []
+                for ch in account_chars_check:
+                    try:
+                        if getattr(ch, "privilege_level", 0) >= caller.privilege_level:
+                            caller.msg("You cannot unban someone of equal or higher privilege.")
+                            return
+                    except Exception:
+                        continue
 
         ip_host = None
         if args.ip:

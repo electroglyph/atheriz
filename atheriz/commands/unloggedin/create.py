@@ -4,9 +4,8 @@ from atheriz.commands.base_cmd import Command
 from atheriz.objects.base_account import Account
 from atheriz.commands.unloggedin.connect import char_selection
 from atheriz.globals.objects import (
-    CREATION_COOLDOWN_LOCK,
-    CREATION_COOLDOWNS,
     apply_creation_cooldown,
+    clear_creation_cooldown,
     try_reserve_creation_cooldown,
 )
 from atheriz.commands.unloggedin.validation import validate_account_name, validate_password
@@ -37,28 +36,24 @@ class CreateCommand(Command):
         name = await caller.session.prompt("Enter an account name:")
         name = name.strip()
         if err := validate_account_name(name):
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"account:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(err)
             return
 
         password = await caller.session.prompt("Enter a password:")
         if err := validate_password(password):
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"account:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(err)
             return
 
         try:
             account = Account.create(name, password)
         except ValueError as e:
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"account:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(str(e))
             return
         if account is None:
-            with CREATION_COOLDOWN_LOCK:
-                CREATION_COOLDOWNS.pop(f"account:{rate_key}", None)
+            clear_creation_cooldown(rate_key)
             caller.msg(f"Account with this name ({name}) already exists.")
             return
         apply_creation_cooldown(
