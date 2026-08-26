@@ -177,7 +177,7 @@ class Node(Flags, AccessLock):
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)
         mro = type(self).mro()
         try:
-            cur = mro.index(Node)
+            cur = mro.index(__class__)
         except ValueError:
             cur = -1
         for cls in reversed(mro[cur + 1 :]):
