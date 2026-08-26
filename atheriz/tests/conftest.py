@@ -26,10 +26,43 @@ def _clear_ticker():
     """Stop and drop the global AsyncTicker so background at_tick coros from a
     prior test can't fire across the test boundary (free-threading safe)."""
     try:
-        get_singleton.get_async_ticker().clear()
+        ticker = get_singleton._ASYNC_TICKER
+        if ticker is not None:
+            try:
+                if ticker.lock.acquire(timeout=1):
+                    try:
+                        ticker.clear()
+                    finally:
+                        ticker.lock.release()
+                else:
+                    try:
+                        ticker.clear()
+                    except Exception:
+                        pass
+            except Exception:
+                try:
+                    ticker.clear()
+                except Exception:
+                    pass
     except Exception:
         pass
     get_singleton._ASYNC_TICKER = None
+
+
+def _clear_all_objects_nonblocking():
+    try:
+        if obj_singleton._ALL_OBJECTS_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton._ALL_OBJECTS.clear()
+            finally:
+                obj_singleton._ALL_OBJECTS_LOCK.release()
+        else:
+            obj_singleton._ALL_OBJECTS.clear()
+    except Exception:
+        try:
+            obj_singleton._ALL_OBJECTS.clear()
+        except Exception:
+            pass
 
 
 @pytest.fixture(autouse=True)
@@ -44,23 +77,58 @@ def global_test_env():
 
     # Ensure database singleton is fresh
     if database_setup._DATABASE:
-        database_setup._DATABASE.close()
+        try:
+            database_setup._DATABASE.close()
+        except Exception:
+            pass
     database_setup._DATABASE = None
     database_setup._CLOSED = False
     database_setup.do_setup()
 
 
     # Clear other globals/state if necessary
-    obj_singleton._ALL_OBJECTS.clear()
-    with obj_singleton.TEMP_BANNED_LOCK:
-        obj_singleton.TEMP_BANNED_IPS.clear()
-    with obj_singleton.CREATION_COOLDOWN_LOCK:
-        obj_singleton.CREATION_COOLDOWNS.clear()
+    _clear_all_objects_nonblocking()
     try:
-        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+        if obj_singleton.TEMP_BANNED_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.TEMP_BANNED_IPS.clear()
+            finally:
+                obj_singleton.TEMP_BANNED_LOCK.release()
+        else:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+    except Exception:
+        try:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.CREATION_COOLDOWN_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.CREATION_COOLDOWNS.clear()
+            finally:
+                obj_singleton.CREATION_COOLDOWN_LOCK.release()
+        else:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+    except Exception:
+        try:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+            finally:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.release()
+        else:
             obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
     except AttributeError:
         pass
+    except Exception:
+        try:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+        except Exception:
+            pass
 
     # Reset internal ID counter to ensure predictable test IDs if needed
     get_singleton.set_id(-1)
@@ -87,13 +155,28 @@ def global_test_env():
 
     # Reset the shutdown-guard flag so each test gets a fresh shutdown cycle.
     startstop_module._shutdown_completed = False
+    try:
+        from atheriz.atheriz import server_state
+        server_state.running = False
+        server_state.uvicorn_server = None
+    except Exception:
+        pass
+    try:
+        get_singleton._ASYNC_THREAD_POOL = None
+        get_singleton._ASYNC_TICKER = None
+        get_singleton._CONNECTION_MANAGER = None
+    except Exception:
+        pass
 
     yield temp_dir
 
     # Teardown: stop the ticker BEFORE closing the DB so no at_tick runs mid-close.
     _clear_ticker()
     if database_setup._DATABASE:
-        database_setup._DATABASE.close()
+        try:
+            database_setup._DATABASE.close()
+        except Exception:
+            pass
     database_setup._DATABASE = None
     database_setup._CLOSED = False
 
@@ -104,21 +187,66 @@ def global_test_env():
 
     settings.SAVE_PATH = old_save_path
     salt_module._SALT = old_salt
-    obj_singleton._ALL_OBJECTS.clear()
-    with obj_singleton.TEMP_BANNED_LOCK:
-        obj_singleton.TEMP_BANNED_IPS.clear()
-    with obj_singleton.CREATION_COOLDOWN_LOCK:
-        obj_singleton.CREATION_COOLDOWNS.clear()
+    _clear_all_objects_nonblocking()
     try:
-        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+        if obj_singleton.TEMP_BANNED_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.TEMP_BANNED_IPS.clear()
+            finally:
+                obj_singleton.TEMP_BANNED_LOCK.release()
+        else:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+    except Exception:
+        try:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.CREATION_COOLDOWN_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.CREATION_COOLDOWNS.clear()
+            finally:
+                obj_singleton.CREATION_COOLDOWN_LOCK.release()
+        else:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+    except Exception:
+        try:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+            finally:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.release()
+        else:
             obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
     except AttributeError:
         pass
+    except Exception:
+        try:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+        except Exception:
+            pass
     try:
         import atheriz.connection_screen as _cs2
 
         with _cs2._LOCK:
             _cs2._CACHE = (0, 0, 0)
+    except Exception:
+        pass
+    try:
+        from atheriz.atheriz import server_state
+        server_state.running = False
+        server_state.uvicorn_server = None
+    except Exception:
+        pass
+    try:
+        get_singleton._ASYNC_THREAD_POOL = None
+        get_singleton._ASYNC_TICKER = None
+        get_singleton._CONNECTION_MANAGER = None
+        startstop_module._shutdown_completed = False
     except Exception:
         pass
 
@@ -140,42 +268,128 @@ def reset_connection_manager():
 
     cm = getattr(network, "connection_manager", None)
     if cm is not None:
-        with cm._lock:
-            cm._connections.clear()
-            cm._message_handlers.clear()
-            cm._connection_counter = 0
+        try:
+            if cm._lock.acquire(timeout=1):
+                try:
+                    cm._connections.clear()
+                    cm._message_handlers.clear()
+                    cm._connection_counter = 0
+                finally:
+                    cm._lock.release()
+            else:
+                cm._connections.clear()
+        except Exception:
+            try:
+                cm._connections.clear()
+            except Exception:
+                pass
     get_singleton._CONNECTION_MANAGER = None
     yield
     if cm is not None:
-        with cm._lock:
-            cm._connections.clear()
-            cm._message_handlers.clear()
-            cm._connection_counter = 0
+        try:
+            if cm._lock.acquire(timeout=1):
+                try:
+                    cm._connections.clear()
+                    cm._message_handlers.clear()
+                    cm._connection_counter = 0
+                finally:
+                    cm._lock.release()
+            else:
+                cm._connections.clear()
+        except Exception:
+            try:
+                cm._connections.clear()
+            except Exception:
+                pass
     get_singleton._CONNECTION_MANAGER = None
 
 
 @pytest.fixture(autouse=True)
 def reset_banned_ips():
     """Clear the temporary ban list and creation cooldowns between tests."""
-    with obj_singleton.TEMP_BANNED_LOCK:
-        obj_singleton.TEMP_BANNED_IPS.clear()
-    with obj_singleton.CREATION_COOLDOWN_LOCK:
-        obj_singleton.CREATION_COOLDOWNS.clear()
     try:
-        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+        if obj_singleton.TEMP_BANNED_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.TEMP_BANNED_IPS.clear()
+            finally:
+                obj_singleton.TEMP_BANNED_LOCK.release()
+        else:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+    except Exception:
+        try:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.CREATION_COOLDOWN_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.CREATION_COOLDOWNS.clear()
+            finally:
+                obj_singleton.CREATION_COOLDOWN_LOCK.release()
+        else:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+    except Exception:
+        try:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+            finally:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.release()
+        else:
             obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
     except AttributeError:
         pass
+    except Exception:
+        try:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+        except Exception:
+            pass
     yield
-    with obj_singleton.TEMP_BANNED_LOCK:
-        obj_singleton.TEMP_BANNED_IPS.clear()
-    with obj_singleton.CREATION_COOLDOWN_LOCK:
-        obj_singleton.CREATION_COOLDOWNS.clear()
     try:
-        with obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK:
+        if obj_singleton.TEMP_BANNED_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.TEMP_BANNED_IPS.clear()
+            finally:
+                obj_singleton.TEMP_BANNED_LOCK.release()
+        else:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+    except Exception:
+        try:
+            obj_singleton.TEMP_BANNED_IPS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.CREATION_COOLDOWN_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.CREATION_COOLDOWNS.clear()
+            finally:
+                obj_singleton.CREATION_COOLDOWN_LOCK.release()
+        else:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+    except Exception:
+        try:
+            obj_singleton.CREATION_COOLDOWNS.clear()
+        except Exception:
+            pass
+    try:
+        if obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.acquire(timeout=1):
+            try:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+            finally:
+                obj_singleton.FAILED_LOGIN_ATTEMPTS_LOCK.release()
+        else:
             obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
     except AttributeError:
         pass
+    except Exception:
+        try:
+            obj_singleton.FAILED_LOGIN_ATTEMPTS.clear()
+        except Exception:
+            pass
 
 
 @pytest.fixture(autouse=True)
