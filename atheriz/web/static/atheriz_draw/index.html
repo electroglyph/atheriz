@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Atheriz Draw</title>
     <!-- We link the custom font CSS directly, vite will inline it -->
-    <script type="module" crossorigin src="/static/assets/draw-CubvuGWO.js"></script>
+    <script type="module" crossorigin src="/static/assets/draw-ogUSkHwt.js"></script>
     <link rel="modulepreload" crossorigin href="/static/assets/connection-BOkVTULm.js">
     <link rel="stylesheet" crossorigin href="/static/assets/connection-wsl0qt4t.css">
-    <link rel="stylesheet" crossorigin href="/static/assets/draw-BY2Z8u_z.css">
+    <link rel="stylesheet" crossorigin href="/static/assets/draw-CN0AGCQa.css">
   </head>
   <body>
     <div id="app">
@@ -120,6 +120,8 @@
               <option value="free">Free-form</option>
             </select>
           </div>
+          <div class="separator"></div>
+          <button id="btn-edit-legend" title="Edit map legend">🏷️ Edit Legend</button>
         </div>
       </header>
 
@@ -404,13 +406,23 @@
       </div>
     </div>
 
+    <div id="map-error-modal" class="modal hidden" style="z-index: 3000;">
+      <div class="modal-content" style="width: 420px; max-width: 90vw; background: #3a1a1a; border: 2px solid #ff3333; box-shadow: 0 0 0 4px rgba(255,51,51,0.25), 0 16px 40px rgba(0,0,0,0.85);">
+        <h3 style="color: #ff5555; display: flex; align-items: center; gap: 8px; font-size: 18px; margin-bottom: 12px;">⚠️ Map Edit Error</h3>
+        <p id="map-error-modal-message" style="color: #ffdede; font-size: 14px; line-height: 1.4; white-space: pre-wrap; background: #2a1212; border: 1px solid #662222; border-radius: 4px; padding: 10px 12px;"></p>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button id="map-error-modal-ok" class="primary" style="background: #cc2222; border-color: #aa1111;">OK</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Color Adjust Modal -->
-    <div id="move-denied-modal" class="modal hidden">
-      <div class="modal-content" style="width: 320px;">
-        <h3>Room Move Rejected</h3>
-        <p id="move-denied-modal-message"></p>
-        <div class="modal-actions">
-          <button id="move-denied-modal-ok">OK</button>
+    <div id="move-denied-modal" class="modal hidden" style="z-index: 3000;">
+      <div class="modal-content" style="width: 420px; max-width: 90vw; background: #3a1a1a; border: 2px solid #ff3333; box-shadow: 0 0 0 4px rgba(255,51,51,0.25), 0 16px 40px rgba(0,0,0,0.85);">
+        <h3 style="color: #ff5555; display: flex; align-items: center; gap: 8px; font-size: 18px; margin-bottom: 12px;">⚠️ Room Move Rejected</h3>
+        <p id="move-denied-modal-message" style="color: #ffdede; font-size: 14px; line-height: 1.4; white-space: pre-wrap; background: #2a1212; border: 1px solid #662222; border-radius: 4px; padding: 10px 12px;"></p>
+        <div class="modal-actions" style="margin-top: 16px;">
+          <button id="move-denied-modal-ok" class="primary" style="background: #cc2222; border-color: #aa1111;">OK</button>
         </div>
       </div>
     </div>
@@ -446,6 +458,21 @@
         <div class="modal-actions" style="margin-top: 16px;">
           <button id="color-adjust-cancel">Cancel</button>
           <button id="color-adjust-ok" class="primary">Apply</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Legend Editor Modal -->
+    <div id="legend-editor-modal" class="modal hidden">
+      <div class="modal-content" style="width: 560px; max-width: 90vw; max-height: 80vh; display: flex; flex-direction: column;">
+        <h2>Edit Map Legend</h2>
+        <div style="font-size: 11px; color: #888; margin-bottom: 8px;">Top row is automatic (your position) — not saved. Below: symbol (1-2 chars), description, optional coord (x/y), show flag.</div>
+        <div id="legend-editor-list" style="flex: 1; overflow-y: auto; border: 1px solid #444; background: #111; padding: 8px; border-radius: 4px; min-height: 120px; max-height: 50vh;"></div>
+        <div class="modal-actions" style="margin-top: 12px;">
+          <button id="legend-add-btn">Add Entry</button>
+          <div style="flex:1"></div>
+          <button id="legend-cancel-btn">Cancel</button>
+          <button id="legend-save-btn" class="primary">Save Legend</button>
         </div>
       </div>
     </div>
