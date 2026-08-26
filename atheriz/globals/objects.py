@@ -66,8 +66,9 @@ FAILED_LOGIN_ATTEMPTS_LOCK = RLock()
 
 
 def creation_cooldown_active(op: str, host: str, now: float) -> bool:
-    """Return True if ``op`` for ``host`` is still within its cooldown window."""
-    key = f"{op}:{host}"
+    if host == "?":
+        return False
+    key = host
     with CREATION_COOLDOWN_LOCK:
         expires = CREATION_COOLDOWNS.get(key)
         if expires is None:
@@ -79,14 +80,17 @@ def creation_cooldown_active(op: str, host: str, now: float) -> bool:
 
 
 def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> None:
-    """Record a creation cooldown expiry for ``op`` and ``host``."""
+    if host == "?":
+        return
     if cooldown > 0:
         with CREATION_COOLDOWN_LOCK:
-            CREATION_COOLDOWNS[f"{op}:{host}"] = now + cooldown
+            CREATION_COOLDOWNS[host] = now + cooldown
 
 
 def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: float) -> bool:
-    key = f"{op}:{host}"
+    if host == "?":
+        return True
+    key = host
     with CREATION_COOLDOWN_LOCK:
         expires = CREATION_COOLDOWNS.get(key)
         if expires is not None and expires > now:

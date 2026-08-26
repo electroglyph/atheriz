@@ -171,7 +171,6 @@ class TelnetConnection(BaseConnection):
         except Exception as e:
             logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
             self.close()
-        finally:
             with self._pending_lock:
                 self._pending_bytes = max(0, self._pending_bytes - nb)
 
@@ -227,9 +226,6 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
                     self.close()
-                finally:
-                    with self._pending_lock:
-                        self._pending_bytes = max(0, self._pending_bytes - nb)
             else:
                 should_close = False
                 with self._pending_lock:
@@ -287,10 +283,6 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write/iac failed for {self.client_host}: {e}")
                     self.close()
-                finally:
-                    if nb:
-                        with self._pending_lock:
-                            self._pending_bytes = max(0, self._pending_bytes - nb)
             else:
                 if nb:
                     should_close = False

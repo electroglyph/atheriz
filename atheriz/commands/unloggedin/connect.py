@@ -113,9 +113,12 @@ class ConnectCommand(Command):
             host = getattr(caller, "client_host", "?")
             if not isinstance(host, str):
                 host = "?"
-            with FAILED_LOGIN_ATTEMPTS_LOCK:
-                FAILED_LOGIN_ATTEMPTS[host] = FAILED_LOGIN_ATTEMPTS.get(host, 0) + 1
-                attempts = FAILED_LOGIN_ATTEMPTS[host]
+            if host == "?":
+                attempts = 0
+            else:
+                with FAILED_LOGIN_ATTEMPTS_LOCK:
+                    FAILED_LOGIN_ATTEMPTS[host] = FAILED_LOGIN_ATTEMPTS.get(host, 0) + 1
+                    attempts = FAILED_LOGIN_ATTEMPTS[host]
             try:
                 caller.failed_login_attempts = getattr(caller, "failed_login_attempts", 0) + 1
             except Exception:
@@ -127,14 +130,16 @@ class ConnectCommand(Command):
                 )
                 caller.msg("Too many failed login attempts. Please try again later.")
                 caller.close()
-                ban_ip(host, time.time() + settings.LOGIN_ATTEMPT_COOLDOWN)
+                if host != "?":
+                    ban_ip(host, time.time() + settings.LOGIN_ATTEMPT_COOLDOWN)
             return
 
         host = getattr(caller, "client_host", "?")
         if not isinstance(host, str):
             host = "?"
-        with FAILED_LOGIN_ATTEMPTS_LOCK:
-            FAILED_LOGIN_ATTEMPTS.pop(host, None)
+        if host != "?":
+            with FAILED_LOGIN_ATTEMPTS_LOCK:
+                FAILED_LOGIN_ATTEMPTS.pop(host, None)
         try:
             caller.failed_login_attempts = 0
         except Exception:

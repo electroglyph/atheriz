@@ -49,6 +49,8 @@ class ConnectionManager:
         from atheriz.inputfuncs import InputFuncs
 
         self._connections: dict[str, "BaseConnection"] = {}
+        self._conn_to_id: dict[int, str] = {}
+        self._per_ip_counts: dict[str, int] = {}
         self._lock = threading.RLock()
         self._message_handlers: dict[str, Callable] = {}
         self._connection_counter = 0
@@ -81,12 +83,12 @@ class ConnectionManager:
                 except Exception:
                     pass
                 return False
-            if limit > 0:
-                same_host = sum(
-                    1
-                    for c in self._connections.values()
-                    if getattr(c, "client_host", "?") == host
-                )
+            if limit > 0 and host != "?":
+                same_host = self._per_ip_counts.get(host, 0)
+                # if overwriting same conn_id, don't count itself twice
+                existing = self._connections.get(conn_id)
+                if existing is not None and getattr(existing, "client_host", "?") == host:
+                    same_host -= 1
                 if same_host >= limit:
                     logger.warning(
                         f"[Network] Refusing connection from {host}: "
@@ -97,19 +99,41 @@ class ConnectionManager:
                     except Exception:
                         pass
                     return False
+            # handle overwrite: adjust old host count
+            old = self._connections.get(conn_id)
+            if old is not None:
+                old_host = getattr(old, "client_host", "?")
+                if old_host != "?" and old_host != host:
+                    cnt = self._per_ip_counts.get(old_host, 0) - 1
+                    if cnt <= 0:
+                        self._per_ip_counts.pop(old_host, None)
+                    else:
+                        self._per_ip_counts[old_host] = cnt
+                # remove old reverse entry
+                self._conn_to_id.pop(id(old), None)
             self._connections[conn_id] = connection
+            self._conn_to_id[id(connection)] = conn_id
+            if host != "?":
+                self._per_ip_counts[host] = self._per_ip_counts.get(host, 0) + 1
         logger.info(f"[Network] Connection opened: {conn_id} (total: {self.connection_count})")
         return True
 
     def disconnect(self, connection: "BaseConnection"):
         conn_id = None
+        host = getattr(connection, "client_host", "?")
         with self._lock:
-            for cid, conn in self._connections.items():
-                if conn is connection:
-                    conn_id = cid
-                    break
-            if conn_id:
+            conn_id = self._conn_to_id.pop(id(connection), None)
+            if conn_id is not None and conn_id in self._connections:
                 del self._connections[conn_id]
+                if host != "?":
+                    cnt = self._per_ip_counts.get(host, 0) - 1
+                    if cnt <= 0:
+                        self._per_ip_counts.pop(host, None)
+                    else:
+                        self._per_ip_counts[host] = cnt
+            elif conn_id is None and connection is not None:
+                # legacy fallback without O(N) scan under lock: lookup via id map only
+                pass
         if not conn_id:
             return
         with connection.lock:

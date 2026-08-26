@@ -156,18 +156,12 @@ class Script(Flags, DbOps):
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)
-        # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = next(
-            (
-                i
-                for i, c in enumerate(mro)
-                if c.__module__ == "atheriz.objects.base_script" and c.__qualname__ == "Script"
-            ),
-            len(mro),
-        )
-        ancestors = mro[current_idx + 1 :]
-        for cls in reversed(ancestors):
+        try:
+            cur = mro.index(Script)
+        except ValueError:
+            cur = -1
+        for cls in reversed(mro[cur + 1 :]):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
         if settings.THREADSAFE_GETTERS_SETTERS:
@@ -193,7 +187,10 @@ class Script(Flags, DbOps):
         Args:
             child (Object | Node): The target object experiencing the method injection.
         """
-        self.child = child
+        with self.lock:
+            if self.child is not None and self.child is not child:
+                raise ValueError(f"Script {self.id} already attached to {self.child} cannot be attached to {child}")
+            self.child = child
         at_funcs = [
             (d, getattr(self, d))
             for d in dir(self)

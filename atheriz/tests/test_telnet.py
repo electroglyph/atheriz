@@ -200,7 +200,8 @@ class TestTelnetProtocol:
             t.start()
             t.join()
             w.write.assert_called_once_with("hello")
-            assert conn._pending_bytes == 0
+            # pending now covers transport backlog until drain (M-05), not immediate decrement
+            assert conn._pending_bytes == 5
 
     def test_close_calls_writer_close(self, global_test_env):
         w = _make_writer()
@@ -352,7 +353,8 @@ class TestTelnetProtocol:
         conn._pending_bytes = 999999
         conn.send_command("text", "hi")
         w.write.assert_called_once()
-        assert conn._pending_bytes == 999999
+        # pending now tracks even on-loop until drain (M-05 coverage)
+        assert conn._pending_bytes == 1000001
 
     def test_offloop_reserves_and_schedules(self, global_test_env):
         w = _make_writer()
@@ -368,7 +370,8 @@ class TestTelnetProtocol:
             with patch.object(conn, "_get_write_buffer_size", return_value=0):
                 conn.send_command("text", "hello")
         assert w.write.call_count == 1
-        assert conn._pending_bytes == 0
+        # pending remains until drain (M-05 coverage), not immediate 0
+        assert conn._pending_bytes == 5
         assert any(n == "_offloop_write" for n, _ in calls)
 
     def test_offloop_pending_exceeds_closes_without_schedule(self, global_test_env):
@@ -402,7 +405,8 @@ class TestTelnetProtocol:
             conn._offloop_write("hello", 5)
         w.write.assert_not_called()
         assert conn._closing is True
-        assert conn._pending_bytes == 0
+        # pending remains until drain even when closing due to backlog (M-05)
+        assert conn._pending_bytes == 5
 
     def test_offloop_write_checks_buffer_after_write(self, global_test_env):
         w = _make_writer()
@@ -412,7 +416,8 @@ class TestTelnetProtocol:
             conn._offloop_write("hello", 5)
         w.write.assert_called_once_with("hello")
         assert conn._closing is True
-        assert conn._pending_bytes == 0
+        # pending remains until drain (M-05), not immediate 0
+        assert conn._pending_bytes == 5
 
     def test_offloop_write_always_decrements_on_exception(self, global_test_env):
         w = _make_writer()
@@ -498,7 +503,8 @@ class TestTelnetProtocol:
                 conn.send_command("prompt_masked", "sec")
         assert "_offloop_iac" in calls
         assert "_offloop_write" in calls
-        assert conn._pending_bytes == 0
+        # pending remains until drain (M-05), not immediate 0
+        assert conn._pending_bytes == 3
 
     def test_prompt_masked_offloop_pending_exceeds(self, global_test_env):
         w = _make_writer()

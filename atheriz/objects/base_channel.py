@@ -148,7 +148,6 @@ class Channel(Flags, DbOps, AccessLock):
             delete_objects(ops)
         with self.lock:
             self.is_deleted = True
-        with self.lock:
             listeners = list(self.listeners.values())
             self.listeners.clear()
         for listener in listeners:
@@ -198,9 +197,9 @@ class Channel(Flags, DbOps, AccessLock):
         Args:
             listener (Object): The object to subscribe to this channel.
         """
-        if getattr(self, "is_deleted", False):
-            return
         with self.lock:
+            if getattr(self, "is_deleted", False):
+                return
             self.listeners[listener.id] = listener
 
     def remove_listener(self, listener: Object) -> None:
@@ -294,15 +293,12 @@ class Channel(Flags, DbOps, AccessLock):
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)
-        # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = next(
-            (i for i, c in enumerate(mro)
-             if c.__module__ == 'atheriz.objects.base_channel' and c.__qualname__ == 'Channel'),
-            len(mro)
-        )
-        ancestors = mro[current_idx + 1 :]
-        for cls in reversed(ancestors):
+        try:
+            cur = mro.index(Channel)
+        except ValueError:
+            cur = -1
+        for cls in reversed(mro[cur + 1 :]):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
         if settings.THREADSAFE_GETTERS_SETTERS:

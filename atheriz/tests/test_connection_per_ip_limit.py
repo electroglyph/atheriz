@@ -52,9 +52,8 @@ def test_unknown_host_never_limited(global_test_env):
         assert manager.register_connection("c0", FakeConnection()) is True
         assert manager.register_connection("c1", FakeConnection()) is True
         third = FakeConnection()
-        with patch.object(third, "close") as close_spy:
-            assert manager.register_connection("c2", third) is False
-            close_spy.assert_called_once()
+        # '?' hosts are now isolated per-connection (no shared bucket)
+        assert manager.register_connection("c2", third) is True
 
 
 def test_slot_freed_after_disconnect(global_test_env):

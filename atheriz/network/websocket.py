@@ -41,6 +41,7 @@ class WebSocketConnection(BaseConnection):
         self._pending_bytes_by_task: dict[object, int] = {}
         self._closing = False
         self._close_task = None
+        self._send_lock = asyncio.Lock()
 
     def _track_task(self, task, nb: int):
         with self._pending_tasks_lock:
@@ -64,6 +65,10 @@ class WebSocketConnection(BaseConnection):
         except Exception as e:
             logger.debug(f"[WebSocket] Async task failed: {e}")
 
+    async def _locked_send(self, data: str):
+        async with self._send_lock:
+            await self.websocket.send_text(data)
+
     def send_command(self, cmd: str, *args, **kwargs):
         if cmd == "echo_on":
             return
@@ -86,10 +91,10 @@ class WebSocketConnection(BaseConnection):
                 self._pending_bytes += nb
                 try:
                     if self._is_on_loop_thread():
-                        task = self._resolve_loop().create_task(self.websocket.send_text(data))
+                        task = self._resolve_loop().create_task(self._locked_send(data))
                     else:
                         task = asyncio.run_coroutine_threadsafe(
-                            self.websocket.send_text(data), self._resolve_loop()
+                            self._locked_send(data), self._resolve_loop()
                         )
                 except Exception as e:
                     self._pending_count = max(0, self._pending_count - 1)

@@ -104,12 +104,33 @@ class BaseConnection:
                 if now - self._last_input_busy >= 1.0:
                     self._last_input_busy = now
                     notify_busy = True
+            try:
+                threading.Timer(0.05, self._retry_drain).start()
+            except Exception:
+                pass
         if notify_busy:
             logger.warning(
                 f"[Network] Input queue submission rejected (pool full); "
                 f"{len(self._input_queue)} message(s) pending retry"
             )
             self.msg("Server busy; input dropped.")
+
+    def _retry_drain(self):
+        from atheriz.globals.get import get_async_threadpool
+        with self.lock:
+            if getattr(self, "_disconnected", False):
+                return
+            if not self._input_queue or self._input_running:
+                return
+            self._input_running = True
+        if get_async_threadpool().add_task(self._drain_input):
+            return
+        with self.lock:
+            self._input_running = False
+        try:
+            threading.Timer(0.05, self._retry_drain).start()
+        except Exception:
+            pass
 
     def _drain_input(self):
         """Worker-side: run queued input handlers FIFO until the queue empties."""
