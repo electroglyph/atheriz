@@ -41,7 +41,18 @@ def _is_legend_entry(value) -> bool:
     desc = value.get("desc")
     coord = value.get("coord")
     show = value.get("show", True)
-    if not (isinstance(symbol, str) and 0 < len(symbol) <= 2):
+    if not isinstance(symbol, str):
+        return False
+    # Allow ANSI-wrapped symbols: check visible length after stripping.
+    try:
+        from atheriz.utils import strip_ansi
+        visible = strip_ansi(symbol)
+    except Exception:
+        visible = symbol
+    if not (0 < len(visible) <= 2):
+        return False
+    # Guard raw length to avoid absurd payloads (ANSI + 2 chars still < 64)
+    if len(symbol) > 64:
         return False
     if desc is not None and not isinstance(desc, str):
         return False
@@ -50,15 +61,31 @@ def _is_legend_entry(value) -> bool:
             return False
     if not isinstance(show, bool):
         return False
-    # fg/bg are optional and loosely typed (170.0 etc); accept any if present
+    # fg/bg are optional: legacy hue (float/int), or new [r,g,b] Color, or None.
+    def _is_fg(v):
+        if v is None:
+            return True
+        if isinstance(v, (int, float)):
+            return True
+        if isinstance(v, list) and len(v) == 3 and all(isinstance(c, int) and 0 <= c <= 255 for c in v):
+            return True
+        if v == [-1, -1, -1]:
+            return True
+        return False
+    def _is_bg(v):
+        if v is None:
+            return True
+        if isinstance(v, (int, float)):
+            return True
+        if isinstance(v, list) and len(v) == 3 and all(isinstance(c, int) and -1 <= c <= 255 for c in v):
+            return True
+        return False
     fg = value.get("fg")
     bg = value.get("bg")
-    if fg is not None and not isinstance(fg, (int, float)):
+    if not _is_fg(fg):
         return False
-    if bg is not None and not isinstance(bg, (int, float, type(None))):
-        # bg may be None or numeric; allow any scalar
-        if not isinstance(bg, (int, float)):
-            return False
+    if not _is_bg(bg):
+        return False
     return True
 
 def inputfunc(name: str | None = None) -> Callable:

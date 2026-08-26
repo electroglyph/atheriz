@@ -2,7 +2,7 @@ import { WebSocketConnection, WebSocketLike } from './webclient/connection';
 import { ConnectionState, WireMessage } from './webclient/types';
 import { CanvasState } from './state/CanvasState';
 import { Cell, Color } from './types';
-import { parseAnsiSymbol } from './utils/ansiParser';
+import { parseAnsiSymbol, stripAnsi, wrapLegendSymbol, DEFAULT_FG, TRANSPARENT } from './utils/ansiParser';
 
 export interface MapEditExit {
     name: string;
@@ -22,8 +22,8 @@ export interface MapLegendEntry {
     desc: string | null;
     coord: [number, number] | null;
     show: boolean;
-    fg?: number | null;
-    bg?: number | null;
+    fg?: Color | null;
+    bg?: Color | null;
 }
 
 export interface MapEditPayload {
@@ -257,7 +257,8 @@ export class MapEditSession {
             return;
         }
         for (const e of legend) {
-            if (!e.symbol || e.symbol.length === 0 || e.symbol.length > 2) {
+            const vis = stripAnsi(e.symbol ?? '');
+            if (!vis || vis.length === 0 || vis.length > 2) {
                 this.listener?.({ type: 'error', message: `Invalid legend symbol: ${e.symbol}` });
                 return;
             }
@@ -337,14 +338,21 @@ export class MapEditSession {
                 ]
             );
         } else if (item.kind === 'legend') {
-            this.conn.send('map_edit_legend', [this.key, this.inFlight.seq, item.legend.map((e) => ({
-                symbol: e.symbol,
-                desc: e.desc,
-                coord: e.coord ? [...e.coord] : null,
-                show: e.show,
-                fg: e.fg ?? null,
-                bg: e.bg ?? null,
-            }))]);
+            this.conn.send('map_edit_legend', [this.key, this.inFlight.seq, item.legend.map((e) => {
+                const fg = (Array.isArray(e.fg) && e.fg.length === 3 ? e.fg as Color : DEFAULT_FG);
+                const bg = (Array.isArray(e.bg) && e.bg.length === 3 ? e.bg as Color : TRANSPARENT);
+                const vis = stripAnsi(e.symbol ?? '');
+                const ch = vis || e.symbol || 'X';
+                const wrapped = wrapLegendSymbol(ch, fg, bg);
+                return {
+                    symbol: wrapped,
+                    desc: e.desc,
+                    coord: e.coord ? [...e.coord] : null,
+                    show: e.show,
+                    fg: null,
+                    bg: null,
+                };
+            })]);
         } else {
             this.conn.send('map_edit', [this.key, this.inFlight.seq, item.cells]);
         }
@@ -369,14 +377,21 @@ export class MapEditSession {
                         ]
                     );
                 } else if (item.kind === 'legend') {
-                    this.conn.send('map_edit_legend', [this.key, seq, item.legend.map((e) => ({
-                        symbol: e.symbol,
-                        desc: e.desc,
-                        coord: e.coord ? [...e.coord] : null,
-                        show: e.show,
-                        fg: e.fg ?? null,
-                        bg: e.bg ?? null,
-                    }))]);
+                    this.conn.send('map_edit_legend', [this.key, seq, item.legend.map((e) => {
+                        const fg = (Array.isArray(e.fg) && e.fg.length === 3 ? e.fg as Color : DEFAULT_FG);
+                        const bg = (Array.isArray(e.bg) && e.bg.length === 3 ? e.bg as Color : TRANSPARENT);
+                        const vis = stripAnsi(e.symbol ?? '');
+                        const ch = vis || e.symbol || 'X';
+                        const wrapped = wrapLegendSymbol(ch, fg, bg);
+                        return {
+                            symbol: wrapped,
+                            desc: e.desc,
+                            coord: e.coord ? [...e.coord] : null,
+                            show: e.show,
+                            fg: null,
+                            bg: null,
+                        };
+                    })]);
                 } else {
                     this.conn.send('map_edit', [this.key, seq, item.cells]);
                 }

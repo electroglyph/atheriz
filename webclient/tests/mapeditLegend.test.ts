@@ -171,14 +171,23 @@ describe('MapEditSession legend editing', () => {
         vi.useRealTimers();
     });
 
-    it('serializes legend coord, fg, bg and show flag', () => {
+    it('serializes legend coord, fg, bg and show flag (colors become ANSI)', () => {
         const holder = makeHolder();
         const session = new MapEditSession('K0', makeCanvas(), { originX: 0, originY: 0 }, holder.createSocket);
         holder.socket.open();
         ack(holder.socket, 0, 'K1');
-        session.saveLegend([{ symbol: 'Z', desc: 'Hidden', coord: [3, 4], show: false, fg: 5, bg: 9 }]);
+        // plain colors -> ANSI-wrapped symbol, fg/bg nulled (server stores ANSI)
+        session.saveLegend([{ symbol: 'Z', desc: 'Hidden', coord: [3, 4], show: false, fg: [10, 20, 30] as any, bg: [40, 50, 60] as any }]);
         const body = JSON.parse(holder.socket.sent[1])[1][2][0];
-        expect(body).toMatchObject({ symbol: 'Z', desc: 'Hidden', coord: [3, 4], show: false, fg: 5, bg: 9 });
+        expect(body.desc).toBe('Hidden');
+        expect(body.coord).toEqual([3, 4]);
+        expect(body.show).toBe(false);
+        // symbol wrapped with both fg and bg
+        expect(body.symbol).toContain('\x1b[48;2;40;50;60m');
+        expect(body.symbol).toContain('\x1b[38;2;10;20;30m');
+        expect(body.symbol.endsWith('\x1b[0m')).toBe(true);
+        expect(body.fg).toBeNull();
+        expect(body.bg).toBeNull();
         session.dispose();
     });
 

@@ -520,25 +520,37 @@ def test_map_handler_optimistic_clear_preserves_concurrent_update(global_test_en
 def test_map_edit_rejects_non_builder_before_validation(monkeypatch, global_test_env):
     from atheriz.inputfuncs import InputFuncs
     from unittest.mock import MagicMock
+    import atheriz.globals.mapedit as mapedit
 
     funcs = InputFuncs()
-    # non-builder puppet
+    # draw WebSocket has no puppet (or non-builder puppet) — key+IP is proof of builder
+    # granted via DrawCommand (caller.is_builder already checked). So handler must allow
+    # non-builder puppet when key is valid, and only reject unknown_key for bogus key.
     puppet = MagicMock()
     puppet.is_builder = False
     conn = MagicMock()
     conn.session.puppet = puppet
     conn.client_host = "1.2.3.4"
-    # large payload that would be expensive to validate
-    large_cells = [[0, 0, "X", [0, 0, 0], [0, 0, 0], ["bold"]] for _ in range(200)]
-    # Should reject quickly without iterating all cells? We test that it sends reject
+    # invalid key should be rejected as unknown_key, not builder permission (fast path still via consume)
     conn.send_command = MagicMock()
-    funcs.map_edit(conn, ["key", 1, large_cells], {})
-    conn.send_command.assert_called_with("map_edit_reject", "Builder permission required.")
-    # also for map_validate_moves
+    funcs.map_edit(conn, ["key", 1, [[0, 0, "X", [0, 0, 0], [0, 0, 0], ["bold"]]]], {})
+    conn.send_command.assert_called_with("map_edit_reject", "unknown_key")
     conn.send_command.reset_mock()
-    large_moves = [[0, 0, 1, 1] for _ in range(200)]
-    funcs.map_validate_moves(conn, ["key", 1, large_moves], {})
-    conn.send_command.assert_called_with("map_edit_reject", "Builder permission required.")
+    funcs.map_validate_moves(conn, ["key", 1, [[0, 0, 1, 1]]], {})
+    conn.send_command.assert_called_with("map_edit_reject", "unknown_key")
+    # valid key for this host should allow non-builder puppet (draw WS has no builder puppet)
+    host = "1.2.3.4"
+    area = "test"
+    z = 0
+    key = mapedit.grant(host, area, z)
+    conn2 = MagicMock()
+    conn2.session.puppet = puppet
+    conn2.client_host = host
+    conn2.send_command = MagicMock()
+    funcs.map_edit(conn2, [key, 1, [[0, 0, "X", [204, 204, 204], [-1, -1, -1], []]]], {})
+    # should not reject as builder — should succeed (map_ack) or at least not builder error
+    assert conn2.send_command.called
+    assert conn2.send_command.call_args[0][0] != "map_edit_reject" or "Builder" not in conn2.send_command.call_args[0][1]
 
 
 def test_nodegrid_apply_moves_marks_neighbors_dirty(global_test_env):

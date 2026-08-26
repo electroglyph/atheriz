@@ -18,6 +18,8 @@ export class CharMapDialog {
     
     private selectedChars: Set<string> = new Set();
     private onConfirm: (chars: string[]) => void;
+    private oneShotConfirm: ((chars: string[]) => void) | null = null;
+    private onCloseOnce: (() => void) | null = null;
     
     private readonly COLS = 16;
     private readonly ROW_HEIGHT = 32;
@@ -40,8 +42,19 @@ export class CharMapDialog {
         this.scrollContainer.addEventListener('scroll', () => this.handleScroll());
         this.cancelBtn.addEventListener('click', () => this.close());
         this.confirmBtn.addEventListener('click', () => {
-            this.onConfirm(Array.from(this.selectedChars));
-            this.close();
+            const chars = Array.from(this.selectedChars);
+            const cb = this.oneShotConfirm;
+            if (cb) {
+                this.oneShotConfirm = null;
+                const oc = this.onCloseOnce;
+                this.onCloseOnce = null;
+                cb(chars);
+                this.close();
+                if (oc) oc();
+            } else {
+                this.onConfirm(chars);
+                this.close();
+            }
         });
         
         // Close on clicking outside
@@ -50,8 +63,10 @@ export class CharMapDialog {
         });
     }
 
-    public async open(fontFamily: string) {
+    public async open(fontFamily: string, onConfirm?: (chars: string[]) => void, onClose?: () => void) {
         closeOtherModals('char-map-modal');
+        if (onConfirm) this.oneShotConfirm = onConfirm;
+        if (onClose) this.onCloseOnce = onClose;
         this.selectedChars.clear();
         this.updatePreview();
         this.modal.classList.remove('hidden');
@@ -83,6 +98,12 @@ export class CharMapDialog {
     }
 
     public close() {
+        if (this.oneShotConfirm) {
+            const oc = this.onCloseOnce;
+            this.oneShotConfirm = null;
+            this.onCloseOnce = null;
+            if (oc) oc();
+        }
         this.modal.classList.add('hidden');
     }
 

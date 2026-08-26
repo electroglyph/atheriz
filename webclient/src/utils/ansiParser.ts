@@ -87,8 +87,23 @@ export function detectAnsiDimensions(ansiString: string): { width: number; heigh
     return { width, height };
 }
 
-const DEFAULT_FG: Color = [204, 204, 204];
-const TRANSPARENT: Color = [-1, -1, -1];
+export const DEFAULT_FG: Color = [204, 204, 204];
+export const TRANSPARENT: Color = [-1, -1, -1];
+
+export function stripAnsi(s: string): string {
+    return s.replace(/\x1b\[[0-9;]*m/g, '');
+}
+
+export function wrapLegendSymbol(char: string, fg: Color, bg: Color): string {
+    if (!char) return char;
+    const isDefaultFg = fg[0] === 204 && fg[1] === 204 && fg[2] === 204;
+    const isDefaultBg = bg[0] === -1 && bg[1] === -1 && bg[2] === -1;
+    if (isDefaultFg && isDefaultBg) return char;
+    let out = '';
+    if (!isDefaultBg) out += `\x1b[48;2;${bg[0]};${bg[1]};${bg[2]}m`;
+    if (!isDefaultFg) out += `\x1b[38;2;${fg[0]};${fg[1]};${fg[2]}m`;
+    return out + char + '\x1b[0m';
+}
 
 /**
  * Parses a single ANSI-wrapped symbol (one map-editor cell) into a Cell.

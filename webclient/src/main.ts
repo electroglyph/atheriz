@@ -214,7 +214,7 @@ async function initApp() {
             return;
         }
         mapEditSession.saveLegend(legendEntries);
-    });
+    }, charMapDialog, () => appState.fontFamily);
     document.getElementById('btn-edit-legend')?.addEventListener('click', () => {
         if (!mapEditSession) {
             const msg = 'No map edit session — re-run mapedit in-game.';
