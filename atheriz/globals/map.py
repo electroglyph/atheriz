@@ -53,6 +53,35 @@ class LegendEntry:
             self.bg == other.bg
         )
 
+    def to_payload(self) -> dict:
+        """Serialise for the Draw editor payload."""
+        return {
+            "symbol": self.symbol,
+            "desc": self.desc,
+            "coord": list(self.coord) if self.coord is not None else None,
+            "show": self.show,
+            "fg": self.fg,
+            "bg": self.bg,
+        }
+
+    @staticmethod
+    def from_payload(data: dict) -> "LegendEntry":
+        """Validated construction from a client payload dict."""
+        symbol = data.get("symbol")
+        desc = data.get("desc")
+        coord = data.get("coord")
+        show = data.get("show", True)
+        fg = data.get("fg", 170.0)
+        bg = data.get("bg")
+        # Basic type guards; caller does full validation before calling.
+        if coord is not None:
+            coord = tuple(coord)  # type: ignore[assignment]
+        e = LegendEntry(symbol=symbol, desc=desc, coord=coord)
+        e.show = bool(show)
+        e.fg = fg
+        e.bg = bg
+        return e
+
     # def __getstate__(self):
     #     d = self.__dict__.copy()
     #     d["coord"] = tuple_to_str(d["coord"])

@@ -23,18 +23,29 @@ def _fake_conn_with_puppet(is_builder):
     return conn, puppet
 
 
-def test_map_edit_rejects_non_builder_before_key_validation(global_test_env):
+def test_map_edit_allows_non_builder_puppet_when_key_valid(global_test_env):
+    # Draw editor opens a separate WS with no puppet; key + IP is auth (see
+    # atheriz/inputfuncs.py:392 map_edit comment). A non-builder puppet must
+    # not be rejected before key validation.
     funcs = InputFuncs()
     conn, puppet = _fake_conn_with_puppet(is_builder=False)
-    puppet.is_builder = False
     fake_chain = MagicMock(area="test", z=0)
     result_processed = MagicMock(status=mapedit.PROCESSED, new_key="newk", chain=fake_chain)
     with patch("atheriz.inputfuncs.mapedit.consume", return_value=result_processed) as mock_consume:
-        with patch("atheriz.inputfuncs.get_map_handler"):
-            funcs.map_edit(conn, ["somekey", 1, [[0, 0, "x"]]], {})
-    mock_consume.assert_not_called()
-    conn.send_command.assert_called_once()
-    assert conn.send_command.call_args[0][0] == "map_edit_reject"
+        mi = MagicMock()
+        mi.lock = MagicMock()
+        mi.lock.__enter__ = MagicMock(return_value=None)
+        mi.lock.__exit__ = MagicMock(return_value=None)
+        mi.batch_update.return_value.__enter__ = MagicMock(return_value=None)
+        mi.batch_update.return_value.__exit__ = MagicMock(return_value=None)
+        mi.pre_grid = {}
+        with patch("atheriz.inputfuncs.get_map_handler") as mock_mh:
+            mock_mh.return_value.get_mapinfo.return_value = mi
+            with patch("atheriz.inputfuncs.get_node_handler") as mock_nh:
+                mock_nh.return_value.get_area.return_value = None
+                funcs.map_edit(conn, ["somekey", 1, [[0, 0, "x"]]], {})
+    mock_consume.assert_called_once()
+    assert conn.send_command.call_args[0][0] == "map_ack"
 
 
 def test_map_edit_allows_builder_to_proceed(global_test_env):
@@ -59,14 +70,19 @@ def test_map_edit_allows_builder_to_proceed(global_test_env):
     assert conn.send_command.call_args[0][0] == "map_ack"
 
 
-def test_map_validate_moves_rejects_non_builder(global_test_env):
+def test_map_validate_moves_allows_non_builder_puppet_when_key_valid(global_test_env):
+    # Same as map_edit — draw WS has no puppet, so key is auth.
     funcs = InputFuncs()
     conn, puppet = _fake_conn_with_puppet(is_builder=False)
-    with patch("atheriz.inputfuncs.mapedit.consume") as mock_consume:
-        funcs.map_validate_moves(conn, ["k", 1, [[0, 0, 1, 1]]], {})
-    mock_consume.assert_not_called()
-    conn.send_command.assert_called_once()
-    assert conn.send_command.call_args[0][0] == "map_edit_reject"
+    fake_chain = MagicMock(area="test", z=0, validation=[])
+    result = MagicMock(status=mapedit.PROCESSED, new_key="newk", chain=fake_chain)
+    with patch("atheriz.inputfuncs.mapedit.consume", return_value=result) as mock_consume:
+        with patch("atheriz.inputfuncs.get_node_handler") as mock_nh:
+            mock_nh.return_value.get_area.return_value = None
+            with patch.object(funcs, "_send_move_verdict") as mock_verdict:
+                funcs.map_validate_moves(conn, ["k", 1, [[0, 0, 1, 1]]], {})
+                mock_verdict.assert_called_once()
+    mock_consume.assert_called_once()
 
 
 def test_websocket_byte_size_counts_utf8_not_chars():

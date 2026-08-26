@@ -39,8 +39,9 @@ import { LayerManager } from './ui/LayerManager';
 import { PreviewWindow } from './ui/PreviewWindow';
 import { GradientPicker } from './ui/GradientPicker';
 import { readDrawGrant, clearDrawGrant } from './webclient/launch';
-import { loadMapPayload, MapEditSession, MapEditPayload, MapEditOrigin, logRoomData } from './mapedit';
+import { loadMapPayload, MapEditSession, MapEditPayload, MapEditOrigin, MapLegendEntry, logRoomData } from './mapedit';
 import { toCssFontFamily } from './utils/cssFont';
+import { LegendEditorDialog } from './ui/LegendEditorDialog';
 
 document.fonts.ready.then(() => {
     void initApp();
@@ -78,12 +79,16 @@ async function initApp() {
     let mapEditOrigin: MapEditOrigin | null = null;
     let mapPayload: MapEditPayload | null = null;
     let roomCellSet: Set<string> | null = null;
+    let legendEntries: MapLegendEntry[] = [];
+    let playerSymbol: string = 'X';
     if (grant) {
         const payload = grant.payload as MapEditPayload;
         mapPayload = payload;
         mapEditOrigin = loadMapPayload(canvasState, payload);
         mapEditSession = new MapEditSession(grant.key, canvasState, mapEditOrigin);
         roomCellSet = new Set(mapEditOrigin.roomCells);
+        legendEntries = (payload.legend ?? []).map((e) => ({ ...e }));
+        if (payload.playerSymbol) playerSymbol = payload.playerSymbol;
         clearDrawGrant();
     }
 
@@ -199,14 +204,38 @@ async function initApp() {
     const layerManager = new LayerManager('layer-manager-container', canvasState, undoStack);
 
     const moveDeniedDialog = new MessageDialog('move-denied-modal');
+    const mapErrorDialog = new MessageDialog('map-error-modal');
+    const legendEditor = new LegendEditorDialog((legend) => {
+        legendEntries = legend.map((e) => ({ ...e }));
+        if (!mapEditSession) {
+            const msg = 'No map edit session — re-run mapedit in-game.';
+            console.warn(msg);
+            mapErrorDialog.show(msg);
+            return;
+        }
+        mapEditSession.saveLegend(legendEntries);
+    });
+    document.getElementById('btn-edit-legend')?.addEventListener('click', () => {
+        if (!mapEditSession) {
+            const msg = 'No map edit session — re-run mapedit in-game.';
+            console.warn(msg);
+            mapErrorDialog.show(msg);
+            return;
+        }
+        legendEditor.open(legendEntries, playerSymbol);
+    });
 
     // Safe to register here: websocket events are async and cannot fire
     // before the synchronous setup below this point has completed.
     mapEditSession?.onEvent((event) => {
         if (event.type === 'reject') {
             console.warn(`Map edit rejected (${event.reason}). Re-run 'mapedit' in-game.`);
+            mapErrorDialog.show(`Map edit rejected: ${event.reason}. Re-run 'mapedit' in-game.`);
         } else if (event.type === 'error') {
-            console.warn(`Map edit connection failed: ${event.message}. Re-run 'mapedit' in-game.`);
+            console.warn(`Map edit failed: ${event.message}.`);
+            mapErrorDialog.show(event.message);
+        } else if (event.type === 'legend_saved') {
+            if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log('Legend saved.');
         } else if (event.type === 'saved') {
             if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log('Saved to server.');
         } else if (event.type === 'moves_denied') {
@@ -379,7 +408,9 @@ async function initApp() {
     const btnSaveServer = document.getElementById('btn-save-server');
     btnSaveServer?.addEventListener('click', () => {
         if (!mapEditSession) {
-            console.warn('No map edit session — re-run mapedit in-game.');
+            const msg = 'No map edit session — re-run mapedit in-game.';
+            console.warn(msg);
+            mapErrorDialog.show(msg);
             return;
         }
         mapEditSession.saveToServer();

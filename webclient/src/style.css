@@ -815,3 +815,17 @@ body.tool-eyedropper-active #main-canvas {
 #gfp-sentinel {
   height: 1px;
 }
+
+.legend-row input[type="text"],
+.legend-row input[type="number"] {
+  background: #333;
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 2px;
+  padding: 4px;
+  font-size: 12px;
+}
+
+.legend-row input::placeholder {
+  color: #777;
+}

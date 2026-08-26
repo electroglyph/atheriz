@@ -22,15 +22,22 @@ export function asPosition(value: unknown): [number, number] | undefined {
 export function asLegend(value: unknown): MapPayload['legend'] {
     if (!Array.isArray(value)) return [];
     return value.flatMap((entry) => {
-        if (Array.isArray(entry) && typeof entry[0] === 'string' && typeof entry[1] === 'string') {
+        if (Array.isArray(entry) && typeof entry[0] === 'string') {
+            const rawDesc = entry[1];
+            const desc = typeof rawDesc === 'string' ? rawDesc : rawDesc == null ? '' : null;
+            if (desc === null) return [];
             const coords = asPosition(entry[2]);
-            return [{ symbol: entry[0], desc: entry[1], coords }];
+            return [{ symbol: entry[0], desc, coords }];
         }
         if (typeof entry === 'object' && entry !== null &&
-            typeof (entry as { symbol?: unknown }).symbol === 'string' &&
-            typeof (entry as { desc?: unknown }).desc === 'string') {
-            const data = entry as { symbol: string; desc: string; coords?: unknown };
-            return [{ symbol: data.symbol, desc: data.desc, coords: asPosition(data.coords) }];
+            typeof (entry as { symbol?: unknown }).symbol === 'string') {
+            const raw = entry as { symbol: string; desc?: unknown; coords?: unknown };
+            const rawDesc = raw.desc;
+            let desc: string | null;
+            if (typeof rawDesc === 'string') desc = rawDesc;
+            else if (rawDesc == null) desc = '';
+            else return [];
+            return [{ symbol: raw.symbol, desc, coords: asPosition(raw.coords) }];
         }
         return [];
     });

@@ -32,6 +32,35 @@ def _is_attrs(value) -> bool:
         return False
     return set(value) <= {"bold", "italic", "underline"}
 
+
+def _is_legend_entry(value) -> bool:
+    """True if value is a valid legend entry dict from the Draw client."""
+    if not isinstance(value, dict):
+        return False
+    symbol = value.get("symbol")
+    desc = value.get("desc")
+    coord = value.get("coord")
+    show = value.get("show", True)
+    if not (isinstance(symbol, str) and 0 < len(symbol) <= 2):
+        return False
+    if desc is not None and not isinstance(desc, str):
+        return False
+    if coord is not None:
+        if not (isinstance(coord, list) and len(coord) == 2 and all(isinstance(v, int) for v in coord)):
+            return False
+    if not isinstance(show, bool):
+        return False
+    # fg/bg are optional and loosely typed (170.0 etc); accept any if present
+    fg = value.get("fg")
+    bg = value.get("bg")
+    if fg is not None and not isinstance(fg, (int, float)):
+        return False
+    if bg is not None and not isinstance(bg, (int, float, type(None))):
+        # bg may be None or numeric; allow any scalar
+        if not isinstance(bg, (int, float)):
+            return False
+    return True
+
 def inputfunc(name: str | None = None) -> Callable:
     """
     Decorator to mark a method as an input handler for incoming client WebSocket commands.
@@ -360,10 +389,11 @@ class InputFuncs:
         """
         if len(args) < 3:
             return
-        puppet = getattr(getattr(connection, "session", None), "puppet", None)
-        if not puppet or not getattr(puppet, "is_builder", False):
-            connection.send_command("map_edit_reject", "Builder permission required.")
-            return
+        # Auth is via the secret key chain granted to a builder (DrawCommand
+        # ``mapedit`` checks ``caller.is_builder``). The draw editor opens a
+        # separate WebSocket with no puppet, so we must NOT require
+        # ``connection.session.puppet.is_builder`` here — possession of the
+        # rotating key + IP check is the proof. See mapedit.grant/consume.
         key, seq, cells = args[0], args[1], args[2]
         if not (isinstance(key, str) and isinstance(seq, int) and isinstance(cells, list)):
             return
@@ -446,10 +476,8 @@ class InputFuncs:
         """
         if len(args) < 3 or len(args) > 4:
             return
-        puppet = getattr(getattr(connection, "session", None), "puppet", None)
-        if not puppet or not getattr(puppet, "is_builder", False):
-            connection.send_command("map_edit_reject", "Builder permission required.")
-            return
+        # See map_edit() — auth is via the Draw grant key chain, not the
+        # editing connection's puppet (draw opens a separate WS with no puppet).
         key, seq, moves = args[0], args[1], args[2]
         if not (isinstance(key, str) and isinstance(seq, int) and isinstance(moves, list)):
             return
@@ -491,6 +519,71 @@ class InputFuncs:
             )
         result.chain.validation = denied
         self._send_move_verdict(connection, seq, result.new_key, denied)
+
+    @inputfunc()
+    def map_edit_legend(self, connection: Connection, args: list, kwargs: dict) -> None:
+        """
+        Handle legend edits from the Draw editor.
+
+        Args:
+            connection: The connection sending the edit.
+            args: Expects `[key (str), seq (int), legend]` where legend is a list
+                of `{symbol, desc, coord?, show?}` dicts. The list *replaces*
+                the MapInfo's legend_entries for that area/z.
+            kwargs: Unused.
+        """
+        if len(args) < 3:
+            connection.send_command("map_edit_reject", "Invalid legend payload.")
+            return
+        # See map_edit() — legend auth is via the Draw grant key chain.
+        key, seq, legend = args[0], args[1], args[2]
+        if not (isinstance(key, str) and isinstance(seq, int) and isinstance(legend, list)):
+            connection.send_command("map_edit_reject", "Invalid legend payload.")
+            return
+        if len(legend) > 200:
+            connection.send_command("map_edit_reject", "Too many legend entries (max 200).")
+            return
+        for idx, entry in enumerate(legend):
+            if not _is_legend_entry(entry):
+                connection.send_command("map_edit_reject", f"Invalid legend entry at index {idx}.")
+                return
+        ip = getattr(connection, "client_host", "?")
+        result = mapedit.consume(key, ip, seq)
+        if result.status == mapedit.REJECT:
+            connection.send_command("map_edit_reject", result.reason)
+            return
+        if result.status == mapedit.RETRY:
+            connection.send_command("map_ack", seq, result.new_key)
+            return
+        mi = get_map_handler().get_mapinfo(result.chain.area, result.chain.z)
+        if mi is None:
+            from atheriz.globals.map import MapInfo as _MI
+
+            mi = _MI(name=result.chain.area)
+            get_map_handler().set_mapinfo(result.chain.area, result.chain.z, mi)
+        # Replace legend atomically
+        from atheriz.globals.map import LegendEntry as _LE
+
+        new_entries: list = []
+        for data in legend:
+            e = _LE()
+            e.symbol = data.get("symbol")
+            desc = data.get("desc")
+            if desc is None:
+                desc = ""
+            e.desc = desc
+            coord = data.get("coord")
+            e.coord = tuple(coord) if isinstance(coord, list) else None
+            e.show = bool(data.get("show", True))
+            e.fg = data.get("fg", 170.0)
+            e.bg = data.get("bg")
+            new_entries.append(e)
+        with mi.lock:
+            mi.legend_entries = new_entries
+            mi.map_changed = True
+        mi.render_legend()
+        connection.send_command("map_ack", seq, result.new_key)
+        connection.send_command("legend_ok", seq, result.new_key)
 
     @staticmethod
     def _send_move_verdict(connection: Connection, seq: int, new_key: str, denied: list) -> None:

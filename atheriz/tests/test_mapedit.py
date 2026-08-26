@@ -720,3 +720,246 @@ def test_mapedit_evict_lru_and_ttl(monkeypatch):
     mapedit._previous.clear()
     monkeypatch.setattr(s, "MAPEDIT_CHAIN_TTL", 180.0)
     monkeypatch.setattr(s, "MAPEDIT_MAX_CHAINS", 256)
+
+
+# ==================== Legend edit tests ====================
+
+
+def test_draw_payload_includes_legend_and_player_symbol():
+    from atheriz.globals.map import LegendEntry
+
+    mi = make_mi({(0, 0): "X"})
+    mi.legend_entries = [LegendEntry(symbol="★", desc="shrine", coord=(2, 3))]
+    mi.legend_entries[0].show = True
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    # symbol is plain, but test ANSI-stripped path via monkey character
+    caller.symbol = "\x1b[38;2;255;0;0m🯅\x1b[0m"
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh):
+        DrawCommand().run(caller, None)
+    payload = conn.sent[0][1][1]
+    assert payload["legend"] == [{"symbol": "★", "desc": "shrine", "coord": [2, 3], "show": True, "fg": 170.0, "bg": None}]
+    assert payload["playerSymbol"] == "🯅"
+
+
+def test_draw_payload_legend_coords_none_and_player_symbol_fallback():
+    from atheriz.globals.map import LegendEntry
+
+    mi = make_mi({})
+    mi.legend_entries = [LegendEntry(symbol="X", desc="test", coord=None)]
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    node = Node(coord=Coord("TestArea", 0, 0, 0))
+    conn = make_conn()
+    caller = MockCaller(location=node, conn=conn)
+    caller.symbol = "X"
+    with patch("atheriz.commands.loggedin.mapedit.get_map_handler", return_value=mh):
+        DrawCommand().run(caller, None)
+    payload = conn.sent[0][1][1]
+    assert payload["legend"][0]["coord"] is None
+    assert payload["playerSymbol"] == "X"
+
+
+def test_map_edit_legend_replaces_entries_and_notifies():
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    # add a listener that captures at_legend_update
+    updates = []
+
+    class Listener:
+        id = 999
+        def at_legend_update(self, legend, show_legend=True, area="Somewhere"):
+            updates.append((legend, show_legend, area))
+    mi.listeners[999] = Listener()
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        handshake_key = conn.sent[0][1][1]
+        assert conn.sent[0][0] == "map_ack"
+        conn.sent.clear()
+        updates.clear()
+        legend = [
+            {"symbol": "★", "desc": "shrine", "coord": [2, 3], "show": True, "fg": 170.0, "bg": None},
+            {"symbol": "■", "desc": "wall", "coord": None, "show": False},
+        ]
+        InputFuncs().map_edit_legend(conn, [handshake_key, 1, legend], {})
+    assert len(mi.legend_entries) == 2
+    assert mi.legend_entries[0].symbol == "★"
+    assert mi.legend_entries[0].desc == "shrine"
+    assert mi.legend_entries[0].coord == (2, 3)
+    assert mi.legend_entries[1].show is False
+    assert mi.map_changed is True
+    # inputfunc sends both map_ack and legend_ok after persisting
+    assert conn.sent[0][0] == "map_ack"
+    assert conn.sent[0][1][0] == 1
+    assert conn.sent[1][0] == "legend_ok"
+    assert conn.sent[1][1][0] == 1
+    assert len(updates) == 1
+    assert updates[0][1] is True
+
+
+def test_map_edit_legend_null_desc_normalized_to_empty_string():
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "X", "desc": None, "coord": None, "show": True}]], {})
+    assert mi.legend_entries[0].desc == ""
+
+
+def test_map_edit_legend_key_proves_builder_no_puppet_check():
+    # The draw editor opens a separate WS with no puppet; auth is via the
+    # secret key chain granted to a builder (DrawCommand.access). Possession
+    # of a valid key + IP is proof, not the editing connection's puppet.
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    # Anonymous draw WS: puppet is None
+    conn = FakeConnection()
+    conn.client_host = "10.0.0.1"
+    conn.session.puppet = None
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+        conn.sent.clear()
+        # Even a non-builder puppet on the editing WS must be allowed — the
+        # builder check happened at grant time.
+        non_builder = MockCaller(is_builder=False)
+        conn.session.puppet = non_builder
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "X", "desc": "hi", "coord": None, "show": True}]], {})
+    # Should succeed via key, not reject for builder permission
+    assert conn.sent[0][0] == "map_ack"
+    assert len(mi.legend_entries) == 1
+    assert mi.legend_entries[0].symbol == "X"
+
+
+def test_map_edit_handshake_allows_anonymous_puppet():
+    # Draw editor's WS has no puppet (None) — handshake must still succeed.
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = FakeConnection()
+    conn.client_host = "10.0.0.1"
+    conn.session.puppet = None
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=MockMapHandler()):
+        InputFuncs().map_edit(conn, [key, 0, []], {})
+    assert conn.sent[0][0] == "map_ack"
+
+
+def test_map_validate_moves_allows_anonymous_puppet():
+    nh = make_node_area(Node(coord=Coord("TestArea", 3, 3, 0)))
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = FakeConnection()
+    conn.client_host = "10.0.0.1"
+    conn.session.puppet = None
+    # handshake + validate as anonymous draw WS
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=MockMapHandler()):
+        InputFuncs().map_edit(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+    with patch("atheriz.inputfuncs.get_node_handler", return_value=nh):
+        InputFuncs().map_validate_moves(conn, [k1, 1, [[3, 3, 4, 3]]], {})
+    assert conn.sent[1][0] in ("moves_ok", "moves_denied")
+
+
+def test_map_edit_legend_reject_unknown_key():
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=MockMapHandler()):
+        InputFuncs().map_edit_legend(conn, ["bogus", 1, []], {})
+    assert conn.sent[0][0] == "map_edit_reject"
+    assert conn.sent[0][1][0] == "unknown_key"
+
+
+def test_map_edit_legend_retry_does_not_reapply():
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+        # map_edit_legend sends both map_ack and legend_ok per call
+        assert conn.sent[0][0] == "map_ack"
+        assert conn.sent[1][0] == "legend_ok"
+        conn.sent.clear()
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "A", "desc": "first", "coord": None, "show": True}]], {})
+        edited_key = conn.sent[0][1][1]
+        assert conn.sent[0][0] == "map_ack"
+        assert conn.sent[1][0] == "legend_ok"
+        assert mi.legend_entries[0].symbol == "A"
+        # retry with previous key+same seq must return RETRY without overwriting
+        conn.sent.clear()
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "B", "desc": "second", "coord": None, "show": True}]], {})
+    assert mi.legend_entries[0].symbol == "A"
+    assert conn.sent[0][0] == "map_ack"
+    assert conn.sent[0][1][1] == edited_key
+
+
+def test_map_edit_legend_malformed_entries_are_ignored():
+    mi = make_mi({})
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    bad = [
+        [{"desc": "no symbol"}],
+        [{"symbol": "", "desc": "empty symbol"}],
+        [{"symbol": "toolong", "desc": "too long"}],
+        [{"symbol": "X", "desc": 123}],
+        [{"symbol": "X", "desc": "hi", "coord": [1]}],
+        [{"symbol": "X", "desc": "hi", "show": "yes"}],
+    ]
+    for legend in bad:
+        with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+            InputFuncs().map_edit_legend(conn, [key, 0, legend], {})
+        # each bad legend must produce a map_edit_reject, not an ack, and not overwrite
+        assert conn.sent[-1][0] == "map_edit_reject"
+    # Ensure no legend was accepted
+    assert len(mi.legend_entries) == 0
+    # malformed top-level args are rejected with map_edit_reject
+    conn2 = make_conn()
+    for args in ([], ["k"], [123, 0, []], ["k", "0", []], ["k", 0, "nope"], ["k", 0, [["too", "many", "entries"]] * 201]):
+        with patch("atheriz.inputfuncs.get_map_handler", return_value=MockMapHandler()):
+            InputFuncs().map_edit_legend(conn2, args, {})
+    assert len(conn2.sent) == 6
+    assert all(c == "map_edit_reject" for c, _a, _k in conn2.sent)
+
+
+def test_map_edit_legend_creates_mapinfo_if_missing():
+    mh = MockMapHandler()
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "X", "desc": "new area legend", "coord": None, "show": True}]], {})
+    mi = mh.get_mapinfo("TestArea", 0)
+    assert mi is not None
+    assert mi.legend_entries[0].desc == "new area legend"
+
+
+def test_map_edit_legend_replaces_atomically_and_legacy_coord_tuple():
+    mi = make_mi({})
+    from atheriz.globals.map import LegendEntry
+    mi.legend_entries = [LegendEntry(symbol="OLD", desc="old", coord=(0, 0))]
+    mh = MockMapHandler()
+    mh.set_mapinfo("TestArea", 0, mi)
+    key = mapedit.grant("10.0.0.1", "TestArea", 0)
+    conn = make_conn()
+    with patch("atheriz.inputfuncs.get_map_handler", return_value=mh):
+        InputFuncs().map_edit_legend(conn, [key, 0, []], {})
+        k1 = conn.sent[0][1][1]
+        # new legend with one entry that has a list coord -> stored as tuple
+        InputFuncs().map_edit_legend(conn, [k1, 1, [{"symbol": "N", "desc": "new", "coord": [5, 6], "show": True}]], {})
+    assert len(mi.legend_entries) == 1
+    assert mi.legend_entries[0].symbol == "N"
+    assert mi.legend_entries[0].coord == (5, 6)
+    assert isinstance(mi.legend_entries[0].coord, tuple)

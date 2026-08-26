@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import re
+
 from atheriz.commands.base_cmd import Command
 from atheriz.globals.get import get_map_handler, get_node_handler
 from atheriz.globals.map import MapInfo
@@ -37,7 +39,13 @@ class DrawCommand(Command):
             mi = MapInfo(name=area)
             mh.set_mapinfo(area, z, mi)
         key = mapedit.grant(getattr(conn, "client_host", "?"), area, z)
-        payload = {"area": area, "z": z, "grid": [], "rooms": []}
+        raw_sym = str(getattr(caller, "symbol", "X") or "X")
+        plain = re.sub(r"\x1b\[[0-9;]*m", "", raw_sym)
+        # strip reset sequences like \x1b[0m already covered, keep first glyph
+        plain = plain.strip() or "X"
+        if len(plain) > 2:
+            plain = plain[:2]
+        payload = {"area": area, "z": z, "grid": [], "rooms": [], "legend": [], "playerSymbol": plain}
         if mi.pre_grid:
             mi.pre_render()
         with mi.lock:
@@ -81,5 +89,8 @@ class DrawCommand(Command):
                 ]
             for coord, node in extra_nodes:
                 payload["rooms"].append(room_payload(node))
+        with mi.lock:
+            for entry in mi.legend_entries:
+                payload["legend"].append(entry.to_payload())
         conn.send_command("launch_draw", key, payload)
         caller.msg("Opening AtheriZ Draw in a new tab.")

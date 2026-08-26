@@ -17,11 +17,22 @@ export interface MapRoom {
     exits: MapEditExit[];
 }
 
+export interface MapLegendEntry {
+    symbol: string;
+    desc: string | null;
+    coord: [number, number] | null;
+    show: boolean;
+    fg?: number | null;
+    bg?: number | null;
+}
+
 export interface MapEditPayload {
     area: string;
     z: number;
     grid: [number, number, string][];
     rooms?: MapRoom[];
+    legend?: MapLegendEntry[];
+    playerSymbol?: string;
 }
 
 /** One edited cell sent back to the engine:
@@ -51,7 +62,8 @@ export type MapEditEvent =
     | { type: 'reject'; reason: string }
     | { type: 'error'; message: string }
     | { type: 'moves_denied'; moves: RoomMove[] }
-    | { type: 'saved' };
+    | { type: 'saved' }
+    | { type: 'legend_saved' };
 
 export type MapEditListener = (event: MapEditEvent) => void;
 
@@ -134,7 +146,8 @@ function cellAttrs(cell: Cell | null): string[] {
 
 type QueueItem =
     | { kind: 'edit'; cells: MapEditOp[]; isSave: boolean }
-    | { kind: 'validate'; serverMoves: RoomMove[]; clientMoves: RoomMove[]; context: RoomMove[] };
+    | { kind: 'validate'; serverMoves: RoomMove[]; clientMoves: RoomMove[]; context: RoomMove[] }
+    | { kind: 'legend'; legend: MapLegendEntry[] };
 
 const coordKey = (x: number, y: number): string => `${x},${y}`;
 
@@ -237,6 +250,26 @@ export class MapEditSession {
         this.flush();
     }
 
+    public saveLegend(legend: MapLegendEntry[]): void {
+        if (this.stopped) return;
+        if (legend.length > 200) {
+            this.listener?.({ type: 'error', message: 'Too many legend entries (max 200).' });
+            return;
+        }
+        for (const e of legend) {
+            if (!e.symbol || e.symbol.length === 0 || e.symbol.length > 2) {
+                this.listener?.({ type: 'error', message: `Invalid legend symbol: ${e.symbol}` });
+                return;
+            }
+            if (e.desc == null || e.desc.trim().length === 0) {
+                this.listener?.({ type: 'error', message: `Legend description required for symbol ${e.symbol}` });
+                return;
+            }
+        }
+        this.queue.push({ kind: 'legend', legend });
+        this.flush();
+    }
+
     /** Current world coords of all known rooms (after validated moves). */
     public currentRoomCoords(): { x: number; y: number }[] {
         return Array.from(this.roomPositions.values()).map((key) => {
@@ -303,6 +336,15 @@ export class MapEditSession {
                     item.context.map((m) => [m.fromX, m.fromY, m.toX, m.toY]),
                 ]
             );
+        } else if (item.kind === 'legend') {
+            this.conn.send('map_edit_legend', [this.key, this.inFlight.seq, item.legend.map((e) => ({
+                symbol: e.symbol,
+                desc: e.desc,
+                coord: e.coord ? [...e.coord] : null,
+                show: e.show,
+                fg: e.fg ?? null,
+                bg: e.bg ?? null,
+            }))]);
         } else {
             this.conn.send('map_edit', [this.key, this.inFlight.seq, item.cells]);
         }
@@ -326,6 +368,15 @@ export class MapEditSession {
                             item.context.map((m) => [m.fromX, m.fromY, m.toX, m.toY]),
                         ]
                     );
+                } else if (item.kind === 'legend') {
+                    this.conn.send('map_edit_legend', [this.key, seq, item.legend.map((e) => ({
+                        symbol: e.symbol,
+                        desc: e.desc,
+                        coord: e.coord ? [...e.coord] : null,
+                        show: e.show,
+                        fg: e.fg ?? null,
+                        bg: e.bg ?? null,
+                    }))]);
                 } else {
                     this.conn.send('map_edit', [this.key, seq, item.cells]);
                 }
@@ -343,6 +394,14 @@ export class MapEditSession {
         if (message.command === 'map_ack') {
             if (typeof args[0] !== 'number' || typeof args[1] !== 'string') return;
             if (this.inFlight && args[0] === this.inFlight.seq) {
+                if (this.inFlight.item.kind === 'legend') {
+                    this.key = args[1];
+                    this.inFlight = null;
+                    this.listener?.({ type: 'legend_saved' });
+                    this.listener?.({ type: 'synced' });
+                    this.flush();
+                    return;
+                }
                 const isSave = this.inFlight.item.kind === 'edit' && this.inFlight.item.isSave;
                 this.key = args[1];
                 this.inFlight = null;
@@ -350,6 +409,15 @@ export class MapEditSession {
                     this.pendingMoves = [];
                     this.listener?.({ type: 'saved' });
                 }
+                this.listener?.({ type: 'synced' });
+                this.flush();
+            }
+        } else if (message.command === 'legend_ok') {
+            if (typeof args[0] !== 'number' || typeof args[1] !== 'string') return;
+            if (this.inFlight && this.inFlight.item.kind === 'legend' && args[0] === this.inFlight.seq) {
+                this.key = args[1];
+                this.inFlight = null;
+                this.listener?.({ type: 'legend_saved' });
                 this.listener?.({ type: 'synced' });
                 this.flush();
             }
