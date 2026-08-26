@@ -2,8 +2,11 @@ import asyncio
 import logging
 import os
 import shutil
+import sys
 import tempfile
 import threading
+import time
+import traceback
 from pathlib import Path
 import warnings
 
@@ -20,6 +23,25 @@ from atheriz.globals import objects as obj_singleton
 from atheriz.globals import get as get_singleton
 from atheriz.globals import startstop as startstop_module
 from atheriz.globals import salt as salt_module
+
+
+def _ctest_log(msg: str) -> None:
+    ts = time.strftime("%H:%M:%S", time.localtime())
+    # also monotonic delta for ordering
+    mono = f"{time.monotonic():.2f}"
+    print(f"[{ts} {mono} conftest] {msg}", file=sys.stderr, flush=True)
+
+
+def _dump_threads(prefix: str = "") -> None:
+    out = [prefix] if prefix else []
+    for tid, frame in sys._current_frames().items():
+        th = next((t for t in threading.enumerate() if t.ident == tid), None)
+        name = th.name if th else f"tid={tid}"
+        out.append(f"--- Thread {name} ({tid}) ---")
+        out.append("".join(traceback.format_stack(frame)))
+    msg = "\n".join(out)
+    print(msg, file=sys.stderr, flush=True)
+    return msg
 
 
 def _clear_ticker():
@@ -66,7 +88,14 @@ def _clear_all_objects_nonblocking():
 
 
 @pytest.fixture(autouse=True)
-def global_test_env():
+def global_test_env(request):
+    # Logging: identify which test is running; request.node is available for function-scoped fixtures
+    try:
+        nodeid = request.node.nodeid
+    except Exception:
+        nodeid = "unknown"
+    _ctest_log(f"ENTER {nodeid}")
+    _t0 = time.monotonic()
     # Setup: Redirect SAVE_PATH to a temporary directory
     old_save_path = settings.SAVE_PATH
     old_salt = salt_module._SALT
@@ -168,22 +197,43 @@ def global_test_env():
     except Exception:
         pass
 
-    yield temp_dir
+    # watchdog: if test doesn't finish in 25s, dump threads (hang diagnosis)
+    _watchdog_stop = threading.Event()
+
+    def _watchdog():
+        if not _watchdog_stop.wait(25):
+            _ctest_log(f"WATCHDOG: {nodeid} still running after 25s (hang?)")
+            _dump_threads(f"WATCHDOG {nodeid}")
+
+    _wd_thread = threading.Thread(target=_watchdog, daemon=True, name=f"wd-{nodeid[:30]}")
+    _wd_thread.start()
+    _ctest_log(f"YIELD {nodeid} setup done in {time.monotonic()-_t0:.2f}s -> running test")
+    try:
+        yield temp_dir
+    finally:
+        _watchdog_stop.set()
+    _ctest_log(f"TEARDOWN start {nodeid} after {time.monotonic()-_t0:.2f}s")
+    _t1 = time.monotonic()
 
     # Teardown: stop the ticker BEFORE closing the DB so no at_tick runs mid-close.
     _clear_ticker()
     if database_setup._DATABASE:
         try:
+            _ctest_log(f"DB close start {nodeid}")
+            # Database.close() is internally synchronized via _INIT_LOCK+self.lock;
+            # do not hold db.lock externally (would leak if _DATABASE cleared inside close).
             database_setup._DATABASE.close()
-        except Exception:
-            pass
+            _ctest_log(f"DB close done {nodeid} in {time.monotonic()-_t1:.2f}s")
+        except Exception as e:
+            _ctest_log(f"DB close failed {nodeid}: {e}\n{traceback.format_exc()}")
     database_setup._DATABASE = None
     database_setup._CLOSED = False
 
     try:
         shutil.rmtree(temp_dir)
-    except OSError:
-        pass
+    except OSError as e:
+        _ctest_log(f"rmtree failed {nodeid}: {e}")
+    _ctest_log(f"rmtree done {nodeid}")
 
     settings.SAVE_PATH = old_save_path
     salt_module._SALT = old_salt
@@ -249,6 +299,7 @@ def global_test_env():
         startstop_module._shutdown_completed = False
     except Exception:
         pass
+    _ctest_log(f"LEAVE {nodeid} total {time.monotonic()-_t0:.2f}s")
 
 
 @pytest.fixture(autouse=True)
