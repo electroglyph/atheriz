@@ -88,7 +88,8 @@ class HelpCommand(Command):
                     description=cmd.desc,
                     aliases=f"{cmd.key}, " + ", ".join(cmd.aliases) if cmd.aliases else f"{cmd.key}"
                 )
-        cmd = cmdset.get(args.command)
+        query = args.command.lower()
+        cmd = cmdset.get(query)
         if cmd and cmd.access(caller) and not cmd.hide:
             caller.msg(print_help(cmd))
             return
@@ -97,13 +98,19 @@ class HelpCommand(Command):
                 for o in loc.contents:
                     if o.external_cmdset:
                         for cmd in o.external_cmdset.get_all():
-                            if cmd.key == args.command and cmd.access(caller) and not cmd.hide:
+                            if cmd.key.lower() == query and cmd.access(caller) and not cmd.hide:
+                                caller.msg(print_help(cmd))
+                                return
+                            if any(a.lower() == query for a in (cmd.aliases or [])):
                                 caller.msg(print_help(cmd))
                                 return
             for o in caller.contents:
                 if o.external_cmdset:
                     for cmd in o.external_cmdset.get_all():
-                        if cmd.key == args.command and cmd.access(caller) and not cmd.hide:
+                        if cmd.key.lower() == query and cmd.access(caller) and not cmd.hide:
+                            caller.msg(print_help(cmd))
+                            return
+                        if any(a.lower() == query for a in (cmd.aliases or [])):
                             caller.msg(print_help(cmd))
                             return
             caller.msg("Command not found.")

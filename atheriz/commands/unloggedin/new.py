@@ -90,7 +90,27 @@ class NewCharacterCommand(Command):
             caller.msg(f"Character with this name ({name}) already exists.")
             return
 
-        character = Object.create(None, name, desc=desc, is_pc=True)
+        try:
+            character = Object.create(None, name, desc=desc, is_pc=True)
+            # Atomic uniqueness: if another thread created same name concurrently, roll back this one
+            from atheriz.globals.objects import _ALL_OBJECTS, _ALL_OBJECTS_LOCK
+
+            with _ALL_OBJECTS_LOCK:
+                dupes = [o for o in _ALL_OBJECTS.values() if getattr(o, "is_pc", False) and isinstance(getattr(o, "name", None), str) and o.name.lower() == name.lower() and o.id != character.id]
+                if dupes:
+                    # remove just-created duplicate
+                    _ALL_OBJECTS.pop(character.id, None)
+                    raise ValueError(f"Character with this name ({name}) already exists.")
+        except ValueError as e:
+            with CREATION_COOLDOWN_LOCK:
+                CREATION_COOLDOWNS.pop(f"character:{rate_key}", None)
+            caller.msg(str(e))
+            try:
+                with character.lock:
+                    character.is_deleted = True
+            except Exception:
+                pass
+            return
         apply_creation_cooldown(
             "character", rate_key, time.monotonic(), settings.CREATION_COOLDOWN
         )

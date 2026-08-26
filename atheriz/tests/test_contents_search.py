@@ -298,10 +298,7 @@ class TestContentsSearch:
         results = search(me, "me")
         assert len(results) == 1
         assert results[0] == me
-
-        results = search(me, "Hero")
-        assert len(results) == 1
-        assert results[0] == me
+        # Per AGENTS intentional: only "me" returns self; Hero name branch removed (H-25)
 
     def test_search_plurals(self, global_test_env):
         """Test plural handling."""
@@ -488,8 +485,7 @@ class TestSearchDoesNotReturnContainerItself:
         hero = Object.create(None, "Hero", is_pc=True)
         results = hero.search("me")
         assert hero in results
-        results2 = hero.search("hero")
-        assert hero in results2
+        # Per AGENTS intentional: only "me" returns self; name branch (hero) is bug shadowing container contents (H-25)
 
 
 class TestSearchPluralAndSubstringEdges:

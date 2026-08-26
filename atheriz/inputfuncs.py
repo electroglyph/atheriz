@@ -88,11 +88,16 @@ def dispatch_loggedin(puppet: Object, text: str, immediate: bool = False):
     if not cmd:
         # handle aliasing / short commands
         # this makes 'bleh work as `say bleh`
-        cmd = get_loggedin_cmdset().get(raw_cmd_key[:1])
-        if cmd:
-            matched_alias = raw_cmd_key[:1]
-            cmd_args = (parts[0][1:] + (f" {parts[1]}" if len(parts) > 1 else "")).lstrip(" \t\r\n")
-        else:
+        # only glued single-char aliases that are non-alpha (e.g. ', :, ;) are
+        # allowed to consume a prefix; letter aliases like 'l' for look must not
+        # shadow external 'lcustom' (multi-char prefix is bug, single-char 'l' is intentional)
+        first = raw_cmd_key[:1]
+        if first and not first.isalpha():
+            cmd = get_loggedin_cmdset().get(first)
+            if cmd:
+                matched_alias = first
+                cmd_args = (parts[0][1:] + (f" {parts[1]}" if len(parts) > 1 else "")).lstrip(" \t\r\n")
+        if not cmd:
             # check for commands provided by objects in the player's location
             loc = puppet.location
             if loc:

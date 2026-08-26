@@ -167,19 +167,10 @@ class Command:
             arg_list = []
         else:
             try:
-                use_posix = (os.name != "nt")
-                if use_posix:
-                    import re as _re
-                    args_string = _re.sub(r'\\(?![\"\'\\])', r'\\\\', args_string)
-                arg_list = shlex.split(args_string, posix=use_posix)
-                if not use_posix:
-                    normalized = []
-                    for tok in arg_list:
-                        if len(tok) >= 2 and tok[0] == tok[-1] and tok[0] in ('"', "'"):
-                            normalized.append(tok[1:-1])
-                        else:
-                            normalized.append(tok)
-                    arg_list = normalized
+                import re as _re
+                # Consistent POSIX shlex on all platforms.
+                args_string = _re.sub(r'\\(?![\"\'\\])', r'\\\\', args_string)
+                arg_list = shlex.split(args_string, posix=True)
             except ValueError:
                 caller.msg("Unbalanced quote in command.")
                 caller.msg(self.print_help())

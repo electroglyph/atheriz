@@ -107,6 +107,9 @@ class CmdSocials(Command):
             if not targets:
                 caller.msg(f"Could not find '{target_name}'.")
                 return
+            if len(targets) > 1:
+                caller.msg(f"Multiple matches for '{target_name}'. Be more specific.")
+                return
             target = targets[0]
             
             if isinstance(templates, tuple) and len(templates) > 1:

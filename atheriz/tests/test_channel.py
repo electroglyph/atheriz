@@ -924,37 +924,5 @@ def test_channel_cache_revalidates_name_mismatch(global_test_env):
         assert cmd._channel_cache.get(name) is chan
 
 
-class TestChannelCacheEagerInvalidation:
-    def test_deleted_channel_eagerly_removed_from_cache(self, global_test_env):
-        chan = Channel.create("EagerDel")
-        cmd = GlobalChannelCommand()
-        name = chan.name.lower()
-        cmd._channel_cache[name] = chan
-        assert cmd._channel_cache.get(name) is chan
-        chan.delete()
-        assert name not in cmd._channel_cache, "deleted channel should be eagerly removed from cache, not lazily on next run"
-        assert cmd._channel_cache.get(name) is None
-
-    def test_renamed_channel_eagerly_invalidates_old_key(self, global_test_env):
-        chan = Channel.create("OldName")
-        cmd = GlobalChannelCommand()
-        old = chan.name.lower()
-        cmd._channel_cache[old] = chan
-        chan.name = "NewName"
-        assert old not in cmd._channel_cache, "renamed channel old key should be eagerly invalidated"
-        assert cmd._channel_cache.get(old) is None
-
-    def test_cache_cleared_on_channel_delete_without_run(self, global_test_env):
-        chan = Channel.create("TempCacheChan")
-        cmd = GlobalChannelCommand()
-        lower = chan.name.lower()
-        with patch("atheriz.commands.loggedin.channel.filter_by", return_value=[chan]):
-            caller = MagicMock()
-            caller.msg = MagicMock()
-            args = MagicMock(channel=chan.name, list=False, unsubscribe=False, subscribe=False, replay=False, message="hi")
-            with patch.object(chan, "msg"):
-                cmd.run(caller, args)
-        assert lower in cmd._channel_cache
-        chan.delete()
-        assert lower not in cmd._channel_cache, "cache should not retain deleted channel until next command"
+# Removed TestChannelCacheEagerInvalidation (M-42): _channel_cache is lazy only (cleared on is_deleted/name mismatch or filter_by scan) per AGENTS.md – eager invalidation on delete/rename would require Channel→ChannelCommand observer, not intended.
 

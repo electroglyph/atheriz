@@ -34,6 +34,24 @@ class NoneCommand(Command):
             cmd for cmd in get_loggedin_cmdset().get_keys() if cmd not in _IGNORED_COMMANDS
         ]
         choices = commands + commands2
+        # include external verbs from location and inventory (help.py pattern)
+        try:
+            loc = getattr(caller, "location", None)
+            if loc:
+                for o in getattr(loc, "contents", []):
+                    cs = getattr(o, "external_cmdset", None)
+                    if cs:
+                        for k in cs.get_keys():
+                            if k not in _IGNORED_COMMANDS and k not in choices:
+                                choices.append(k)
+            for o in getattr(caller, "contents", []):
+                cs = getattr(o, "external_cmdset", None)
+                if cs:
+                    for k in cs.get_keys():
+                        if k not in _IGNORED_COMMANDS and k not in choices:
+                            choices.append(k)
+        except Exception:
+            pass
         if choices:
             scores = [levenshtein(args.none, cmd) for cmd in choices]
             best_match = choices[scores.index(min(scores))]

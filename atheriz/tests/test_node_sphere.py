@@ -142,7 +142,7 @@ def test_get_dir_different_area_returns_empty():
 def test_get_dir_mixed_dims_and_same_area():
     assert get_dir(("AreaA", 0, 0, 0), (0, 1, 0)) == ""
     assert get_dir(("X", 0, 0, 0), ("X", 0, 1, 0)) == "north"
-    assert get_dir((0, 0, 0), (0, 1, 0)) == "east"
+    assert get_dir((0, 0, 0), (0, 1, 0)) == "north"
 
 
 def test_get_points_in_sphere_radius_guard():

@@ -31,9 +31,15 @@ if TYPE_CHECKING:
 
 
 def _term_matches(obj, term: str) -> bool:
-    if term in obj.name.lower():
+    term_l = term.lower()
+    name_l = obj.name.lower()
+    if term_l == name_l or term_l in name_l.split():
         return True
-    return any(term in alias.lower() for alias in obj.aliases)
+    for alias in obj.aliases:
+        alias_l = alias.lower()
+        if term_l == alias_l or term_l in alias_l.split():
+            return True
+    return False
 
 
 def filter_visible(obj_list: list[Object], looker: Object | None = None) -> list[Object]:
@@ -144,10 +150,10 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
             direct contents.
         looker (Object | None): The object doing the looking; used to check view locks on containers.
     """
-    query = query.lower()
-    if query == "me" or query == obj.name.lower():
+    query = query.lower().strip()
+    if query == "me":
         return [obj]
-    # computed once so the #id branch and the match loop share one candidate list
+    # Self-target via "me" is intentional.
     objs = _gather_contents(obj, looker=looker) if recursive else list(obj.contents)
     if looker is not None:
         objs = [o for o in objs if o.access(looker, "view")]
@@ -167,12 +173,16 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
     required = []
     count = 1
     index = 0
-    split = query.split(" ")
+    split = query.split()
+    if not split:
+        return []
     start = 0
     end = len(split)
     if split[0] == "all":
         count = 0
         start = 1
+        if start >= end:
+            return list(objs)
     elif split[0].isnumeric():
         count = int(split[0])
         start = 1
@@ -222,7 +232,8 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
             if count == 1 and index == 0:
                 return [objs[x]]
             else:
-                matches.append(objs[x])
+                if objs[x] not in matches:
+                    matches.append(objs[x])
                 if len(matches) == count and index == 0:
                     return matches
                 continue
@@ -231,7 +242,8 @@ def search(obj: Object | Node, query: str, recursive: bool = True, looker: Objec
                 if count == 1 and index == 0:
                     return [objs[x]]
                 else:
-                    matches.append(objs[x])
+                    if objs[x] not in matches:
+                        matches.append(objs[x])
                     if len(matches) == count and index == 0:
                         return matches
                     break

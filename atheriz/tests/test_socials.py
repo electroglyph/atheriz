@@ -89,7 +89,7 @@ def test_targeted_social(test_env):
 
 
 def test_targeted_social_multiple_matches(test_env):
-    """search returns a list; the first match is used as a single Object."""
+    """search returns a list; ambiguous target must error, not pick first silently."""
     room, alice, bob = test_env
     cmd = CmdSocials()
 
@@ -98,12 +98,10 @@ def test_targeted_social_multiple_matches(test_env):
     args = Namespace(cmdstring="hug", target=["Bob"])
     cmd.run(alice, args)
 
-    assert alice.msg.called
-    alice_args, alice_kwargs = alice.msg.call_args
-    alice_text = alice_args[0] if alice_args else alice_kwargs.get('text', '')
-    if isinstance(alice_text, tuple): alice_text = alice_text[0]
-
-    assert "You hug Bob (offline)." in alice_text
+    # fixed M-35: ambiguous should report multiple matches
+    all_msgs = " ".join(str(c.args[0]) for c in alice.msg.call_args_list if c.args)
+    assert "multiple" in all_msgs.lower()
+    assert not bob.msg.called
 
 def test_missing_target_social(test_env):
     room, alice, bob = test_env

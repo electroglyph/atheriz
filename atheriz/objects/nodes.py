@@ -505,7 +505,12 @@ class Node(Flags, AccessLock):
             desc (str): The description returned when looked at.
         """
         with self.lock:
-            self.nouns[noun] = desc
+            low = noun.lower()
+            # remove any legacy mixed-case alias that would shadow
+            for k in list(self.nouns.keys()):
+                if k.lower() == low and k != low:
+                    self.nouns.pop(k, None)
+            self.nouns[low] = desc
 
     def remove_noun(self, noun: str):
         """
@@ -515,7 +520,11 @@ class Node(Flags, AccessLock):
             noun (str): The keyword to remove.
         """
         with self.lock:
-            self.nouns.pop(noun, None)
+            self.nouns.pop(noun.lower(), None)
+            # legacy fallback for mixed-case keys persisted before fix
+            for k in list(self.nouns.keys()):
+                if k.lower() == noun.lower():
+                    self.nouns.pop(k, None)
 
     def get_noun(self, noun: str) -> str | None:
         """
@@ -528,7 +537,14 @@ class Node(Flags, AccessLock):
             str | None: The description, or None if not found.
         """
         with self.lock:
-            return self.nouns.get(noun)
+            val = self.nouns.get(noun.lower())
+            if val is not None:
+                return val
+            # fallback scan for legacy mixed-case persisted keys
+            for k, v in self.nouns.items():
+                if k.lower() == noun.lower():
+                    return v
+            return None
 
     def __str__(self):
         return f"Node: {self.coord}"
