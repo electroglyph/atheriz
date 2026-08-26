@@ -1,9 +1,11 @@
 from __future__ import annotations
 import sqlite3
 import os
+from pathlib import Path
 from . import settings
 from threading import Lock, RLock
 from typing import TYPE_CHECKING
+from atheriz.utils import is_in_game_folder
 
 if TYPE_CHECKING:
     from sqlite3 import Connection
@@ -61,10 +63,14 @@ def get_database():
             raise RuntimeError("database is closed; refusing to reopen")
         if _DATABASE is not None:
             return _DATABASE
-        from pathlib import Path
-
-        Path(settings.SAVE_PATH).mkdir(parents=True, exist_ok=True)
-        db_path = Path(settings.SAVE_PATH) / "database.sqlite3"
+        save_path = Path(settings.SAVE_PATH)
+        if not (save_path.is_absolute() or is_in_game_folder()):
+            raise RuntimeError(
+                f"Cannot determine database path: SAVE_PATH ({settings.SAVE_PATH}) is not absolute "
+                "and we're not in a game folder. Run 'atheriz new' or set SAVE_PATH."
+            )
+        save_path.mkdir(parents=True, exist_ok=True)
+        db_path = save_path / "database.sqlite3"
         c = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
         try:
             c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")

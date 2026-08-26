@@ -21,6 +21,7 @@ from atheriz.globals.startstop import do_shutdown, do_startup, do_reload
 from atheriz.globals.get import get_node_handler, get_unique_id
 from atheriz.database_setup import get_database
 from atheriz.server_events import at_char_create
+from atheriz.utils import is_in_game_folder
 import secrets
 import shutil
 import threading
@@ -504,6 +505,11 @@ def start_server():
         os._exit(1)
 
     pid = os.getpid()
+    if not (save_path.is_absolute() or is_in_game_folder()):
+        raise RuntimeError(
+            f"Cannot determine save path: SAVE_PATH ({settings.SAVE_PATH}) is not absolute "
+            "and we're not in a game folder. Run 'atheriz new' or set SAVE_PATH."
+        )
     if not save_path.exists():
         save_path.mkdir(parents=True, exist_ok=True)
 
@@ -550,6 +556,11 @@ def start_server():
     # write admin token
     token = secrets.token_hex(32)
     secret_path = Path(settings.SECRET_PATH)
+    if not (secret_path.is_absolute() or is_in_game_folder()):
+        raise RuntimeError(
+            f"Cannot determine secret path: SECRET_PATH ({settings.SECRET_PATH}) is not absolute "
+            "and we're not in a game folder. Run 'atheriz new' or set SECRET_PATH."
+        )
     secret_path.mkdir(parents=True, exist_ok=True)
     try:
         secret_path.chmod(0o700)
@@ -1231,6 +1242,11 @@ def spawn_daemon(args):
         cmd.extend(["--host", str(args.host)])
 
     save_path = Path(settings.SAVE_PATH)
+    if not (save_path.is_absolute() or is_in_game_folder()):
+        raise RuntimeError(
+            f"Cannot determine save path: SAVE_PATH ({settings.SAVE_PATH}) is not absolute "
+            "and we're not in a game folder. Run 'atheriz new' or set SAVE_PATH."
+        )
     save_path.mkdir(parents=True, exist_ok=True)
     log_file = save_path / "server.log"
 
@@ -1311,6 +1327,11 @@ def create_game_data(args):
     print("No running server detected; creating directly against the database.")
     print("Loading existing data...")
     save_path = Path(settings.SAVE_PATH)
+    if not (save_path.is_absolute() or is_in_game_folder()):
+        raise RuntimeError(
+            f"Cannot determine save path: SAVE_PATH ({settings.SAVE_PATH}) is not absolute "
+            "and we're not in a game folder. Run 'atheriz new' or set SAVE_PATH."
+        )
     if not save_path.exists():
         save_path.mkdir(parents=True)
     load_objects()
@@ -1439,6 +1460,11 @@ def do_reset_command(args):
     if save_path.exists():
         shutil.rmtree(save_path)
 
+    if not (save_path.is_absolute() or is_in_game_folder()):
+        raise RuntimeError(
+            f"Cannot determine save path: SAVE_PATH ({settings.SAVE_PATH}) is not absolute "
+            "and we're not in a game folder. Run 'atheriz new' or set SAVE_PATH."
+        )
     save_path.mkdir(parents=True)
 
     print("Setting up new world...")
