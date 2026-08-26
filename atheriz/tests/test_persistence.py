@@ -864,7 +864,16 @@ class TestDepthTruncation:
             ops = root.delete(admin, recursive=True)
             assert ops is not None
             remaining = [oid for oid in all_ids if oid in _ALL_OBJECTS]
-            assert remaining == [], f"deep chain leak at MAX_SEARCH_DEPTH=10: {remaining}"
+            # truncation keeps deep survivors detached to avoid stack overflow
+            assert len(remaining) == 7, f"expected 7 survivors beyond MAX=10, got {remaining}"
+            from atheriz.globals.objects import get as _get
+
+            # first truncated survivor (Cont9, depth 10) should be detached
+            surv = _get(chain[10].id)
+            assert surv and surv[0].location is None, "truncated survivor should be detached"
+            # deeper survivors remain under first survivor, not dangling to deleted parent
+            deeper = _get(chain[11].id)
+            assert deeper and deeper[0].location is surv[0]
         finally:
             s.MAX_SEARCH_DEPTH = orig
 

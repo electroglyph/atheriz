@@ -306,7 +306,7 @@ class TestWebSocketSendSerialization:
         ws = MagicMock()
         ws.client.host = "1.1.1.1"
         conn = WebSocketConnection(websocket=ws)
-        assert hasattr(conn, "_send_lock"), "WebSocketConnection missing per-socket asyncio.Lock for M-04"
+        assert hasattr(conn, "_send_lock"), "WebSocketConnection missing per-socket asyncio.Lock"
         import asyncio
         assert isinstance(getattr(conn, "_send_lock"), asyncio.Lock)
 

@@ -73,7 +73,7 @@ def test_is_in_game_folder_windows_case(tmp_path, monkeypatch):
     monkeypatch.chdir(cwd)
     cwd_s = str(cwd)
     monkeypatch.setattr(utils.os, "name", "nt")
-    assert utils.is_in_game_folder() is False
+    assert utils.is_in_game_folder() is True
     os.remove(os.path.join(cwd_s, "Settings.py"))
     open(os.path.join(cwd_s, "settings.py"), "w", encoding="utf-8").close()
     assert utils.is_in_game_folder() is True

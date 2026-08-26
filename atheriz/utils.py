@@ -26,6 +26,8 @@ _COLOR_REGEX = re.compile(_ANSI_COLOR)
 
 def _exists_exact(path: Path) -> bool:
     try:
+        if os.name == "nt":
+            return path.name.lower() in (n.lower() for n in os.listdir(path.parent))
         return path.name in os.listdir(path.parent)
     except Exception:
         return path.exists()
@@ -35,6 +37,8 @@ def _exists_exact_str(path_str: str) -> bool:
     try:
         parent = os.path.dirname(path_str) or "."
         name = os.path.basename(path_str)
+        if os.name == "nt":
+            return name.lower() in (n.lower() for n in os.listdir(parent))
         return name in os.listdir(parent)
     except Exception:
         return os.path.exists(path_str)
@@ -337,53 +341,19 @@ def clamp(minimum, value, maximum):
     return max(min(maximum, value), minimum)
 
 
-def _coords_xy(coord):
-    # Supports Coord(area,x,y,z), 4-tuple (area,x,y,z), 3-tuple (x,y,z), and objects with .x/.y
-    try:
-        if hasattr(coord, "x") and hasattr(coord, "y"):
-            return coord.x, coord.y
-    except Exception:
-        pass
-    try:
-        if len(coord) == 3:
-            return coord[0], coord[1]
-        if len(coord) >= 4:
-            # Coord or 4-tuple: (area,x,y,z)
-            return coord[1], coord[2]
-    except Exception:
-        pass
-    # fallback legacy index 1/2
-    try:
-        return coord[1], coord[2]
-    except Exception:
-        return 0, 0
-
-
 def get_dir(origin: tuple, dest: tuple) -> str:
     """
     get map direction between two coords.
     returns '' if origin == dest
     """
     try:
-        o_len = len(origin)
-        d_len = len(dest)
-        o_area = origin[0] if o_len >= 4 else None
-        d_area = dest[0] if d_len >= 4 else None
-        # mixed dimensions with an explicit area vs no area is considered area mismatch
-        if (o_len >= 4) != (d_len >= 4):
-            if isinstance(o_area, str) or isinstance(d_area, str):
-                return ""
-        if o_area is not None and d_area is not None:
-            if isinstance(o_area, str) or isinstance(d_area, str):
-                if o_area != d_area:
-                    return ""
-            elif origin[0] != dest[0]:
-                return ""
+        if origin[0] != dest[0]:
+            return ""
     except Exception:
         pass
     try:
-        o_x, o_y = _coords_xy(origin)
-        d_x, d_y = _coords_xy(dest)
+        o_x, o_y = origin[1], origin[2]
+        d_x, d_y = dest[1], dest[2]
     except Exception:
         return ""
     ew_vec = d_x - o_x

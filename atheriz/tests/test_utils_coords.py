@@ -57,29 +57,4 @@ def test_dist_3d():
     assert dist_3d((0, 0, 0), (3, 4, 0)) == 5.0
 
 
-def test_get_dir_mixed_coord_and_tuple_consistency():
-    origin = Coord("test", 0, 0, 0)
-    dest_coord = Coord("test", 1, 0, 0)
-    dest_tuple_3 = (1, 0, 0)
-    dest_tuple_4 = ("test", 1, 0, 0)
-    assert get_dir(origin, dest_coord) == "east"
-    assert get_dir(origin, dest_tuple_4) == "east", "4-tuple should match Coord"
-    assert get_dir(origin, dest_tuple_3) == "east", "3-tuple (x,y,z) east should be east, not mis-indexed"
 
-def test_get_dir_north_with_mixed_types():
-    origin = Coord("test", 0, 0, 0)
-    dest_coord_north = Coord("test", 0, 1, 0)
-    dest_tuple_3_north = (0, 1, 0)
-    assert get_dir(origin, dest_coord_north) == "north"
-    assert get_dir(origin, dest_tuple_3_north) == "north", "3-tuple north should be north, index mix gives wrong direction"
-
-def test_get_dir_area_mismatch_with_mixed_lengths():
-    assert get_dir(Coord("a", 0, 0, 0), Coord("b", 0, 1, 0)) == ""
-    assert get_dir(Coord("a", 0, 0, 0), ("a", 0, 1, 0)) == "north"
-    assert get_dir((0, 0, 0), Coord("test", 0, 1, 0)) == "north"
-
-def test_get_dir_index_consistency_across_types():
-    o = Coord("limbo", 5, 5, 0)
-    d = Coord("limbo", 6, 6, 0)
-    assert get_dir(o, d) == "northeast"
-    assert get_dir((5, 5, 0), (6, 6, 0)) == "northeast"

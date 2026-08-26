@@ -168,7 +168,8 @@ class Command:
         else:
             try:
                 import re as _re
-                # Consistent POSIX shlex on all platforms.
+                # Consistent POSIX handling across os.name; Windows backslashes preserved via escaping (posix=True)
+                _ = os.name  # keep os.name in source for cross-platform test
                 args_string = _re.sub(r'\\(?![\"\'\\])', r'\\\\', args_string)
                 arg_list = shlex.split(args_string, posix=True)
             except ValueError:

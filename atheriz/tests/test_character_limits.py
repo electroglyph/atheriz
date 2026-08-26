@@ -32,14 +32,14 @@ def test_character_creation_respects_max_under_concurrency(global_test_env, real
     orig_max = settings.MAX_CHARACTERS
     settings.MAX_CHARACTERS = 3
     try:
-        acct = Account.create("alice", "secret")
+        acct = Account.create("alice", "password123")
         assert acct is not None
 
         # Use distinct character names to avoid name collision handling
         names = [f"Hero{i}" for i in range(10)]
 
         def create_one(name):
-            at_char_create("alice", name, "secret")
+            at_char_create("alice", name, "password123")
 
         threads = [threading.Thread(target=create_one, args=(n,)) for n in names]
         for t in threads:
@@ -72,13 +72,13 @@ def test_character_creation_does_not_leak_id_on_overflow(global_test_env, real_h
     orig_max = settings.MAX_CHARACTERS
     settings.MAX_CHARACTERS = 2
     try:
-        acct = Account.create("bob", "secret")
+        acct = Account.create("bob", "password123")
         acct.characters = list(range(settings.MAX_CHARACTERS))  # fill with dummy ids
 
         before_id = get_id()
 
         with patch("atheriz.server_events.save_objects"):
-            at_char_create("bob", "Overflow", "secret")
+            at_char_create("bob", "Overflow", "password123")
 
         after_id = get_id()
         # With fix, no Object.create should have been called, so global ID not incremented
@@ -93,9 +93,9 @@ def test_character_creation_single_thread_still_works(global_test_env, real_home
     from atheriz.objects.base_account import Account
     from atheriz.globals.objects import get
 
-    acct = Account.create("carol", "secret")
+    acct = Account.create("carol", "password123")
     with patch("atheriz.server_events.save_objects"):
-        at_char_create("carol", "NewHero", "secret")
+        at_char_create("carol", "NewHero", "password123")
 
     assert len(acct.characters) == 1
     char = get(acct.characters[0])[0]

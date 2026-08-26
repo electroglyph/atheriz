@@ -93,7 +93,11 @@ class ConnectCommand(Command):
         accounts = filter_by(lambda x: x.is_account and x.name.lower() == account_name.lower())
 
         if not accounts:
-            # don't say "account not found" for security reasons
+            # mitigate timing oracle: burn same PBKDF2 cost as valid check
+            try:
+                Account.hash_password(password)
+            except Exception:
+                pass
             caller.msg("Invalid password.")
             return
 

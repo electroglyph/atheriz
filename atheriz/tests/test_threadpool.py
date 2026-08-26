@@ -533,7 +533,8 @@ def test_ticker_clear_while_timer_running():
         get_mod._ASYNC_THREAD_POOL = old
 
 
-def test_stop_preserves_queued_tasks_when_full(global_test_env):
+def test_stop_preserves_queued_tasks_when_full(global_test_env, monkeypatch):
+    monkeypatch.setattr(settings, "THREADPOOL_RELIEF_LIMIT", 0)
     atp = AsyncThreadPool(max_threads=3)
     block = threading.Event()
     try:

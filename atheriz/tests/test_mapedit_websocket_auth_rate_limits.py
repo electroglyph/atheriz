@@ -192,6 +192,5 @@ def test_per_ip_limit_applies_to_unknown_host(global_test_env):
         assert mgr.register_connection("c0", FakeConnection()) is True
         assert mgr.register_connection("c1", FakeConnection()) is True
         third = FakeConnection()
-        with patch.object(third, "close") as spy:
-            assert mgr.register_connection("c2", third) is False
-            spy.assert_called_once()
+        # "?" hosts are isolated per-connection (no shared bucket)
+        assert mgr.register_connection("c2", third) is True

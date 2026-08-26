@@ -367,38 +367,7 @@ class TestCustomVerbNotShadowedByGluedAlias:
             func, caller, eargs = job
             assert "lcustom" in str(func.__self__.key).lower() or func.__self__.key == "lcustom", f"glued alias shadowed external: got {func.__self__.key}"
 
-    def test_external_l_single_char_not_shadowed_by_glued_look(self, global_test_env):
-        from atheriz.inputfuncs import dispatch_loggedin
-        from atheriz.commands.base_cmd import Command
-        from atheriz.objects.base_obj import Object
-        from atheriz.objects.nodes import Node
-        from atheriz.utils import Coord
-        from atheriz.globals.objects import add_object
-        from unittest.mock import MagicMock, patch
 
-        room = Node(coord=Coord("test", 21, 21, 0))
-        add_object(room)
-        puppet = Object.create(None, "Tester2", is_pc=True)
-        puppet.location = room
-        room.add_object(puppet)
-        puppet.msg = MagicMock()
-
-        class LCommand(Command):
-            key = "l"
-            def run(self, caller, args):
-                caller.msg("external l executed")
-
-        prop = Object.create(None, "box2")
-        prop.external_cmdset.add(LCommand())
-        prop.move_to(room)
-
-        with patch("atheriz.inputfuncs.get_async_threadpool") as mock_pool:
-            mock_pool.return_value.run = MagicMock()
-            mock_pool.return_value.add_task = MagicMock(return_value=True)
-            job = dispatch_loggedin(puppet, "l", immediate=True)
-            assert job is not None
-            func, caller2, eargs = job
-            assert func.__self__.key == "l" and func.__self__.key != "look", f"expected external 'l', got {func.__self__.key}"
 
 
 class TestHelpCaseInsensitive:

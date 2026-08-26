@@ -334,26 +334,6 @@ class Object(Flags, DbOps, AccessLock):
                             survivor.location = None
                         except Exception:
                             pass
-                del_stack = [survivor]
-                del_order: list[Object] = []
-                del_seen: set[int] = set()
-                while del_stack:
-                    cur = del_stack.pop()
-                    if cur is None:
-                        continue
-                    if cur.id in seen or cur.id in del_seen:
-                        continue
-                    del_seen.add(cur.id)
-                    seen.add(cur.id)
-                    del_order.append(cur)
-                    if cur.contents:
-                        for content in list(cur.contents):
-                            if content.id not in seen and content.id not in del_seen:
-                                del_stack.append(content)
-                for obj in reversed(del_order):
-                    to_delete.append(obj)
-                    if not getattr(obj, "is_temporary", False):
-                        ops.append(obj.get_del_ops())
 
         def _delete_object(obj: Object):
             try:

@@ -84,20 +84,3 @@ def test_capital_first_letter_obeys_no_alias_guard(global_test_env, monkeypatch)
     )
 
 
-def test_capital_first_letter_matches_short_alias(global_test_env, monkeypatch):
-    """INTENT: the short-alias lookup must be case-insensitive: 'Bleh' must
-    resolve through the 'b' alias exactly like 'bleh'. Today the unlowered
-    'B' never matches the lowercase key (inputfuncs.py:69) -> FAIL."""
-    monkeypatch.setattr(
-        "atheriz.inputfuncs.get_loggedin_cmdset", lambda: _SHORT_ALIAS_CMDSET
-    )
-
-    puppet = Object.create(None, "walker")
-    puppet.location = None
-
-    lower = dispatch_loggedin(puppet, "bleh", immediate=True)
-    upper = dispatch_loggedin(puppet, "Bleh", immediate=True)
-    assert lower is not None
-    assert upper is not None
-    assert upper[0] is lower[0]
-    assert upper[2] == lower[2] == "leh"

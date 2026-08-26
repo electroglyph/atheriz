@@ -28,8 +28,25 @@ _IGNORE_FILES = [
     "spam_accounts.txt",
     "time",
 ]
+class _BoundedDict(dict):
+    _limit = 4000
+
+    def __setitem__(self, key, value):
+        is_new = key not in self
+        super().__setitem__(key, value)
+        if is_new and len(self) > self._limit:
+            # evict oldest (FIFO)
+            oldest = next(iter(self))
+            if oldest != key:
+                super().__delitem__(oldest)
+            else:
+                # key was oldest (re-inserted?), remove next oldest
+                keys = list(self.keys())
+                if len(keys) > 1:
+                    super().__delitem__(keys[0])
+
 # not persisted
-TEMP_BANNED_IPS = {}
+TEMP_BANNED_IPS: dict[str, float] = _BoundedDict()
 TEMP_BANNED_LOCK = RLock()
 
 
@@ -58,10 +75,10 @@ def unban_ip(host: str) -> None:
         TEMP_BANNED_IPS.pop(host, None)
 
 
-CREATION_COOLDOWNS = {}
+CREATION_COOLDOWNS: dict[str, float] = _BoundedDict()
 CREATION_COOLDOWN_LOCK = RLock()
 
-FAILED_LOGIN_ATTEMPTS: dict[str, int] = {}
+FAILED_LOGIN_ATTEMPTS: dict[str, int] = _BoundedDict()
 FAILED_LOGIN_ATTEMPTS_LOCK = RLock()
 
 

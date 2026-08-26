@@ -16,6 +16,7 @@ _EXCLUDED_MODULES = {
     "atheriz.reloader",
     "atheriz.globals.get",
     "atheriz.globals.objects",
+    "atheriz.globals.startstop",
     # `settings` holds live game-folder values injected by setup_game_folder();
     # reloading it resets every value to source defaults.
     "atheriz.settings",
@@ -325,6 +326,14 @@ try:
     _reload_lock = _SHARED_WORLD_LOCK
 except Exception:
     _reload_lock = threading.Lock()
+
+# keep _reload_lock in sync with the live world lock (reload of startstop would stale it)
+try:
+    import atheriz.globals.startstop as _ss
+    _reload_lock = _ss._WORLD_LOCK
+    _ss._shutdown_lock = _ss._WORLD_LOCK
+except Exception:
+    pass
 
 
 def _reload_game_logic() -> str:

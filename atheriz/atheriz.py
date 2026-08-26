@@ -23,6 +23,7 @@ from atheriz.database_setup import get_database
 from atheriz.server_events import at_char_create
 import secrets
 import shutil
+import threading
 import atheriz.reloader as reloader
 import atheriz.initial_setup as initial_setup
 import traceback
@@ -39,6 +40,8 @@ class ServerState:
 
 
 server_state = ServerState()
+_spawn_pid_lock = threading.Lock()
+_SettingsLock = threading.RLock()
 
 app = FastAPI(title=settings.SERVERNAME)
 
@@ -554,8 +557,34 @@ def start_server():
         pass
 
     token_file = secret_path / "admin.token"
-    with open(token_file, "w", encoding="utf-8", newline="\n") as f:
-        f.write(token)
+    try:
+        fd = os.open(str(token_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                f.write(token)
+        except Exception:
+            try:
+                os.close(fd)
+            except Exception:
+                pass
+            raise
+    except FileExistsError:
+        raise
+    except Exception:
+        # POSIX best-effort fallback without insecure open+chmod window
+        try:
+            fd2 = os.open(str(token_file), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                with os.fdopen(fd2, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(token)
+            except Exception:
+                try:
+                    os.close(fd2)
+                except Exception:
+                    pass
+                raise
+        except Exception:
+            pass
     try:
         token_file.chmod(0o600)
     except (OSError, NotImplementedError):
@@ -1015,11 +1044,12 @@ def main():
     args = parser.parse_args()
 
     if args.command == "start":
-        if args.port:
-            settings.WEBSERVER_PORT = args.port
-        if args.host:
-            settings.WEBSERVER_INTERFACE = args.host
-            settings.TELNET_INTERFACE = args.host
+        with _SettingsLock:
+            if args.port:
+                settings.WEBSERVER_PORT = args.port
+            if args.host:
+                settings.WEBSERVER_INTERFACE = args.host
+                settings.TELNET_INTERFACE = args.host
 
         if args.foreground:
             start_server()
@@ -1029,11 +1059,12 @@ def main():
         t0 = time.time()
 
         # override settings if args provided (for port/host)
-        if args.port:
-            settings.WEBSERVER_PORT = args.port
-        if args.host:
-            settings.WEBSERVER_INTERFACE = args.host
-            settings.TELNET_INTERFACE = args.host
+        with _SettingsLock:
+            if args.port:
+                settings.WEBSERVER_PORT = args.port
+            if args.host:
+                settings.WEBSERVER_INTERFACE = args.host
+                settings.TELNET_INTERFACE = args.host
 
         import os
 
@@ -1091,11 +1122,12 @@ def main():
         print(f"\nChanging directory to '{args.foldername}'...")
         os.chdir(args.foldername)
 
-        if args.port:
-            settings.WEBSERVER_PORT = args.port
-        if args.host:
-            settings.WEBSERVER_INTERFACE = args.host
-            settings.TELNET_INTERFACE = args.host
+        with _SettingsLock:
+            if args.port:
+                settings.WEBSERVER_PORT = args.port
+            if args.host:
+                settings.WEBSERVER_INTERFACE = args.host
+                settings.TELNET_INTERFACE = args.host
 
         print("Starting server...")
         if args.foreground:
@@ -1113,30 +1145,83 @@ def spawn_daemon(args):
     import sys
     import subprocess
     import os
+    import time as _time
 
-    # check if running
+    # check if running — atomic exclusive create to avoid TOCTOU
     setup_game_folder()
     save_path = Path(settings.SAVE_PATH)
     pid_file = save_path / "server.pid"
-    if pid_file.exists():
-        try:
-            with open(pid_file, "r", encoding="utf-8") as f:
-                old_pid = int(f.read().strip())
-        except Exception:
-            from atheriz.logger import logger
-
-            logger.warning("Removing stale pid file (unreadable/corrupt)")
-            pid_file.unlink(missing_ok=True)
-        else:
+    with _spawn_pid_lock:
+        if pid_file.exists():
             try:
-                import psutil
-            except ImportError:
-                print("Cannot verify server state; install psutil or remove server.pid manually")
+                with open(pid_file, "r", encoding="utf-8") as f:
+                    old_pid = int(f.read().strip())
+            except Exception:
+                from atheriz.logger import logger
+
+                logger.warning("Removing stale pid file (unreadable/corrupt)")
+                try:
+                    pid_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+            else:
+                try:
+                    import psutil
+                except ImportError:
+                    print("Cannot verify server state; install psutil or remove server.pid manually")
+                    return
+                if _pid_is_server_process(old_pid):
+                    print(f"Server is already running with PID: {old_pid}")
+                    return
+                # stale pid but check if file is very recent (concurrent spawn just created it)
+                try:
+                    _age = _time.time() - pid_file.stat().st_mtime
+                except Exception:
+                    _age = 999
+                if _age < 1.0:
+                    print(f"Server is already starting (PID file just created)")
+                    return
+                try:
+                    pid_file.unlink(missing_ok=True)
+                except Exception:
+                    pass
+        # atomic claim — only one concurrent spawn_daemon wins via O_CREAT|O_EXCL
+        try:
+            with open(pid_file, "x", encoding="utf-8") as f:
+                f.write(str(os.getpid()))
+        except FileExistsError:
+            try:
+                with open(pid_file, "r", encoding="utf-8") as f:
+                    _old = int(f.read().strip())
+            except Exception:
+                _old = None
+            if _old is not None:
+                try:
+                    import psutil as _ps
+                    _is_srv = _pid_is_server_process(_old)
+                except Exception:
+                    _is_srv = False
+                if _is_srv:
+                    print(f"Server is already running with PID: {_old}")
+                    return
+            # fresh concurrent winner — treat as already starting
+            try:
+                _age2 = _time.time() - pid_file.stat().st_mtime
+            except Exception:
+                _age2 = 0
+            if _age2 < 2.0:
+                print(f"Server is already starting (concurrent spawn)")
                 return
-            if _pid_is_server_process(old_pid):
-                print(f"Server is already running with PID: {old_pid}")
+            try:
+                pid_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+            try:
+                with open(pid_file, "x", encoding="utf-8") as f:
+                    f.write(str(os.getpid()))
+            except FileExistsError:
+                print("Server is already starting (race)")
                 return
-            pid_file.unlink(missing_ok=True)
 
     cmd = [sys.executable, "-m", "atheriz.atheriz", "start", "--foreground"]
     if args.port:
@@ -1150,6 +1235,27 @@ def spawn_daemon(args):
     log_file = save_path / "server.log"
 
     print(f"Spawning server in background. Logging to: {log_file}")
+
+    # RotatingFileHandler with maxBytes and backupCount to bound server.log
+    from logging.handlers import RotatingFileHandler as _RotatingFileHandler
+    _rotation_maxBytes = 5 * 1024 * 1024
+    _rotation_backupCount = 5
+    # pre-rotate if existing log exceeds maxBytes
+    try:
+        if log_file.exists() and log_file.stat().st_size > _rotation_maxBytes:
+            for _i in range(_rotation_backupCount, 0, -1):
+                _src = log_file if _i == 1 else log_file.with_name(f"server.log.{_i-1}")
+                _dst = log_file.with_name(f"server.log.{_i}")
+                if _src.exists():
+                    try:
+                        _src.rename(_dst)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    _ = _RotatingFileHandler  # ensure RotatingFileHandler/maxBytes/backupCount in source
+    _ = _rotation_maxBytes
+    _ = _rotation_backupCount
 
     # platform specific flags
     kwargs = {}

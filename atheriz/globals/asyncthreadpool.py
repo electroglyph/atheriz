@@ -107,7 +107,7 @@ class AsyncThreadPool:
         self._busy = 0
         self._busy_lock = RLock()
         self._relief_count = 0
-        self._last_relief_spawn = time.monotonic()
+        self._last_relief_spawn = 0
         self._current_tasks = {}
         self._saturated_since: Optional[float] = None
         self._last_starvation_log = 0.0

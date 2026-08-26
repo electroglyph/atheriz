@@ -80,6 +80,10 @@ def _format_value(val, hint_name: str | None = None):
         except Exception:
             return "<unprintable>"
 
+    # hide sensitive fields
+    if hint_name and ("password" in hint_name.lower() or "secret" in hint_name.lower()):
+        return "<hidden>"
+
     # --- hint-specific branches ---------------------------------------------
 
     if hint_name == "internal_cmdset":
@@ -230,7 +234,7 @@ class ExamineCommand(Command):
         else:
             caller.msg(f"Examining {target.name} (#{target.id}):")
 
-        ignore = ["access", "lock"]
+        ignore = ["access", "lock", "password", "secret_token", "secret"]
 
         attrs = dict(vars(target))
         prop_names = set()
@@ -246,7 +250,7 @@ class ExamineCommand(Command):
         sorted_keys = sorted(attrs.keys())
 
         for key in sorted_keys:
-            if key in ignore:
+            if key in ignore or "password" in key.lower() or "secret" in key.lower():
                 continue
             val = attrs[key]
             val_output = _format_value(val, hint_name=key)

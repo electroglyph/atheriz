@@ -96,6 +96,7 @@ def test_spawn_daemon_uses_exclusive_pid_create(tmp_path):
 def test_spawn_daemon_concurrent_only_one_wins(tmp_path):
     barrier = threading.Barrier(2, timeout=5)
     results = []
+    popen_calls: list[int] = []
     import atheriz.settings as settings
     orig_save = settings.SAVE_PATH
     settings.SAVE_PATH = str(tmp_path)
@@ -103,6 +104,7 @@ def test_spawn_daemon_concurrent_only_one_wins(tmp_path):
     if tmp_pid.exists():
         tmp_pid.unlink()
     def fake_popen(*a, **kw):
+        popen_calls.append(1)
         class P:
             pid = 12345
         time.sleep(0.05)
@@ -129,7 +131,8 @@ def test_spawn_daemon_concurrent_only_one_wins(tmp_path):
     t1.join(timeout=5)
     t2.join(timeout=5)
     settings.SAVE_PATH = orig_save
-    assert results.count("spawned") == 1, f"concurrent spawn_daemon both succeeded: {results} — TOCTOU"
+    assert len(popen_calls) == 1, f"concurrent spawn_daemon both Popen: {popen_calls} results:{results} — TOCTOU"
+    # spawn_daemon returns normally even when refusing second caller; count Popen not results
 
 
 def test_pid_file_toctou_spawn_vs_start(tmp_path):
