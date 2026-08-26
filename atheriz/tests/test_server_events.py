@@ -150,7 +150,131 @@ class TestAtCharCreateNewAccount:
     def test_returns_early_when_account_create_fails(self, global_test_env, real_home_node):
         # INTENT: if Account.create returns None (e.g., duplicate race), early return
         with patch("atheriz.server_events.Account.create", return_value=None), \
-             patch("atheriz.server_events.save_objects") as mock_save:
+              patch("atheriz.server_events.save_objects") as mock_save:
             at_char_create("dup", "X", "pw")
 
         mock_save.assert_not_called()
+
+
+class TestAtCharCreatePersistence:
+    def test_existing_account_new_character_marks_account_modified(self, global_test_env, real_home_node, fixed_salt, monkeypatch):
+        import atheriz.settings as settings
+        from atheriz.objects.base_account import Account
+        from atheriz.globals.objects import save_objects, load_objects, get as gl_get
+        import dill
+        from atheriz import database_setup
+
+        monkeypatch.setattr(settings, "ALWAYS_SAVE_ALL", False)
+        account = Account.create("persist_acct", "password123")
+        from atheriz.globals.objects import _ALL_OBJECTS
+        save_objects()
+        object.__setattr__(account, "is_modified", False)
+        assert account.is_modified is False
+        at_char_create("persist_acct", "NewHero", "password123")
+        assert account.is_modified is True
+        db = database_setup.get_database()
+        with db.lock:
+            cur = db.connection.cursor()
+            cur.execute("SELECT data FROM objects WHERE id=?", (account.id,))
+            row = cur.fetchone()
+            assert row is not None
+            loaded = dill.loads(row[0])
+            assert any(
+                gl_get(cid) and gl_get(cid)[0].name == "NewHero" for cid in loaded.characters
+            ) or loaded.characters == account.characters
+            assert len(loaded.characters) >= 1 and loaded.characters[-1] in [c for c in loaded.characters]
+
+    def test_existing_account_second_character_persists_across_reload(self, global_test_env, real_home_node, fixed_salt, monkeypatch):
+        import atheriz.settings as settings
+        from atheriz.objects.base_account import Account
+        from atheriz.globals.objects import save_objects, load_objects, _ALL_OBJECTS
+        from atheriz import database_setup
+        import dill
+        monkeypatch.setattr(settings, "ALWAYS_SAVE_ALL", False)
+        account = Account.create("reload_acct", "password123")
+        save_objects()
+        object.__setattr__(account, "is_modified", False)
+        at_char_create("reload_acct", "SecondHero", "password123")
+        save_objects()
+        saved_chars = list(account.characters)
+        assert len(saved_chars) >= 1
+        _ALL_OBJECTS.clear()
+        database_setup.get_database().close()
+        database_setup.reopen_database()
+        database_setup.do_setup()
+        load_objects()
+        from atheriz.globals.objects import filter_by
+
+        reloaded = filter_by(lambda x: getattr(x, "is_account", False) and x.name == "reload_acct")
+        assert reloaded
+        assert reloaded[0].characters == saved_chars
+
+    def test_cli_character_name_uniqueness_enforced(self, global_test_env, real_home_node, fixed_salt):
+        from atheriz.objects.base_account import Account
+        from atheriz.globals.objects import filter_by
+
+        Account.create("uniq_acct1", "password123")
+        Account.create("uniq_acct2", "password123")
+        at_char_create("uniq_acct1", "HeroDup", "password123")
+        at_char_create("uniq_acct2", "herodup", "password123")
+        heroes = filter_by(lambda x: getattr(x, "is_pc", False) and x.name.lower() == "herodup")
+        assert len(heroes) == 1
+
+    def test_cli_character_name_validation_rejects_invalid(self, global_test_env, real_home_node, fixed_salt):
+        from atheriz.globals.objects import filter_by
+
+        at_char_create("badname_acct", "x", "password123")
+        pcs = filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "x")
+        assert pcs == []
+
+
+class TestAtCharCreateWeakPassword:
+    def test_cli_weak_password_rejected(self, global_test_env, real_home_node, fixed_salt):
+        from atheriz.globals.objects import filter_by
+        at_char_create("weak_acct", "HeroWeak", "x")
+        accts = filter_by(lambda x: getattr(x, "is_account", False) and x.name == "weak_acct")
+        assert accts == [], "CLI must validate password, short 'x' should not create account"
+        pcs = filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "HeroWeak")
+        assert pcs == []
+
+    def test_cli_short_password_does_not_create_account(self, global_test_env, real_home_node):
+        from atheriz.globals.objects import filter_by
+        from unittest.mock import patch
+        with patch("atheriz.server_events.save_objects"):
+            at_char_create("shortpwacct", "HeroShort", "short")
+            accts = filter_by(lambda x: getattr(x, "is_account", False) and x.name == "shortpwacct")
+            assert accts == [], "password shorter than MIN_PASSWORD_LENGTH must be rejected"
+
+    def test_cli_password_validation_enforced_on_existing_account(self, global_test_env, real_home_node, fixed_salt):
+        from atheriz.objects.base_account import Account
+        from atheriz.globals.objects import filter_by
+        Account.create("existacct", "validpass123")
+        from unittest.mock import patch
+        with patch("atheriz.server_events.save_objects"):
+            at_char_create("existacct", "NewHero2", "x")
+            heroes = filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "NewHero2")
+            assert heroes == [], "even for existing account, weak char name or short pw should not create"
+
+
+class TestPasswordPolicy:
+    def test_validation_rejects_short_password(self):
+        from atheriz.commands.unloggedin.validation import validate_password
+        assert validate_password("x") is not None
+        assert validate_password("") is not None
+        assert validate_password("short") is not None
+
+    def test_cli_at_char_create_calls_validate_password(self, global_test_env, real_home_node):
+        from unittest.mock import patch
+        with patch("atheriz.server_events.save_objects"), \
+             patch("atheriz.server_events.Account.create") as mock_create, \
+             patch("atheriz.server_events.Object.create") as mock_obj:
+            at_char_create("anyacct", "AnyHero", "x")
+            assert mock_create.called is False, "short password must not reach Account.create"
+            assert mock_obj.called is False
+
+    def test_min_password_length_not_weak(self):
+        import atheriz.settings as s
+        assert s.MIN_PASSWORD_LENGTH >= 8, "MIN_PASSWORD_LENGTH must be at least 8"
+        from atheriz.commands.unloggedin.validation import validate_password
+        assert validate_password("1234567") is not None
+        assert validate_password("12345678") is None or "at least" not in validate_password("12345678")

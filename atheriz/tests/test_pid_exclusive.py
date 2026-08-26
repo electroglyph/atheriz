@@ -85,3 +85,56 @@ def test_open_x_is_windows_compatible(tmp_path):
     assert "fcntl" not in src, "must not use fcntl (Windows incompatible)"
     # msvcrt is also not needed for exclusive create
     assert "msvcrt" not in src
+
+
+def test_spawn_daemon_uses_exclusive_pid_create(tmp_path):
+    import inspect
+    src = inspect.getsource(az.spawn_daemon)
+    assert 'open(pid_file, "x"' in src or "os.open" in src, "spawn_daemon must use exclusive create to avoid TOCTOU"
+
+
+def test_spawn_daemon_concurrent_only_one_wins(tmp_path):
+    barrier = threading.Barrier(2, timeout=5)
+    results = []
+    import atheriz.settings as settings
+    orig_save = settings.SAVE_PATH
+    settings.SAVE_PATH = str(tmp_path)
+    tmp_pid = Path(tmp_path) / "server.pid"
+    if tmp_pid.exists():
+        tmp_pid.unlink()
+    def fake_popen(*a, **kw):
+        class P:
+            pid = 12345
+        time.sleep(0.05)
+        return P()
+    def run_spawn():
+        barrier.wait(timeout=5)
+        from unittest.mock import MagicMock, patch as mpatch
+        args = MagicMock()
+        args.port = None
+        args.host = None
+        with mpatch("atheriz.atheriz.setup_game_folder", return_value=False), \
+             mpatch("subprocess.Popen", side_effect=fake_popen), \
+             mpatch("atheriz.atheriz._pid_is_server_process", return_value=False), \
+             mpatch("atheriz.atheriz.Path", wraps=Path):
+            try:
+                az.spawn_daemon(args)
+                results.append("spawned")
+            except Exception as e:
+                results.append(f"err:{e}")
+    t1 = threading.Thread(target=run_spawn)
+    t2 = threading.Thread(target=run_spawn)
+    t1.start()
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+    settings.SAVE_PATH = orig_save
+    assert results.count("spawned") == 1, f"concurrent spawn_daemon both succeeded: {results} — TOCTOU"
+
+
+def test_pid_file_toctou_spawn_vs_start(tmp_path):
+    import inspect
+    src_start = inspect.getsource(az.start_server)
+    src_spawn = inspect.getsource(az.spawn_daemon)
+    assert src_start.count("FileExistsError") >= 1, "start_server must handle FileExistsError from exclusive create"
+    assert "FileExistsError" in src_spawn or "os.open" in src_spawn, "spawn_daemon must also handle races"

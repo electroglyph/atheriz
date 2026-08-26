@@ -13,7 +13,7 @@ import asyncio
 import os
 import socket
 import time
-from concurrent.futures import ThreadPoolExecutor
+import threading
 from pathlib import Path
 
 import pytest
@@ -23,6 +23,7 @@ import atheriz.atheriz as az
 from atheriz import settings
 from atheriz.atheriz import request_internal_shutdown, server_state
 from atheriz.globals import get as get_singleton
+from atheriz.globals import startstop as startstop_module
 
 BOOT_DEADLINE = 15.0
 READ_TIMEOUT = 10.0
@@ -35,6 +36,38 @@ def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
+
+
+def _clear_global_pool_and_ticker():
+    try:
+        pool = get_singleton._ASYNC_THREAD_POOL
+        if pool is not None:
+            try:
+                pool.stop(wait=True, timeout=2)
+            except Exception:
+                pass
+        get_singleton._ASYNC_THREAD_POOL = None
+    except Exception:
+        pass
+    try:
+        ticker = get_singleton._ASYNC_TICKER
+        if ticker is not None:
+            try:
+                ticker.clear()
+                ticker.stop()
+            except Exception:
+                pass
+        get_singleton._ASYNC_TICKER = None
+    except Exception:
+        pass
+    try:
+        get_singleton._CONNECTION_MANAGER = None
+    except Exception:
+        pass
+    try:
+        startstop_module._shutdown_completed = False
+    except Exception:
+        pass
 
 
 class _FakeSignal:
@@ -66,37 +99,42 @@ class TestServerBoot:
         monkeypatch.setattr(az, "setup_game_folder", lambda required=False: None)
         monkeypatch.setattr(az, "signal", _FakeSignal)
 
+        _clear_global_pool_and_ticker()
         server_state.running = False
         server_state.uvicorn_server = None
         original_lifespan = az.app.router.lifespan_context
 
-        executor = ThreadPoolExecutor(max_workers=1)
+        thread = threading.Thread(target=az.start_server, daemon=True)
+        thread.start()
         try:
-            future = executor.submit(az.start_server)
-
             self._wait_for_boot(telnet_port, tmp_path / "secret")
 
-            out = asyncio.run(self._telnet_session(telnet_port))
+            try:
+                out = asyncio.run(asyncio.wait_for(self._telnet_session(telnet_port), timeout=READ_TIMEOUT + 5))
+            except asyncio.TimeoutError:
+                pytest.fail(f"telnet session timed out after {READ_TIMEOUT+5}s")
+
             assert "ATHERIZ VERSION" in out, out
             assert "enter 'connect" in out, out
             assert "Goodbye!" in out, out
 
             assert request_internal_shutdown(port=web_port)
 
-            future.result(timeout=JOIN_TIMEOUT)
+            thread.join(timeout=JOIN_TIMEOUT)
+            assert not thread.is_alive(), f"server thread did not exit within {JOIN_TIMEOUT}s after shutdown"
         finally:
-            if future is not None and not future.done():
+            if thread.is_alive():
                 srv = server_state.uvicorn_server
                 if srv is not None:
-                    srv.should_exit = True
-                try:
-                    future.result(timeout=JOIN_TIMEOUT)
-                except Exception:
-                    pass
-            executor.shutdown(wait=True)
+                    try:
+                        srv.should_exit = True
+                    except Exception:
+                        pass
+                thread.join(timeout=5)
             server_state.running = False
             server_state.uvicorn_server = None
             az.app.router.lifespan_context = original_lifespan
+            _clear_global_pool_and_ticker()
 
         assert not (Path(settings.SAVE_PATH) / "server.pid").exists()
         assert not (Path(settings.SECRET_PATH) / "admin.token").exists()
@@ -119,12 +157,14 @@ class TestServerBoot:
 
         server_state.running = False
         server_state.uvicorn_server = None
+        _clear_global_pool_and_ticker()
 
         az.start_server()
 
         out = capsys.readouterr().out
         assert "already running" in out.lower()
         assert server_state.uvicorn_server is None
+        _clear_global_pool_and_ticker()
 
     def _wait_for_boot(self, telnet_port: int, secret_dir: Path):
         token = secret_dir / "admin.token"
@@ -146,22 +186,26 @@ class TestServerBoot:
         )
 
     async def _telnet_session(self, telnet_port: int) -> str:
-        reader, writer = await telnetlib3.open_connection(
-            "127.0.0.1", telnet_port, encoding="utf8"
+        reader, writer = await asyncio.wait_for(
+            telnetlib3.open_connection("127.0.0.1", telnet_port, encoding="utf8"),
+            timeout=READ_TIMEOUT,
         )
         try:
             out = await self._read_until(reader, "ATHERIZ VERSION", READ_TIMEOUT)
             writer.write("quit\n")
             try:
-                await writer.drain()
-            except AttributeError:
+                await asyncio.wait_for(writer.drain(), timeout=2)
+            except (AttributeError, asyncio.TimeoutError):
                 pass
-            out += await self._read_until(reader, "", READ_TIMEOUT)
+            try:
+                out += await asyncio.wait_for(self._read_until(reader, "", READ_TIMEOUT), timeout=READ_TIMEOUT)
+            except asyncio.TimeoutError:
+                pass
             return out
         finally:
             writer.close()
             try:
-                await writer.wait_closed()
+                await asyncio.wait_for(writer.wait_closed(), timeout=2)
             except Exception:
                 pass
 

@@ -609,3 +609,33 @@ class TestAccountDisconnect:
         assert account.logged_in is True
         account.at_disconnect()
         assert account.logged_in is False
+
+
+class TestPerUserSalt:
+    def test_same_password_has_same_hash_with_global_salt(self, fixed_salt, global_test_env):
+        acc1 = Account.create("alice_salt", "samepassword123")
+        acc2 = Account.create("bob_salt", "samepassword123")
+        assert acc1.password == acc2.password
+        assert acc1.check_password("samepassword123") is True
+        assert acc2.check_password("samepassword123") is True
+        assert acc1.check_password("wrong") is False
+
+    def test_hash_uses_global_salt(self, global_test_env):
+        import hashlib
+        from unittest.mock import patch
+        from atheriz.globals import salt as salt_mod
+
+        orig_salt = salt_mod._SALT
+        salt_mod._SALT = "globalsalt"
+        try:
+            a1 = Account.create("u1", "pw123456")
+            a2 = Account.create("u2", "pw123456")
+            h1 = a1.password
+            h2 = a2.password
+            assert h1 == h2
+            with patch("atheriz.objects.base_account.hashlib.pbkdf2_hmac") as mp:
+                mp.return_value.hex.return_value = "00" * 32
+                Account.hash_password("x")
+                assert mp.call_args.args[2] == b"globalsalt"
+        finally:
+            salt_mod._SALT = orig_salt

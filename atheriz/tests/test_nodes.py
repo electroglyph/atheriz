@@ -4,7 +4,7 @@ relocation, and overwrite warnings.
 """
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -162,3 +162,36 @@ class TestNodeGridOverwrite:
 
         log = capture_atheriz_log()
         assert "overwrit" not in log.lower(), f"idempotent re-add warned: {log!r}"
+
+
+class TestNodeNonRecursiveDeleteStranded:
+    def test_nonrecursive_delete_with_no_home_and_no_fallback_does_not_strand(self, global_test_env):
+        node = Node(coord=Coord("test", 9, 9, 0))
+        caller = Object.create(None, "caller")
+        caller.location = None
+        caller.home = None
+        item = Object.create(None, "stranded_item")
+        item.location = node
+        node.add_object(item)
+        item.home = None
+        assert item.location is node
+        with patch("atheriz.objects.nodes.get_node_handler") as mock_nh:
+            mock_nh.return_value = MagicMock()
+            result = node.delete(caller, recursive=False)
+            assert result is not None
+        assert item.location is not node, "item should not remain stranded on deleted node"
+        assert item.location is None or getattr(item, "is_deleted", False) is True
+
+    def test_nonrecursive_delete_caller_on_node_with_no_fallback(self, global_test_env):
+        node = Node(coord=Coord("test", 8, 8, 0))
+        caller = Object.create(None, "caller2")
+        caller.location = node
+        node.add_object(caller)
+        item = Object.create(None, "item2")
+        item.move_to(node)
+        item.home = None
+        with patch("atheriz.objects.nodes.get_node_handler") as mock_nh:
+            mock_nh.return_value = MagicMock()
+            node.delete(caller, recursive=False)
+        assert item.location is not node
+        assert caller.location is not node

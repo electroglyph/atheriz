@@ -531,3 +531,151 @@ def test_ticker_clear_while_timer_running():
         ticker.clear()
         atp.stop(wait=True, timeout=5)
         get_mod._ASYNC_THREAD_POOL = old
+
+
+def test_stop_preserves_queued_tasks_when_full(global_test_env):
+    atp = AsyncThreadPool(max_threads=3)
+    block = threading.Event()
+    try:
+        _occupy_workers(atp, block)
+        atp.task_queue = queue.Queue(maxsize=2)
+        ran = []
+
+        def mk(n):
+            def task():
+                ran.append(n)
+            task._n = n
+            return task
+
+        t1 = mk(1)
+        t2 = mk(2)
+        assert atp.add_task(t1) is True
+        assert atp.add_task(t2) is True
+        before = [item[0] for item in list(atp.task_queue.queue)]
+        assert len(before) == 2
+        atp.stop(wait=False, timeout=2)
+        remaining = []
+        while True:
+            try:
+                item = atp.task_queue.get_nowait()
+                if item is None:
+                    continue
+                remaining.append(item[0])
+            except queue.Empty:
+                break
+        assert set(remaining) == set(before), f"queued tasks discarded on stop: before {len(before)} remaining {len(remaining)}"
+    finally:
+        block.set()
+        try:
+            atp.stop(wait=True, timeout=5)
+        except Exception:
+            pass
+
+
+def test_stop_holds_busy_lock_while_injecting_sentinels(global_test_env):
+    atp = AsyncThreadPool(max_threads=3)
+    block = threading.Event()
+    try:
+        _occupy_workers(atp, block)
+        atp.task_queue = queue.Queue(maxsize=2)
+        atp.task_queue.put_nowait((lambda: None, (), {}))
+        atp.task_queue.put_nowait((lambda: None, (), {}))
+        held = []
+        orig_put = atp.task_queue.put_nowait
+        orig_get = atp.task_queue.get_nowait
+
+        def spy_put(x):
+            try:
+                held.append(atp._busy_lock._is_owned())  # type: ignore[attr-defined]
+            except AttributeError:
+                try:
+                    held.append(bool(getattr(atp._busy_lock, "_count", 0)))
+                except Exception:
+                    held.append(False)
+            return orig_put(x)
+
+        def spy_get():
+            try:
+                held.append(atp._busy_lock._is_owned())  # type: ignore[attr-defined]
+            except AttributeError:
+                held.append(False)
+            return orig_get()
+
+        atp.task_queue.put_nowait = spy_put  # type: ignore[method-assign]
+        atp.task_queue.get_nowait = spy_get  # type: ignore[method-assign]
+        atp.stop(wait=False, timeout=2)
+        assert held, "no sentinel put observed"
+        assert all(held), f"stop injected sentinel without holding _busy_lock: {held}"
+    finally:
+        block.set()
+        try:
+            atp.stop(wait=True, timeout=5)
+        except Exception:
+            pass
+        try:
+            atp.task_queue.put_nowait = orig_put  # type: ignore
+            atp.task_queue.get_nowait = orig_get  # type: ignore
+        except Exception:
+            pass
+
+
+def test_delay_checks_stopped_under_lock(global_test_env):
+    import inspect
+    from atheriz.globals.asyncthreadpool import AsyncThreadPool
+    src = inspect.getsource(AsyncThreadPool.delay)
+    assert "_busy_lock" in src and "_stopped" in src, "delay must guard _stopped with _busy_lock"
+
+
+def test_add_task_and_stop_do_not_interleave_without_lock(global_test_env):
+    atp = AsyncThreadPool(max_threads=2)
+    block = threading.Event()
+    try:
+        _occupy_workers(atp, block)
+        atp.task_queue = queue.Queue(maxsize=2)
+        accepted = []
+        lock = threading.Lock()
+
+        def adder():
+            for i in range(20):
+                def task(n=i):
+                    pass
+                task._id = n  # type: ignore
+                if atp.add_task(task):
+                    with lock:
+                        accepted.append(task)
+
+        barrier = threading.Barrier(2, timeout=5)
+
+        def adder_thread():
+            barrier.wait(timeout=5)
+            adder()
+
+        def stopper():
+            barrier.wait(timeout=5)
+            atp.stop(wait=False, timeout=2)
+
+        t1 = threading.Thread(target=adder_thread, daemon=True)
+        t2 = threading.Thread(target=stopper, daemon=True)
+        t1.start()
+        t2.start()
+        t1.join(timeout=5)
+        t2.join(timeout=5)
+        remaining = []
+        while True:
+            try:
+                item = atp.task_queue.get_nowait()
+                if item is None:
+                    continue
+                remaining.append(item[0])
+            except queue.Empty:
+                break
+        with lock:
+            acc_set = set(id(x) for x in accepted)
+            rem_set = set(id(x) for x in remaining)
+            assert acc_set.issubset(rem_set) or len(rem_set) == len(acc_set), f"tasks lost during add_task vs stop race: accepted {len(acc_set)} remaining {len(rem_set)}"
+    finally:
+        block.set()
+        try:
+            atp.stop(wait=True, timeout=5)
+        except Exception:
+            pass

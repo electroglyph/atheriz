@@ -179,3 +179,39 @@ class TestCmdSocialsExtra:
         kwargs = c.location.msg_contents.call_args.kwargs
         assert "target" in kwargs["mapping"]
         assert kwargs["mapping"]["target"] is target
+
+
+class TestSocialMultipleTargetsShouldError:
+    def test_social_with_multiple_matching_targets_should_error(self, global_test_env):
+        caller = _make_caller()
+        caller.location = MagicMock()
+        caller.location.msg_contents = MagicMock()
+        bob1 = MagicMock()
+        bob1.name = "Bob"
+        bob1.id = 1
+        bob2 = MagicMock()
+        bob2.name = "Bob"
+        bob2.id = 2
+        caller.search = MagicMock(return_value=[bob1, bob2])
+        args = Namespace(cmdstring="hug", target=["Bob"])
+        CmdSocials().run(caller, args)
+        caller.msg.assert_called()
+        all_msgs = " ".join(str(c.args[0]) for c in caller.msg.call_args_list if c.args)
+        assert "multiple" in all_msgs.lower(), "social with ambiguous target should report multiple matches, not silently pick first"
+        caller.location.msg_contents.assert_not_called()
+
+    def test_social_ambiguous_target_does_not_hug_first(self):
+        caller = _make_caller()
+        caller.location = MagicMock()
+        caller.location.msg_contents = MagicMock()
+        a = MagicMock()
+        a.name = "Alex"
+        a.id = 10
+        b = MagicMock()
+        b.name = "Alex"
+        b.id = 11
+        caller.search = MagicMock(return_value=[a, b])
+        args = Namespace(cmdstring="smile", target=["Alex"])
+        CmdSocials().run(caller, args)
+        assert caller.location.msg_contents.call_count == 0
+        assert any("multiple" in str(c.args[0]).lower() for c in caller.msg.call_args_list if c.args)

@@ -850,3 +850,52 @@ class TestTelnetTLS:
                 await server.wait_closed()
 
         asyncio.run(run())
+
+
+class TestTelnetPendingBacklog:
+    def test_telnet_pending_bytes_covers_transport_backlog_on_loop(self, global_test_env):
+        """INTENT: _pending_bytes must reflect transport backlog until drain;
+        decrementing immediately after write undercounts and bypasses
+        TELNET_MAX_PENDING_BYTES limit."""
+        w = _make_writer()
+        conn = TelnetConnection(MagicMock(), w)
+        conn.thread_id = threading.get_ident()
+        w.transport = MagicMock()
+        w.transport.get_write_buffer_size.side_effect = [0, 5]
+        conn._pending_bytes = 0
+        conn.send_command("text", "hello")
+        assert conn._pending_bytes != 0, "pending_bytes decremented before transport drain"
+
+    def test_telnet_offloop_pending_covers_backlog(self, global_test_env):
+        """INTENT: offloop path reserves _pending_bytes and must keep it until
+        transport actually drains, not decrement right after scheduling write."""
+        w = _make_writer()
+        conn = TelnetConnection(MagicMock(), w)
+        conn.thread_id = 999999
+        mock_loop = MagicMock()
+        mock_loop.call_soon_threadsafe.side_effect = lambda f, *a: f(*a)
+        with patch.object(conn, "_resolve_loop", return_value=mock_loop):
+            with patch.object(conn, "_get_write_buffer_size", return_value=5):
+                conn._pending_bytes = 0
+                conn.send_command("text", "hello")
+                assert conn._pending_bytes != 0, "offloop pending_bytes should remain until transport drain"
+
+    def test_telnet_pending_limit_bypass_via_immediate_decrement(self, global_test_env, monkeypatch):
+        """INTENT: with immediate decrement, two quick sends can bypass
+        TELNET_MAX_PENDING_BYTES because pending is reset between them."""
+        orig = settings.TELNET_MAX_PENDING_BYTES
+        try:
+            settings.TELNET_MAX_PENDING_BYTES = 10
+            w = _make_writer()
+            conn = TelnetConnection(MagicMock(), w)
+            conn.thread_id = 999999
+            mock_loop = MagicMock()
+            mock_loop.call_soon_threadsafe.side_effect = lambda f, *a: f(*a)
+            with patch.object(conn, "_resolve_loop", return_value=mock_loop):
+                with patch.object(conn, "_get_write_buffer_size", return_value=0):
+                    conn.send_command("text", "12345")
+                    assert conn._pending_bytes == 5, f"first pending should remain 5 until drain, got {conn._pending_bytes}"
+                    conn.send_command("text", "123456")
+                    assert conn._closing is True, "second send should be rejected due to pending limit"
+        finally:
+            settings.TELNET_MAX_PENDING_BYTES = orig

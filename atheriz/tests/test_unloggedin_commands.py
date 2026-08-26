@@ -111,6 +111,37 @@ class TestConnectCommand:
         caller.close.assert_called_once()
         assert any("banned" in str(c) for c in caller.msg.call_args_list)
 
+    def test_connect_timing_oracle_mitigated(self, global_test_env, fixed_salt):
+        from unittest.mock import patch
+        caller = self._make_caller()
+        parsed = MagicMock(account_name="nonexistent", password="anything")
+        with patch("atheriz.commands.unloggedin.connect.Account.hash_password") as mock_hash:
+            mock_hash.return_value = "deadbeef" * 8
+            asyncio.run(self._run(ConnectCommand(), caller, parsed))
+            mock_hash.assert_called_once()
+            assert mock_hash.call_args.args[0] == "anything"
+
+    def test_connect_timing_oracle_uses_dummy_hash_with_600k_iterations(self, global_test_env, fixed_salt):
+        from unittest.mock import patch
+        caller = self._make_caller()
+        parsed = MagicMock(account_name="no_such_user", password="pw123456")
+        with patch("atheriz.objects.base_account.hashlib.pbkdf2_hmac") as mock_pbkdf2:
+            mock_pbkdf2.return_value.hex.return_value = "00" * 32
+            asyncio.run(self._run(ConnectCommand(), caller, parsed))
+            assert mock_pbkdf2.called, "invalid-account path must execute dummy PBKDF2 to avoid timing oracle"
+            assert mock_pbkdf2.call_args.args[3] == 600_000
+
+    def test_connect_invalid_account_timing_equals_valid_wrong(self, global_test_env, fixed_salt):
+        from unittest.mock import patch
+        Account.create("oracle_user2", "correctpw")
+        with patch("atheriz.objects.base_account.hashlib.pbkdf2_hmac") as mock_pbkdf2:
+            mock_pbkdf2.return_value.hex.return_value = "ab" * 32
+            caller_invalid = self._make_caller()
+            parsed_invalid = MagicMock(account_name="oracle_nonexist2", password="wrongpw")
+            asyncio.run(self._run(ConnectCommand(), caller_invalid, parsed_invalid))
+            assert mock_pbkdf2.called, "invalid path must still do PBKDF2"
+            assert mock_pbkdf2.call_args.args[3] == 600_000
+
 
 class TestCharSelection:
     """INTENT: the post-login screen lets a user pick an existing character,
@@ -271,6 +302,79 @@ class TestGuestCommand:
                 asyncio.run(GuestCommand().run(caller, None))
             caller.msg.assert_called_with("Gender selection is required.")
             create.assert_not_called()
+        finally:
+            settings.GUEST_ENABLED = old_enabled
+
+    def test_guest_temporary_removed_on_disconnect(self, global_test_env):
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.objects.session import Session
+        from atheriz.tests.fakes import FakeConnection
+        old_enabled = settings.GUEST_ENABLED
+        settings.GUEST_ENABLED = True
+        from atheriz.objects.nodes import Node, Coord
+        from atheriz.globals.objects import add_object
+        from atheriz.globals.get import get_unique_id, get_node_handler
+        home_coord = Coord("limbo", 0, 0, 0)
+        home = Node(coord=home_coord, desc="Home", symbol="#")
+        home.id = get_unique_id()
+        add_object(home)
+        nh = get_node_handler()
+        nh.get_node = MagicMock(return_value=home)
+        try:
+            conn = FakeConnection()
+            caller = MagicMock()
+            caller.session = conn.session
+            caller.session.puppet = None
+            caller.msg = MagicMock()
+            caller.send_command = MagicMock()
+            caller.client_host = "10.0.0.1"
+            caller.session.prompt = AsyncMock(side_effect=["GuestTmp", "M", "desc"])
+            before_ids = set(_ALL_OBJECTS.keys())
+            asyncio.run(GuestCommand().run(caller, None))
+            guest = caller.session.puppet
+            assert guest is not None
+            assert guest.is_temporary is True
+            assert guest.id in _ALL_OBJECTS
+            assert len(_ALL_OBJECTS) == len(before_ids) + 1
+            conn.session.at_disconnect()
+            assert guest.id not in _ALL_OBJECTS, "guest temporary object must be removed on disconnect to avoid unbounded growth"
+            assert len(_ALL_OBJECTS) == len(before_ids)
+        finally:
+            settings.GUEST_ENABLED = old_enabled
+
+    def test_guest_temporary_not_persisted_and_unbounded_growth(self, global_test_env):
+        from atheriz.globals.objects import _ALL_OBJECTS, save_objects
+        from atheriz import database_setup
+        old_enabled = settings.GUEST_ENABLED
+        settings.GUEST_ENABLED = True
+        from atheriz.objects.nodes import Node, Coord
+        from atheriz.globals.objects import add_object
+        from atheriz.globals.get import get_unique_id, get_node_handler
+        home_coord = Coord("limbo", 0, 0, 0)
+        home = Node(coord=home_coord, desc="Home", symbol="#")
+        home.id = get_unique_id()
+        add_object(home)
+        nh = get_node_handler()
+        nh.get_node = MagicMock(return_value=home)
+        try:
+            guests = []
+            for i in range(5):
+                caller = MagicMock()
+                from atheriz.tests.fakes import FakeConnection
+                conn = FakeConnection()
+                caller.session = conn.session
+                caller.session.puppet = None
+                caller.msg = MagicMock()
+                caller.send_command = MagicMock()
+                caller.client_host = f"10.0.0.{i}"
+                caller.session.prompt = AsyncMock(side_effect=[f"Guest{i}", "M", "desc"])
+                asyncio.run(GuestCommand().run(caller, None))
+                guests.append((conn, caller.session.puppet))
+            assert len([g for _, g in guests if g.id in _ALL_OBJECTS]) == 5
+            for conn, g in guests:
+                conn.session.at_disconnect()
+            remaining = [g for _, g in guests if g.id in _ALL_OBJECTS]
+            assert remaining == [], f"temporary guests leaked in _ALL_OBJECTS: {remaining}"
         finally:
             settings.GUEST_ENABLED = old_enabled
 
@@ -492,3 +596,143 @@ class TestGuestEdge:
         custom = next(c for c in choices if c.key == "C")
         custom.callback(ctx)
         assert ctx.state.get("custom_gender") is True
+
+
+class TestCreationCooldownBypass:
+    def test_alternate_op_bypass_blocked(self, global_test_env):
+        from atheriz.globals.objects import CREATION_COOLDOWNS
+        old_cd = settings.CREATION_COOLDOWN
+        old_guest = settings.GUEST_ENABLED
+        old_acct = settings.ACCOUNT_CREATION_ENABLED
+        settings.CREATION_COOLDOWN = 60
+        settings.GUEST_ENABLED = True
+        settings.ACCOUNT_CREATION_ENABLED = True
+        CREATION_COOLDOWNS.clear()
+        try:
+            from atheriz.objects.nodes import Node, Coord
+            from atheriz.globals.objects import add_object
+            from atheriz.globals.get import get_unique_id, get_node_handler
+            home_coord = Coord("limbo", 0, 0, 0)
+            home = Node(coord=home_coord, desc="Home", symbol="#")
+            home.id = get_unique_id()
+            add_object(home)
+            nh = get_node_handler()
+            nh.get_node = MagicMock(return_value=home)
+            guest_caller = MagicMock()
+            guest_caller.session = MagicMock()
+            guest_caller.session.puppet = None
+            guest_caller.msg = MagicMock()
+            guest_caller.send_command = MagicMock()
+            guest_caller.client_host = "203.0.113.5"
+            guest_caller.session.prompt = AsyncMock(side_effect=["GuestA", "M", "desc"])
+            asyncio.run(GuestCommand().run(guest_caller, None))
+            assert guest_caller.session.puppet is not None
+            acct_caller = MagicMock()
+            acct_caller.session = MagicMock()
+            acct_caller.session.account = None
+            acct_caller.session.prompt = AsyncMock(side_effect=["newacct", "validpass123"])
+            acct_caller.msg = MagicMock()
+            acct_caller.send_command = MagicMock()
+            acct_caller.client_host = "203.0.113.5"
+            from unittest.mock import patch as _patch
+            with _patch("atheriz.commands.unloggedin.create.char_selection", new=AsyncMock()):
+                asyncio.run(CreateCommand().run(acct_caller, None))
+            acct_caller.msg.assert_called_with("Creation is temporarily rate-limited. Please try again later.")
+            assert acct_caller.session.account is None
+        finally:
+            CREATION_COOLDOWNS.clear()
+            settings.CREATION_COOLDOWN = old_cd
+            settings.GUEST_ENABLED = old_guest
+            settings.ACCOUNT_CREATION_ENABLED = old_acct
+
+    def test_id_caller_reuse_bypass_blocked(self, global_test_env):
+        from atheriz.globals.objects import CREATION_COOLDOWNS
+        old_cd = settings.CREATION_COOLDOWN
+        old_enabled = settings.GUEST_ENABLED
+        settings.CREATION_COOLDOWN = 60
+        settings.GUEST_ENABLED = True
+        CREATION_COOLDOWNS.clear()
+        try:
+            fake_id = 999999
+            caller1 = MagicMock()
+            caller1.session = MagicMock()
+            caller1.session.puppet = None
+            caller1.msg = MagicMock()
+            caller1.send_command = MagicMock()
+            caller1.client_host = None
+            caller1.session.prompt = AsyncMock(side_effect=["Guest1", "M", "desc"])
+            with patch("atheriz.commands.unloggedin.guest.id", return_value=fake_id):
+                with patch("atheriz.commands.unloggedin.guest.get_node_handler") as gnh:
+                    gnh.return_value.get_node.return_value = None
+                    character = MagicMock()
+                    with patch("atheriz.commands.unloggedin.guest.Object.create", return_value=character):
+                        asyncio.run(GuestCommand().run(caller1, None))
+            caller2 = MagicMock()
+            caller2.session = MagicMock()
+            caller2.session.puppet = None
+            caller2.msg = MagicMock()
+            caller2.send_command = MagicMock()
+            caller2.client_host = None
+            caller2.session.prompt = AsyncMock(side_effect=["Guest2", "M", "desc2"])
+            with patch("atheriz.commands.unloggedin.guest.id", return_value=fake_id + 1):
+                pass
+            with patch("atheriz.commands.unloggedin.guest.id", return_value=fake_id):
+                asyncio.run(GuestCommand().run(caller2, None))
+            caller2.msg.assert_called_with("Creation is temporarily rate-limited. Please try again later.")
+            caller2.session.prompt.assert_not_awaited()
+        finally:
+            CREATION_COOLDOWNS.clear()
+            settings.CREATION_COOLDOWN = old_cd
+            settings.GUEST_ENABLED = old_enabled
+
+    def test_weak_password_rejected_via_validation(self, global_test_env, fixed_salt):
+        from atheriz.server_events import at_char_create
+        from unittest.mock import patch
+        from atheriz.objects.nodes import Node, Coord
+        from atheriz.globals.objects import add_object, filter_by
+        from atheriz.globals.get import get_unique_id
+        home_coord = Coord("limbo", 0, 0, 0)
+        home = Node(coord=home_coord, desc="Home", theme="limbo", symbol="#")
+        home.id = get_unique_id()
+        add_object(home)
+        nh = MagicMock()
+        nh.get_node.return_value = home
+        with patch("atheriz.server_events.get_node_handler", return_value=nh), \
+             patch("atheriz.server_events.save_objects"):
+            before = len(filter_by(lambda x: getattr(x, "is_account", False)))
+            at_char_create("weakpwacct", "HeroWeak", "x")
+            after = len(filter_by(lambda x: getattr(x, "is_account", False) and x.name == "weakpwacct"))
+            assert after == 0, "CLI create with short password 'x' must be rejected by validation"
+            heroes = filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "HeroWeak")
+            assert heroes == []
+
+    def test_cli_create_alternate_op_same_host_rate_limited(self, global_test_env):
+        from atheriz.globals.objects import CREATION_COOLDOWNS
+        old_cd = settings.CREATION_COOLDOWN
+        settings.CREATION_COOLDOWN = 60
+        CREATION_COOLDOWNS.clear()
+        try:
+            host = "198.51.100.99"
+            from atheriz.commands.unloggedin.create import CreateCommand as CC
+            caller1 = MagicMock()
+            caller1.session = MagicMock()
+            caller1.session.account = None
+            caller1.session.prompt = AsyncMock(side_effect=["acct1", "validpass123"])
+            caller1.msg = MagicMock()
+            caller1.send_command = MagicMock()
+            caller1.client_host = host
+            with patch("atheriz.commands.unloggedin.create.char_selection", new=AsyncMock()):
+                asyncio.run(CC().run(caller1, None))
+            assert caller1.session.account is not None
+            caller2 = MagicMock()
+            caller2.session = MagicMock()
+            caller2.session.puppet = None
+            caller2.msg = MagicMock()
+            caller2.send_command = MagicMock()
+            caller2.client_host = host
+            caller2.session.prompt = AsyncMock(side_effect=["GuestX", "M", "desc"])
+            asyncio.run(GuestCommand().run(caller2, None))
+            caller2.msg.assert_called_with("Creation is temporarily rate-limited. Please try again later.")
+        finally:
+            CREATION_COOLDOWNS.clear()
+            settings.CREATION_COOLDOWN = old_cd

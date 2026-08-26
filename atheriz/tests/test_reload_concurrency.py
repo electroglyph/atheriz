@@ -217,3 +217,112 @@ def test_http_vs_ingame_reload_not_interleaved(global_test_env, tmp_path, monkey
     # or in-game did (non-blocking second returns skipping). Never both ran
     # do_reload+reload concurrently.
     assert any("already in progress" in r.lower() for r in results) or len(results) == 2, f"expected serialization, results={results}"
+
+
+def test_shutdown_and_reload_do_not_overlap(global_test_env):
+    import threading
+    import time
+
+    import atheriz.globals.startstop as ss
+    import atheriz.reloader as R
+
+    active: set[int] = set()
+    max_overlap = [0]
+    overlap_lock = threading.Lock()
+    barrier = threading.Barrier(2, timeout=5)
+
+    def hold_shutdown():
+        with ss._shutdown_lock:
+            tid = threading.get_ident()
+            with overlap_lock:
+                active.add(tid)
+                max_overlap[0] = max(max_overlap[0], len(active))
+            try:
+                barrier.wait(timeout=5)
+            except Exception:
+                return
+            time.sleep(0.15)
+            with overlap_lock:
+                active.discard(tid)
+
+    def hold_reload():
+        with R._reload_lock:
+            tid = threading.get_ident()
+            with overlap_lock:
+                active.add(tid)
+                max_overlap[0] = max(max_overlap[0], len(active))
+            try:
+                barrier.wait(timeout=5)
+            except Exception:
+                return
+            time.sleep(0.15)
+            with overlap_lock:
+                active.discard(tid)
+
+    t1 = threading.Thread(target=hold_shutdown, daemon=True)
+    t2 = threading.Thread(target=hold_reload, daemon=True)
+    t1.start()
+    t2.start()
+    t1.join(timeout=5)
+    t2.join(timeout=5)
+    assert not t1.is_alive() and not t2.is_alive()
+    assert max_overlap[0] <= 1, f"shutdown and reload overlapped {max_overlap[0]} deep, missing shared world lock"
+
+
+def test_reload_holds_world_lock_while_patching(global_test_env, tmp_path, monkeypatch):
+    import threading
+    import time
+    from unittest.mock import patch, MagicMock
+
+    import atheriz.reloader as R
+    import atheriz.globals.startstop as ss
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "__init__.py").write_text("")
+    (tmp_path / "settings.py").write_text("")
+    (tmp_path / "admin.token").write_text("tok")
+
+    active: set[int] = set()
+    max_overlap = [0]
+    olock = threading.Lock()
+    barrier = threading.Barrier(2, timeout=5)
+
+    orig_apply = R._apply_patch
+
+    def slow_apply(obj, new_class):
+        tid = threading.get_ident()
+        with olock:
+            active.add(tid)
+            max_overlap[0] = max(max_overlap[0], len(active))
+        try:
+            barrier.wait(timeout=5)
+        except Exception:
+            pass
+        time.sleep(0.1)
+        res = orig_apply(obj, new_class)
+        with olock:
+            active.discard(tid)
+        return res
+
+    def slow_shutdown_step(name, fn, *a, **kw):
+        tid = threading.get_ident()
+        with olock:
+            active.add(tid)
+            max_overlap[0] = max(max_overlap[0], len(active))
+        try:
+            barrier.wait(timeout=5)
+        except Exception:
+            pass
+        time.sleep(0.1)
+        with olock:
+            active.discard(tid)
+
+    with patch.object(R, "_apply_patch", side_effect=slow_apply):
+        with patch.object(ss, "_shutdown_step", side_effect=slow_shutdown_step):
+            t1 = threading.Thread(target=lambda: R.reload_game_logic(), daemon=True)
+            t2 = threading.Thread(target=lambda: ss.do_shutdown(), daemon=True)
+            t1.start()
+            t2.start()
+            t1.join(timeout=10)
+            t2.join(timeout=10)
+    assert max_overlap[0] <= 1, f"reload patching overlapped shutdown {max_overlap[0]}, world lock not held"

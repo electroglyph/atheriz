@@ -359,3 +359,119 @@ class TestDbOps:
         with pytest.raises(RuntimeError):
             obj.get_save_ops()
         assert obj.is_modified is True
+
+
+def _is_db_locked(db):
+    try:
+        return db.lock._is_owned()  # type: ignore[attr-defined]
+    except AttributeError:
+        try:
+            return bool(getattr(db.lock, "_count", 0))
+        except Exception:
+            return False
+
+
+def test_load_objects_releases_db_lock_before_deserialization(global_test_env, monkeypatch):
+    from atheriz.objects.base_obj import Object
+    from atheriz.globals.objects import save_objects, load_objects
+
+    obj = Object.create(None, "ProbeLoad")
+    save_objects()
+    db = database_setup.get_database()
+    held = []
+
+    orig = dill.loads
+
+    def checking(blob):
+        held.append(_is_db_locked(db))
+        return orig(blob)
+
+    monkeypatch.setattr(dill, "loads", checking)
+    monkeypatch.setattr("atheriz.globals.objects.dill.loads", checking)
+    load_objects()
+    assert held, "dill.loads was not called"
+    assert not any(held), "dill.loads executed while db.lock held"
+
+
+def test_save_objects_releases_db_lock_before_serialization(global_test_env, monkeypatch):
+    from atheriz.objects.base_obj import Object
+    from atheriz.globals.objects import save_objects
+
+    obj = Object.create(None, "ProbeSave")
+    obj.desc = "dirty"
+    object.__setattr__(obj, "is_modified", True)
+    db = database_setup.get_database()
+    held = []
+    orig = dill.dumps
+
+    def checking(o):
+        held.append(_is_db_locked(db))
+        return orig(o)
+
+    monkeypatch.setattr(dill, "dumps", checking)
+    monkeypatch.setattr("atheriz.globals.objects.dill.dumps", checking)
+    monkeypatch.setattr("atheriz.objects.base_db_ops.dill.dumps", checking)
+    monkeypatch.setattr("atheriz.globals.node.dill.dumps", checking)
+    monkeypatch.setattr("atheriz.globals.map.dill.dumps", checking)
+    save_objects(force=True)
+    assert held, "dill.dumps was not called"
+    assert not any(held), "dill.dumps executed while db.lock held"
+
+
+def test_map_handler_save_releases_db_lock_before_serialization(global_test_env, monkeypatch):
+    from atheriz.globals.map import MapInfo
+    from atheriz.globals.get import get_map_handler
+
+    mh = get_map_handler()
+    mi = MapInfo(name="ProbeMapSave")
+    mi.pre_grid[(1, 1)] = "Y"
+    with mh.lock:
+        mh.data[("ProbeMapSave", 0)] = mi
+    db = database_setup.get_database()
+    held = []
+    orig = dill.dumps
+
+    def checking(o):
+        held.append(_is_db_locked(db))
+        return orig(o)
+
+    monkeypatch.setattr(dill, "dumps", checking)
+    monkeypatch.setattr("atheriz.globals.map.dill.dumps", checking)
+    mh.save(force=True)
+    assert held
+    assert not any(held), "map dill.dumps while db.lock held"
+
+
+def test_node_handler_save_releases_db_lock_before_serialization(global_test_env, monkeypatch):
+    from atheriz.globals.get import get_node_handler
+    from atheriz.objects.nodes import Node
+    from atheriz.utils import Coord
+
+    nh = get_node_handler()
+    n = Node(coord=Coord("ProbeNodeSave", 0, 0, 0), desc="n")
+    nh.add_node(n)
+    db = database_setup.get_database()
+    held = []
+    orig = dill.dumps
+
+    def checking(o):
+        held.append(_is_db_locked(db))
+        return orig(o)
+
+    monkeypatch.setattr(dill, "dumps", checking)
+    monkeypatch.setattr("atheriz.globals.node.dill.dumps", checking)
+    monkeypatch.setattr("atheriz.utils.dill.dumps", checking)
+    monkeypatch.setattr("atheriz.globals.objects.dill.dumps", checking)
+    nh.save(force=True)
+    assert held
+    assert not any(held), "node dill.dumps while db.lock held"
+
+
+def test_busy_timeout_is_configured(global_test_env):
+    db = database_setup.get_database()
+    with db.lock:
+        cur = db.connection.cursor()
+        cur.execute("PRAGMA busy_timeout")
+        row = cur.fetchone()
+        assert row is not None
+        assert int(row[0]) > 0, f"busy_timeout not configured, got {row[0]}"

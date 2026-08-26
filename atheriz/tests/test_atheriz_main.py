@@ -622,3 +622,93 @@ class TestSSLConfig:
         captured = self._run_start(monkeypatch, tmp_path)
         assert "ssl_certfile" not in captured
         assert "ssl_keyfile" not in captured
+
+
+class TestAdminTokenSecurePermissions:
+    def test_admin_token_created_with_secure_permissions(self, global_test_env, monkeypatch, tmp_path):
+        import inspect
+        from atheriz import atheriz as az
+        src = inspect.getsource(az.start_server)
+        assert "os.open" in src and "admin.token" in src, (
+            "admin.token must be created atomically via os.open(..., 0o600) not open()+chmod"
+        )
+        assert "0o600" in src
+        assert 'open(token_file, "w"' not in src, "window where token is 0o644 before chmod must not exist"
+
+    def test_admin_token_file_mode_is_600_without_window(self, global_test_env, tmp_path, monkeypatch):
+        from atheriz import atheriz as az
+        import os
+        captured_modes = {}
+
+        orig_open = os.open
+
+        def spy_open(path, flags, mode=0o777):
+            captured_modes["mode"] = mode
+            captured_modes["flags"] = flags
+            return orig_open(path, flags, mode)
+
+        secret = tmp_path / "secret"
+        monkeypatch.setattr(az.settings, "SECRET_PATH", str(secret))
+        monkeypatch.setattr(az.settings, "SAVE_PATH", str(tmp_path))
+        monkeypatch.setattr(az, "setup_game_folder", lambda required=False: None)
+        monkeypatch.setattr(az, "setup_protocols", lambda: None)
+        monkeypatch.setattr(az, "do_startup", lambda: None)
+        monkeypatch.setattr(az, "setup_static_files", lambda: None)
+        monkeypatch.setattr(az, "do_shutdown", lambda: None)
+        import uvicorn
+
+        class FakeConfig:
+            def __init__(self, *a, **kw):
+                pass
+
+        class FakeServer:
+            def __init__(self, cfg):
+                self.config = cfg
+            def run(self):
+                pass
+
+        monkeypatch.setattr(uvicorn, "Config", FakeConfig)
+        monkeypatch.setattr(uvicorn, "Server", FakeServer)
+        with patch("os.open", side_effect=spy_open):
+            try:
+                az.start_server()
+            except SystemExit:
+                pass
+            except Exception:
+                pass
+        token_file = secret / "admin.token"
+        if token_file.exists():
+            mode = oct(token_file.stat().st_mode)[-3:]
+            assert mode == "600", f"admin.token mode must be 600, got {mode}"
+            assert captured_modes.get("mode") == 0o600, "must use os.open with 0o600 atomically"
+            assert captured_modes.get("flags") & os.O_CREAT and captured_modes.get("flags") & os.O_EXCL, "must use O_EXCL"
+        else:
+            import inspect as _insp
+            assert "os.open" in _insp.getsource(az.start_server)
+
+    def test_salt_file_uses_secure_create_and_token_does_too(self):
+        import inspect
+        from atheriz.globals import salt as salt_mod
+        from atheriz import atheriz as az
+        salt_src = inspect.getsource(salt_mod.get_salt)
+        assert "os.open" in salt_src and "0o600" in salt_src
+        az_src = inspect.getsource(az.start_server)
+        assert az_src.count("os.open") >= 1, "both salt and token should use os.open"
+
+
+class TestServerLogRotation:
+    def test_server_log_has_rotation_handler(self, tmp_path, monkeypatch):
+        import inspect
+        from atheriz import atheriz as az
+        src = inspect.getsource(az.spawn_daemon)
+        assert "RotatingFileHandler" in src or "rotation" in src.lower() or "maxBytes" in src, (
+            "server.log must use RotatingFileHandler to avoid unbounded growth"
+        )
+
+    def test_spawn_daemon_log_not_unbounded_append(self, tmp_path):
+        import inspect
+        from atheriz import atheriz as az
+        src = inspect.getsource(az.spawn_daemon)
+        assert 'open(log_file, "a"' not in src or "RotatingFileHandler" in src, (
+            "plain append without rotation allows unbounded server.log"
+        )

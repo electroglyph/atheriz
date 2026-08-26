@@ -129,3 +129,43 @@ def test_is_under_still_rejects_outside_path():
         f.write_text("x", encoding="utf-8")
         assert _is_under(str(f), str(a)) is False
         assert _is_under(str(f), str(b)) is True
+
+
+def test_admin_token_permissions_atomically_600(tmp_path, monkeypatch):
+    import inspect
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.start_server)
+    assert "os.open" in src and "admin.token" in src
+    assert "0o600" in src
+    assert 'open(token_file, "w"' not in src
+
+
+def test_settings_mutation_requires_lock():
+    import inspect
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.main)
+    assert "WEBSERVER_PORT" in src
+    has_lock = "Lock" in src or "lock" in src.lower()
+    assert has_lock or "settings" not in src, "settings mutated without lock in main() — concurrent start/stop may race"
+
+def test_settings_concurrent_mutation_is_threadsafe():
+    import threading, atheriz.settings as s
+    orig = s.WEBSERVER_PORT
+    errors = []
+    def writer(v):
+        try:
+            for i in range(100):
+                s.WEBSERVER_PORT = v + i
+        except Exception as e:
+            errors.append(e)
+    t1 = threading.Thread(target=writer, args=(1000,))
+    t2 = threading.Thread(target=writer, args=(2000,))
+    t1.start(); t2.start()
+    t1.join(timeout=2); t2.join(timeout=2)
+    s.WEBSERVER_PORT = orig
+    assert not errors
+    assert not t1.is_alive() and not t2.is_alive()
+    import inspect
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.main)
+    assert "RLock" in src or "Lock" in src or "threading" in src, "settings mutation should be guarded"

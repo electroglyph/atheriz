@@ -270,3 +270,76 @@ def test_session_prompt_binds_future_to_existing_loop(global_test_env):
         loop.run_until_complete(run_prompt())
     finally:
         loop.close()
+
+
+def test_session_echo_race_masked_prompt_then_disconnect_sends_echo_on(global_test_env):
+    loop = asyncio.new_event_loop()
+    conn = MagicMock()
+    conn.loop = loop
+    conn.send_command = MagicMock()
+    conn.msg = MagicMock()
+    sess = Session(connection=conn)
+    async def run():
+        task = asyncio.create_task(sess.prompt("secret", mask=True))
+        await asyncio.sleep(0)
+        assert sess._input_masked is True
+        assert sess.input_future is not None
+        sess.at_disconnect()
+        conn.send_command.assert_any_call("echo_on")
+        assert sess._input_masked is False
+        assert sess.input_future is None
+        if not task.done():
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+    loop.run_until_complete(run())
+    loop.close()
+
+def test_session_double_disconnect_idempotent(global_test_env):
+    conn = MagicMock()
+    conn.send_command = MagicMock()
+    sess = Session(connection=conn)
+    sess.puppet = MagicMock()
+    sess.puppet.session = conn
+    sess.puppet.at_disconnect = MagicMock()
+    sess.at_disconnect()
+    first_calls = sess.puppet.at_disconnect.call_count
+    sess.at_disconnect()
+    assert sess.puppet is None or sess.puppet.at_disconnect.call_count == first_calls, "second disconnect must not double-call puppet"
+
+def test_session_echo_state_not_leaked_on_cancelled_prompt(global_test_env):
+    loop = asyncio.new_event_loop()
+    conn = MagicMock()
+    conn.loop = loop
+    conn.send_command = MagicMock()
+    conn.msg = MagicMock()
+    sess = Session(connection=conn)
+    async def run():
+        t1 = asyncio.create_task(sess.prompt("first", mask=True))
+        await asyncio.sleep(0)
+        assert sess._input_masked is True
+        t2 = asyncio.create_task(sess.prompt("second", mask=False))
+        await asyncio.sleep(0)
+        assert sess._input_masked is False
+        conn.send_command.assert_any_call("echo_on")
+        for t in (t1, t2):
+            if not t.done():
+                t.cancel()
+                try:
+                    await t
+                except asyncio.CancelledError:
+                    pass
+    loop.run_until_complete(run())
+    loop.close()
+
+def test_connection_double_close_no_runtime_error(global_test_env):
+    from atheriz.tests.fakes import FakeConnection
+    conn = FakeConnection()
+    conn.close()
+    try:
+        conn.close()
+    except RuntimeError as e:
+        assert False, f"double close raised RuntimeError: {e}"
+    assert conn.closed is True

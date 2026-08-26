@@ -488,3 +488,32 @@ class TestUnloggedinNoneCommand:
         UnloggedinNoneCommand().run(c, args)
         assert c.msg.called
         assert "did you mean" in c.msg.call_args[0][0]
+
+
+class TestNounCaseInsensitive:
+    def test_add_noun_case_insensitive_lookup(self, global_test_env):
+        loc = Node(coord=_make_coord("n", 0, 0, 0))
+        loc.add_noun("Flower", "a pretty flower")
+        assert loc.get_noun("flower") == "a pretty flower", "get_noun should be case-insensitive"
+        assert loc.get_noun("FLOWER") == "a pretty flower"
+        assert loc.get_noun("Flower") == "a pretty flower"
+
+    def test_look_finds_noun_case_insensitively(self, global_test_env):
+        from atheriz.commands.loggedin.look import LookCommand
+        loc = Node(coord=_make_coord("looktest", 0, 0, 0))
+        loc.add_noun("Flower", "a pretty flower desc")
+        caller = _make_caller(builder=True, location=loc)
+        caller.msg = MagicMock()
+        caller.search = MagicMock(return_value=[])
+        loc.get_noun = MagicMock(wraps=loc.get_noun)
+        args = MagicMock(target=["flower"])
+        LookCommand().run(caller, args)
+        all_text = " ".join(str(c.args[0]) for c in caller.msg.call_args_list if c.args)
+        assert "pretty flower" in all_text.lower(), "look flower should find noun stored as Flower"
+
+    def test_add_noun_overwrites_case_insensitively(self, global_test_env):
+        loc = Node(coord=_make_coord("n2", 0, 0, 0))
+        loc.add_noun("Rock", "first")
+        loc.add_noun("rock", "second")
+        assert loc.get_noun("ROCK") == "second"
+        assert len([k for k in loc.nouns.keys() if k.lower() == "rock"]) == 1

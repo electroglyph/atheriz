@@ -437,3 +437,116 @@ class TestDropGetEdge:
         PutCommand().run(c, args)
         c.msg.assert_called_once()
         assert "can't put" in str(c.msg.call_args).lower()
+
+
+class TestPutDropWrongLock:
+    def test_put_finds_chest_when_room_denies_put_but_allows_view(self, global_test_env):
+        room = _make_room(Coord("test", 10, 10, 0))
+        room.add_lock("put", lambda caller: False)
+        chest = Object.create(None, "Chest", is_container=True)
+        chest.is_container = True
+        chest.move_to(room)
+        caller = _make_caller(builder=True)
+        caller.location = room
+        room.add_object(caller)
+        caller.msg = MagicMock()
+        room.msg_contents = MagicMock()
+        apple = Object.create(None, "Apple", is_item=True)
+        apple.move_to(caller)
+        args = MagicMock(object="apple", destination=["chest"])
+        PutCommand().run(caller, args)
+        assert apple in chest.contents, "put should find chest via view lock, not put lock; apple should be in chest"
+        assert apple not in caller.contents
+
+    def test_drop_succeeds_when_room_denies_put_but_allows_drop(self, global_test_env):
+        room = _make_room(Coord("test", 11, 11, 0))
+        room.add_lock("put", lambda caller: False)
+        caller = _make_caller()
+        caller.location = room
+        room.add_object(caller)
+        caller.msg = MagicMock()
+        room.msg_contents = MagicMock()
+        apple = Object.create(None, "Apple2", is_item=True)
+        apple.move_to(caller)
+        args = MagicMock(object=["Apple2"])
+        DropCommand().run(caller, args)
+        assert apple in room.contents, "drop should be gated by drop lock, not put; apple should be dropped"
+        assert apple not in caller.contents
+
+
+class TestPutGiveRecursiveClosedContainer:
+    def test_put_does_not_find_sword_inside_closed_pouch(self, global_test_env):
+        room = _make_room(Coord("test", 12, 12, 0))
+        caller = _make_caller(builder=True)
+        caller.location = room
+        room.add_object(caller)
+        caller.msg = MagicMock()
+        room.msg_contents = MagicMock()
+        chest = Object.create(None, "Chest2", is_container=True)
+        chest.is_container = True
+        chest.move_to(room)
+        pouch = Object.create(None, "Pouch", is_container=True)
+        pouch.is_container = True
+        pouch.move_to(caller)
+        sword = Object.create(None, "Sword", is_item=True)
+        sword.move_to(pouch)
+        assert sword in pouch.contents
+        args = MagicMock(object="sword", destination=["chest2"])
+        PutCommand().run(caller, args)
+        assert sword in pouch.contents, "put should not find sword nested inside pouch"
+        assert sword not in chest.contents
+        assert any("not found" in str(c).lower() or "can't put" in str(c).lower() for c in [str(x) for x in caller.msg.call_args_list]) or sword not in chest.contents
+
+    def test_give_does_not_find_sword_inside_closed_pouch(self, global_test_env):
+        from atheriz.commands.loggedin.give import GiveCommand
+        room = _make_room(Coord("test", 13, 13, 0))
+        giver = _make_caller(name="Giver")
+        giver.location = room
+        room.add_object(giver)
+        giver.msg = MagicMock()
+        receiver = _make_caller(name="Receiver")
+        receiver.is_pc = True
+        receiver.is_container = True
+        receiver.location = room
+        room.add_object(receiver)
+        receiver.msg = MagicMock()
+        room.msg_contents = MagicMock()
+        pouch = Object.create(None, "Pouch2", is_container=True)
+        pouch.is_container = True
+        pouch.move_to(giver)
+        sword = Object.create(None, "Sword2", is_item=True)
+        sword.move_to(pouch)
+        cmd = GiveCommand()
+        args = cmd.parser.parse_args(["sword2", "Receiver"])
+        cmd.run(giver, args)
+        assert sword in pouch.contents, "give should not find sword nested inside closed pouch"
+        assert sword not in receiver.contents
+
+
+class TestExamDoesNotLeakPassword:
+    def test_exam_does_not_dump_password_hash(self, global_test_env, fixed_salt):
+        from atheriz.objects.base_account import Account
+        admin = Object.create(None, "AdminExam")
+        admin.privilege_level = settings.Privilege.Admin
+        admin.msg = MagicMock()
+        acct = Account.create("exam_acct", "supersecret")
+        target = f"#{acct.id}"
+        args = MagicMock(target=target)
+        ExamineCommand().run(admin, args)
+        all_text = " ".join(str(c.args[0]) for c in admin.msg.call_args_list if c.args)
+        assert "supersecret" not in all_text
+        assert acct.password not in all_text, "exam should not dump password hash"
+        assert "password" not in all_text.lower(), "exam should not expose password field"
+
+    def test_exam_does_not_expose_secret_attribute(self, global_test_env):
+        admin = Object.create(None, "AdminExam2")
+        admin.privilege_level = settings.Privilege.Admin
+        admin.msg = MagicMock()
+        victim = Object.create(None, "Victim")
+        victim.password = "should_not_leak_hash_value_123"
+        victim.secret_token = "also_secret"
+        args = MagicMock(target=f"#{victim.id}")
+        ExamineCommand().run(admin, args)
+        all_text = " ".join(str(c.args[0]) for c in admin.msg.call_args_list if c.args)
+        assert "should_not_leak" not in all_text
+        assert "password" not in all_text.lower()

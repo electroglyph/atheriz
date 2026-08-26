@@ -337,3 +337,71 @@ class TestDisabledTransition:
 
         start_autosave()
         assert _slots_holding_tick() == []
+
+
+def test_time_slot_running_read_holds_lock(global_test_env):
+    import inspect
+    from atheriz.globals.asyncthreadpool import AsyncTicker
+
+    src = inspect.getsource(AsyncTicker.TimeSlot.timer)
+    assert "self.running" in src
+    lines = src.splitlines()
+    for idx, line in enumerate(lines):
+        if "while" in line and "self.running" in line:
+            ctx = "\n".join(lines[max(0, idx - 3): idx + 1])
+            assert "with self.lock" in ctx or "self.lock" in ctx, "TimeSlot.timer reads running without lock"
+            break
+    else:
+        assert False, "while self.running not found"
+    src2 = inspect.getsource(AsyncTicker.TimeSlot.start)
+    assert "with self.lock" in src2
+    assert "self.running" in src2
+
+
+def test_save_snapshot_filters_hold_object_lock(global_test_env):
+    from pathlib import Path
+
+    p = Path(__file__).parents[1] / "globals" / "objects.py"
+    src = p.read_text() if p.exists() else ""
+    if not src:
+        import inspect
+        import atheriz.globals.objects as m
+        src = inspect.getsource(m.save_objects)
+    start = src.find("snapshot = list(_ALL_OBJECTS.values())")
+    end = src.find("with db.lock:", start)
+    segment = src[start:end] if start != -1 and end != -1 else src
+    assert "is_temporary" in segment
+    assert "with obj.lock" in segment or "with o.lock" in segment or "_is_still_saveable" in segment, "snapshot filters is_temporary/is_deleted without holding object lock"
+
+
+def test_handler_flags_cleared_only_after_snapshot(global_test_env, monkeypatch):
+    from atheriz.globals.get import get_node_handler
+    from atheriz.objects.nodes import NodeArea, NodeGrid
+    from atheriz.objects.nodes import Node
+    from atheriz.utils import Coord
+    import atheriz.globals.node as node_mod
+
+    nh = get_node_handler()
+    area = NodeArea("FlagAfterSnap")
+    grid = NodeGrid("FlagAfterSnap", 0)
+    node = Node(coord=Coord("FlagAfterSnap", 0, 0, 0))
+    grid.add_node(node)
+    area.add_grid(grid)
+    nh.add_area(area)
+    with area.lock:
+        area.is_modified = True
+    with nh.lock:
+        nh._modified = True
+    orig = node_mod.detach
+    called = []
+
+    def spy(obj):
+        called.append(getattr(obj, "name", ""))
+        if getattr(obj, "name", None) == "FlagAfterSnap":
+            assert area.is_modified is True or nh._modified is True, "handler/area flags cleared before detach snapshot"
+        return orig(obj)
+
+    monkeypatch.setattr(node_mod, "detach", spy)
+    monkeypatch.setattr("atheriz.utils.detach", spy)
+    nh.save(force=True)
+    assert called

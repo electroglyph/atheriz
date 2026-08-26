@@ -297,3 +297,51 @@ class TestWebSocketMessageSize:
 
         mock_get_cm.return_value.handle_command.assert_called_once()
         ws.close.assert_not_called()
+
+
+class TestWebSocketSendSerialization:
+    def test_websocket_sends_have_per_socket_lock(self, global_test_env):
+        """INTENT: concurrent send_text must be serialized via per-socket
+        asyncio.Lock; otherwise messages interleave/corrupt."""
+        ws = MagicMock()
+        ws.client.host = "1.1.1.1"
+        conn = WebSocketConnection(websocket=ws)
+        assert hasattr(conn, "_send_lock"), "WebSocketConnection missing per-socket asyncio.Lock for M-04"
+        import asyncio
+        assert isinstance(getattr(conn, "_send_lock"), asyncio.Lock)
+
+    def test_websocket_concurrent_send_text_is_serialized(self, global_test_env):
+        """INTENT: concurrent send_command must not run send_text concurrently;
+        a per-socket lock should serialize them."""
+        import time
+        ws = MagicMock()
+        ws.client.host = "1.1.1.1"
+        loop = asyncio.new_event_loop()
+        t = threading.Thread(target=loop.run_forever, daemon=True)
+        t.start()
+        conn = WebSocketConnection(websocket=ws, session_id="x")
+        conn.loop = loop
+        active = 0
+        max_active = 0
+        alock = threading.Lock()
+
+        async def fake_send(data):
+            nonlocal active, max_active
+            with alock:
+                active += 1
+                max_active = max(max_active, active)
+            await asyncio.sleep(0.04)
+            with alock:
+                active -= 1
+
+        ws.send_text.side_effect = fake_send
+        threads = [threading.Thread(target=lambda: conn.send_command("text", "hi")) for _ in range(5)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        time.sleep(0.5)
+        loop.call_soon_threadsafe(loop.stop)
+        t.join(timeout=2)
+        loop.close()
+        assert max_active <= 1, f"concurrent send_text not serialized: max_active={max_active}"

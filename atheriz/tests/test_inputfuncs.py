@@ -330,3 +330,153 @@ class TestSubclassing:
         assert "my_custom" in handlers
         # Parent handlers still present
         assert "text" in handlers
+
+
+class TestCustomVerbNotShadowedByGluedAlias:
+    def test_custom_verb_l_not_shadowed_by_look(self, global_test_env):
+        from atheriz.inputfuncs import dispatch_loggedin
+        from atheriz.commands.base_cmd import Command
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord
+        from atheriz.globals.objects import add_object
+        from unittest.mock import MagicMock, patch
+
+        room = Node(coord=Coord("test", 20, 20, 0))
+        add_object(room)
+        puppet = Object.create(None, "Tester", is_pc=True)
+        puppet.location = room
+        room.add_object(puppet)
+        puppet.msg = MagicMock()
+
+        class LCustomCommand(Command):
+            key = "lcustom"
+            def run(self, caller, args):
+                caller.msg("custom lcustom executed")
+
+        prop = Object.create(None, "mystery-box")
+        prop.external_cmdset.add(LCustomCommand())
+        prop.move_to(room)
+
+        with patch("atheriz.inputfuncs.get_async_threadpool") as mock_pool:
+            mock_run = MagicMock()
+            mock_pool.return_value.run = mock_run
+            mock_pool.return_value.add_task = MagicMock(return_value=True)
+            job = dispatch_loggedin(puppet, "lcustom", immediate=True)
+            assert job is not None, "dispatch should return job for external lcustom"
+            func, caller, eargs = job
+            assert "lcustom" in str(func.__self__.key).lower() or func.__self__.key == "lcustom", f"glued alias shadowed external: got {func.__self__.key}"
+
+    def test_external_l_single_char_not_shadowed_by_glued_look(self, global_test_env):
+        from atheriz.inputfuncs import dispatch_loggedin
+        from atheriz.commands.base_cmd import Command
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord
+        from atheriz.globals.objects import add_object
+        from unittest.mock import MagicMock, patch
+
+        room = Node(coord=Coord("test", 21, 21, 0))
+        add_object(room)
+        puppet = Object.create(None, "Tester2", is_pc=True)
+        puppet.location = room
+        room.add_object(puppet)
+        puppet.msg = MagicMock()
+
+        class LCommand(Command):
+            key = "l"
+            def run(self, caller, args):
+                caller.msg("external l executed")
+
+        prop = Object.create(None, "box2")
+        prop.external_cmdset.add(LCommand())
+        prop.move_to(room)
+
+        with patch("atheriz.inputfuncs.get_async_threadpool") as mock_pool:
+            mock_pool.return_value.run = MagicMock()
+            mock_pool.return_value.add_task = MagicMock(return_value=True)
+            job = dispatch_loggedin(puppet, "l", immediate=True)
+            assert job is not None
+            func, caller2, eargs = job
+            assert func.__self__.key == "l" and func.__self__.key != "look", f"expected external 'l', got {func.__self__.key}"
+
+
+class TestHelpCaseInsensitive:
+    def test_help_look_case_insensitive(self, global_test_env):
+        from atheriz.commands.loggedin.help import HelpCommand
+        from atheriz.objects.base_obj import Object
+        from unittest.mock import MagicMock
+        caller = Object.create(None, "Helper")
+        caller.privilege_level = __import__("atheriz.settings", fromlist=["Privilege"]).Privilege.Player
+        caller.quelled = False
+        caller.msg = MagicMock()
+        caller.location = None
+        caller.session = MagicMock(screenreader=True, term_width=80)
+        args = MagicMock(command="LOOK")
+        HelpCommand().run(caller, args)
+        all_text = " ".join(str(c.args[0]) for c in caller.msg.call_args_list if c.args)
+        assert "not found" not in all_text.lower(), "help LOOK should find look case-insensitively"
+        assert "look" in all_text.lower()
+
+    def test_help_uppercase_external(self, global_test_env):
+        from atheriz.commands.loggedin.help import HelpCommand
+        from atheriz.commands.base_cmd import Command
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord
+        from atheriz.globals.objects import add_object
+        from unittest.mock import MagicMock
+        room = Node(coord=Coord("test", 22, 22, 0))
+        add_object(room)
+        caller = Object.create(None, "Helper2")
+        caller.privilege_level = __import__("atheriz.settings", fromlist=["Privilege"]).Privilege.Player
+        caller.quelled = False
+        caller.msg = MagicMock()
+        caller.location = room
+        room.add_object(caller)
+        caller.session = MagicMock(screenreader=True, term_width=80)
+
+        class MyExt(Command):
+            key = "myverb"
+            desc = "My external verb"
+            def run(self, caller, args):
+                pass
+
+        prop = Object.create(None, "prop")
+        prop.external_cmdset.add(MyExt())
+        prop.move_to(room)
+        args = MagicMock(command="MYVERB")
+        HelpCommand().run(caller, args)
+        all_text = " ".join(str(c.args[0]) for c in caller.msg.call_args_list if c.args)
+        assert "not found" not in all_text.lower()
+        assert "myverb" in all_text.lower()
+
+
+class TestNoneCommandIncludesExternal:
+    def test_none_suggests_external_verb(self, global_test_env):
+        from atheriz.commands.loggedin.none import NoneCommand
+        from atheriz.commands.base_cmd import Command
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord
+        from atheriz.globals.objects import add_object
+        from unittest.mock import MagicMock
+        room = Node(coord=Coord("test", 23, 23, 0))
+        add_object(room)
+        caller = Object.create(None, "Typer")
+        caller.location = room
+        room.add_object(caller)
+        caller.msg = MagicMock()
+        caller.internal_cmdset = __import__("atheriz.commands.base_cmdset", fromlist=["CmdSet"]).CmdSet()
+        prop = Object.create(None, "prop2")
+        class ExtCmd(Command):
+            key = "flurble"
+            desc = "external flurble"
+            def run(self, caller, args):
+                pass
+        prop.external_cmdset.add(ExtCmd())
+        prop.move_to(room)
+        args = MagicMock(none=["flurbe"])
+        NoneCommand().run(caller, args)
+        all_text = " ".join(str(c.args[0]) for c in caller.msg.call_args_list if c.args)
+        assert "flurble" in all_text.lower(), "typo suggestion should include external verb flurble"

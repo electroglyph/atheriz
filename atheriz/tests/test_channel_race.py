@@ -75,3 +75,29 @@ class TestChannelCommandRace:
 
         messages = [str(c.args[0]) for c in caller.msg.call_args_list]
         assert any("stalechan not found" in m for m in messages), messages
+
+
+class TestChannelDeleteSubscribeRace:
+    def test_channel_delete_blocks_concurrent_subscribe(self, global_test_env):
+        """INTENT: add_listener checks is_deleted outside lock then inserts after
+        clear, so concurrent delete + subscribe can leave listener in deleted
+        channel. Correct code checks is_deleted inside lock."""
+        import inspect
+        from atheriz.objects.base_channel import Channel
+
+        src = inspect.getsource(Channel.add_listener)
+        lines = src.splitlines()
+        lock_idx = next((i for i, l in enumerate(lines) if "with self.lock" in l), None)
+        check_idx = next((i for i, l in enumerate(lines) if "is_deleted" in l), None)
+        assert lock_idx is not None and check_idx is not None
+        assert lock_idx < check_idx, "add_listener must check is_deleted inside lock to avoid delete/subscribe race"
+
+    def test_channel_delete_leaves_no_listener_in_deleted_channel(self, global_test_env):
+        """INTENT: delete sets is_deleted and clears listeners in separate
+        lock blocks, allowing add_listener to slip in between. Correct code
+        holds one lock across both."""
+        import inspect
+        from atheriz.objects.base_channel import Channel
+
+        src = inspect.getsource(Channel.delete)
+        assert src.count("with self.lock:") == 1, "delete must hold single lock across is_deleted and listeners clear to avoid race"

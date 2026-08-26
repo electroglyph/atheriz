@@ -243,3 +243,44 @@ class TestPutCommandContainmentGuard:
         success2 = inner.move_to(room)
         assert success2 is True
         assert inner.location is room
+
+
+class TestContainmentLoopBeyond100:
+    def test_cycle_beyond_100_depth_is_detected(self, global_test_env):
+        outer = _make_container("OuterDeep")
+        parent = outer
+        chain = [outer]
+        for i in range(105):
+            nxt = _make_container(f"Level{i}")
+            assert nxt.move_to(parent) is True
+            parent = nxt
+            chain.append(nxt)
+        deepest = parent
+        success = outer.move_to(deepest)
+        assert success is False, "containment loop beyond 100 depth should still be blocked, not silent break"
+        assert outer.location is not deepest
+
+    def test_put_loop_beyond_100_is_blocked(self, global_test_env):
+        from atheriz.commands.loggedin.put import PutCommand
+        from unittest.mock import MagicMock
+        room = Node(coord=Coord("TestArea", 99, 99, 0))
+        from atheriz.globals.objects import add_object as _add
+        _add(room)
+        caller = Object.create(None, "CallerDeep", is_pc=True)
+        caller.location = room
+        room.add_object(caller)
+        caller.msg = MagicMock()
+        outer = _make_container("OuterPut")
+        outer.move_to(caller)
+        parent = outer
+        for i in range(105):
+            nxt = _make_container(f"P{i}")
+            nxt.move_to(parent)
+            parent = nxt
+        deepest = parent
+        deepest.access = MagicMock(return_value=True)
+        caller.search = MagicMock(side_effect=[[deepest], [outer]])
+        args = MagicMock(object="OuterPut", destination=["deepest"])
+        PutCommand().run(caller, args)
+        assert any("containment loop" in str(c).lower() for c in caller.msg.call_args_list), "put should block deep containment loop"
+        assert outer.location is caller

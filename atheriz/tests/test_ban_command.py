@@ -279,3 +279,44 @@ def test_unban_privilege_gate():
     cmd.run(caller, cmd.parser.parse_args(["Rival"]))
     assert target.is_banned is True
     assert "equal or higher" in _last_msg(caller)
+
+
+def test_failed_login_attempts_bounded(global_test_env):
+    from atheriz.globals.objects import FAILED_LOGIN_ATTEMPTS, FAILED_LOGIN_ATTEMPTS_LOCK
+    with FAILED_LOGIN_ATTEMPTS_LOCK:
+        FAILED_LOGIN_ATTEMPTS.clear()
+        for i in range(6000):
+            FAILED_LOGIN_ATTEMPTS[f"host-{i}"] = 1
+        size = len(FAILED_LOGIN_ATTEMPTS)
+    assert size < 5000, f"FAILED_LOGIN_ATTEMPTS unbounded: {size} entries, expected LRU cap"
+
+def test_temp_banned_ips_bounded(global_test_env):
+    from atheriz.globals.objects import TEMP_BANNED_IPS, TEMP_BANNED_LOCK
+    import time
+    with TEMP_BANNED_LOCK:
+        TEMP_BANNED_IPS.clear()
+        now = time.time()
+        for i in range(6000):
+            TEMP_BANNED_IPS[f"10.0.{i//256}.{i%256}"] = now + 3600
+        size = len(TEMP_BANNED_IPS)
+    assert size < 5000, f"TEMP_BANNED_IPS unbounded: {size}"
+
+def test_creation_cooldowns_bounded(global_test_env):
+    from atheriz.globals.objects import CREATION_COOLDOWNS, CREATION_COOLDOWN_LOCK
+    import time
+    with CREATION_COOLDOWN_LOCK:
+        CREATION_COOLDOWNS.clear()
+        now = time.monotonic()
+        for i in range(6000):
+            CREATION_COOLDOWNS[f"account:host-{i}"] = now + 60
+        size = len(CREATION_COOLDOWNS)
+    assert size < 5000, f"CREATION_COOLDOWNS unbounded: {size}"
+
+def test_failed_login_attempts_eviction_preserves_recent(global_test_env):
+    from atheriz.globals.objects import FAILED_LOGIN_ATTEMPTS, FAILED_LOGIN_ATTEMPTS_LOCK
+    with FAILED_LOGIN_ATTEMPTS_LOCK:
+        FAILED_LOGIN_ATTEMPTS.clear()
+        for i in range(10000):
+            FAILED_LOGIN_ATTEMPTS[f"h{i}"] = i
+        assert len(FAILED_LOGIN_ATTEMPTS) < 10000, "must evict old entries, not grow forever"
+        assert "h9999" in FAILED_LOGIN_ATTEMPTS, "most recent entry must survive eviction"

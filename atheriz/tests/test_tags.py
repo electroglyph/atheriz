@@ -318,3 +318,30 @@ def test_has_tag_all(tagged_obj):
     assert tagged_obj.has_tag(["warrior", "mage"], all=True) is False
     assert tagged_obj.has_tag(["mage"], all=True) is False
     assert tagged_obj.has_tag([], all=True) is True  # empty set is a subset of anything
+
+
+class TestAliasesMutableDefaultAliasing:
+    def test_aliases_list_is_copied_not_referenced(self, global_test_env):
+        orig = ["alpha", "beta"]
+        obj = Object.create(None, "Aliased", aliases=orig)
+        orig.append("gamma")
+        assert "gamma" not in obj.aliases, "aliases should be copied, not aliased to caller's list"
+        assert obj.aliases == ["alpha", "beta"]
+
+    def test_aliases_mutating_object_does_not_affect_caller(self, global_test_env):
+        orig = ["one"]
+        obj = Object.create(None, "Aliased2", aliases=orig)
+        stored = object.__getattribute__(obj, "aliases")
+        stored.append("two")
+        assert orig == ["one"], "mutating object's aliases should not affect original list"
+        assert "two" in object.__getattribute__(obj, "aliases")
+
+    def test_aliases_empty_list_not_shared(self, global_test_env):
+        a = Object.create(None, "A", aliases=None)
+        b = Object.create(None, "B", aliases=None)
+        object.__getattribute__(a, "aliases").append("x")
+        assert "x" not in object.__getattribute__(b, "aliases"), "empty aliases default should not be shared"
+
+    def test_aliases_none_gives_empty(self, global_test_env):
+        obj = Object.create(None, "NoAlias")
+        assert obj.aliases == []

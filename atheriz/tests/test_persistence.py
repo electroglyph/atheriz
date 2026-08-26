@@ -768,3 +768,116 @@ class TestDillFailure:
             loaded = dill.loads(cur.fetchone()[0])
             assert loaded.name != "changed-one"
         assert database_setup.get_database() is not None
+
+
+class TestGuestTemporaryCleanup:
+    def test_guest_temporary_removed_on_disconnect_no_leak(self, global_test_env):
+        from atheriz.objects.session import Session
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.tests.fakes import FakeConnection
+        conn = FakeConnection()
+        sess = conn.session
+        char = Object.create(None, "GuestLeak", is_pc=True)
+        char.is_temporary = True
+        sess.puppet = char
+        char.session = sess
+        before = set(_ALL_OBJECTS.keys())
+        assert char.id in before
+        sess.at_disconnect()
+        assert char.id not in _ALL_OBJECTS, "temporary guest must be removed from registry on disconnect"
+        assert len(_ALL_OBJECTS) == len(before) - 1
+
+    def test_multiple_temporary_guests_all_cleaned(self, global_test_env):
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.tests.fakes import FakeConnection
+        conns = []
+        chars = []
+        before = set(_ALL_OBJECTS.keys())
+        for i in range(3):
+            c = FakeConnection(session_id=f"g{i}")
+            ch = Object.create(None, f"Tmp{i}", is_pc=True)
+            ch.is_temporary = True
+            c.session.puppet = ch
+            ch.session = c.session
+            conns.append(c)
+            chars.append(ch)
+        assert len(set(chars[i].id for i in range(3)) & _ALL_OBJECTS.keys()) == 3
+        for c in conns:
+            c.session.at_disconnect()
+        for ch in chars:
+            assert ch.id not in _ALL_OBJECTS
+
+
+class TestMROBrittleness:
+    def test_setstate_mro_not_hardcoded(self):
+        import inspect
+        from atheriz.objects.base_obj import Object
+        src = inspect.getsource(Object.__setstate__)
+        assert '"atheriz.objects.base_obj"' not in src and "'atheriz.objects.base_obj'" not in src, "MRO search must not be hardcoded to atheriz.objects.base_obj"
+
+    def test_account_setstate_mro_not_hardcoded(self):
+        import inspect
+        from atheriz.objects.base_account import Account
+        src = inspect.getsource(Account.__setstate__)
+        assert "atheriz.objects.base_account" not in src or "super" in src, "Account __setstate__ brittle MRO"
+
+    def test_dynamic_subclass_setstate_restores_flags(self, global_test_env):
+        import dill
+        from atheriz.objects.base_obj import Object
+        class MyPC(Object):
+            pass
+        obj = MyPC.create(None, "DynPC", is_pc=True)
+        obj.is_temporary = True
+        blob = dill.dumps(obj)
+        loaded = dill.loads(blob)
+        assert hasattr(loaded, "is_temporary")
+        assert loaded.is_pc is True
+        assert hasattr(loaded, "lock")
+
+
+class TestDepthTruncation:
+    def test_recursive_delete_depth_truncation_leak(self, global_test_env):
+        from atheriz.globals.objects import _ALL_OBJECTS
+        import atheriz.settings as s
+        orig = s.MAX_SEARCH_DEPTH
+        s.MAX_SEARCH_DEPTH = 10
+        try:
+            admin = Object.create(None, "AdminDel")
+            admin.privilege_level = s.Privilege.Admin
+            root = Object.create(admin, "Root", is_container=True)
+            cur = root
+            chain = [root]
+            for i in range(15):
+                nxt = Object.create(admin, f"Cont{i}", is_container=True)
+                cur.add_object(nxt)
+                with nxt.lock:
+                    nxt.location = cur
+                cur = nxt
+                chain.append(cur)
+            leaf = Object.create(admin, "Leaf")
+            cur.add_object(leaf)
+            with leaf.lock:
+                leaf.location = cur
+            chain.append(leaf)
+            all_ids = [o.id for o in chain]
+            assert all(oid in _ALL_OBJECTS for oid in all_ids)
+            ops = root.delete(admin, recursive=True)
+            assert ops is not None
+            remaining = [oid for oid in all_ids if oid in _ALL_OBJECTS]
+            assert remaining == [], f"deep chain leak at MAX_SEARCH_DEPTH=10: {remaining}"
+        finally:
+            s.MAX_SEARCH_DEPTH = orig
+
+    def test_nodegrid_overwrite_does_not_leak_old(self, global_test_env):
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.objects.nodes import NodeGrid, Node
+        from atheriz.utils import Coord
+        grid = NodeGrid(area="test", z=0)
+        coord = Coord("test", 5, 5, 0)
+        n1 = Node(coord=coord, desc="first")
+        grid.add_node(n1)
+        assert n1.id in _ALL_OBJECTS
+        n2 = Node(coord=coord, desc="second")
+        grid.add_node(n2)
+        assert n2.id in _ALL_OBJECTS
+        assert n1.id not in _ALL_OBJECTS, "overwritten node must be removed from registry"

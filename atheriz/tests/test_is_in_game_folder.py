@@ -73,3 +73,27 @@ def test_is_in_game_folder_windows_branch(temp_cwd, monkeypatch):
     monkeypatch.setattr(os, "name", "posix")
     (temp_cwd / "atheriz.py").unlink()
     assert is_in_game_folder() is True
+
+
+def test_is_in_game_folder_nt_case_insensitive(temp_cwd, monkeypatch):
+    monkeypatch.setattr(os, "name", "nt")
+    (temp_cwd / "SETTINGS.PY").write_text("# settings")
+    (temp_cwd / "__INIT__.PY").write_text("")
+    from atheriz.utils import is_in_game_folder
+    import pathlib
+    assert is_in_game_folder() is True, "NT filesystem is case-insensitive, detection must be case-insensitive"
+    (temp_cwd / "SETTINGS.PY").unlink()
+    (temp_cwd / "__INIT__.PY").unlink()
+    monkeypatch.setattr(os, "name", "posix")
+    (temp_cwd / "settings.py").write_text("# settings")
+    (temp_cwd / "__init__.py").write_text("")
+    assert is_in_game_folder() is True
+
+def test_is_in_game_folder_nt_mixed_case(temp_cwd, monkeypatch):
+    monkeypatch.setattr(os, "name", "nt")
+    (temp_cwd / "Settings.py").write_text("#")
+    (temp_cwd / "__init__.py").write_text("")
+    from atheriz.utils import is_in_game_folder
+    assert is_in_game_folder() is True, "Windows case-insensitive check must handle mixed case"
+    (temp_cwd / "Settings.py").unlink()
+    monkeypatch.setattr(os, "name", "posix")

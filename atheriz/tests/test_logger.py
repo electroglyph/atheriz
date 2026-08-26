@@ -107,3 +107,23 @@ def test_debug_level_capture(tmp_path):
         atheriz_logger.logger.setLevel(original_logger_level)
         atheriz_logger.logger.removeHandler(file_handler)
         file_handler.close()
+
+def test_server_log_uses_rotating_handler(tmp_path):
+    import inspect
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.spawn_daemon)
+    assert "RotatingFileHandler" in src, "server.log must use RotatingFileHandler to bound size"
+    assert "maxBytes" in src or "max_bytes" in src.lower()
+
+def test_server_log_rotation_limits_size(tmp_path):
+    import inspect, logging.handlers
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.spawn_daemon)
+    assert "RotatingFileHandler" in src
+    assert "backupCount" in src or "backup_count" in src.lower()
+
+def test_atheriz_log_no_unbounded_growth_via_plain_append(tmp_path):
+    import inspect
+    from atheriz import atheriz as az
+    src = inspect.getsource(az.spawn_daemon)
+    assert 'open(log_file, "a"' not in src or "RotatingFileHandler" in src, "plain append without rotation is unbounded"

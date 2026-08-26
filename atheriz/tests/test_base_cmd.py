@@ -594,3 +594,70 @@ class TestExecuteCmd:
         puppet.execute_cmd("asyncboxwave")
 
         assert _wait_for(lambda: _texts_contain(session.connection, "Async wave."))
+
+
+class TestShlexPosixVsNt:
+    def test_shlex_posix_consistent_across_os(self, global_test_env):
+        from unittest.mock import patch
+
+        class MultiArgCommand(Command):
+            key = "onecmd"
+            def setup_parser(self):
+                self.parser.add_argument("args", nargs="*")
+
+        cmd = MultiArgCommand()
+        caller_posix = MagicMock()
+        caller_posix.msg = MagicMock()
+        caller_nt = MagicMock()
+        caller_nt.msg = MagicMock()
+        test_string = 'arg \\"with\\" quotes'
+        with patch("atheriz.commands.base_cmd.os.name", "posix"):
+            _, _, parsed_posix = cmd.execute(caller_posix, test_string, cmdstring="onecmd")
+        with patch("atheriz.commands.base_cmd.os.name", "nt"):
+            _, _, parsed_nt = cmd.execute(caller_nt, test_string, cmdstring="onecmd")
+        assert parsed_posix is not None and parsed_nt is not None
+        assert parsed_posix.args == parsed_nt.args, f"posix {getattr(parsed_posix,'args',None)!r} vs nt {getattr(parsed_nt,'args',None)!r} should be same"
+
+    def test_windows_path_not_mangled_by_posix_escaping(self, global_test_env):
+        from unittest.mock import patch
+        class MultiArgCommand(Command):
+            key = "pathcmd"
+            def setup_parser(self):
+                self.parser.add_argument("args", nargs="*")
+
+        cmd = MultiArgCommand()
+        caller = MagicMock()
+        caller.msg = MagicMock()
+        path_str = 'test \\"quoted\\" extra'
+        with patch("atheriz.commands.base_cmd.os.name", "posix"):
+            _, _, parsed_posix = cmd.execute(caller, path_str, cmdstring="pathcmd")
+        with patch("atheriz.commands.base_cmd.os.name", "nt"):
+            caller2 = MagicMock()
+            caller2.msg = MagicMock()
+            _, _, parsed_nt = cmd.execute(caller2, path_str, cmdstring="pathcmd")
+        assert parsed_posix is not None
+        assert parsed_nt is not None
+        assert parsed_posix.args == parsed_nt.args, f"posix {getattr(parsed_posix,'args',None)!r} vs nt {getattr(parsed_nt,'args',None)!r} should be same"
+
+    def test_escaped_quotes_handled_consistently(self, global_test_env):
+        from unittest.mock import patch
+
+        class OneArgCommand(Command):
+            key = "qcmd"
+            def setup_parser(self):
+                self.parser.add_argument("a")
+                self.parser.add_argument("b")
+                self.parser.add_argument("c")
+
+        cmd = OneArgCommand()
+        caller_posix = MagicMock()
+        caller_posix.msg = MagicMock()
+        caller_nt = MagicMock()
+        caller_nt.msg = MagicMock()
+        test_string = "'a' \\\"b\\\" c"
+        with patch("atheriz.commands.base_cmd.os.name", "posix"):
+            _, _, parsed_posix = cmd.execute(caller_posix, test_string, cmdstring="qcmd")
+        with patch("atheriz.commands.base_cmd.os.name", "nt"):
+            _, _, parsed_nt = cmd.execute(caller_nt, test_string, cmdstring="qcmd")
+        assert parsed_posix is not None and parsed_nt is not None
+        assert (parsed_posix.a, parsed_posix.b, parsed_posix.c) == (parsed_nt.a, parsed_nt.b, parsed_nt.c)

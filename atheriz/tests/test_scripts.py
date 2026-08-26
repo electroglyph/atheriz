@@ -389,3 +389,30 @@ def test_script_dill_clears_child_and_hooks():
     res = obj.at_test_hook("roundtrip")
     assert obj.log == ["before: roundtrip, None", "at_test_hook: roundtrip, None"]
     assert res == "original_result"
+
+
+class TestScriptSharedHost:
+    def test_script_shared_between_hosts_is_rejected(self, global_test_env):
+        """INTENT: same Script instance must not be installable on two hosts;
+        install_hooks overwrites self.child, leaking hooks on first host."""
+        obj1 = DummyObj.create(None, "Host1")
+        obj2 = DummyObj.create(None, "Host2")
+        script = DummyBeforeScript.create(None, "SharedScript")
+        obj1.add_script(script)
+        assert script.child is obj1
+        with pytest.raises(Exception):
+            obj2.add_script(script)
+        assert script.child is obj1, "install_hooks overwrote child when same script added to two hosts"
+        assert len(obj2.hooks.get("at_test_hook", set())) == 0
+
+    def test_script_install_hooks_does_not_overwrite_existing_child(self, global_test_env):
+        """INTENT: install_hooks directly on same script with different child
+        must not silently reassign child."""
+        obj1 = DummyObj.create(None, "HostA")
+        obj2 = DummyObj.create(None, "HostB")
+        script = DummyBeforeScript.create(None, "HookScript2")
+        script.install_hooks(obj1)
+        assert script.child is obj1
+        with pytest.raises(Exception):
+            script.install_hooks(obj2)
+        assert script.child is obj1

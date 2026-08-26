@@ -167,3 +167,28 @@ def test_rejection_busy_reply_throttled(pool, monkeypatch):
     monkeypatch.undo()
     conn.enqueue_input(rec.make_handler(99), [], {})
     assert _wait(lambda: len(rec.ran) == 6)
+
+
+def test_input_queue_retries_after_threadpool_reject_without_new_enqueue(pool, monkeypatch):
+    """INTENT: when add_task rejects due to THREADPOOL_QUEUE_LIMIT, pending
+    input must be retried automatically without requiring a new enqueue;
+    otherwise queue starves with _input_running False and messages stuck."""
+    real_add = pool.add_task
+    first = {"rejected": True}
+
+    def fail_once(func, *a, **k):
+        if first["rejected"]:
+            first["rejected"] = False
+            return False
+        return real_add(func, *a, **k)
+
+    monkeypatch.setattr(pool, "add_task", fail_once)
+    conn = FakeConnection()
+    rec = _DrainRecorder()
+    conn.enqueue_input(rec.make_handler("only"), [], {})
+    assert len(conn._input_queue) == 1
+    assert conn._input_running is False
+    monkeypatch.setattr(pool, "add_task", real_add)
+    assert _wait(lambda: rec.ran == ["only"], timeout=1.0), "input queue starved after threadpool reject: handler never retried without new input"
+    assert not conn._input_queue
+    assert conn._input_running is False

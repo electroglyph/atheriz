@@ -463,3 +463,77 @@ class TestSearchDupes:
         node.add_object(crate1)
         results = node.search("crate")
         assert results == [crate1]
+
+
+class TestSearchDoesNotReturnContainerItself:
+    def test_search_does_not_return_container_itself(self, global_test_env):
+        bag = Object.create(None, "bag", is_container=True)
+        bag.is_container = True
+        coin = Object.create(None, "coin", is_item=True)
+        coin.move_to(bag)
+        results = bag.search("bag")
+        assert bag not in results, "search(bag,'bag') should not return container itself"
+        assert results == []
+
+    def test_search_container_name_does_not_shadow_contents(self, global_test_env):
+        bag = Object.create(None, "bag", is_container=True)
+        bag.is_container = True
+        bag2 = Object.create(None, "bag", is_item=True)
+        bag2.move_to(bag)
+        results = bag.search("bag")
+        assert bag not in results
+        assert bag2 in results or results == [bag2]
+
+    def test_search_me_still_returns_self(self, global_test_env):
+        hero = Object.create(None, "Hero", is_pc=True)
+        results = hero.search("me")
+        assert hero in results
+        results2 = hero.search("hero")
+        assert hero in results2
+
+
+class TestSearchPluralAndSubstringEdges:
+    def test_search_all_alone_returns_all_contents(self, global_test_env):
+        bag = Object.create(None, "bag2", is_container=True)
+        bag.is_container = True
+        a = Object.create(None, "apple", is_item=True)
+        b = Object.create(None, "banana", is_item=True)
+        a.move_to(bag)
+        b.move_to(bag)
+        results = bag.search("all")
+        assert len(results) == 2, f"'all' alone should return all contents, got {results}"
+        assert a in results and b in results
+
+    def test_search_substring_does_not_match_caterpillar(self, global_test_env):
+        bag = Object.create(None, "bag3", is_container=True)
+        bag.is_container = True
+        cat = Object.create(None, "cat", is_item=True)
+        caterpillar = Object.create(None, "caterpillar", is_item=True)
+        caterpillar.move_to(bag)
+        results = bag.search("cat")
+        assert cat not in results or caterpillar not in results
+        assert caterpillar not in results, "'cat' should not match 'caterpillar' via substring"
+        cat.move_to(bag)
+        results2 = bag.search("cat")
+        assert cat in results2
+        assert caterpillar not in results2
+
+    def test_search_split_multiple_spaces(self, global_test_env):
+        bag = Object.create(None, "bag4", is_container=True)
+        bag.is_container = True
+        sword = Object.create(None, "sword", is_item=True)
+        sword.move_to(bag)
+        results = bag.search("sword  ")
+        assert sword in results or results == [sword]
+        results2 = bag.search("  sword")
+        assert sword in results2
+        results3 = bag.search("sword  2")
+        assert results3 == []
+
+    def test_search_plural_cat_vs_caterpillar(self, global_test_env):
+        bag = Object.create(None, "bag5", is_container=True)
+        bag.is_container = True
+        caterpillar = Object.create(None, "caterpillar", is_item=True)
+        caterpillar.move_to(bag)
+        results = bag.search("cats")
+        assert caterpillar not in results, "'cats' plural should not match caterpillar"

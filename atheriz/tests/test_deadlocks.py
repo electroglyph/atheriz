@@ -281,3 +281,91 @@ def test_move_into_deleting_node_not_orphan(global_test_env):
     # Cleanup: handler holds references; global_test_env will isolate next test,
     # but explicitly clear our area to avoid leaking into other tests in same process.
     nh.remove_area("TestDeadlock")
+
+
+def test_add_object_unique_does_not_deadlock_with_contents(global_test_env):
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    repo_root = Path(__file__).resolve().parents[2]
+    child = r"""
+import sys
+sys.path.insert(0, {repo!r})
+import threading
+import time
+from pathlib import Path
+import tempfile
+import os
+os.chdir(tempfile.mkdtemp())
+Path("settings.py").write_text("")
+Path("__init__.py").write_text("")
+import atheriz.settings as settings
+settings.SAVE_PATH = tempfile.mkdtemp()
+from atheriz import database_setup
+database_setup._DATABASE = None
+database_setup._CLOSED = False
+try:
+    database_setup.do_setup()
+except Exception:
+    pass
+from atheriz.objects.base_obj import Object
+from atheriz.globals.objects import add_object_unique, remove_object, _ALL_OBJECTS
+from atheriz.globals.get import get_unique_id
+from threading import Barrier
+
+victim = Object.create(None, "Victim")
+candidate = Object.create(None, "Candidate")
+remove_object(candidate)
+assert candidate.id not in _ALL_OBJECTS
+barrier = Barrier(2, timeout=5)
+deadlock = [False]
+
+def pred(r):
+    if r.id == victim.id:
+        try:
+            barrier.wait(timeout=5)
+        except Exception:
+            return False
+        with r.lock:
+            time.sleep(0.05)
+            return False
+    return False
+
+def adder():
+    try:
+        add_object_unique(candidate, pred, "dup")
+    except Exception:
+        pass
+
+def reader():
+    try:
+        with victim.lock:
+            try:
+                barrier.wait(timeout=5)
+            except Exception:
+                return
+            _ = victim.contents
+    except Exception:
+        pass
+
+import threading as th
+t1 = th.Thread(target=adder, daemon=True)
+t2 = th.Thread(target=reader, daemon=True)
+t1.start()
+t2.start()
+t1.join(timeout=3)
+t2.join(timeout=3)
+if t1.is_alive() or t2.is_alive():
+    print("DEADLOCK=1")
+else:
+    print("DEADLOCK=0")
+"""
+    proc = subprocess.run(
+        [sys.executable, "-c", child.format(repo=str(repo_root))],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "DEADLOCK=0" in proc.stdout, f"deadlock detected: Global->Object vs Object->Global lock inversion {proc.stdout} {proc.stderr}"

@@ -172,3 +172,79 @@ def test_telnet_shell_exits_when_registration_refused(global_test_env):
                 loop.close()
 
     mcm.return_value.dispatch.assert_not_called()
+
+
+def test_unknown_host_connections_isolated_not_shared_bucket(global_test_env):
+    manager = ConnectionManager()
+    with _cap(2):
+        c1 = FakeConnection()
+        if hasattr(c1, "client_host"):
+            delattr(c1, "client_host")
+        c2 = FakeConnection()
+        if hasattr(c2, "client_host"):
+            delattr(c2, "client_host")
+        c3 = FakeConnection()
+        if hasattr(c3, "client_host"):
+            delattr(c3, "client_host")
+        assert manager.register_connection("u1", c1) is True
+        assert manager.register_connection("u2", c2) is True
+        assert manager.register_connection("u3", c3) is True, "host '?' must not share bucket across unknown hosts"
+    assert manager.connection_count == 3
+
+
+def test_host_question_mark_does_not_share_bucket(global_test_env):
+    manager = ConnectionManager()
+    with _cap(2):
+        c1 = _conn("?")
+        c2 = _conn("?")
+        c3 = _conn("?")
+        assert manager.register_connection("q1", c1) is True
+        assert manager.register_connection("q2", c2) is True
+        assert manager.register_connection("q3", c3) is True, "'?' host must be isolated per-connection or unlimited"
+
+
+def test_creation_cooldown_alternate_op_is_rate_limited(global_test_env):
+    from atheriz.globals.objects import CREATION_COOLDOWNS, CREATION_COOLDOWN_LOCK
+    import time
+    old = __import__("atheriz.settings", fromlist=["CREATION_COOLDOWN"]).CREATION_COOLDOWN
+    import atheriz.settings as s
+    orig = s.CREATION_COOLDOWN
+    s.CREATION_COOLDOWN = 60
+    try:
+        with CREATION_COOLDOWN_LOCK:
+            CREATION_COOLDOWNS.clear()
+        from atheriz.globals.objects import try_reserve_creation_cooldown, apply_creation_cooldown, creation_cooldown_active
+        host = "203.0.113.10"
+        now = time.monotonic()
+        assert try_reserve_creation_cooldown("guest", host, now, 60) is True
+        assert creation_cooldown_active("account", host, now) is True or try_reserve_creation_cooldown("account", host, now, 60) is False, "alternate op should still be blocked per-host"
+    finally:
+        s.CREATION_COOLDOWN = orig
+        with CREATION_COOLDOWN_LOCK:
+            CREATION_COOLDOWNS.clear()
+
+
+def test_connection_per_ip_enforced_with_many_hosts_bounded(global_test_env):
+    from atheriz.globals.objects import TEMP_BANNED_IPS, FAILED_LOGIN_ATTEMPTS
+    manager = ConnectionManager()
+    with _cap(2):
+        for i in range(10):
+            assert manager.register_connection(f"c{i}", _conn(f"10.0.0.{i}")) is True
+    assert manager.connection_count == 10
+    with _cap(2):
+        for i in range(5):
+            manager.register_connection(f"dup{i}", _conn("1.1.1.1"))
+        dup_count = sum(1 for c in manager.get_all_connections() if getattr(c, "client_host", None) == "1.1.1.1")
+        assert dup_count <= 2
+
+def test_max_connections_per_ip_isolation_for_question_hosts(global_test_env):
+    manager = ConnectionManager()
+    with _cap(1):
+        real = _conn("8.8.8.8")
+        assert manager.register_connection("real1", real) is True
+        unknown1 = FakeConnection()
+        unknown1.client_host = "?"
+        unknown2 = FakeConnection()
+        unknown2.client_host = "?"
+        assert manager.register_connection("u1", unknown1) is True
+        assert manager.register_connection("u2", unknown2) is True, "?' hosts should each get separate bucket, not block each other"

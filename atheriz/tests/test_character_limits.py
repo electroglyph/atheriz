@@ -101,3 +101,42 @@ def test_character_creation_single_thread_still_works(global_test_env, real_home
     char = get(acct.characters[0])[0]
     assert char.name == "NewHero"
     assert char.is_pc is True
+
+
+def test_guest_is_temporary_removed_on_disconnect_no_leak(global_test_env):
+    import asyncio
+    from unittest.mock import AsyncMock, MagicMock
+    from atheriz.commands.unloggedin.guest import GuestCommand
+    from atheriz.globals.objects import _ALL_OBJECTS
+    from atheriz.tests.fakes import FakeConnection
+    from atheriz.objects.nodes import Node, Coord
+    from atheriz.globals.objects import add_object
+    from atheriz.globals.get import get_unique_id, get_node_handler
+    import atheriz.settings as s
+    orig = s.GUEST_ENABLED
+    s.GUEST_ENABLED = True
+    home_coord = Coord("limbo", 0, 0, 0)
+    home = Node(coord=home_coord, desc="Home", symbol="#")
+    home.id = get_unique_id()
+    add_object(home)
+    nh = get_node_handler()
+    nh.get_node = MagicMock(return_value=home)
+    try:
+        conn = FakeConnection()
+        caller = MagicMock()
+        caller.session = conn.session
+        caller.session.puppet = None
+        caller.msg = MagicMock()
+        caller.send_command = MagicMock()
+        caller.client_host = "10.9.8.7"
+        caller.session.prompt = AsyncMock(side_effect=["LeakGuest", "M", "desc"])
+        before = set(_ALL_OBJECTS.keys())
+        asyncio.run(GuestCommand().run(caller, None))
+        guest = caller.session.puppet
+        assert guest is not None and guest.is_temporary is True
+        assert guest.id in _ALL_OBJECTS
+        conn.session.at_disconnect()
+        assert guest.id not in _ALL_OBJECTS, "guest temporary object leaked after disconnect"
+        assert len(_ALL_OBJECTS) == len(before)
+    finally:
+        s.GUEST_ENABLED = orig

@@ -411,3 +411,26 @@ class TestBroadcastEdge:
             summarized2 = mgr._summarize_raw(long_raw, limit=80)
             assert summarized2 == summarized
             assert mgr._should_log_malformed("1.2.3.4") is False
+
+
+class TestManagerDisconnectScalability:
+    def test_manager_disconnect_has_reverse_map(self, global_test_env):
+        """INTENT: disconnect does linear scan under lock (O(N) while holding
+        _lock), starving register/broadcast. Correct code keeps reverse map for
+        O(1) lookup and does not hold lock during scan."""
+        from atheriz.network.manager import ConnectionManager
+        mgr = ConnectionManager.__new__(ConnectionManager)
+        mgr._connections = {}
+        mgr._lock = threading.RLock()
+        has_reverse = any(hasattr(mgr, name) for name in ("_conn_to_id", "_id_by_conn", "_reverse", "_conn_ids", "_connection_by_obj"))
+        import inspect
+        src = inspect.getsource(ConnectionManager.disconnect)
+        has_scan = "for cid, conn in self._connections" in src
+        assert has_reverse or not has_scan, "ConnectionManager.disconnect holds lock while scanning O(N); should use reverse map"
+
+    def test_manager_disconnect_does_not_scan_under_lock(self, global_test_env):
+        """INTENT: disconnect must not perform linear scan while holding lock."""
+        import inspect
+        from atheriz.network.manager import ConnectionManager
+        src = inspect.getsource(ConnectionManager.disconnect)
+        assert "for cid, conn in self._connections" not in src, "disconnect performs O(N) scan under lock; should use reverse map for O(1)"
