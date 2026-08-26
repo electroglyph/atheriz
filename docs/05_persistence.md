@@ -28,7 +28,7 @@ Atheriz relies completely on Python's advanced pickling hooks.
 - `__getstate__()` (`atheriz/objects/base_obj.py:399`) copies `__dict__`, pops MRO `_pickle_excludes`, pops `session/lock/hooks`, converts `location`/`home` `Node`→`Coord` and `Object`→`id`, coerces `privilege_level` to `int`, reverts `_puppet_restore` keys.
 - `__setstate__(state)` (`459`) recreates `RLock`, restores `Privilege` IntEnum, resets `session/group_channel/hooks`, restores ancestor `__setstate__`, coerces legacy `list` `_contents`→`set`, calls `ensure_thread_safe` if enabled. `resolve_relations` (`484`) then calls `at_init()` (`514`), so `at_init` runs post-deserialization; `__init__` must be no-arg compatible for reloader (`atheriz/reloader.py:264`).
 
-Review `Object.__getstate__` and `Object.__setstate__` inside [`atheriz/objects/base_obj.py`](../atheriz/objects/base_obj.py) for exact logic. `AccessLock._pickle_excludes = ("access",)` (`atheriz/objects/base_lock.py:12`) and `__setstate__` rebinds `access` to `_safe/_fast` per current `SLOW_LOCKS`. 
+Review `Object.__getstate__` and `Object.__setstate__` inside [`atheriz/objects/base_obj.py`](../atheriz/objects/base_obj.py) for exact logic. `AccessLock._pickle_excludes = ("access",)` (`atheriz/objects/base_lock.py:12`) drops any stale instance-bound `access` from old pickles; current `access` is a normal class method.
 
 ### 5.2.2 Adding Custom Attributes That Persist
 Defining standard Python variables attached directly to `self` guarantees data persistence during standard database checkpoints automatically, provided the target data remains picklable. 

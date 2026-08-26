@@ -2,7 +2,6 @@
 Tests for lock functionality in Object class.
 """
 
-from unittest.mock import patch
 from atheriz.objects.base_obj import Object
 import atheriz.settings as settings
 
@@ -174,25 +173,8 @@ def test_access_checks_correct_lock_name():
     assert obj.access(accessor, "control") is False
 
 
-# --- SLOW_LOCKS setting tests ---
-
-
-def test_slow_locks_enabled():
-    """Test that Object uses _safe_access when SLOW_LOCKS is True."""
-    with patch.object(settings, "SLOW_LOCKS", True):
-        obj = MockObject()
-        assert obj.access == obj._safe_access
-
-
-def test_slow_locks_disabled():
-    """Test that Object uses _fast_access when SLOW_LOCKS is False."""
-    with patch.object(settings, "SLOW_LOCKS", False):
-        obj = MockObject()
-        assert obj.access == obj._fast_access
-
-
-def test_safe_access_behavior():
-    """Test _safe_access method directly."""
+def test_access_behavior():
+    """Test access method directly."""
     obj = MockObject()
     accessor = MockObject()
     accessor.privilege_level = settings.Privilege.Player
@@ -200,50 +182,11 @@ def test_safe_access_behavior():
 
     obj.add_lock("test", lambda x: True)
 
-    assert obj._safe_access(accessor, "test") is True
+    assert obj.access(accessor, "test") is True
 
     obj.add_lock("test", lambda x: False)
 
-    assert obj._safe_access(accessor, "test") is False
-
-
-def test_fast_access_behavior():
-    """Test _fast_access method directly."""
-    obj = MockObject()
-    accessor = MockObject()
-    accessor.privilege_level = settings.Privilege.Player
-    accessor.quelled = False
-
-    obj.add_lock("test", lambda x: True)
-
-    assert obj._fast_access(accessor, "test") is True
-
-    obj.add_lock("test", lambda x: False)
-
-    assert obj._fast_access(accessor, "test") is False
-
-
-def test_safe_and_fast_access_have_same_behavior():
-    """Test that _safe_access and _fast_access produce identical results."""
-    obj = MockObject()
-    accessor = MockObject()
-    accessor.privilege_level = settings.Privilege.Player
-    accessor.quelled = False
-
-    # No locks
-    assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
-
-    # Passing lock
-    obj.add_lock("test", lambda x: True)
-    assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
-
-    # Failing lock
-    obj.add_lock("test", lambda x: False)
-    assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
-
-    # Superuser
-    accessor.privilege_level = settings.Privilege.Admin
-    assert obj._safe_access(accessor, "test") == obj._fast_access(accessor, "test")
+    assert obj.access(accessor, "test") is False
 
 
 def test_quelled_superuser():

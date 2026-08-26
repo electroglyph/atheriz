@@ -22,7 +22,7 @@ Atheriz utilizes a class injection system. When the server starts, it reads `CLA
 
 ### 1.2.1 Prerequisites
 
-Atheriz requires Python `>=3.13` (`pyproject.toml` `requires-python`). Python 3.14t (free-threaded, `3.14t`) is highly recommended for best concurrency — when the GIL is disabled the engine forces `SLOW_LOCKS=True` (`atheriz/settings.py:143`) — but 3.13 and regular 3.14 work fine. [uv](https://docs.astral.sh/uv/getting-started/installation/) is an easy way to manage Python versions and virtual environments.
+Atheriz requires Python `>=3.13` (`pyproject.toml` `requires-python`). Python 3.14t (free-threaded, `3.14t`) is highly recommended for best concurrency. [uv](https://docs.astral.sh/uv/getting-started/installation/) is an easy way to manage Python versions and virtual environments.
 
 **Install uv:**
 ```sh

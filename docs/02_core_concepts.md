@@ -207,11 +207,7 @@ The access check logic evaluates in this order (`atheriz/objects/base_lock.py:52
 2. **Superuser Bypass:** If `accessing_obj.is_superuser` (i.e. `privilege_level >= Admin`), access is granted for all *other* locks (including `delete` on other objects).
 3. **Callable Evaluation:** Otherwise evaluates all callables for the lock name — *any* `False` denies (`False`), otherwise grants (`True`).
 
-Furthermore, lock evaluation supports two modes via `settings.SLOW_LOCKS`:
-- **Fast Mode:** Callables execute without `self.lock` (`_fast_access`) — `locks` dict may tear if mutated.
-- **Slow Mode (Default):** Callables execute inside `with self.lock:` (`_safe_access`).
-
-Under free-threaded Python (`sys._is_gil_enabled()==False`) the engine forces `SLOW_LOCKS=True` (`atheriz/settings.py:143`), so fast mode is unavailable on 3.14t. `AccessLock._pickle_excludes = ("access",)`; `__setstate__` rebinds `access` to `_safe/_fast` based on current setting.
+Lock evaluation always runs under `with self.lock:` (`atheriz/objects/base_lock.py:32`). `AccessLock._pickle_excludes = ("access",)`; old pickles with an instance-bound `access` drop the stale value on unpickle.
 
 ### 2.6.3 Managing Locks
 Use `add_lock()` to append an evaluation function to an object's locks, and `clear_locks_by_name()` to wipe them.

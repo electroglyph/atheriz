@@ -1789,11 +1789,7 @@ crossing per network message).
 
 ### `def creation_cooldown_active(op: str, host: str, now: float)`
 
-Return True if ``op`` for ``host`` is still within its cooldown window.
-
 ### `def apply_creation_cooldown(op: str, host: str, now: float, cooldown: float)`
-
-Record a creation cooldown expiry for ``op`` and ``host``.
 
 ### `def try_reserve_creation_cooldown(op: str, host: str, now: float, cooldown: float)`
 
@@ -3160,10 +3156,6 @@ Default value: `True`
 ### `CHANNEL_HISTORY_LIMIT`
 
 Default value: `50`
-
-### `SLOW_LOCKS`
-
-Default value: `True`
 
 ### `MAX_LOGIN_ATTEMPTS`
 

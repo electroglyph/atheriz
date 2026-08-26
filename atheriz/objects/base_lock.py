@@ -1,5 +1,4 @@
 from __future__ import annotations
-import atheriz.settings as settings
 from typing import Callable
 from typing import TYPE_CHECKING
 
@@ -14,10 +13,6 @@ class AccessLock:
     def __init__(self):
         # dict[str, list[Callable]] = {}
         object.__setattr__(self, "locks", {})
-        if settings.SLOW_LOCKS:
-            self.access = self._safe_access
-        else:
-            self.access = self._fast_access
 
     def add_lock(self, lock_name: str, callable: Callable):
         """
@@ -47,7 +42,7 @@ class AccessLock:
         with self.lock:
             self.locks.pop(lock_name, None)
 
-    def _safe_access(self, accessing_obj: Object, name: str):
+    def access(self, accessing_obj: Object, name: str):
         # workaround for doors
         if getattr(self, "id", None) is not None and getattr(accessing_obj, "id", None) == self.id and name in ["delete", "get"]:
             return False
@@ -60,21 +55,6 @@ class AccessLock:
                     return False
             return True
 
-    def _fast_access(self, accessing_obj: Object, name: str):
-        if getattr(self, "id", None) is not None and getattr(accessing_obj, "id", None) == self.id and name in ["delete", "get"]:
-            return False
-        if getattr(accessing_obj, "is_superuser", False):
-            return True
-        lock_list = self.locks.get(name, [])
-        for lock in lock_list:
-            if not lock(accessing_obj):
-                return False
-        return True
-    
     def __setstate__(self, state):
         if not hasattr(self, "locks"):
             object.__setattr__(self, "locks", state.get("locks", {}))
-        if settings.SLOW_LOCKS:
-            object.__setattr__(self, "access", self._safe_access)
-        else:
-            object.__setattr__(self, "access", self._fast_access)

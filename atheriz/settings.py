@@ -130,23 +130,6 @@ LOG_LEVEL = "info"
 SAVE_CHANNEL_HISTORY = True
 # maximum channel history entries to keep
 CHANNEL_HISTORY_LIMIT = 50
-# If you plan on changing object permission locks while they are in use, set this to True
-# If you only set locks at object creation, you can set this to False
-# NOTE: SLOW_LOCKS=False is not free-threaded safe — it reads `self.locks`
-# without holding `self.lock` (`_fast_access` vs `_safe_access`). In a
-# free-threaded build (no GIL) concurrent `add_lock` vs `access` can tear
-# the dict/list. This setting is forced to True below when the GIL is
-# disabled.
-SLOW_LOCKS = True
-
-import sys
-
-try:
-    _gil_enabled = sys._is_gil_enabled()  # type: ignore[attr-defined]
-except AttributeError:
-    _gil_enabled = True
-if not _gil_enabled:
-    SLOW_LOCKS = True
 # Max attempts before temporary ban
 MAX_LOGIN_ATTEMPTS = 3
 # Cooldown in seconds for temporary ban

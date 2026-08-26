@@ -73,7 +73,6 @@ This specifies: "Import the `Object` class defined inside `my_game/object.py` an
 - `MENU_PROMPT_TIMEOUT` (`60`, `settings.py:157`, `atheriz/menu.py:100`): `run_menu` future timeout → auto-close.
 - `MAPEDIT_CHAIN_TTL` / `MAPEDIT_MAX_CHAINS` (`180.0` / `256`, `settings.py:161`, `atheriz/globals/mapedit.py:42`): AtheriZ Draw key-chain expiry/limit.
 - `THREADSAFE_GETTERS_SETTERS`: If `True`, applies thread-safe property locks on attributes. Disabling this may cause race conditions. Patched per-class under `_PATCH_LOCK`.
-- `SLOW_LOCKS`: Set `True` if you plan to change locks while in use; `False` for better perf. Forced `True` under free-threaded Python (`sys._is_gil_enabled()==False`, `atheriz/settings.py:143`), so fast mode unavailable on 3.14t.
 - `AUTO_ALIAS_IGNORED_KEYS` (`["save","quit","wander","exit","logout","disconnect","none"]`, `settings.py:198`, `atheriz/inputfuncs.py:15`): excluded from `AUTO_COMMAND_ALIASING`.
 - `Privilege`: An `IntEnum` of permission levels — `Guest`, `Player`, `Helper`, `Builder`, `Admin` — ordered from least to most privileged. Permission gates such as `is_builder` and `is_superuser` are derived from it.
 
