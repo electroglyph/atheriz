@@ -51,12 +51,12 @@ class TestAtCharCreateWrongPassword:
 
     def test_returns_early_no_new_character(self, global_test_env, real_home_node, capsys):
         from atheriz.objects.base_account import Account
-        existing = Account.create("alice", "secret")
+        existing = Account.create("alice", "password123")
         assert existing is not None
 
         with patch("atheriz.server_events.save_objects") as mock_save, \
              patch("atheriz.server_events.Object.create") as mock_create:
-            at_char_create("alice", "Bob", "wrongpw")
+            at_char_create("alice", "Bob", "wrongpass123")
 
         # No new character was created
         mock_create.assert_not_called()
@@ -71,13 +71,13 @@ class TestAtCharCreateMaxCharacters:
     def test_returns_early_when_max(self, global_test_env, real_home_node, capsys, fixed_salt):
         from atheriz.objects.base_account import Account
         from atheriz import settings
-        existing = Account.create("alice", "secret")
+        existing = Account.create("alice", "password123")
         # Fill to max
         existing.characters = list(range(settings.MAX_CHARACTERS))
 
         with patch("atheriz.server_events.save_objects"), \
              patch("atheriz.server_events.Object.create") as mock_create:
-            at_char_create("alice", "Bob", "secret")
+            at_char_create("alice", "Bob", "password123")
 
         mock_create.assert_not_called()
         captured = capsys.readouterr()
@@ -90,12 +90,12 @@ class TestAtCharCreateExistingAccount:
     def test_creates_character_under_existing(self, global_test_env, real_home_node, fixed_salt):
         from atheriz.objects.base_account import Account
         from atheriz.globals.objects import get
-        existing = Account.create("alice", "secret")
+        existing = Account.create("alice", "password123")
         initial_count = len(existing.characters)
 
         with patch("atheriz.server_events.save_objects") as mock_save, \
              patch("atheriz.server_events.Object.create", wraps=Object.create):
-            at_char_create("alice", "Bob", "secret")
+            at_char_create("alice", "Bob", "password123")
 
         # Account now has one more character
         assert len(existing.characters) == initial_count + 1
@@ -109,11 +109,11 @@ class TestAtCharCreateExistingAccount:
     def test_sets_home(self, global_test_env, real_home_node, fixed_salt):
         from atheriz.objects.base_account import Account
         from atheriz.globals.objects import get
-        existing = Account.create("alice", "secret")
+        existing = Account.create("alice", "password123")
 
         with patch("atheriz.server_events.save_objects"), \
              patch("atheriz.server_events.Object.create", wraps=Object.create):
-            at_char_create("alice", "Bob", "secret")
+            at_char_create("alice", "Bob", "password123")
 
         new_char = get(existing.characters[-1])[0]
         # home (the Node) is stored on the character
@@ -121,12 +121,12 @@ class TestAtCharCreateExistingAccount:
 
     def test_calls_move_to_with_home(self, global_test_env, real_home_node, fixed_salt):
         from atheriz.objects.base_account import Account
-        existing = Account.create("alice", "secret")
+        existing = Account.create("alice", "password123")
 
         with patch("atheriz.server_events.save_objects"), \
              patch("atheriz.server_events.Object.create", wraps=Object.create), \
              patch("atheriz.objects.base_obj.Object.move_to") as mock_move:
-            at_char_create("alice", "Bob", "secret")
+            at_char_create("alice", "Bob", "password123")
 
         # move_to was called once with the home node
         mock_move.assert_called_once()
@@ -139,7 +139,7 @@ class TestAtCharCreateNewAccount:
     def test_creates_account_when_none_exists(self, global_test_env, real_home_node, fixed_salt):
         with patch("atheriz.server_events.save_objects") as mock_save, \
              patch("atheriz.objects.base_obj.Object.move_to"):
-            at_char_create("newuser", "Newbie", "pw")
+            at_char_create("newuser", "Newbie", "password123")
 
         from atheriz.globals.objects import filter_by
 

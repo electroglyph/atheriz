@@ -67,13 +67,18 @@ def get_database():
         db_path = Path(settings.SAVE_PATH) / "database.sqlite3"
         c = sqlite3.connect(str(db_path), check_same_thread=False, isolation_level=None)
         try:
-            c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL;")
+            c.executescript("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA busy_timeout=5000;")
         except Exception:
             try:
                 c.execute("PRAGMA journal_mode=DELETE;")
                 c.execute("PRAGMA synchronous=NORMAL;")
+                c.execute("PRAGMA busy_timeout=5000;")
             except Exception:
                 pass
+        try:
+            c.execute("PRAGMA busy_timeout=5000;")
+        except Exception:
+            pass
         _DATABASE = Database(c)
         return _DATABASE
 

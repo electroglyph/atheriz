@@ -175,14 +175,12 @@ class Node(Flags, AccessLock):
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)
-        # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = next(
-            (i for i, c in enumerate(mro) if c.__module__ == "atheriz.objects.nodes" and c.__qualname__ == "Node"),
-            len(mro),
-        )
-        ancestors = mro[current_idx + 1 :]
-        for cls in reversed(ancestors):
+        try:
+            cur = mro.index(Node)
+        except ValueError:
+            cur = -1
+        for cls in reversed(mro[cur + 1 :]):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
         if settings.THREADSAFE_GETTERS_SETTERS:
@@ -434,13 +432,16 @@ class Node(Flags, AccessLock):
                     elif fallback is not None:
                         if content.move_to(fallback, force=True, announce=False):
                             moved = True
-                    if not moved and (home is not None or fallback is not None):
+                    if not moved:
                         if content.location is obj:
                             try:
                                 obj.remove_object(content)
                             except Exception:
                                 pass
-                            content.location = None
+                            try:
+                                content.location = None
+                            except Exception:
+                                pass
                         res = content.delete(caller, True)
                         if res:
                             all_ops.extend(res)
@@ -448,10 +449,14 @@ class Node(Flags, AccessLock):
 
         def _self_delete():
             if getattr(self, "_is_tickable", False):
-                get_async_ticker().remove_coro(self.at_tick, self._tick_seconds)
-            get_node_handler().remove_node(self.coord)
-            with self.lock:
-                self.is_deleted = True
+                try:
+                    get_async_ticker().remove_coro(self.at_tick, self._tick_seconds)
+                except Exception:
+                    pass
+            try:
+                get_node_handler().remove_node(self.coord)
+            except Exception:
+                pass
 
         if not self.at_delete(caller):
             return None
@@ -991,6 +996,14 @@ class NodeGrid:
             links_snapshot = list(node.links) if needs_transition else []
             coord_snapshot = node.coord
         if needs_remove:
+            try:
+                with old.lock:
+                    old.is_deleted = True
+            except Exception:
+                try:
+                    old.is_deleted = True
+                except Exception:
+                    pass
             remove_object(old)
             logger.warning(
                 f"Overwriting node at area {self.area} z {self.z} "

@@ -47,6 +47,8 @@ class Session:
             self._input_masked = False
             stack, self.puppet_stack = self.puppet_stack, []
             puppet = self.puppet
+            self.puppet = None
+            self.last_puppet = puppet if puppet is not None else self.last_puppet
         if masked and self.connection is not None:
             try:
                 self.connection.send_command("echo_on")
@@ -84,12 +86,32 @@ class Session:
         if puppet:
             elapsed = time.time() - self.conn_time
             if self.conn_time > 0.0 and elapsed > 0:
-                # Clear the session link before accruing so the seconds_played
-                # getter stops adding the live delta; otherwise this session's
-                # time is baked in twice.
                 puppet.session = None
                 puppet.seconds_played += elapsed
             puppet.at_disconnect()
+            if getattr(puppet, "is_temporary", False):
+                try:
+                    loc = getattr(puppet, "location", None)
+                    if loc is not None:
+                        try:
+                            loc.remove_object(puppet)
+                        except Exception:
+                            pass
+                        try:
+                            puppet.location = None
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    from atheriz.globals.objects import remove_object
+                    remove_object(puppet)
+                except Exception:
+                    pass
+                try:
+                    puppet.is_deleted = True
+                except Exception:
+                    pass
         if self.account:
             self.account.at_disconnect()
 

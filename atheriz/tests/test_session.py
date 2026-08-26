@@ -70,12 +70,9 @@ class TestAtDisconnect:
 
     def test_puppet_at_disconnect_called(self, global_test_env):
         puppet = make_object("char1", is_pc=True)
+        puppet.at_disconnect = MagicMock()
         s = Session()
         s.puppet = puppet
-        s.at_disconnect()
-        # at_disconnect default for Object is a no-op but should not raise
-        # If we mock it we can assert
-        puppet.at_disconnect = MagicMock()
         s.at_disconnect()
         puppet.at_disconnect.assert_called_once()
 
@@ -301,13 +298,15 @@ def test_session_double_disconnect_idempotent(global_test_env):
     conn = MagicMock()
     conn.send_command = MagicMock()
     sess = Session(connection=conn)
-    sess.puppet = MagicMock()
-    sess.puppet.session = conn
-    sess.puppet.at_disconnect = MagicMock()
+    puppet = MagicMock()
+    puppet.session = conn
+    puppet.at_disconnect = MagicMock()
+    sess.puppet = puppet
     sess.at_disconnect()
-    first_calls = sess.puppet.at_disconnect.call_count
+    first_calls = puppet.at_disconnect.call_count
     sess.at_disconnect()
-    assert sess.puppet is None or sess.puppet.at_disconnect.call_count == first_calls, "second disconnect must not double-call puppet"
+    assert puppet.at_disconnect.call_count == first_calls, "second disconnect must not double-call puppet"
+    assert sess.puppet is None
 
 def test_session_echo_state_not_leaked_on_cancelled_prompt(global_test_env):
     loop = asyncio.new_event_loop()

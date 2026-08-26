@@ -122,7 +122,7 @@ class TestNodeDeleteRelocation:
 
     def test_nonrecursive_delete_self_fallback_leaves_contents(self, global_test_env):
         """INTENT: when the caller stands on the node being deleted there is
-        no sensible fallback, so contents must not be re-moved anywhere."""
+        no sensible fallback, so contents must not be stranded on deleted node."""
         nh = NodeHandler()
         node = Node(coord=Coord("test", 5, 5, 0))
         caller = Object.create(None, "caller")
@@ -133,7 +133,7 @@ class TestNodeDeleteRelocation:
         with patch("atheriz.objects.nodes.get_node_handler", return_value=nh):
             node.delete(caller, recursive=False)
 
-        assert obj.location is node
+        assert obj.location is not node
 
 
 class TestNodeGridOverwrite:

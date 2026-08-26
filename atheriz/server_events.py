@@ -24,6 +24,24 @@ def at_char_create(account_name: str, char_name: str, password: str):
         char_name (str): The name of the character to create.
         password (str): The password of the account.
     """
+    from atheriz.commands.unloggedin.validation import (
+        validate_account_name,
+        validate_character_name,
+        validate_password,
+    )
+
+    err = validate_password(password)
+    if err is not None:
+        print(err)
+        return
+    err = validate_character_name(char_name)
+    if err is not None:
+        print(err)
+        return
+    exists_lc = char_name.lower()
+    if filter_by(lambda x: getattr(x, "is_pc", False) and getattr(x, "name", "").lower() == exists_lc):
+        print(f"Character name '{char_name}' already exists.")
+        return
     results: list[Account] = filter_by(lambda x: x.is_account and x.name.lower() == account_name.lower())
     nh = get_node_handler()
     home = nh.get_node(settings.DEFAULT_HOME)
@@ -46,11 +64,17 @@ def at_char_create(account_name: str, char_name: str, password: str):
                 character = Object.create(None, char_name, is_pc=True)
                 character.home = home
                 r.characters.append(character.id)
+                object.__setattr__(r, "is_modified", True)
             character.move_to(home)
             save_objects()
+            object.__setattr__(r, "is_modified", True)
             print("Success! Character created.")
             return
 
+    err = validate_account_name(account_name)
+    if err is not None:
+        print(err)
+        return
     print(f"Creating account '{account_name}'...")
     try:
         account = Account.create(account_name, password)
@@ -65,6 +89,8 @@ def at_char_create(account_name: str, char_name: str, password: str):
     character.home = home
     with account.lock:
         account.characters.append(character.id)
+        object.__setattr__(account, "is_modified", True)
     character.move_to(home)
     save_objects()
+    object.__setattr__(account, "is_modified", True)
     print("Success! Account and character created.")

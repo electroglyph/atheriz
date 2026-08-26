@@ -55,10 +55,9 @@ class PutCommand(Command):
                         _is_loop = True
                         break
                     if id(_cur) in _seen:
+                        _is_loop = True
                         break
                     _seen.add(id(_cur))
-                    if len(_seen) > 100:
-                        break
                     _nxt = getattr(_cur, "location", None)
                     if _nxt is None or getattr(_nxt, "is_node", False):
                         break
@@ -99,10 +98,9 @@ class PutCommand(Command):
                     _is_loop = True
                     break
                 if id(_cur) in _seen:
+                    _is_loop = True
                     break
                 _seen.add(id(_cur))
-                if len(_seen) > 100:
-                    break
                 _nxt = getattr(_cur, "location", None)
                 if _nxt is None or getattr(_nxt, "is_node", False):
                     break

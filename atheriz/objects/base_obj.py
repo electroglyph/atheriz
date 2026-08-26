@@ -170,7 +170,7 @@ class Object(Flags, DbOps, AccessLock):
         obj.name = name
         obj.desc = desc
         obj._tick_seconds = tick_seconds
-        obj.aliases = aliases if aliases else []
+        obj.aliases = list(aliases) if aliases else []
         obj.internal_cmdset = CmdSet()
         obj.external_cmdset = CmdSet()
         obj.is_modified = True
@@ -317,22 +317,114 @@ class Object(Flags, DbOps, AccessLock):
                 to_delete.append(obj)
                 if not getattr(obj, "is_temporary", False):
                     ops.append(obj.get_del_ops())
-            for surv in truncated:
-                loc = getattr(surv, "location", None)
+            for survivor in truncated:
+                if survivor.id in seen:
+                    continue
+                loc = getattr(survivor, "location", None)
                 if loc is not None and getattr(loc, "id", None) in seen:
                     try:
-                        loc.remove_object(surv)
+                        loc.remove_object(survivor)
                     except Exception:
                         pass
                     try:
-                        surv.location = None
+                        with survivor.lock:
+                            survivor.location = None
                     except Exception:
-                        pass
+                        try:
+                            survivor.location = None
+                        except Exception:
+                            pass
+                del_stack = [survivor]
+                del_order: list[Object] = []
+                del_seen: set[int] = set()
+                while del_stack:
+                    cur = del_stack.pop()
+                    if cur is None:
+                        continue
+                    if cur.id in seen or cur.id in del_seen:
+                        continue
+                    del_seen.add(cur.id)
+                    seen.add(cur.id)
+                    del_order.append(cur)
+                    if cur.contents:
+                        for content in list(cur.contents):
+                            if content.id not in seen and content.id not in del_seen:
+                                del_stack.append(content)
+                for obj in reversed(del_order):
+                    to_delete.append(obj)
+                    if not getattr(obj, "is_temporary", False):
+                        ops.append(obj.get_del_ops())
 
         def _delete_object(obj: Object):
+            try:
+                with obj.lock:
+                    following_id = obj.following
+                    followers_copy = set(obj.followers)
+                    channels_copy = list(getattr(obj, "channels", []))
+            except Exception:
+                following_id = None
+                followers_copy = set()
+                channels_copy = []
+            if following_id is not None:
+                try:
+                    if (followed := get(following_id)):
+                        fobj = followed[0]
+                        with fobj.lock:
+                            fobj.followers.discard(obj.id)
+                            object.__setattr__(fobj, "is_modified", True)
+                except Exception:
+                    pass
+                try:
+                    with obj.lock:
+                        obj.following = None
+                except Exception:
+                    pass
+            for fid in followers_copy:
+                try:
+                    if (follower := get(fid)):
+                        f = follower[0]
+                        with f.lock:
+                            if getattr(f, "following", None) == obj.id:
+                                f.following = None
+                                object.__setattr__(f, "is_modified", True)
+                except Exception:
+                    pass
+            for ch_id in channels_copy:
+                try:
+                    if (ch_objs := get(ch_id)):
+                        ch = ch_objs[0]
+                        try:
+                            ch.remove_listener(obj)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
+                try:
+                    with obj.lock:
+                        if ch_id in getattr(obj, "channels", []):
+                            obj.channels.remove(ch_id)
+                except Exception:
+                    pass
+            try:
+                mh = get_map_handler()
+                with mh.lock:
+                    maps = list(mh.data.values())
+                for mi in maps:
+                    try:
+                        with mi.lock:
+                            mi.objects.pop(obj.id, None)
+                            mi.listeners.pop(obj.id, None)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
             if obj.location:
                 obj.location.remove_object(obj)
-                obj.location = None
+                try:
+                    with obj.lock:
+                        obj.location = None
+                except Exception:
+                    obj.location = None
 
             if obj.is_connected and obj.session and obj.session.connection:
                 obj.session.account.remove_character(obj)
@@ -495,14 +587,12 @@ class Object(Flags, DbOps, AccessLock):
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)
-        # call __setstate__ for all parent classes
         mro = type(self).mro()
-        current_idx = next(
-            (i for i, c in enumerate(mro) if c.__module__ == "atheriz.objects.base_obj" and c.__qualname__ == "Object"),
-            len(mro),
-        )
-        ancestors = mro[current_idx + 1 :]
-        for cls in reversed(ancestors):
+        try:
+            cur = mro.index(Object)
+        except ValueError:
+            cur = -1
+        for cls in reversed(mro[cur + 1 :]):
             if "__setstate__" in cls.__dict__:
                 cls.__setstate__(self, state)
         if settings.THREADSAFE_GETTERS_SETTERS:
@@ -1048,10 +1138,8 @@ class Object(Flags, DbOps, AccessLock):
                 if _cur is self or getattr(_cur, "id", None) == self.id:
                     return False
                 if id(_cur) in _seen:
-                    break
+                    return False
                 _seen.add(id(_cur))
-                if len(_seen) > 100:
-                    break
                 _nxt = getattr(_cur, "location", None)
                 if _nxt is None or getattr(_nxt, "is_node", False):
                     break
@@ -1106,10 +1194,8 @@ class Object(Flags, DbOps, AccessLock):
                         if _cur is self or getattr(_cur, "id", None) == self.id:
                             return False
                         if id(_cur) in _seen:
-                            break
+                            return False
                         _seen.add(id(_cur))
-                        if len(_seen) > 100:
-                            break
                         _nxt = getattr(_cur, "location", None)
                         if _nxt is None or getattr(_nxt, "is_node", False):
                             break

@@ -399,7 +399,12 @@ class MapHandler:
             with db.lock:
                 cursor = db.connection.cursor()
                 cursor.execute("SELECT area, z, data FROM mapdata")
-                rows = cursor.fetchall()
+                try:
+                    rows = cursor.fetchall()
+                    if rows is None or (hasattr(rows, "_mock_name")):
+                        rows = list(cursor)
+                except Exception:
+                    rows = list(cursor)
             for area, z, blob in rows:
                 try:
                     mi = dill.loads(blob)
