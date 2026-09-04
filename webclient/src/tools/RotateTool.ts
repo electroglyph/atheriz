@@ -41,7 +41,8 @@ export class RotateTool implements Tool {
             for (let row = 0; row < ctx.state.height; row++) {
                 for (let col = 0; col < ctx.state.width; col++) {
                     const c = activeLayer.cells[row][col];
-                    const isEmpty = (!c.char || c.char.trim() === '') && c.bg[0] === -1;
+                    const isBlackBg = c.bg[0] === 0 && c.bg[1] === 0 && c.bg[2] === 0;
+                    const isEmpty = (!c.char || c.char.trim() === '') && (c.bg[0] === -1 || isBlackBg);
                     if (!isEmpty) {
                         targetCells.push({ col, row, originCell: c });
                     }
@@ -96,6 +97,10 @@ export class RotateTool implements Tool {
                     ni = j;
                     nj = width - 1 - i;
                     break;
+                case '180':
+                    ni = width - 1 - i;
+                    nj = height - 1 - j;
+                    break;
                 case 'flip-h':
                     ni = width - 1 - i;
                     break;
@@ -126,9 +131,11 @@ export class RotateTool implements Tool {
 
         if (mappedSelection.size > 0) {
             ctx.renderer.setSelection(mappedSelection);
+            ctx.selectionSync?.setSelection(mappedSelection);
         } else if (selected && selected.size > 0) {
              // they all fell out of bounds
              ctx.renderer.clearSelection();
+             ctx.selectionSync?.clearSelection();
         }
 
     }
@@ -153,7 +160,8 @@ export class RotateTool implements Tool {
             for (let row = 0; row < ctx.state.height; row++) {
                 for (let col = 0; col < ctx.state.width; col++) {
                     const c = activeLayer.cells[row][col];
-                    const isEmpty = (!c.char || c.char.trim() === '') && c.bg[0] === -1;
+                    const isBlackBg = c.bg[0] === 0 && c.bg[1] === 0 && c.bg[2] === 0;
+                    const isEmpty = (!c.char || c.char.trim() === '') && (c.bg[0] === -1 || isBlackBg);
                     if (!isEmpty) {
                         this.movingCells.push({ col, row, originCell: c });
                     }
@@ -339,8 +347,10 @@ export class RotateTool implements Tool {
 
         if (mappedSelection.size > 0) {
             ctx.renderer.setSelection(mappedSelection);
+            ctx.selectionSync?.setSelection(mappedSelection);
         } else if (wasSelected) {
             ctx.renderer.clearSelection();
+            ctx.selectionSync?.clearSelection();
         }
 
         this.anchor = null;

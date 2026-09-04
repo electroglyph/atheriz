@@ -567,6 +567,28 @@ class TestPyCommandEvalTwice:
 
 
 class TestPyCommandKill:
+    def test_raise_in_thread_accepts_windows_thread_id(self, monkeypatch):
+        from atheriz.commands.loggedin import py as py_mod
+
+        calls = []
+
+        def fake_raise(ident, exc):
+            calls.append((ident, exc))
+            return 1
+
+        monkeypatch.setattr(
+            py_mod.ctypes.pythonapi, "PyThreadState_SetAsyncExc", fake_raise
+        )
+
+        # Windows thread IDs can exceed signed 32-bit c_long range.
+        py_mod._raise_in_thread(2**32 - 1, KeyboardInterrupt)
+
+        assert len(calls) == 1
+        ident, exc = calls[0]
+        assert isinstance(ident, py_mod.ctypes.c_ulong)
+        assert ident.value == 2**32 - 1
+        assert exc.value is KeyboardInterrupt
+
     def test_runaway_thread_is_killed(self, global_test_env, monkeypatch):
         from atheriz.commands.loggedin import py as py_mod
 

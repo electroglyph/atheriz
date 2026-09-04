@@ -16,6 +16,9 @@ export interface RecordingHeader {
 }
 
 export class SessionRecorder {
+    // In-memory ring cap: a long recording must not grow RAM without bound.
+    // Oldest events are dropped first; elapsed timestamps stay valid.
+    static readonly MAX_EVENTS = 100000;
     private startedAt = 0;
     private header: RecordingHeader | null = null;
     private events: RecordingEvent[] = [];
@@ -39,15 +42,15 @@ export class SessionRecorder {
     }
 
     output(side: 'o' | 'r', text: string): void {
-        if (this.header) this.events.push([this.elapsed(), side, text]);
+        if (this.header) this.push([this.elapsed(), side, text]);
     }
 
     resize(data: unknown): void {
-        if (this.header) this.events.push([this.elapsed(), 'resize', data]);
+        if (this.header) this.push([this.elapsed(), 'resize', data]);
     }
 
     layoutEvent(type: 'show_right' | 'hide_right'): void {
-        if (this.header) this.events.push([this.elapsed(), type, {}]);
+        if (this.header) this.push([this.elapsed(), type, {}]);
     }
 
     stop(): string | null {
@@ -56,6 +59,13 @@ export class SessionRecorder {
         this.header = null;
         this.events = [];
         return result;
+    }
+
+    private push(event: RecordingEvent): void {
+        this.events.push(event);
+        if (this.events.length > SessionRecorder.MAX_EVENTS) {
+            this.events.splice(0, Math.ceil(SessionRecorder.MAX_EVENTS / 2));
+        }
     }
 
     private elapsed(): number {

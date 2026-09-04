@@ -1,4 +1,4 @@
-import { Tool, ToolContext } from './Tool';
+import { Tool, ToolContext, SelectionSync } from './Tool';
 import { Point, Cell, Color } from '../types';
 import { LIGHT_CHARS, ROUNDED_CHARS, DOUBLE_CHARS, HEAVY_CHARS } from '../utils/characters';
 import { GridRenderer } from '../canvas/GridRenderer';
@@ -52,7 +52,7 @@ function bindSelectionEscapeHandler(): void {
     });
 }
 
-export class SelectionTool implements Tool {
+export class SelectionTool implements Tool, SelectionSync {
     private selectedCells: Set<string> = new Set();
     private clipboard: {
         cells: { col: number; row: number; cell: Cell }[];
@@ -245,6 +245,16 @@ export class SelectionTool implements Tool {
         if (renderer) {
             renderer.clearSelection();
         }
+    }
+
+    /**
+     * Replace the selection with translated coordinates (used by Move/Rotate
+     * after they move the renderer outline) so later Delete/Copy act on the
+     * moved cells instead of the stale pre-move ones.
+     */
+    public setSelection(cells: Set<string>): void {
+        this.selectedCells = new Set(cells);
+        this.lastRenderer?.setSelection(this.selectedCells);
     }
 
     private getRectCells(from: Point, to: Point): Set<string> {

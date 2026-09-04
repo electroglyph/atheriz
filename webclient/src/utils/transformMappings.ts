@@ -289,9 +289,10 @@ function flipSextantV(char: string): string {
     return getSextantChar(newVal);
 }
 
-export function transformCharacter(char: string, mode: 'cw90' | 'ccw90' | 'flip-h' | 'flip-v' | 'free'): string {
+export function transformCharacter(char: string, mode: 'cw90' | 'ccw90' | '180' | 'flip-h' | 'flip-v' | 'free'): string {
     if (mode === 'cw90' && cwMap.has(char)) return cwMap.get(char)!;
     if (mode === 'ccw90' && ccwMap.has(char)) return ccwMap.get(char)!;
+    if (mode === '180' && rot180Map.has(char)) return rot180Map.get(char)!;
     if (mode === 'flip-h') {
         if (hMap.has(char)) return hMap.get(char)!;
         return flipSextantH(char);

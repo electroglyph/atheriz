@@ -28,7 +28,10 @@ export class AnsiExporter {
 
         // Background Layer: Exported as a full raster sequence. 
         // We emit every cell to guarantee a solid base, avoiding transparent holes during rendering.
+        // A hidden background layer matches the preview (which composites visible
+        // layers over black), so emit a plain black raster as the base instead.
         const bgLayer = layers[0];
+        const bgHidden = !bgLayer.visible;
         let currentFg: Color | null = null;
         let currentBg: Color | null = null;
         let currentStyle = { bold: false, italic: false, underline: false };
@@ -37,12 +40,12 @@ export class AnsiExporter {
             out += `\x1b[${r + 1};1H`;
             for (let c = 0; c < width; c++) {
                 const cell = bgLayer.cells[r][c];
-                const char = cell.char || ' ';
+                const char = bgHidden ? ' ' : (cell.char || ' ');
 
                 // A layer promoted to index 0 (after the original bg was deleted) may still
                 // carry transparent bg sentinel values [-1,-1,-1]. Resolve to black here so
                 // we never emit invalid negative color components into the escape sequence.
-                const bg: Color = cell.bg[0] === -1 ? [0, 0, 0] : cell.bg;
+                const bg: Color = (bgHidden || cell.bg[0] === -1) ? [0, 0, 0] : cell.bg;
 
                 const bgChanged = !currentBg || currentBg[0] !== bg[0] || currentBg[1] !== bg[1] || currentBg[2] !== bg[2];
                 const fgChanged = !currentFg || currentFg[0] !== cell.fg[0] || currentFg[1] !== cell.fg[1] || currentFg[2] !== cell.fg[2];
@@ -55,7 +58,7 @@ export class AnsiExporter {
                     out += `\x1b[38;2;${cell.fg[0]};${cell.fg[1]};${cell.fg[2]}m`;
                     currentFg = cell.fg;
                 }
-                currentStyle = emitStyle(cell, currentStyle);
+                currentStyle = emitStyle(bgHidden ? {} : cell, currentStyle);
 
                 out += char;
             }
@@ -65,9 +68,10 @@ export class AnsiExporter {
         // To minimize file size and avoid overwriting lower layers unnecessarily,
         // we only emit cursor jumps and ANSI sequences for non-transparent cells.
         for (let li = 1; li < layers.length; li++) {
+            const layer = layers[li];
+            if (!layer.visible) continue;
             out += LAYER_BOUNDARY_MARKER;
 
-            const layer = layers[li];
             currentFg = null;
             currentBg = null;
             currentStyle = { bold: false, italic: false, underline: false };

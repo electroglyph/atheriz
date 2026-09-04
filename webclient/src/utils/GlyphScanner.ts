@@ -33,6 +33,20 @@ export class GlyphScanner {
             return this.cache.get(fontFamily)!;
         }
 
+        // Wait for the real webfont before measuring. Without this, the scan
+        // measures the fallback font and caches those metrics permanently
+        // under the real family name.
+        const fonts = (document as Document & { fonts?: { load(font: string): Promise<unknown> } }).fonts;
+        let fontReady = !fonts;
+        if (fonts) {
+            try {
+                await fonts.load(`16px ${fontFamily}`);
+                fontReady = true;
+            } catch {
+                fontReady = false;
+            }
+        }
+
         const canvas = document.createElement('canvas');
         canvas.width = 16;
         canvas.height = 16;
@@ -108,7 +122,9 @@ export class GlyphScanner {
                 codesProcessed += chunkProcessed;
 
                 if (rangeIdx >= this.VALID_RANGES.length) {
-                    this.cache.set(fontFamily, validGlyphs);
+                    // Never cache fallback-font metrics under the real name;
+                    // a later open (once the font loads) rescans correctly.
+                    if (fontReady) this.cache.set(fontFamily, validGlyphs);
                     resolve(validGlyphs);
                 } else {
                     onProgress(Math.floor((codesProcessed / totalCodes) * 100));

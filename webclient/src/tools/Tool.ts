@@ -21,6 +21,17 @@ export interface ToolContext {
         ctrlKey: boolean;
     };
     onCellsMoved?: (moves: CellMove[]) => void;
+    /**
+     * Owner of the authoritative selection set, if the host wires one.
+     * Move/Rotate keep it in sync when they translate the renderer outline;
+     * without it Delete/Copy would keep using stale coordinates.
+     */
+    selectionSync?: SelectionSync;
+}
+
+export interface SelectionSync {
+    setSelection(cells: Set<string>): void;
+    clearSelection(): void;
 }
 
 export interface Tool {

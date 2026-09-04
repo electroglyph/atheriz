@@ -141,6 +141,9 @@ export class GoogleFontPicker {
         this.observer.disconnect();
         this.observer.observe(this.sentinel);
 
+        // Stop observing discarded items so detached nodes are not retained.
+        this.fontObserver.disconnect();
+
         this.renderMore();
     }
 
@@ -215,6 +218,8 @@ export class GoogleFontPicker {
         // not triggered after the picker is dismissed, preventing server load.
         this.fontObserver.disconnect();
         this.previewQueue.length = 0;
-        this.previewInFlight = 0;
+        // Do NOT reset previewInFlight: in-flight loads still settle and
+        // decrement it in their finally blocks; zeroing here would drive the
+        // counter negative and admit extra concurrent loads on next open.
     }
 }

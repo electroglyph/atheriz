@@ -109,6 +109,11 @@ export class ColorPickerModal {
     open(initialColor: Color): Promise<Color | null> {
         return new Promise((resolve) => {
             closeOtherModals('color-picker-modal');
+            if (this.resolve) {
+                const pending = this.resolve;
+                this.resolve = null;
+                pending(null);
+            }
             this.resolve = resolve;
             const [h, s, v] = rgbToHsv(initialColor[0], initialColor[1], initialColor[2]);
             this.hue = h;

@@ -9,6 +9,7 @@ export class SidebarResizer {
     private boundDocumentMouseMove = this.onMouseMove.bind(this);
     private boundDocumentMouseUp = this.onMouseUp.bind(this);
     private boundResizerMouseDown = this.onMouseDown.bind(this);
+    private boundWindowUnload = this.destroy.bind(this);
 
     constructor(sidebarId: string, resizerId: string, inverted: boolean = false) {
         this.sidebar = document.getElementById(sidebarId)!;
@@ -22,14 +23,16 @@ export class SidebarResizer {
         this.resizer.addEventListener('mousedown', this.boundResizerMouseDown);
         document.addEventListener('mousemove', this.boundDocumentMouseMove);
         document.addEventListener('mouseup', this.boundDocumentMouseUp);
-        window.addEventListener('beforeunload', this.destroy.bind(this));
-        window.addEventListener('pagehide', this.destroy.bind(this));
+        window.addEventListener('beforeunload', this.boundWindowUnload);
+        window.addEventListener('pagehide', this.boundWindowUnload);
     }
 
     public destroy() {
         this.resizer.removeEventListener('mousedown', this.boundResizerMouseDown);
         document.removeEventListener('mousemove', this.boundDocumentMouseMove);
         document.removeEventListener('mouseup', this.boundDocumentMouseUp);
+        window.removeEventListener('beforeunload', this.boundWindowUnload);
+        window.removeEventListener('pagehide', this.boundWindowUnload);
     }
 
     private onMouseDown(e: MouseEvent) {

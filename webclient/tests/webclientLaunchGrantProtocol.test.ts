@@ -392,13 +392,20 @@ describe('payload boolean coercion and legend visibility', () => {
 });
 
 describe('buffer flush fallback and completion', () => {
-    it('main.ts flushBuffer contains fallback timer', () => {
-        const mainPath = path.resolve(import.meta.dirname, '../src/webclient/main.ts');
-        const content = fs.readFileSync(mainPath, 'utf-8');
-        expect(content).toContain('setTimeout(done, 100)');
+    it('buffer.ts SequentialWriter contains fallback timer', () => {
+        const bufferPath = path.resolve(import.meta.dirname, '../src/webclient/buffer.ts');
+        const content = fs.readFileSync(bufferPath, 'utf-8');
+        expect(content).toContain('class SequentialWriter');
+        expect(content).toContain('BUFFER_WRITE_FALLBACK_MS');
         expect(content).toContain('let settled = false');
         expect(content).toContain('try {');
-        expect(content).toContain('left.write(chunk, done)');
+        expect(content).toContain('this.writeChunk(chunk, done)');
+        // main.ts must route through the writer, not its own queue
+        const mainPath = path.resolve(import.meta.dirname, '../src/webclient/main.ts');
+        const main = fs.readFileSync(mainPath, 'utf-8');
+        expect(main).not.toContain('bufferQueue');
+        expect(main).not.toContain('flushBuffer');
+        expect(main).toContain('writer.enqueue');
     });
     it('buffer stall fallback clears writing flag after 100ms', async () => {
         vi.useFakeTimers();

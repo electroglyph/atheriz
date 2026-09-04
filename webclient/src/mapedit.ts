@@ -62,6 +62,7 @@ export type MapEditEvent =
     | { type: 'reject'; reason: string }
     | { type: 'error'; message: string }
     | { type: 'moves_denied'; moves: RoomMove[] }
+    | { type: 'moves_accepted' }
     | { type: 'saved' }
     | { type: 'legend_saved' };
 
@@ -453,6 +454,7 @@ export class MapEditSession {
                     if (original === null) original = coordKey(move.fromX, move.fromY);
                     this.roomPositions.set(original, coordKey(move.toX, move.toY));
                 }
+                this.listener?.({ type: 'moves_accepted' });
                 this.flush();
             }
         } else if (message.command === 'moves_denied') {

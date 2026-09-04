@@ -3,6 +3,9 @@ import { MapBackground, MapLegendEntry, MapPayload } from './types';
 const ANSI = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 const RESET = '\x1b[0m';
 export const MAP_CLEAR_SEQUENCE = '\x1b[2J\x1b[3J\x1b[H';
+// Background padding past the widest plausible map line is never visible;
+// cap it so a corrupt coordinate cannot throw RangeError via String.repeat.
+const MAX_BACKGROUND_PAD = 10000;
 
 export function renderMap(payload: MapPayload, columns: number, rows: number): string {
     if (columns <= 0 || rows <= 0) return '';
@@ -63,6 +66,9 @@ function applyBackground(lines: string[], payload: MapPayload): void {
             const start = visualRawIndex(line, x, true);
             const end = visualRawIndex(line, x + 1, false);
             if (x >= visibleLength(line)) {
+                // A far-off-map coordinate would pad a gigabyte string and throw;
+                // anything past the render window is invisible anyway.
+                if (x - visibleLength(line) > MAX_BACKGROUND_PAD) continue;
                 lines[y] = `${line}${' '.repeat(x - visibleLength(line))}${color} ${RESET}`;
             } else {
                 lines[y] = `${line.slice(0, start)}${color}${line.slice(start, end)}${RESET}${line.slice(end)}`;
@@ -272,10 +278,10 @@ export function parseBackground(value: unknown): MapPayload['background'] | unde
     for (const entry of values) {
         if (typeof entry !== 'object' || entry === null || Array.isArray(entry)) continue;
         const data = entry as { color?: unknown; coords?: unknown };
-        if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number' && Number.isFinite(part) && part >= 0 && part <= 255)) continue;
+        if (!Array.isArray(data.color) || data.color.length !== 3 || !data.color.every((part) => typeof part === 'number' && Number.isInteger(part) && part >= 0 && part <= 255)) continue;
         if (!Array.isArray(data.coords)) continue;
         const coords = data.coords.filter((coord): coord is [number, number] => {
-            return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number' && Number.isFinite(coord[0]) && Number.isFinite(coord[1]);
+            return Array.isArray(coord) && coord.length === 2 && typeof coord[0] === 'number' && typeof coord[1] === 'number' && Number.isInteger(coord[0]) && Number.isInteger(coord[1]);
         });
         if (coords.length === 0) continue;
         backgrounds.push({ color: [data.color[0], data.color[1], data.color[2]], coords });

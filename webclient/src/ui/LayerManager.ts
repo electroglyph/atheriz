@@ -121,6 +121,7 @@ export class LayerManager {
         addBtn.className = 'add-layer-btn';
         addBtn.innerHTML = '+ Add Layer';
         addBtn.addEventListener('click', () => {
+            this.undoStack.push(this.state);
             this.state.addLayer();
         });
         this.container.appendChild(addBtn);

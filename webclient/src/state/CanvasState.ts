@@ -206,8 +206,7 @@ export class CanvasState {
 
         for (let i = 0; i < this.layers.length; i++) {
             const layer = this.layers[i];
-            const sampleBg = layer.cells[0]?.[0]?.bg;
-            const isOpaqueBgLayer = sampleBg ? sampleBg[0] !== -1 : i === 0;
+            const isOpaqueBgLayer = i === 0;
             const defaultBg = isOpaqueBgLayer ? [0, 0, 0] : [-1, -1, -1];
 
             const newCells: Cell[][] = Array.from({ length: newHeight }, () =>

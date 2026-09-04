@@ -369,14 +369,16 @@ def _make_tracer(deadline, max_lines):
 
 def _raise_in_thread(ident, exc_type):
     """Forcibly raise exc_type in another thread via PyThreadState_SetAsyncExc."""
+    # The C API takes an unsigned long thread ID. Use c_ulong because Windows
+    # thread IDs may exceed signed 32-bit c_long range.
     res = ctypes.pythonapi.PyThreadState_SetAsyncExc(
-        ctypes.c_long(ident), ctypes.py_object(exc_type)
+        ctypes.c_ulong(ident), ctypes.py_object(exc_type)
     )
     if res == 0:
         return  # thread already gone
     if res != 1:
         ctypes.pythonapi.PyThreadState_SetAsyncExc(
-            ctypes.c_long(ident), ctypes.c_long(0)
+            ctypes.c_ulong(ident), ctypes.c_ulong(0)
         )
 
 

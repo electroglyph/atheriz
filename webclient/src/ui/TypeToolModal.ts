@@ -41,6 +41,11 @@ export class TypeToolModal {
     open(): Promise<string | null> {
         return new Promise((resolve) => {
             closeOtherModals('type-tool-modal');
+            if (this.resolve) {
+                const pending = this.resolve;
+                this.resolve = null;
+                pending(null);
+            }
             this.resolve = resolve;
             this.input.value = '';
             this.modal.classList.remove('hidden');

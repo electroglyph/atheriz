@@ -15,7 +15,7 @@ import { MAP_CLEAR_SEQUENCE, mergeBackgrounds, parseBackground, renderMap as ren
 import { mapLayout, recordingDividerPct, resizeWidth } from './layout';
 import { inputHeight, shouldClearSubmittedInput, shouldNavigateHistory, submissionFeedback } from './input';
 import { formatPrompt, formatTextOutput } from './text';
-import { BUFFER_FINAL_SEQUENCE } from './buffer';
+import { BUFFER_FINAL_SEQUENCE, SequentialWriter } from './buffer';
 import { playAudio as playAudioElement } from './audio';
 import { screenReaderFeedback, settingFeedback } from './feedback';
 import { shouldResetSession } from './session';
@@ -51,6 +51,8 @@ const right = new Terminal({ ...terminalOptions, customGlyphs: false, cursorBlin
 const leftFit = new FitAddon();
 const rightFit = new FitAddon();
 let mapEnabled = false;
+let mapWanted = false;
+let readerHidMap = false;
 let prompt = '';
 let promptPrinted = false;
 let censorInput = true;
@@ -58,11 +60,22 @@ let connected = false;
 let mapPayload: MapPayload | null = null;
 let pendingBackground: MapPayload['background'];
 let audio: HTMLAudioElement | null = null;
-let bufferQueue: string[] = [];
-let bufferWriting = false;
 let autosaveSetting = readBooleanSetting('autosave', false);
 let commandSubmitted = false;
 const recorder = new SessionRecorder();
+const writer = new SequentialWriter(
+    (chunk, done) => {
+        try {
+            left.write(chunk, done);
+        } catch {
+            done();
+        }
+    },
+    () => {
+        left.write(BUFFER_FINAL_SEQUENCE);
+        recorder.output('o', BUFFER_FINAL_SEQUENCE);
+    },
+);
 const DIVIDER_POSITION_KEY = 'xtermDividerPos';
 let lastRecordedLayout = '';
 
@@ -158,7 +171,15 @@ function resetSessionState(): void {
     promptPrinted = false;
     mapPayload = null;
     pendingBackground = undefined;
+    mapWanted = false;
+    readerHidMap = false;
     commandSubmitted = false;
+    writer.clear();
+    audio?.pause();
+    if (recorder.active) {
+        const recording = recorder.stop();
+        if (recording) downloadText('recording.cast', recording, 'application/json');
+    }
     history.reset();
     elements.input.value = '';
     elements.input.style.height = '';
@@ -220,6 +241,7 @@ function installInputHandlers(): void {
             )) {
                 event.preventDefault();
                 elements.input.value = history.navigate(event.key === 'ArrowUp' ? 'up' : 'down', elements.input.value);
+                history.findCompletions(elements.input.value);
                 resizeInput();
                 updateHint();
             }
@@ -249,13 +271,13 @@ function installInputHandlers(): void {
             write(`\r\nUnknown command: ${trimmed.split(/\s+/)[0]}\r\nEnter :help for a list of commands.\r\n`);
             return;
         }
-        if (!censorInput) history.add(trimmed);
         const feedback = submissionFeedback(connection.send('text', [trimmed]));
         if (feedback) {
             write(feedback);
             commandSubmitted = false;
             return;
         }
+        if (!censorInput) history.add(trimmed);
         if (!censorInput) writeSelf(trimmed);
         elements.input.select();
         commandSubmitted = true;
@@ -289,6 +311,12 @@ function installResizeHandlers(): void {
         document.body.style.pointerEvents = 'none';
         elements.leftTerminal.style.pointerEvents = 'none';
         elements.rightTerminal.style.pointerEvents = 'none';
+        const pointerId = event.pointerId;
+        try {
+            elements.divider.setPointerCapture(pointerId);
+        } catch {
+            // Mouse input and older browsers may not support capture; blur fallback covers them.
+        }
         const move = (moveEvent: PointerEvent) => {
             const next = resizeWidth(startWidth, parentWidth, moveEvent.clientX - startX, dividerWidth);
             elements.leftTerminal.style.width = `${next}px`;
@@ -299,6 +327,12 @@ function installResizeHandlers(): void {
             window.removeEventListener('pointermove', move);
             window.removeEventListener('pointerup', stop);
             window.removeEventListener('pointercancel', stop);
+            window.removeEventListener('blur', stop);
+            try {
+                if (elements.divider.hasPointerCapture(pointerId)) elements.divider.releasePointerCapture(pointerId);
+            } catch {
+                // Capture was never taken or already released.
+            }
             document.body.style.cursor = '';
             document.body.style.userSelect = '';
             document.body.style.pointerEvents = '';
@@ -310,6 +344,7 @@ function installResizeHandlers(): void {
         window.addEventListener('pointermove', move);
         window.addEventListener('pointerup', stop);
         window.addEventListener('pointercancel', stop);
+        window.addEventListener('blur', stop);
     });
 }
 
@@ -328,7 +363,7 @@ function fitAndReportSize(): void {
 }
 
 function write(text: string): void {
-    left.write(text);
+    writer.enqueue(text);
     recorder.output('o', text);
 }
 
@@ -349,12 +384,16 @@ function handleMessage(message: WireMessage): void {
             fitAndReportSize();
             break;
         case 'screenreader':
-            applyScreenReader(asBoolean(message.args[0]), true);
+            if (typeof message.args[0] === 'boolean') applyScreenReader(message.args[0], true);
             break;
         case 'map_enable':
+            mapWanted = true;
+            readerHidMap = screenReaderEnabled;
             setMapVisibility(!screenReaderEnabled);
             break;
         case 'map_disable':
+            mapWanted = false;
+            readerHidMap = false;
             setMapVisibility(false);
             fitAndReportSize();
             break;
@@ -420,7 +459,7 @@ function handleMessage(message: WireMessage): void {
                 : []);
             break;
         case 'launch_draw':
-            launchDraw(
+            handleLaunchDraw(
                 typeof message.args[0] === 'string' ? message.args[0] : undefined,
                 message.args[1],
             );
@@ -440,6 +479,16 @@ function handleMessage(message: WireMessage): void {
     }
 }
 
+function handleLaunchDraw(key: string | undefined, payload: unknown): void {
+    const fallbacks = document.querySelectorAll('.popup-fallback').length;
+    if (launchDraw(key, payload)) return;
+    // launchDraw appends a fallback link when the popup is blocked; any other
+    // refusal is the launch throttle, which keeps the newest grant stored.
+    if (document.querySelectorAll('.popup-fallback').length === fallbacks) {
+        write('\r\nDraw launch throttled; the latest grant was saved. Wait a moment and use :draw to retry.\r\n');
+    }
+}
+
 function writeText(text: string): void {
     write(formatTextOutput(text, left.cols, screenReaderEnabled, prompt, promptPrinted));
     promptPrinted = prompt.length > 0;
@@ -454,9 +503,10 @@ function setPrompt(value: string): void {
 
 function writeBuffer(args: unknown[]): void {
     const chunks = args.filter((value): value is string => typeof value === 'string');
-    if (chunks.length === 0) return;
-    bufferQueue.push(...chunks);
-    flushBuffer();
+    for (const chunk of chunks) {
+        writer.enqueue(chunk);
+        recorder.output('o', chunk);
+    }
 }
 
 function applyScreenReader(enabled: boolean, announce: boolean): void {
@@ -464,8 +514,12 @@ function applyScreenReader(enabled: boolean, announce: boolean): void {
     left.options.screenReaderMode = enabled;
     right.options.screenReaderMode = enabled;
     if (enabled) {
+        if (mapEnabled) readerHidMap = true;
         setMapVisibility(false);
         fitAndReportSize();
+    } else if (readerHidMap) {
+        readerHidMap = false;
+        if (mapWanted) setMapVisibility(true);
     }
     try {
         window.localStorage.setItem('reader', String(enabled));
@@ -498,7 +552,11 @@ function handleInternalCommand(command: string): boolean {
             }
             screenReaderEnabled = !screenReaderEnabled;
             applyScreenReader(screenReaderEnabled, false);
-            connection.send('screenreader', [screenReaderEnabled]);
+            if (!connection.send('screenreader', [screenReaderEnabled])) {
+                screenReaderEnabled = !screenReaderEnabled;
+                applyScreenReader(screenReaderEnabled, false);
+                write('\r\nNot connected to server.\r\n');
+            }
             return true;
         case ':glyphs': {
             const enabled = !(left.options.customGlyphs ?? true);
@@ -518,7 +576,7 @@ function handleInternalCommand(command: string): boolean {
         }
         case ':scrollback': {
             const scrollback = Number.parseInt(args[0] ?? '', 10);
-            if (!Number.isFinite(scrollback) || scrollback < 0) return reportInvalidCommand(':scrollback <number>');
+            if (!Number.isFinite(scrollback) || scrollback < 0 || scrollback > 100000) return reportInvalidCommand(':scrollback <0-100000>');
             left.options.scrollback = scrollback;
             right.options.scrollback = scrollback;
             safeSet('scrollback', String(scrollback));
@@ -576,7 +634,7 @@ function handleInternalCommand(command: string): boolean {
             window.location.reload();
             return true;
         case ':draw':
-            launchDraw();
+            handleLaunchDraw(undefined, undefined);
             return true;
         default:
             return false;
@@ -650,31 +708,6 @@ function playAudio(source: string): void {
     void playAudioElement(audio, source);
 }
 
-function flushBuffer(): void {
-    if (bufferWriting || bufferQueue.length === 0) return;
-    bufferWriting = true;
-    const chunk = bufferQueue.shift();
-    if (!chunk) {
-        bufferWriting = false;
-        return;
-    }
-    let settled = false;
-    const done = () => {
-        if (settled) return;
-        settled = true;
-        bufferWriting = false;
-        if (bufferQueue.length > 0) flushBuffer();
-        else write(BUFFER_FINAL_SEQUENCE);
-    };
-    try {
-        left.write(chunk, done);
-    } catch {
-        done();
-    }
-    setTimeout(done, 100);
-    recorder.output('o', chunk);
-}
-
 function applyBackground(value: unknown): void {
     const background = parseBackground(value);
     if (!background) return;
@@ -731,25 +764,24 @@ function recordLayout(): void {
     }
 }
 
-function installWebgl(terminal: Terminal): WebglAddon | null {
-    let addon: WebglAddon | null = null;
-    try {
-        addon = new WebglAddon();
+function installWebgl(terminal: Terminal): void {
+    const attach = (): void => {
+        let addon: WebglAddon | null = null;
+        try {
+            addon = new WebglAddon();
+        } catch {
+            return;
+        }
         addon.onContextLoss(() => {
             addon?.dispose();
             addon = null;
-            window.setTimeout(() => {
-                try {
-                    addon = new WebglAddon();
-                    terminal.loadAddon(addon);
-                } catch {
-                    // Xterm's DOM renderer remains available as a fallback.
-                }
-            }, 0);
+            window.setTimeout(attach, 0);
         });
-        terminal.loadAddon(addon);
-        return addon;
-    } catch {
-        return null;
-    }
+        try {
+            terminal.loadAddon(addon);
+        } catch {
+            addon.dispose();
+        }
+    };
+    attach();
 }

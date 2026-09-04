@@ -316,6 +316,20 @@ class TestExecute:
         # One positional: parsed as target
         assert parsed.target == "alice"
 
+    def test_execute_preserves_backslashes(self):
+        """Windows-style backslashes must survive parsing verbatim on every
+        OS (pre-escape + posix=True is os-independent by design)."""
+        c = ConcreteCommand()
+        caller = MagicMock()
+        _, _, parsed = c.execute(caller, "C:\\new\\file", cmdstring="test")
+        assert parsed.target == "C:\\new\\file"
+
+    def test_execute_preserves_backslashes_in_quotes(self):
+        c = ConcreteCommand()
+        caller = MagicMock()
+        _, _, parsed = c.execute(caller, '"C:\\new\\file"', cmdstring="test")
+        assert parsed.target == "C:\\new\\file"
+
     def test_shlex_with_no_args_optional(self):
         # Empty string: arg_list = []
         c = OptionalArgsCommand()

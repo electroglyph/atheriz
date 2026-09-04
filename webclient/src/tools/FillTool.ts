@@ -107,13 +107,12 @@ export class FillTool implements Tool {
 
         if (ctx.appState.fillMode === 'gradient') {
             this.fillCells = this.computeFillCells(ctx, cell);
-            ctx.undoStack.push(ctx.state);
             this.renderPreview(ctx);
         } else {
-            ctx.undoStack.push(ctx.state);
             const targets = this.computeFillCells(ctx, cell);
             const updates = this.applyFill(ctx, targets);
             if (updates.length > 0) {
+                ctx.undoStack.push(ctx.state);
                 ctx.state.applyBatch(updates);
             }
             this.anchor = null;
@@ -135,6 +134,7 @@ export class FillTool implements Tool {
 
         const updates = this.applyGradientFill(ctx, this.anchor, this.currentTarget);
         if (updates.length > 0) {
+            ctx.undoStack.push(ctx.state);
             ctx.state.applyBatch(updates);
         }
 

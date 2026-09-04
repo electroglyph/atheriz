@@ -119,8 +119,15 @@ async function initApp() {
         modifiers: { shiftKey: false, altKey: false, ctrlKey: false }
     };
 
+    // Undo checkpoints for in-flight move validations (FIFO: the server
+    // answers validations in order). Each entry is the undo depth before the
+    // move's own stroke, so a deny reverts that stroke plus anything painted
+    // after it instead of a single unrelated entry.
+    const pendingMoveCheckpoints: number[] = [];
+
     context.onCellsMoved = (moves) => {
         if (!mapEditSession || !mapEditOrigin) return;
+        pendingMoveCheckpoints.push(Math.max(0, undoStack.depth - 1));
         const worldMoves = moves.map((m) => ({
             fromX: m.fromCol + mapEditOrigin!.originX,
             fromY: canvasState.height - 1 - m.fromRow + mapEditOrigin!.originY,
@@ -159,6 +166,7 @@ async function initApp() {
     toolManager.addTool('eyedropper', new EyedropperTool());
     const selectionTool = new SelectionTool();
     toolManager.addTool('select', selectionTool);
+    context.selectionSync = selectionTool;
     toolManager.addTool('move', new MoveTool());
     const rotateTool = new RotateTool();
     toolManager.addTool('rotate', rotateTool);
@@ -238,9 +246,12 @@ async function initApp() {
             if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log('Legend saved.');
         } else if (event.type === 'saved') {
             if ((import.meta as unknown as { env?: { DEV?: boolean } }).env?.DEV) console.log('Saved to server.');
+        } else if (event.type === 'moves_accepted') {
+            pendingMoveCheckpoints.shift();
         } else if (event.type === 'moves_denied') {
             console.warn('Room move denied by server — snapping back.');
-            const restored = undoStack.undo();
+            const checkpoint = pendingMoveCheckpoints.shift() ?? Math.max(0, undoStack.depth - 1);
+            const restored = undoStack.undoTo(checkpoint);
             if (restored) {
                 canvasState = restored;
                 context.state = restored;
@@ -269,7 +280,8 @@ async function initApp() {
             const extra = event.moves.length > maxListed ? ` and ${event.moves.length - maxListed} more` : '';
             moveDeniedDialog.show(
                 `The server rejected moving ${event.moves.length === 1 ? 'a room' : `${event.moves.length} rooms`} `
-                + `to ${listed}${extra} — destination occupied. Your changes were undone.`
+                + `to ${listed}${extra} — destination occupied. The canvas was reverted to before the rejected move`
+                + ` (strokes painted after it were reverted as well).`
             );
         }
     });

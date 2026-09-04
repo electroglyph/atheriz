@@ -28,6 +28,10 @@ export class UndoStack {
         return this.undoStack.length > 0;
     }
 
+    public get depth(): number {
+        return this.undoStack.length;
+    }
+
     public canRedo(): boolean {
         return this.redoStack.length > 0;
     }
@@ -51,6 +55,22 @@ export class UndoStack {
         this.currentState = state;
         
         this.notify();
+        return state;
+    }
+
+    /**
+     * Undo back to an earlier checkpoint depth (see {@link depth}), popping
+     * every entry pushed after it. Used when an async server rejection must
+     * revert its own stroke even if the user painted more strokes since.
+     */
+    public undoTo(checkpoint: number): CanvasState | null {
+        if (!this.currentState) return null;
+        let state: CanvasState | null = this.currentState;
+        while (this.undoStack.length > checkpoint) {
+            const next = this.undo();
+            if (!next) break;
+            state = next;
+        }
         return state;
     }
 

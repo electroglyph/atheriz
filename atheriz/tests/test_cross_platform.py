@@ -166,14 +166,13 @@ def test_inputfuncs_strip_and_crlf(global_test_env):
 
 
 def test_shlex_windows_backslash():
-    # posix=False preserves backslashes (needed on Windows)
-    assert shlex.split("C:\\new\\file", posix=False) == ["C:\\new\\file"]
-    # posix=True mangles \n -> n
-    assert shlex.split("C:\\new\\file", posix=True) != ["C:\\new\\file"]
-    # our code uses posix=False (preserves backslashes) - previously checked for os.name conditional
+    # Behavioral coverage lives in test_base_cmd.py
+    # (TestExecute::test_execute_preserves_backslashes*), which drives
+    # Command.execute directly and is os-independent by design. Here we pin
+    # the mechanism it depends on: backslash pre-escape + posix=True.
     src = Path("atheriz/commands/base_cmd.py").read_text(encoding="utf-8")
-    assert 'posix=False' in src or 'posix=(_os.name != "nt")' in src or 'os.name' in src
-    assert shlex.split("C:\\new\\file", posix=True) != ["C:\\new\\file"]
+    assert "posix=True" in src
+    assert "shlex.split" in src
 
 
 def test_connection_newline():

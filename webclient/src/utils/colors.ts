@@ -23,9 +23,9 @@ export function cellEquals(a: Cell, b: Cell): boolean {
     return a.char === b.char
         && colorEquals(a.fg, b.fg)
         && colorEquals(a.bg, b.bg)
-        && a.bold === b.bold
-        && a.italic === b.italic
-        && a.underline === b.underline;
+        && (a.bold ?? false) === (b.bold ?? false)
+        && (a.italic ?? false) === (b.italic ?? false)
+        && (a.underline ?? false) === (b.underline ?? false);
 }
 
 export function cssColor(color: Color): string {

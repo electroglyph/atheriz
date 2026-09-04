@@ -31,6 +31,7 @@ export class LineTool implements Tool {
     private anchor: Point | null = null;
     private currentEnd: Point | null = null;
     private isFirstClick = true;
+    private pushedForStroke = false;
     private toastEl: HTMLDivElement | null = null;
     private committedPoints: Point[] = [];
 
@@ -52,8 +53,8 @@ export class LineTool implements Tool {
 
     onMouseDown(ctx: ToolContext, cell: Point): void {
         if (this.isFirstClick) {
-            ctx.undoStack.push(ctx.state);
             this.isFirstClick = false;
+            this.pushedForStroke = false;
             this.committedPoints = [];
             this.anchor = cell;
             this.currentEnd = cell;
@@ -108,6 +109,7 @@ export class LineTool implements Tool {
             this.anchor = null;
             this.currentEnd = null;
             this.isFirstClick = true;
+            this.pushedForStroke = false;
             this.committedPoints = [];
             this.hideToast();
             ctx.renderer.clearPreview();
@@ -122,6 +124,10 @@ export class LineTool implements Tool {
         const allPoints = [...this.committedPoints, ...newPoints];
         const cells = this.buildCells(ctx, allPoints);
         if (cells.length > 0) {
+            if (!this.pushedForStroke) {
+                ctx.undoStack.push(ctx.state);
+                this.pushedForStroke = true;
+            }
             ctx.state.applyBatch(cells);
         }
         this.committedPoints = allPoints;

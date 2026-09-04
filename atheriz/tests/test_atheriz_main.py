@@ -885,3 +885,49 @@ class TestSpawnDaemonChildLogRotationBounded:
             assert (tmp_path / "server.log.1").stat().st_size <= 100
         finally:
             stream.close()
+
+
+class TestChildLogRotationWiring:
+    def test_daemon_redirected_stdout_gets_rotating_wrapper(self, tmp_path, monkeypatch):
+        import sys
+
+        from atheriz.atheriz import _RotatingLogStream, _wire_child_log_rotation
+
+        log = tmp_path / "server.log"
+        log.write_text("", encoding="utf-8")
+        fake_stdout = open(log, "a", encoding="utf-8")
+        monkeypatch.setattr(sys, "stdout", fake_stdout)
+        try:
+            _wire_child_log_rotation(log)
+            wrapped = sys.stdout
+            assert isinstance(wrapped, _RotatingLogStream), (
+                "daemon-redirected stdout must be wrapped so server.log rotates"
+            )
+        finally:
+            try:
+                sys.stdout.close()
+            except Exception:
+                pass
+            try:
+                fake_stdout.close()
+            except Exception:
+                pass
+
+    def test_unrelated_stdout_is_left_alone(self, tmp_path, monkeypatch):
+        import sys
+
+        from atheriz.atheriz import _wire_child_log_rotation
+
+        log = tmp_path / "server.log"
+        log.write_text("", encoding="utf-8")
+        other = tmp_path / "other.log"
+        other_stdout = open(other, "a", encoding="utf-8")
+        monkeypatch.setattr(sys, "stdout", other_stdout)
+        try:
+            _wire_child_log_rotation(log)
+            assert sys.stdout is other_stdout
+        finally:
+            try:
+                other_stdout.close()
+            except Exception:
+                pass

@@ -12,7 +12,7 @@ export function calculateGrid(
   canvasHeight: number,
   fontRatio: number,
 ): { cols: number; rows: number } {
-  const maxRows = canvasHeight - 2;
+  const maxRows = Math.max(1, canvasHeight - 2);
   // fontRatio = cellWidth / cellHeight. rows = (cols * cropH * fontRatio) / cropW
   let cols = maxWidthGlyphs;
   let rows = Math.max(1, Math.round((cols * cropH * fontRatio) / cropW));
@@ -22,7 +22,7 @@ export function calculateGrid(
     rows = maxRows;
   }
 
-  return { cols: Math.min(cols, maxWidthGlyphs), rows };
+  return { cols: Math.min(cols, maxWidthGlyphs), rows: Math.max(1, rows) };
 }
 
 export function previewFontString(cellFont: string, px = 96): string {

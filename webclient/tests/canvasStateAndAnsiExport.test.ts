@@ -42,7 +42,7 @@ describe('canvas state cloning with overflow cells', () => {
 });
 
 describe('canvas resizing with promoted layers', () => {
-    it('keeps new cells transparent when background was deleted', () => {
+    it('grows a promoted layer opaque: index 0 is the background', () => {
         const state = new CanvasState(2, 2);
         state.addLayer('Overlay', false);
         expect(state.layers[0].cells[0][0].bg).toEqual([0, 0, 0]);
@@ -51,9 +51,12 @@ describe('canvas resizing with promoted layers', () => {
         state.activeLayerIndex = 0;
         expect(state.layers[0].cells[0][0].bg).toEqual([-1, -1, -1]);
         state.resize(4, 4);
+        // The original cell keeps its transparent bg, but the layer is now
+        // index 0 (the background), so newly grown cells default to opaque
+        // black — matching the exporter's background raster invariant.
         expect(state.layers[0].cells[0][0].bg).toEqual([-1, -1, -1]);
-        expect(state.layers[0].cells[3][3].bg).toEqual([-1, -1, -1]);
-        expect(state.layers[0].cells[2][3].bg).toEqual([-1, -1, -1]);
+        expect(state.layers[0].cells[3][3].bg).toEqual([0, 0, 0]);
+        expect(state.layers[0].cells[2][3].bg).toEqual([0, 0, 0]);
     });
 
     it('keeps new cells opaque for true background layer', () => {

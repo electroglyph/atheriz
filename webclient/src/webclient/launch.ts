@@ -15,18 +15,20 @@ export interface DrawGrant {
 }
 
 export function launchDraw(key?: string, payload?: unknown): boolean {
-    const now = Date.now();
-    if (now - lastLaunchAt < 1000) return false;
-    lastLaunchAt = now;
-
+    // The grant is stored before the throttle gate so a throttled retry never
+    // orphans the newest server-minted key; the tab opens the stored grant.
     if (key && payload) {
         try {
             localStorage.setItem(GRANT_KEY, JSON.stringify({ key, payload }));
-            localStorage.setItem(GRANT_TS_KEY, String(now));
+            localStorage.setItem(GRANT_TS_KEY, String(Date.now()));
         } catch {
             // Storage is optional (private mode, quota, etc.) – launch still proceeds.
         }
     }
+
+    const now = Date.now();
+    if (now - lastLaunchAt < 1000) return false;
+    lastLaunchAt = now;
 
     const drawUrl = new URL(DRAW_PATH, window.location.origin).href;
     const opened = window.open(drawUrl, '_blank', 'noopener,noreferrer');
@@ -58,9 +60,13 @@ export function readDrawGrant(): DrawGrant | null {
     }
     try {
         const parsed = JSON.parse(raw) as unknown;
-        if (!isDrawGrant(parsed)) return null;
+        if (!isDrawGrant(parsed)) {
+            clearDrawGrant();
+            return null;
+        }
         return parsed;
     } catch {
+        clearDrawGrant();
         return null;
     }
 }

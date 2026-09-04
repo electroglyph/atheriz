@@ -25,6 +25,9 @@ export class CharMapDialog {
     private readonly ROW_HEIGHT = 32;
     private totalRows: number = 0;
     private validGlyphs: number[] = [];
+    // Guards against a slow earlier scan overwriting a newer font's grid
+    // when the dialog is rapidly reopened with a different font.
+    private scanGeneration = 0;
     
     // A cache of currently rendered row elements to recycle or replace
     private activeRows: Map<number, HTMLElement> = new Map();
@@ -83,17 +86,21 @@ export class CharMapDialog {
         this.innerContainer.style.height = '0px';
         this.innerContainer.innerHTML = '';
         this.activeRows.clear();
-        
+
+        const generation = ++this.scanGeneration;
         try {
-            this.validGlyphs = await GlyphScanner.scanFont(fontFamily, (pct) => {
+            const glyphs = await GlyphScanner.scanFont(fontFamily, (pct) => {
+                if (generation !== this.scanGeneration) return;
                 if (scanStatus) scanStatus.textContent = `Scanning... ${pct}%`;
             });
-            
+
+            if (generation !== this.scanGeneration) return;
+            this.validGlyphs = glyphs;
             this.totalRows = Math.ceil(this.validGlyphs.length / this.COLS);
             this.innerContainer.style.height = `${this.totalRows * this.ROW_HEIGHT}px`;
             this.handleScroll(); // Trigger initial render
         } finally {
-            if (scanStatus) scanStatus.style.display = 'none';
+            if (generation === this.scanGeneration && scanStatus) scanStatus.style.display = 'none';
         }
     }
 

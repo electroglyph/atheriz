@@ -1263,7 +1263,13 @@ def _wire_child_log_rotation(log_file) -> None:
     try:
         if _sys.stdout.isatty():
             return
-        if not _os.path.sameopenfile(_sys.stdout.fileno(), str(log_file)):
+        # sameopenfile() needs two open files/descriptors, while log_file is a
+        # path: compare stat results instead. (Passing the path straight into
+        # sameopenfile() raises TypeError inside os.fstat, which used to make
+        # this check silently fail and left daemon output unrotated.)
+        out_stat = _os.fstat(_sys.stdout.fileno())
+        log_stat = _os.stat(log_file)
+        if not _os.path.samestat(out_stat, log_stat):
             return
     except Exception:
         return

@@ -11,6 +11,7 @@ export class ImageImportDialog {
     private inputW: HTMLInputElement;
     private inputH: HTMLInputElement;
     private optionsContainer: HTMLElement;
+    private errorEl: HTMLElement | null;
     
     private currentBuffer: ArrayBuffer | null = null;
     private origWidth: number = 1;
@@ -32,6 +33,7 @@ export class ImageImportDialog {
         this.inputW = document.getElementById('import-width') as HTMLInputElement;
         this.inputH = document.getElementById('import-height') as HTMLInputElement;
         this.optionsContainer = document.getElementById('chafa-options-container')!;
+        this.errorEl = document.getElementById('import-error');
 
         this.buildOptionsUI();
         this.bindEvents();
@@ -155,6 +157,20 @@ export class ImageImportDialog {
         }
     }
 
+    private showError(message: string) {
+        if (this.errorEl) {
+            this.errorEl.textContent = message;
+            this.errorEl.style.display = 'block';
+        }
+    }
+
+    private clearError() {
+        if (this.errorEl) {
+            this.errorEl.textContent = '';
+            this.errorEl.style.display = 'none';
+        }
+    }
+
     private bindEvents() {
         this.fileInput.addEventListener('change', async () => {
             const file = this.fileInput.files?.[0];
@@ -162,7 +178,8 @@ export class ImageImportDialog {
 
             this.currentBuffer = await file.arrayBuffer();
             this.fileInput.value = ''; // reset so we can load it again if needed
-            
+            this.clearError();
+
             const url = URL.createObjectURL(new Blob([this.currentBuffer]));
             const img = new Image();
             img.onload = () => {
@@ -172,6 +189,11 @@ export class ImageImportDialog {
                 closeOtherModals('image-import-modal');
                 this.modal.classList.remove('hidden');
                 URL.revokeObjectURL(url);
+            };
+            img.onerror = () => {
+                URL.revokeObjectURL(url);
+                this.currentBuffer = null;
+                this.showError(`Could not load "${file.name}" as an image. The file may be corrupt or in an unsupported format.`);
             };
             img.src = url;
             

@@ -11,8 +11,8 @@ export function shouldNavigateHistory(
     return fullSelection || atStart;
 }
 
-export function inputHeight(scrollHeight: number, minimum = 30): number {
-    return Math.max(scrollHeight, minimum);
+export function inputHeight(scrollHeight: number, minimum = 30, maximum = 300): number {
+    return Math.min(Math.max(scrollHeight, minimum), maximum);
 }
 
 export function shouldClearSubmittedInput(

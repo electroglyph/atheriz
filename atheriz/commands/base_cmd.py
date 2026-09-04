@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import Any, Callable
 import argparse
-import os
+import os  # re-exported as atheriz.commands.base_cmd.os: tests patch it to simulate nt/posix
 import shlex
 import threading
 from typing import TYPE_CHECKING
@@ -168,8 +168,9 @@ class Command:
         else:
             try:
                 import re as _re
-                # Consistent POSIX handling across os.name; Windows backslashes preserved via escaping (posix=True)
-                _ = os.name  # keep os.name in source for cross-platform test
+                # Backslash pre-escape + posix=True on every platform: parsing
+                # is os-independent by design, so Windows-style backslashes
+                # survive verbatim (see test_execute_preserves_backslashes).
                 args_string = _re.sub(r'\\(?![\"\'\\])', r'\\\\', args_string)
                 arg_list = shlex.split(args_string, posix=True)
             except ValueError:
