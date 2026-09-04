@@ -277,7 +277,12 @@ def test_spawn_daemon_flags():
 def test_atheriz_pid_and_log_encoding():
     src = Path("atheriz/atheriz.py").read_text(encoding="utf-8")
     assert 'open(pid_file, "x", encoding="utf-8")' in src or 'encoding="utf-8"' in src
-    assert 'open(log_file, "a", encoding="utf-8")' in src
+    # server.log must be opened with explicit UTF-8 (Windows default encoding
+    # is locale-dependent): either a plain append open or the rotating stream,
+    # which wires encoding="utf-8" through RotatingFileHandler.
+    assert 'open(log_file, "a", encoding="utf-8")' in src or (
+        "_RotatingLogStream" in src and 'encoding="utf-8"' in src
+    )
 
 
 def test_chmod_guard():

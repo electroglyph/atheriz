@@ -22,6 +22,7 @@ from atheriz.globals.get import get_node_handler, get_unique_id
 from atheriz.database_setup import get_database
 from atheriz.server_events import at_char_create
 from atheriz.utils import is_in_game_folder
+from logging.handlers import RotatingFileHandler
 import secrets
 import shutil
 import threading
@@ -485,6 +486,10 @@ def start_server():
 
     save_path = Path(settings.SAVE_PATH)
     pid_file = save_path / "server.pid"
+
+    # Daemon-spawned foreground child: stdout/stderr are redirected to
+    # server.log — wrap them so output rotates instead of growing forever.
+    _wire_child_log_rotation(save_path / "server.log")
 
     if pid_file.exists():
         try:
@@ -1189,6 +1194,88 @@ def main():
         parser.print_help()
 
 
+_SERVER_LOG_MAX_BYTES = 5 * 1024 * 1024
+_SERVER_LOG_BACKUP_COUNT = 5
+
+
+class _RotatingLogStream(RotatingFileHandler):
+    """server.log stream with a real byte cap (RotatingFileHandler semantics).
+
+    Passed directly as the daemon child's stdout/stderr (Popen uses
+    ``fileno()``) and, on foreground start, wrapped around ``sys.stdout`` /
+    ``sys.stderr`` when they are redirected to server.log, so Python-level
+    output actually rotates instead of growing without bound.
+    """
+
+    def __init__(self, path, maxBytes=_SERVER_LOG_MAX_BYTES,
+                 backupCount=_SERVER_LOG_BACKUP_COUNT):
+        super().__init__(str(path), mode="a", maxBytes=maxBytes,
+                         backupCount=backupCount, encoding="utf-8")
+
+    def fileno(self):
+        if self.stream is None:
+            self._open()
+        return self.stream.fileno()
+
+    def isatty(self):
+        return False
+
+    def write(self, data):
+        try:
+            if not isinstance(data, str):
+                data = str(data)
+            self.acquire()
+            try:
+                if self.stream is None:
+                    self._open()
+                if self.maxBytes > 0:
+                    self.stream.seek(0, 2)
+                    if self.stream.tell() + len(data.encode("utf-8", "replace")) >= self.maxBytes:
+                        do_roll = getattr(self, "doRollover", None) or getattr(self, "rollover", None)
+                        do_roll()
+                self.stream.write(data)
+                self.flush()
+            finally:
+                self.release()
+        except Exception:
+            pass
+
+    def writelines(self, lines):
+        for line in lines:
+            self.write(line)
+
+    def rollover(self):
+        """Rotate the log (alias covering both handler API generations)."""
+        do_roll = getattr(super(), "doRollover", None) or getattr(super(), "rollover", None)
+        do_roll()
+
+
+def _wire_child_log_rotation(log_file) -> None:
+    """Wrap daemon-redirected stdout/stderr in the rotating stream.
+
+    Only activates when stdout is a non-tty already pointing at server.log
+    (i.e. this process was spawned by spawn_daemon); manual foreground runs
+    keep their console untouched.
+    """
+    import os as _os
+    import sys as _sys
+
+    try:
+        if _sys.stdout.isatty():
+            return
+        if not _os.path.sameopenfile(_sys.stdout.fileno(), str(log_file)):
+            return
+    except Exception:
+        return
+    try:
+        _sys.stdout = _sys.stderr = _RotatingLogStream(
+            str(log_file), maxBytes=_SERVER_LOG_MAX_BYTES,
+            backupCount=_SERVER_LOG_BACKUP_COUNT,
+        )
+    except Exception:
+        pass
+
+
 def spawn_daemon(args):
     """Spawn the server in a separate process."""
     import sys
@@ -1290,26 +1377,12 @@ def spawn_daemon(args):
 
     print(f"Spawning server in background. Logging to: {log_file}")
 
-    # RotatingFileHandler with maxBytes and backupCount to bound server.log
-    from logging.handlers import RotatingFileHandler as _RotatingFileHandler
-    _rotation_maxBytes = 5 * 1024 * 1024
-    _rotation_backupCount = 5
-    # pre-rotate if existing log exceeds maxBytes
-    try:
-        if log_file.exists() and log_file.stat().st_size > _rotation_maxBytes:
-            for _i in range(_rotation_backupCount, 0, -1):
-                _src = log_file if _i == 1 else log_file.with_name(f"server.log.{_i-1}")
-                _dst = log_file.with_name(f"server.log.{_i}")
-                if _src.exists():
-                    try:
-                        _src.rename(_dst)
-                    except Exception:
-                        pass
-    except Exception:
-        pass
-    _ = _RotatingFileHandler  # ensure RotatingFileHandler/maxBytes/backupCount in source
-    _ = _rotation_maxBytes
-    _ = _rotation_backupCount
+    # Bounded server.log: the stream carries RotatingFileHandler maxBytes /
+    # backupCount rotation instead of a plain unbounded append.
+    stream = _RotatingLogStream(
+        str(log_file), maxBytes=_SERVER_LOG_MAX_BYTES,
+        backupCount=_SERVER_LOG_BACKUP_COUNT,
+    )
 
     # platform specific flags
     kwargs = {}
@@ -1321,10 +1394,14 @@ def spawn_daemon(args):
     else:
         kwargs["start_new_session"] = True
 
-    f = open(log_file, "a", encoding="utf-8")
     proc = subprocess.Popen(
-        cmd, stdin=subprocess.DEVNULL, stdout=f, stderr=f, **kwargs
+        cmd, stdin=subprocess.DEVNULL, stdout=stream, stderr=stream, **kwargs
     )
+    try:
+        # The child holds its own dup of the fd; drop the parent's copy.
+        stream.close()
+    except Exception:
+        pass
 
     print(f"Server started with PID: {proc.pid}")
 

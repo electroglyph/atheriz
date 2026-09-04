@@ -252,7 +252,7 @@ def pronoun_to_viewpoints(pronoun, options=None, pronoun_type=None, gender=None,
     if options:
         # option string/list will override the kwargs differentiators given
         if isinstance(options, str):
-            options = options.split()
+            options = options.replace(",", " ").split()
         options = [str(part).strip().lower() for part in options]
         options = [ALIASES.get(opt, opt) for opt in options]
 

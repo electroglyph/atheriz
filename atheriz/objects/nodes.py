@@ -1028,6 +1028,15 @@ class NodeGrid:
             coord_snapshot = node.coord
         if needs_remove:
             try:
+                for content in list(old.contents):
+                    try:
+                        if content.location is old:
+                            content.move_to(node, force=True, announce=False)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+            try:
                 with old.lock:
                     old.is_deleted = True
             except Exception:

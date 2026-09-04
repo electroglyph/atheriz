@@ -40,7 +40,7 @@ class CreateCommand(Command):
             caller.msg(err)
             return
 
-        password = await caller.session.prompt("Enter a password:")
+        password = await caller.session.prompt("Enter a password:", mask=True)
         if err := validate_password(password):
             clear_creation_cooldown(rate_key)
             caller.msg(err)

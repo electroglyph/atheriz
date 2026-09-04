@@ -870,3 +870,18 @@ class TestSpawnDaemonChildLogRotationBounded:
                 stream.close()
             except Exception:
                 pass
+
+    def test_rotating_log_stream_rolls_over_at_cap(self, tmp_path):
+        from atheriz.atheriz import _RotatingLogStream
+
+        log = tmp_path / "server.log"
+        stream = _RotatingLogStream(str(log), maxBytes=100, backupCount=2)
+        try:
+            stream.write("x" * 60)
+            assert not (tmp_path / "server.log.1").exists()
+            stream.write("y" * 60)
+            assert (tmp_path / "server.log.1").exists()
+            assert log.stat().st_size <= 100
+            assert (tmp_path / "server.log.1").stat().st_size <= 100
+        finally:
+            stream.close()

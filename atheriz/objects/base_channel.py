@@ -126,7 +126,11 @@ class Channel(Flags, DbOps, AccessLock):
             lambda x: x.is_channel and x.name.lower() == name.lower(),
             f"Channel {name} already exists.",
         )
-        c.at_create()
+        try:
+            c.at_create()
+        except Exception:
+            remove_object(c)
+            raise
         return c
 
     def delete(self, caller: Object | None = None, unused: bool = True) -> bool:

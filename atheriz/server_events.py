@@ -16,6 +16,21 @@ def at_server_stop():
 def at_server_reload():
     pass
 
+def _lost_pc_name_race(char_name_lower: str, my_id: int) -> bool:
+    """True if another PC already claims this character name and wins ties.
+
+    Lowest id wins, so concurrent creators converge deterministically no
+    matter how the re-checks interleave: the smallest id never sees a
+    smaller dupe, every larger id removes itself.
+    """
+    dupes = filter_by(
+        lambda x: getattr(x, "is_pc", False)
+        and getattr(x, "name", "").lower() == char_name_lower
+        and x.id != my_id
+    )
+    return any(d.id < my_id for d in dupes)
+
+
 def at_char_create(account_name: str, char_name: str, password: str):
     """Create a new character. This is only called when a character is created from the command line.
 
@@ -65,6 +80,16 @@ def at_char_create(account_name: str, char_name: str, password: str):
                 character.home = home
                 r.characters.append(character.id)
                 object.__setattr__(r, "is_modified", True)
+            if _lost_pc_name_race(exists_lc, character.id):
+                with r.lock:
+                    try:
+                        r.characters.remove(character.id)
+                    except ValueError:
+                        pass
+                    object.__setattr__(r, "is_modified", True)
+                remove_object(character)
+                print(f"Character name '{char_name}' already exists.")
+                return
             character.move_to(home)
             save_objects()
             object.__setattr__(r, "is_modified", True)
@@ -86,6 +111,10 @@ def at_char_create(account_name: str, char_name: str, password: str):
         return
     print(f"Creating character '{char_name}'...")
     character = Object.create(None, char_name, is_pc=True)
+    if _lost_pc_name_race(exists_lc, character.id):
+        remove_object(character)
+        print(f"Character name '{char_name}' already exists.")
+        return
     character.home = home
     with account.lock:
         account.characters.append(character.id)

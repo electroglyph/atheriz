@@ -458,7 +458,7 @@ def safe_convert_to_types(converters, *args, raise_errors=True, **kwargs):
             literal_err = f"{err.__class__.__name__}: {err}"
             try:
                 return _safe_arith_eval(inp)
-            except (ValueError, SyntaxError) as arith_err:
+            except (ValueError, SyntaxError, ArithmeticError) as arith_err:
                 parts = _manual_parse_containers(inp)
                 if parts is not None:
                     return parts
