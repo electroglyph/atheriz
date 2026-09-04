@@ -405,9 +405,12 @@ class TestInternalAdminEndpointsBlockLoop:
         from atheriz.atheriz import hot_reload_endpoint
         (tmp_path / "admin.token").write_text("real-token")
         blocking = self._make_blocking()
+        # Mock exactly what the endpoint calls: module reload first, then
+        # do_reload(). Mocking a stale name would let the real full-module
+        # reload run mid-suite and scramble class identities suite-wide.
         with patch.object(atheriz.settings, "SECRET_PATH", str(tmp_path)), \
               patch("atheriz.atheriz.do_reload", blocking), \
-              patch("atheriz.reloader.reload_game_logic", blocking):
+              patch("atheriz.reloader._reload_game_logic", blocking):
             delay = self._ordered_measure(
                 lambda: hot_reload_endpoint(
                     _FakeRequest(token="real-token", host="127.0.0.1")
@@ -770,6 +773,63 @@ class TestStaleAdminTokenRegenerated:
         assert fresh
         assert fresh != "stale-token-from-crash"
         assert len(fresh) == 64
+
+    def test_live_server_token_is_kept_not_replaced(
+        self, global_test_env, monkeypatch, tmp_path
+    ):
+        """INTENT: if a live server owns the folder (a concurrent starter won
+        the pid file after our pid write), a colliding token file must be left
+        alone and boot must stand down gracefully — never raise, never clobber
+        the live token."""
+        import os
+        from pathlib import Path
+
+        import uvicorn
+
+        from atheriz import atheriz as az
+
+        secret = tmp_path / "secret"
+        secret.mkdir(parents=True, exist_ok=True)
+        (secret / "admin.token").write_text("live-server-token")
+
+        class FakeConfig:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        class FakeServer:
+            def __init__(self, config):
+                raise AssertionError("must stand down before serving")
+
+        real_open = os.open
+
+        def hooked_open(path, flags, *args, **kwargs):
+            if str(path).endswith("admin.token") and (flags & os.O_EXCL):
+                # a concurrent starter wins the pid file after our pid write
+                Path(tmp_path, "server.pid").write_text("999999")
+            return real_open(path, flags, *args, **kwargs)
+
+        monkeypatch.setattr(az, "setup_game_folder", lambda required=False: None)
+        monkeypatch.setattr(az, "setup_protocols", lambda: None)
+        monkeypatch.setattr(az, "do_startup", lambda: None)
+        monkeypatch.setattr(az, "setup_static_files", lambda: None)
+        monkeypatch.setattr(az, "do_shutdown", lambda: None)
+        monkeypatch.setattr(az, "_pid_is_server_process", lambda pid: True)
+        monkeypatch.setattr(az.settings, "SAVE_PATH", str(tmp_path))
+        monkeypatch.setattr(az.settings, "SECRET_PATH", str(secret))
+        monkeypatch.setattr(az.settings, "WEBSOCKET_ENABLED", False)
+        monkeypatch.setattr(uvicorn, "Config", FakeConfig)
+        monkeypatch.setattr(uvicorn, "Server", FakeServer)
+        monkeypatch.setattr(os, "open", hooked_open)
+        az.server_state.running = False
+        az.server_state.uvicorn_server = None
+        try:
+            az.start_server()  # must not raise
+        finally:
+            az.server_state.running = False
+            az.server_state.uvicorn_server = None
+            monkeypatch.undo()
+
+        assert (secret / "admin.token").read_text(encoding="utf-8") == "live-server-token"
 
 
 class TestSpawnDaemonChildLogRotationBounded:

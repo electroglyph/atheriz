@@ -170,20 +170,34 @@ class GiveCommand(Command):
             if obj.id == target.id:
                 continue
             if not obj.at_pre_give(caller, target):
+                caller.msg(
+                    f"You can't give {obj.get_display_name(caller)} "
+                    f"to {target.get_display_name(caller)}."
+                )
                 continue
             if obj.move_to(target):
                 given_any = True
-                caller.msg(f"You give {obj.name} to {target.name}.")
-                target.msg(f"{caller.name} gives you {obj.name}.")
+                caller.msg(
+                    f"You give {obj.get_display_name(caller)} "
+                    f"to {target.get_display_name(caller)}."
+                )
+                target.msg(
+                    f"{caller.get_display_name(target)} gives you "
+                    f"{obj.get_display_name(target)}."
+                )
                 loc.msg_contents(
-                    f"{caller.name} gives {obj.name} to {target.name}.",
+                    "$You(giver) $conj(give) $obj(item) to $you(target).",
+                    mapping={"giver": caller, "item": obj, "target": target},
                     from_obj=caller,
                     exclude=(caller, target),
                     msg_type="give",
                 )
                 obj.at_give(caller, target)
             else:
-                caller.msg(f"You can't give {obj.name} to {target.name}.")
+                caller.msg(
+                    f"You can't give {obj.get_display_name(caller)} "
+                    f"to {target.get_display_name(caller)}."
+                )
 
         if not given_any and obj_name == "all":
             caller.msg("You have nothing to give.")

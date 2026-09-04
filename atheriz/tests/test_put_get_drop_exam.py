@@ -489,3 +489,29 @@ class TestGetAllViewLock:
         assert visible in c.contents
         assert hidden in room.contents
         assert hidden not in c.contents
+
+
+class TestGetBroadcastTemplate:
+    def test_get_broadcast_uses_mapping_template(self, global_test_env):
+        """SHOULD: the room broadcast goes through msg_contents mapping
+        templates ($You/$obj) so per-recipient get_display_name applies,
+        instead of f-string-baked names."""
+        c = _make_caller("GetterGary")
+        room = _make_room()
+        c.location = room
+        apple = Object.create(None, "apple")
+        apple.move_to(room)
+        room.msg_contents = MagicMock()
+
+        args = MagicMock(object="apple", source=[])
+        GetCommand().run(c, args)
+
+        assert apple in c.contents
+        room.msg_contents.assert_called_once()
+        call = room.msg_contents.call_args
+        template = call.args[0] if call.args else call.kwargs.get("text", "")
+        assert "GetterGary" not in template, f"baked getter name: {template!r}"
+        assert "apple" not in template, f"baked item name: {template!r}"
+        mapping = call.kwargs.get("mapping", None)
+        assert isinstance(mapping, dict), f"broadcast must pass mapping=..., got {call!r}"
+        assert {"giver", "item"} <= set(mapping)

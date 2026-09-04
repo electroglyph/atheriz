@@ -6,8 +6,8 @@ the protocol endpoints' finally blocks — i.e., on the asyncio loop thread.
 That chain does puppet unwinding, channel announcements, and (with
 AUTOSAVE_PLAYERS_ON_DISCONNECT) a full dill + SQLite checkpoint inline on the
 loop, stalling all network I/O and racing game workers. The fix dispatches
-teardown onto the game threadpool, with an inline fallback when the pool is
-stopped or full.
+teardown onto the game threadpool, deferring with a short delay when the pool
+is stopped or full (never inline on the calling thread).
 """
 
 from __future__ import annotations
@@ -86,17 +86,25 @@ def test_disconnect_does_not_block_on_slow_teardown(manager):
     assert c.session.ran.wait(2.0)
 
 
-def test_inline_fallback_when_pool_rejects(manager, monkeypatch):
+def test_deferred_retry_when_pool_rejects(manager, monkeypatch):
     """INTENT: when the threadpool rejects the task (queue full / stopped),
-    teardown runs inline exactly once instead of being lost."""
+    teardown is deferred via a delayed re-queue — never run inline on the
+    calling (event loop) thread and never silently dropped."""
     monkeypatch.setattr(manager.atp, "add_task", lambda *a, **k: False)
+    delayed = []
+    monkeypatch.setattr(
+        manager.atp, "delay", lambda *a, **k: delayed.append((a, k))
+    )
     c = FakeConnection(session=_RecordingSession())
     manager.register_connection("c1", c)
 
     manager.disconnect(c)
 
-    assert c.session.calls == 1
-    assert c.session.ran.is_set()
+    assert c.session.calls == 0, "teardown must not run inline on disconnect"
+    assert len(delayed) == 1, "rejected teardown must be deferred for retry"
+    (d_args, _) = delayed[0]
+    assert d_args[1] == manager._do_session_disconnect
+    assert d_args[2] is c.session
 
 
 def test_teardown_runs_exactly_once_across_double_disconnect(manager):

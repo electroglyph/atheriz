@@ -142,10 +142,15 @@ class ConnectionManager:
         session = connection.session
         if session is not None:
             if not self.atp.add_task(self._do_session_disconnect, session):
+                # Pool full/stopped: never run teardown inline — disconnect()
+                # executes on the network event loop and at_disconnect()
+                # checkpoints the DB. Re-schedule with a short delay (same
+                # pattern as GameTime alarms); the delayed task re-queues
+                # onto the pool once it drains.
                 try:
-                    session.at_disconnect()
+                    self.atp.delay(0.05, self._do_session_disconnect, session)
                 except Exception as e:
-                    logger.error(f"[Network] Session teardown failed during disconnect: {e}", exc_info=True)
+                    logger.error(f"[Network] Session teardown could not be deferred during disconnect: {e}", exc_info=True)
         try:
             connection.close()
         except Exception as e:

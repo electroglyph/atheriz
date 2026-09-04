@@ -351,8 +351,11 @@ async def hot_reload_endpoint(request: Request):
         if not reloader._reload_lock.acquire(blocking=False):
             return {"status": "error", "message": "Reload already in progress; skipping."}
         try:
-            do_reload()
+            # Reload modules FIRST so the class swap lands before do_reload()
+            # clears and re-registers ticks; otherwise the ticker keeps
+            # stale pre-reload bound methods and new tick code never runs.
             msg = reloader._reload_game_logic()
+            do_reload()
             return {"status": "ok", "message": msg}
         finally:
             reloader._reload_lock.release()
@@ -580,7 +583,42 @@ def start_server():
                 pass
             raise
     except FileExistsError:
-        raise
+        # Leftover token from a crashed run (clean shutdown deletes it). If a
+        # live server owns this folder, keep its token and stand down;
+        # otherwise the file is stale — replace it, mirroring stale-PID
+        # handling above instead of aborting the boot with a traceback.
+        live_pid = None
+        try:
+            with open(save_path / "server.pid", "r", encoding="utf-8") as f:
+                live_pid = int(f.read().strip())
+        except Exception:
+            live_pid = None
+        if (
+            live_pid is not None
+            and live_pid != os.getpid()
+            and _pid_is_server_process(live_pid)
+        ):
+            print(f"Server is already running with PID: {live_pid}")
+            return
+        print("Removing stale admin token.")
+        try:
+            token_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+        try:
+            fd = os.open(str(token_file), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            try:
+                with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as f:
+                    f.write(token)
+            except Exception:
+                try:
+                    os.close(fd)
+                except Exception:
+                    pass
+                raise
+        except FileExistsError:
+            print("Failed to acquire admin token file after retry")
+            return
     except Exception:
         # POSIX best-effort fallback without insecure open+chmod window
         try:

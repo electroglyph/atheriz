@@ -314,6 +314,15 @@ class Object(Flags, DbOps, AccessLock):
                             if depth + 1 >= settings.MAX_SEARCH_DEPTH:
                                 truncated.append(content)
                                 continue
+                            # Honor each child's delete veto, mirroring
+                            # Node._delete_recursive: a vetoed subtree is
+                            # skipped, not force-deleted.
+                            try:
+                                vetoed = not content.at_delete(caller)
+                            except Exception:
+                                vetoed = False
+                            if vetoed:
+                                continue
                             stack.append((content, depth + 1))
             for obj in reversed(order):
                 to_delete.append(obj)
@@ -436,8 +445,39 @@ class Object(Flags, DbOps, AccessLock):
         else:
             _move_contents(self, self.location)
 
+        # Mark deleted and unregister BEFORE the DB delete so a concurrent
+        # save_objects() checkpoint (which skips unregistered/is_deleted
+        # objects) cannot resurrect the rows. Mirrors Node.delete.
+        for obj in to_delete:
+            try:
+                with obj.lock:
+                    obj.is_deleted = True
+            except Exception:
+                try:
+                    obj.is_deleted = True
+                except Exception:
+                    pass
+            try:
+                remove_object(obj)
+            except Exception:
+                pass
         if ops:
-            delete_objects(ops)
+            try:
+                delete_objects(ops)
+            except Exception:
+                # DB failure: roll back the pre-mark so the objects stay
+                # live and registered (a retry must still work).
+                for obj in to_delete:
+                    try:
+                        with obj.lock:
+                            obj.is_deleted = False
+                    except Exception:
+                        pass
+                    try:
+                        add_object(obj)
+                    except Exception:
+                        pass
+                raise
         for obj in to_delete:
             _delete_object(obj)
 
@@ -1674,7 +1714,7 @@ class Object(Flags, DbOps, AccessLock):
         Returns:
             bool: True if the transfer is permitted, False otherwise.
         """
-        return self.access(getter, "give")
+        return getter.access(giver, "give")
 
     @hookable
     def at_give(self, giver: Object, getter: Object, **kwargs) -> None:

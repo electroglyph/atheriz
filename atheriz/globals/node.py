@@ -34,6 +34,13 @@ class NodeHandler:
         self._modified = False
         self._modified2 = False
         self._modified3 = False
+        # Generation counters for the transition/door domains. A plain boolean
+        # cannot distinguish "dirty at snapshot" from "dirtied again after the
+        # snapshot", so save() would clear the flag and lose concurrent
+        # updates. The counter is bumped on every mutation; save() only clears
+        # the flag when the counter is unchanged since the snapshot.
+        self._trans_gen = 0
+        self._door_gen = 0
 
         self.load()
 
@@ -132,6 +139,18 @@ class NodeHandler:
                 return True
         return False
 
+    def mark_transitions_modified(self) -> None:
+        """Flag the transition domain dirty (bumps its generation)."""
+        with self.lock2:
+            self._modified2 = True
+            self._trans_gen += 1
+
+    def mark_doors_modified(self) -> None:
+        """Flag the door domain dirty (bumps its generation)."""
+        with self.lock3:
+            self._modified3 = True
+            self._door_gen += 1
+
     def save(self, force=False):
         if not force and not settings.ALWAYS_SAVE_ALL and not self._is_dirty():
             return
@@ -147,10 +166,12 @@ class NodeHandler:
         with self.lock2:
             trans_refs = list(self.transitions.values())
             trans_was = self._modified2
+            trans_gen = self._trans_gen
         trans_cleared = trans_was
         with self.lock3:
             doors_refs = [(k, dict(v)) for k, v in self.doors.items()]
             doors_was = self._modified3
+            doors_gen = self._door_gen
         doors_cleared = doors_was
         transitions_snapshot = []
         for t in trans_refs:
@@ -460,10 +481,15 @@ class NodeHandler:
                         self._modified = False
                 if trans_cleared:
                     with self.lock2:
-                        self._modified2 = False
+                        # Only clear if nothing dirtied the domain after the
+                        # snapshot; otherwise the concurrent update survives
+                        # for the next checkpoint instead of being lost.
+                        if self._trans_gen == trans_gen:
+                            self._modified2 = False
                 if doors_cleared:
                     with self.lock3:
-                        self._modified3 = False
+                        if self._door_gen == doors_gen:
+                            self._modified3 = False
             except Exception as e:
                 try:
                     cursor.execute("ROLLBACK")
@@ -513,6 +539,7 @@ class NodeHandler:
                 d = {door.to_exit: door}
                 self.doors[door.to_coord] = d
             self._modified3 = True
+            self._door_gen += 1
         mh = get_map_handler()
         symbol = door.closed_symbol if door.closed else door.open_symbol
         seen = set()
@@ -551,6 +578,7 @@ class NodeHandler:
                 for k in rem_keys:
                     del d[k]
             self._modified3 = True
+            self._door_gen += 1
         if door.from_coord is not None:
             from_node = self.get_node(door.from_coord)
             if from_node:
@@ -627,9 +655,11 @@ class NodeHandler:
         with self.lock2:
             self.transitions.clear()
             self._modified2 = True
+            self._trans_gen += 1
         with self.lock3:
             self.doors.clear()
             self._modified3 = True
+            self._door_gen += 1
 
     def get_area(self, name: str) -> NodeArea | None:
         with self.lock:
@@ -671,11 +701,13 @@ class NodeHandler:
         with self.lock2:
             self.transitions[transition.to_coord] = transition
             self._modified2 = True
+            self._trans_gen += 1
 
     def remove_transition(self, destination: Coord):
         with self.lock2:
             self.transitions.pop(destination, None)
             self._modified2 = True
+            self._trans_gen += 1
 
     def find_transitions(
         self, from_z=None, to_z=None, from_area=None, to_area=None

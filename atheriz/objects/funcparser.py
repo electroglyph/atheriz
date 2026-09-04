@@ -1300,8 +1300,9 @@ def funcparser_callable_you(
 
     """
     if args and mapping:
-        # this would mean a $you(key) form
-        caller = mapping.get(args[0], None)
+        # this would mean a $you(key) form; an unknown key falls back to
+        # the caller (consistent with $conj), never a raw-token leak.
+        caller = mapping.get(args[0], caller)
 
     if not (caller and receiver):
         raise ParsingError("No caller or receiver supplied to $you callable.")
@@ -1367,8 +1368,9 @@ def funcparser_callable_your(
 
     """
     if args and mapping:
-        # this would mean a $your(key) form
-        caller = mapping.get(args[0], None)
+        # this would mean a $your(key) form; an unknown key falls back to
+        # the caller (consistent with $conj), never a raw-token leak.
+        caller = mapping.get(args[0], caller)
 
     if not (caller and receiver):
         raise ParsingError("No caller or receiver supplied to $your callable.")

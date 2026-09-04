@@ -1051,9 +1051,9 @@ class TestNodeHandlerDoorSaveRace:
                 state["fired"] = True
                 # simulate a concurrent try_close landing after the snapshot
                 # was detached but before the commit clears the dirty flag
+                # (via the real mutation path, which bumps the generation)
                 door.closed = True
-                with nh.lock3:
-                    nh._modified3 = True
+                nh.mark_doors_modified()
             return real_dumps(obj, *args, **kwargs)
 
         monkeypatch.setattr(dill, "dumps", spy_dumps)
@@ -1077,3 +1077,49 @@ class TestNodeHandlerDoorSaveRace:
         assert persisted_closed is True or still_dirty is True, (
             f"concurrent door close lost: persisted closed={persisted_closed}, handler dirty={still_dirty}"
         )
+
+    def test_transition_update_after_snapshot_before_commit_is_not_lost(
+        self, global_test_env, monkeypatch
+    ):
+        """SHOULD: same generation guard for the transition domain — a
+        concurrent add_transition mid-save must keep the handler dirty."""
+        import dill
+        from atheriz.globals.get import get_node_handler as _get_nh
+        from atheriz.objects.nodes import Transition
+
+        nh = _get_nh()
+        first = Transition(
+            from_coord=Coord("testrace", 0, 0, 0),
+            to_coord=Coord("testrace", 0, 1, 0),
+            from_link="north",
+        )
+        nh.add_transition(first)
+        assert nh._modified2 is True
+
+        real_dumps = dill.dumps
+        state = {"fired": False}
+
+        def spy_dumps(obj, *args, **kwargs):
+            if not state["fired"] and isinstance(obj, Transition):
+                state["fired"] = True
+                # simulate a concurrent structural mutation after the snapshot
+                nh.add_transition(
+                    Transition(
+                        from_coord=Coord("testrace", 0, 1, 0),
+                        to_coord=Coord("testrace", 0, 2, 0),
+                        from_link="north",
+                    )
+                )
+            return real_dumps(obj, *args, **kwargs)
+
+        monkeypatch.setattr(dill, "dumps", spy_dumps)
+        monkeypatch.setattr("atheriz.globals.node.dill.dumps", spy_dumps)
+        nh.save()
+        assert state["fired"], "transition blob was never serialized"
+        with nh.lock2:
+            still_dirty = nh._modified2
+        assert still_dirty is True, "concurrent add_transition lost: flag cleared"
+        # and a follow-up save persists it
+        nh.save()
+        with nh.lock2:
+            assert nh._modified2 is False

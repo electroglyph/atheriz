@@ -119,10 +119,20 @@ class Script(Flags, DbOps):
             bool: True upon successful deletion.
         """
         ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
-        if ops:
-            delete_objects(ops)
+        # Mark deleted and unregister BEFORE the DB delete so a concurrent
+        # checkpoint cannot resurrect the row. Mirrors Node.delete.
         with self.lock:
             self.is_deleted = True
+        remove_object(self)
+        if ops:
+            try:
+                delete_objects(ops)
+            except Exception:
+                # DB failure: roll back so the script stays live.
+                with self.lock:
+                    self.is_deleted = False
+                add_object(self)
+                raise
         child = self.child
         if child is not None:
             self.remove_hooks(child)
@@ -131,7 +141,6 @@ class Script(Flags, DbOps):
                     child.scripts.remove(self.id)
                     child.is_modified = True
             object.__setattr__(self, "child", None)
-        remove_object(self)
         return True
 
     def __getstate__(self):

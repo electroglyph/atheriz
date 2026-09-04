@@ -1260,6 +1260,20 @@ class TestYouUnknownKeyFallback:
         assert "$you(" not in result
         assert result == alice.get_display_name(looker=bob)
 
+    def test_unknown_mapping_key_falls_back_to_caller_your(self, global_test_env):
+        """INTENT: same fallback for $your(badkey) — caller's possessive."""
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.funcparser import FuncParser, ACTOR_STANCE_CALLABLES
+
+        alice = Object.create(None, "FallbackAlice")
+        bob = Object.create(None, "FallbackBob")
+        parser = FuncParser(ACTOR_STANCE_CALLABLES)
+        result = parser.parse(
+            "$your(badkey)", caller=alice, receiver=bob, mapping={"you": alice}
+        )
+        assert "$your(" not in result
+        assert result == alice.get_display_name(looker=bob) + "'s"
+
 
 class TestSafeConvertZeroDivisionParsingError:
     def test_safe_convert_division_by_zero_raises_parsing_error(self):

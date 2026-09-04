@@ -1,5 +1,5 @@
 from __future__ import annotations
-from atheriz.globals.objects import add_object_unique, remove_object, delete_objects
+from atheriz.globals.objects import add_object, add_object_unique, remove_object, delete_objects
 from atheriz.utils import ensure_thread_safe
 from atheriz.globals.salt import get_salt
 from atheriz.globals.get import get_unique_id
@@ -66,11 +66,20 @@ class Account(Flags, DbOps):
             return False
 
         ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
-        if ops:
-            delete_objects(ops)
+        # Mark deleted and unregister BEFORE the DB delete so a concurrent
+        # checkpoint cannot resurrect the row. Mirrors Node.delete.
         with self.lock:
             self.is_deleted = True
         remove_object(self)
+        if ops:
+            try:
+                delete_objects(ops)
+            except Exception:
+                # DB failure: roll back so the account stays live.
+                with self.lock:
+                    self.is_deleted = False
+                add_object(self)
+                raise
         return True
 
     def at_pre_puppet(self, character: Object) -> bool:

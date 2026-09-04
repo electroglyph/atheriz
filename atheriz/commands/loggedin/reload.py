@@ -2,7 +2,8 @@ from __future__ import annotations
 from atheriz.commands.base_cmd import Command
 from atheriz.reloader import reload_game_logic
 from atheriz.logger import logger
-from atheriz.globals.get import get_server_channel
+from atheriz.globals.get import get_server_channel, get_async_ticker
+from atheriz.globals.startstop import _reregister_ticks
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -37,6 +38,14 @@ class ReloadCommand(Command):
 
         logger.info(f"Reload triggered by {caller.name} ({caller.id})")
         result = reload_game_logic()
+        # Refresh ticker registrations so the new tick code actually runs
+        # (clear drops stale pre-reload bound methods; re-register captures
+        # the post-reload ones). Mirrors do_reload().
+        try:
+            get_async_ticker().clear()
+            _reregister_ticks()
+        except Exception as e:
+            logger.error(f"Tick refresh after reload failed: {e}")
         if channel:
             channel.msg(f"{result}")
         else:

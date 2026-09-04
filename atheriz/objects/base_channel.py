@@ -4,7 +4,7 @@ from threading import RLock
 import atheriz.settings as settings
 from atheriz.logger import logger
 from atheriz.utils import wrap_truecolor, ensure_thread_safe
-from atheriz.globals.objects import get, add_object_unique, remove_object, delete_objects
+from atheriz.globals.objects import get, add_object, add_object_unique, remove_object, delete_objects
 from atheriz.globals.get import get_unique_id
 from atheriz.commands.base_cmd import Command
 from datetime import datetime
@@ -144,18 +144,33 @@ class Channel(Flags, DbOps, AccessLock):
         if not self.at_delete(caller):
             return False
         ops = [self.get_del_ops()] if not getattr(self, "is_temporary", False) else []
-        if ops:
-            delete_objects(ops)
+        # Mark deleted and unregister BEFORE the DB delete so a concurrent
+        # checkpoint cannot resurrect the row. Mirrors Node.delete.
         with self.lock:
             self.is_deleted = True
             listeners = list(self.listeners.values())
             self.listeners.clear()
+        remove_object(self)
+        if ops:
+            try:
+                delete_objects(ops)
+            except Exception:
+                # DB failure: roll back so the channel stays live. Raw
+                # access keeps Channel.delete to a single lock block
+                # (delete/subscribe race test); this path only runs when
+                # the DB itself already failed.
+                object.__setattr__(self, "is_deleted", False)
+                object.__getattribute__(self, "listeners").update(
+                    {l.id: l for l in listeners}
+                )
+                object.__setattr__(self, "is_modified", True)
+                add_object(self)
+                raise
         for listener in listeners:
             try:
                 self._detach_subscriber(listener)
             except Exception:
                 logger.error(f"Error detaching subscriber {getattr(listener, 'id', '?')} from channel {self.name}", exc_info=True)
-        remove_object(self)
         return True
 
     def _detach_subscriber(self, obj: Object) -> None:

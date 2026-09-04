@@ -915,3 +915,37 @@ class TestDeleteMarksBeforeDbCommit:
         assert seen, "delete_objects was never called"
         assert seen["is_deleted"] is True, "object must be marked is_deleted before the DB DELETE executes"
         assert seen["registered"] is False, "object must be unregistered before the DB DELETE executes"
+
+    def test_channel_account_script_delete_marks_before_db_delete(self, global_test_env, monkeypatch, fixed_salt):
+        """SHOULD: same mark-before-commit ordering for Channel/Account/Script."""
+        import atheriz.objects.base_channel as channel_mod
+        import atheriz.objects.base_account as account_mod
+        import atheriz.objects.base_script as script_mod
+        from atheriz.objects.base_channel import Channel
+        from atheriz.objects.base_account import Account
+        from atheriz.objects.base_script import Script
+
+        caller = Object.create(None, "Caller")
+        channel = Channel.create("mark_order_chan")
+        account = Account.create("mark_order_acct", "password123")
+        script = Script.create(None, "mark_order_script")
+        seen = {}
+
+        def make_spy(mod, key, target):
+            real_delete = mod.delete_objects
+
+            def spy(ops):
+                seen[key] = (target.is_deleted, target.id in _ALL_OBJECTS)
+                return real_delete(ops)
+
+            return spy
+
+        monkeypatch.setattr(channel_mod, "delete_objects", make_spy(channel_mod, "channel", channel))
+        monkeypatch.setattr(account_mod, "delete_objects", make_spy(account_mod, "account", account))
+        monkeypatch.setattr(script_mod, "delete_objects", make_spy(script_mod, "script", script))
+        channel.delete(caller)
+        account.delete(caller)
+        script.delete(caller)
+        assert seen.get("channel") == (True, False), f"channel must be marked+unregistered first, got {seen.get('channel')}"
+        assert seen.get("account") == (True, False), f"account must be marked+unregistered first, got {seen.get('account')}"
+        assert seen.get("script") == (True, False), f"script must be marked+unregistered first, got {seen.get('script')}"

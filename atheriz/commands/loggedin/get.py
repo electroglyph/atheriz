@@ -107,18 +107,25 @@ class GetCommand(Command):
                 source = loc
 
             for obj in list(source.contents):
-                if not obj.at_pre_get(caller) or obj.id == caller.id:
+                # Parity with the named path (view-filtered search): a hidden
+                # item must not be swept up by `get all`.
+                if (
+                    not obj.at_pre_get(caller)
+                    or obj.id == caller.id
+                    or not obj.access(caller, "view")
+                ):
                     continue
                 if not obj.move_to(caller):
-                    caller.msg(f"You can't get {obj.name}.")
+                    caller.msg(f"You can't get {obj.get_display_name(caller)}.")
                     continue
                 loc.msg_contents(
-                    f"{caller.name} picked up {obj.name}.",
+                    "$You(giver) $conj(take) $obj(item).",
+                    mapping={"giver": caller, "item": obj},
                     from_obj=caller,
                     exclude=caller,
                     msg_type="get",
                 )
-                caller.msg(f"You picked up: {obj.name}")
+                caller.msg(f"You picked up: {obj.get_display_name(caller)}")
                 obj.at_get(caller)
             return
 
@@ -149,16 +156,17 @@ class GetCommand(Command):
 
         for f in found:
             if not f.at_pre_get(caller):
-                caller.msg(f"You can't get {f.name}.")
+                caller.msg(f"You can't get {f.get_display_name(caller)}.")
                 continue
             if not f.move_to(caller):
-                caller.msg(f"You can't get {f.name}.")
+                caller.msg(f"You can't get {f.get_display_name(caller)}.")
                 continue
             loc.msg_contents(
-                f"{caller.name} picked up {f.name}.",
+                "$You(giver) $conj(take) $obj(item).",
+                mapping={"giver": caller, "item": f},
                 from_obj=caller,
                 exclude=caller,
                 msg_type="get",
             )
-            caller.msg(f"You picked up: {f.name}")
+            caller.msg(f"You picked up: {f.get_display_name(caller)}")
             f.at_get(caller)
