@@ -859,10 +859,11 @@ class TestTelnetTLS:
 
 
 class TestTelnetPendingBacklog:
-    def test_telnet_pending_bytes_covers_transport_backlog_on_loop(self, global_test_env):
-        """INTENT: _pending_bytes must reflect transport backlog until drain;
-        decrementing immediately after write undercounts and bypasses
-        TELNET_MAX_PENDING_BYTES limit."""
+    def test_telnet_pending_bytes_released_after_on_loop_write(self, global_test_env):
+        """INTENT: once bytes are written to the transport they are accounted
+        by the transport buffer (checked directly pre/post write), so the
+        logical reservation must be released — otherwise the cap degrades
+        into a lifetime-send limit."""
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
         conn.thread_id = threading.get_ident()
@@ -870,11 +871,11 @@ class TestTelnetPendingBacklog:
         w.transport.get_write_buffer_size.side_effect = [0, 5]
         conn._pending_bytes = 0
         conn.send_command("text", "hello")
-        assert conn._pending_bytes != 0, "pending_bytes decremented before transport drain"
+        assert conn._pending_bytes == 0, "pending_bytes must be released after successful write"
 
-    def test_telnet_offloop_pending_covers_backlog(self, global_test_env):
-        """INTENT: offloop path reserves _pending_bytes and must keep it until
-        transport actually drains, not decrement right after scheduling write."""
+    def test_telnet_offloop_pending_released_after_write_executes(self, global_test_env):
+        """INTENT: offloop path reserves _pending_bytes at schedule time and
+        releases it once _offloop_write executes the transport write."""
         w = _make_writer()
         conn = TelnetConnection(MagicMock(), w)
         conn.thread_id = 999999
@@ -884,24 +885,53 @@ class TestTelnetPendingBacklog:
             with patch.object(conn, "_get_write_buffer_size", return_value=5):
                 conn._pending_bytes = 0
                 conn.send_command("text", "hello")
-                assert conn._pending_bytes != 0, "offloop pending_bytes should remain until transport drain"
+                assert conn._pending_bytes == 0, "offloop pending_bytes must be released after the write executes"
 
-    def test_telnet_pending_limit_bypass_via_immediate_decrement(self, global_test_env, monkeypatch):
-        """INTENT: with immediate decrement, two quick sends can bypass
-        TELNET_MAX_PENDING_BYTES because pending is reset between them."""
+    def test_telnet_pending_limit_enforced_before_write(self, global_test_env, monkeypatch):
+        """INTENT: the pre-write reservation check still rejects a send that
+        would exceed TELNET_MAX_PENDING_BYTES, and an over-full transport
+        buffer still closes the connection."""
         orig = settings.TELNET_MAX_PENDING_BYTES
         try:
             settings.TELNET_MAX_PENDING_BYTES = 10
             w = _make_writer()
             conn = TelnetConnection(MagicMock(), w)
-            conn.thread_id = 999999
-            mock_loop = MagicMock()
-            mock_loop.call_soon_threadsafe.side_effect = lambda f, *a: f(*a)
-            with patch.object(conn, "_resolve_loop", return_value=mock_loop):
-                with patch.object(conn, "_get_write_buffer_size", return_value=0):
-                    conn.send_command("text", "12345")
-                    assert conn._pending_bytes == 5, f"first pending should remain 5 until drain, got {conn._pending_bytes}"
-                    conn.send_command("text", "123456")
-                    assert conn._closing is True, "second send should be rejected due to pending limit"
+            conn.thread_id = threading.get_ident()
+            conn._pending_bytes = 8
+            with patch.object(conn, "_get_write_buffer_size", return_value=0):
+                conn.send_command("text", "123456")
+                assert conn._closing is True, "send exceeding pending limit must close before writing"
+                w.write.assert_not_called()
         finally:
             settings.TELNET_MAX_PENDING_BYTES = orig
+
+
+class TestTelnetPendingBytesRelease:
+    def test_successful_text_send_releases_pending_bytes(self, global_test_env):
+        """Successful on-loop text sends must not accumulate lifetime pending bytes.
+
+        Every successful `send_command("text")` currently leaks `len(text)` into
+        `_pending_bytes` (no decrement on the success path), so ~1MB cumulative
+        output spuriously closes an active session via TELNET_MAX_PENDING_BYTES.
+        """
+        import threading
+
+        conn, w = _make_conn_with_writer()
+        conn.thread_id = threading.get_ident()
+        w.transport = None
+        if hasattr(w, "get_write_buffer_size"):
+            try:
+                del w.get_write_buffer_size
+            except Exception:
+                pass
+        w._transport = None
+        with patch.object(conn, "_get_write_buffer_size", return_value=0):
+            chunk = "x" * 5000
+            for _ in range(220):
+                conn.send_command("text", chunk)
+            assert conn._closing is False, (
+                f"spurious close after ~1MB cumulative output (pending={conn._pending_bytes})"
+            )
+            assert conn._pending_bytes == 0, (
+                f"successful sends leaked pending bytes: {conn._pending_bytes}"
+            )

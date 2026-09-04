@@ -286,7 +286,9 @@ class Channel(Flags, DbOps, AccessLock):
 
     def __setstate__(self, state: dict) -> None:
         object.__setattr__(self, "lock", RLock())
-        self.__dict__.update(state)
+        # Raw dict access: bulk restore must not trip the write-through
+        # __dict__ view (no per-key dirty-marking on the load path).
+        object.__getattribute__(self, "__dict__").update(state)
         self.listeners = {}
         if not isinstance(self.history, deque):
             self.history = deque(self.history, maxlen=settings.CHANNEL_HISTORY_LIMIT)

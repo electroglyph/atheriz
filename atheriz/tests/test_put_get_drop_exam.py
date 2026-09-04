@@ -466,3 +466,26 @@ class TestExamDoesNotLeakPassword:
         all_text = " ".join(str(c.args[0]) for c in admin.msg.call_args_list if c.args)
         assert "should_not_leak" not in all_text
         assert "password" not in all_text.lower()
+
+
+class TestGetAllViewLock:
+    def test_get_all_skips_view_denied_item(self, global_test_env):
+        """SHOULD: `get all` must not take an item whose view lock denies the
+        caller, even when its get lock passes (parity with `get <name>`,
+        which resolves through view-filtered search)."""
+        c = _make_caller()
+        room = _make_room()
+        c.location = room
+        visible = Object.create(None, "Apple")
+        visible.move_to(room)
+        hidden = Object.create(None, "SecretGem")
+        hidden.move_to(room)
+        hidden.add_lock("view", lambda accessor: False)
+        assert hidden.access(c, "view") is False
+        assert hidden.access(c, "get") is True
+        room.msg_contents = MagicMock()
+        args = MagicMock(object="all", source=[])
+        GetCommand().run(c, args)
+        assert visible in c.contents
+        assert hidden in room.contents
+        assert hidden not in c.contents

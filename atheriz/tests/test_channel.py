@@ -926,3 +926,17 @@ def test_channel_cache_revalidates_name_mismatch(global_test_env):
 
 # Removed TestChannelCacheEagerInvalidation (M-42): _channel_cache is lazy only (cleared on is_deleted/name mismatch or filter_by scan) per AGENTS.md – eager invalidation on delete/rename would require Channel→ChannelCommand observer, not intended.
 
+
+class TestChannelCreateAtCreateLeak:
+    def test_create_with_raising_at_create_leaves_no_registry_entry(self, global_test_env):
+        before = set(_ALL_OBJECTS.keys())
+
+        class BadChannel(Channel):
+            def at_create(self):
+                raise RuntimeError("boom-at-create")
+
+        with pytest.raises(RuntimeError, match="boom-at-create"):
+            BadChannel.create("leakchan_xyz_unique")
+        after = set(_ALL_OBJECTS.keys())
+        assert after == before
+

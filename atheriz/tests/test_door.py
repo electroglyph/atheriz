@@ -1014,3 +1014,66 @@ def test_door_broadcast_does_not_hold_lock(global_test_env):
             result = door.try_close(caller)
             assert result is True
     assert not any(captured_locked)
+
+
+class TestNodeHandlerDoorSaveRace:
+    def test_door_update_after_snapshot_before_commit_is_not_lost(self, global_test_env, monkeypatch):
+        """SHOULD: a door mutation landing after the snapshot but before the
+        commit-clear must not be silently dropped — either the new value is
+        persisted or the handler stays dirty."""
+        import dill
+        from atheriz.database_setup import get_database
+        from atheriz.globals.get import get_node_handler as _get_nh
+
+        nh = _get_nh()
+        coord = Coord("testrace", 0, 0, 0)
+        door = Door.create(
+            from_coord=coord,
+            from_exit="north",
+            to_coord=Coord("testrace", 0, 1, 0),
+            to_exit="south",
+            closed=False,
+        )
+        with patch("atheriz.globals.node.get_map_handler", return_value=MockMapHandler()):
+            nh.add_door(door)
+        assert nh._modified3 is True
+
+        real_dumps = dill.dumps
+        state = {"fired": False}
+
+        def spy_dumps(obj, *args, **kwargs):
+            if (
+                not state["fired"]
+                and isinstance(obj, dict)
+                and obj
+                and all(isinstance(v, Door) for v in obj.values())
+            ):
+                state["fired"] = True
+                # simulate a concurrent try_close landing after the snapshot
+                # was detached but before the commit clears the dirty flag
+                door.closed = True
+                with nh.lock3:
+                    nh._modified3 = True
+            return real_dumps(obj, *args, **kwargs)
+
+        monkeypatch.setattr(dill, "dumps", spy_dumps)
+        monkeypatch.setattr("atheriz.globals.node.dill.dumps", spy_dumps)
+        nh.save()
+        assert state["fired"], "doors blob was never serialized"
+
+        db = get_database()
+        with db.lock:
+            cur = db.connection.cursor()
+            cur.execute(
+                "SELECT data FROM doors WHERE area = ? AND x = ? AND y = ? AND z = ?",
+                (coord.area, coord.x, coord.y, coord.z),
+            )
+            row = cur.fetchone()
+        assert row is not None, "doors row was never written"
+        persisted = dill.loads(row[0])
+        persisted_closed = persisted["north"].closed
+        with nh.lock3:
+            still_dirty = nh._modified3
+        assert persisted_closed is True or still_dirty is True, (
+            f"concurrent door close lost: persisted closed={persisted_closed}, handler dirty={still_dirty}"
+        )

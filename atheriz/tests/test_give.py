@@ -212,3 +212,53 @@ def test_give_to_offline_char_fails():
     giver.msg.assert_called()
     assert "could not find" in str(giver.msg.call_args_list).lower() or "offline" in str(giver.msg.call_args_list).lower()
     assert item.location == giver
+
+
+class TestGiveRecipientConsent:
+    def test_give_honors_recipient_give_lock(self, global_test_env):
+        """SHOULD: the recipient's give lock is honored — a give lock on the
+        target denying the giver refuses the transfer and the item stays with
+        the giver (at_pre_give documents the lock as living on the receiving
+        object, but the code checks the item's lock instead)."""
+        giver, receiver, node = setup_give_scenario()
+        receiver.add_lock("give", lambda accessor: False)
+        assert receiver.access(giver, "give") is False
+        item = Object.create(None, "apple", is_item=True)
+        item.move_to(giver)
+
+        cmd = GiveCommand()
+        args = cmd.parser.parse_args(["apple", "receiver"])
+        cmd.run(giver, args)
+
+        assert item in giver.contents
+        assert item.location == giver
+        assert item not in receiver.contents
+        sent = [c.args[0] for c in giver.msg.call_args_list if c.args]
+        assert "You give apple to receiver." not in sent
+
+
+class TestGiveBroadcastTemplate:
+    def test_give_broadcast_uses_mapping_template(self, global_test_env):
+        """SHOULD: the room broadcast goes through msg_contents mapping
+        templates ($You/$obj) so per-recipient get_display_name applies,
+        instead of f-string-baked names."""
+        giver, receiver, node = setup_give_scenario()
+        giver.name = "GivingGary"
+        node.msg_contents = MagicMock()
+        item = Object.create(None, "apple", is_item=True)
+        item.move_to(giver)
+
+        cmd = GiveCommand()
+        args = cmd.parser.parse_args(["apple", "receiver"])
+        cmd.run(giver, args)
+
+        assert item.location == receiver
+        node.msg_contents.assert_called_once()
+        call = node.msg_contents.call_args
+        template = call.args[0] if call.args else call.kwargs.get("text", "")
+        assert giver.name not in template, f"baked giver name in broadcast template: {template!r}"
+        assert receiver.name not in template, f"baked target name in broadcast template: {template!r}"
+        assert item.name not in template, f"baked item name in broadcast template: {template!r}"
+        mapping = call.kwargs.get("mapping", None)
+        assert isinstance(mapping, dict), f"broadcast must pass mapping=..., got {call!r}"
+        assert {"giver", "item", "target"} <= set(mapping)

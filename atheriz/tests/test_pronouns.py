@@ -321,3 +321,8 @@ def test_reflexive_himself_to_2nd():
     # 2nd person neutral reflexive (gender male not available) = yourself
     assert speaker == "yourself"
     assert observer == "himself"
+
+
+class TestPronounCommaSeparatedOptions:
+    def test_pronoun_comma_separated_options_match_space_separated(self):
+        assert pronoun_to_viewpoints("you", "op,p") == ("you", "them")

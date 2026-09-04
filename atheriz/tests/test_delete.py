@@ -218,3 +218,22 @@ def test_delete_objects_utility():
     with db.lock:
         cursor.execute("SELECT id FROM objects WHERE id = ?", (item.id,))
         assert cursor.fetchone() is None
+
+
+class TestRecursiveDeleteChildVeto:
+    def test_recursive_delete_honors_child_delete_lock(self, global_test_env):
+        """INTENT: deleting a container recursively must honor each child's
+        delete gate — a child whose delete lock denies the caller survives
+        (either skipped or by refusing the whole delete)."""
+        caller = Object.create(None, "VetoCaller")
+        caller.privilege_level = settings.Privilege.Player
+        parent = Object.create(caller, "VetoChest", is_container=True)
+        child = Object.create(caller, "VetoGold")
+        assert child.move_to(parent)
+        assert child in parent.contents
+        child.add_lock("delete", lambda _accessor: False)
+
+        parent.delete(caller, recursive=True)
+
+        assert child.is_deleted is False
+        assert child.id in _ALL_OBJECTS

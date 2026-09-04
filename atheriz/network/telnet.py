@@ -155,6 +155,18 @@ class TelnetConnection(BaseConnection):
             return None
         return None
 
+    def _release_pending(self, nb: int):
+        """Release a `_pending_bytes` reservation.
+
+        Bytes are reserved when a send is accepted and released once they sit
+        in the transport buffer (observable via `_get_write_buffer_size`,
+        which the send paths check directly) or the send fails. Without this,
+        the cap degrades into a lifetime-send limit (H2).
+        """
+        if nb:
+            with self._pending_lock:
+                self._pending_bytes = max(0, self._pending_bytes - nb)
+
     def _offloop_write(self, text: str, nb: int):
         text = _telnet_text(text)
         try:
@@ -171,8 +183,8 @@ class TelnetConnection(BaseConnection):
         except Exception as e:
             logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
             self.close()
-            with self._pending_lock:
-                self._pending_bytes = max(0, self._pending_bytes - nb)
+        finally:
+            self._release_pending(nb)
 
     def _offloop_iac(self, telopt_cmd, telopt_opt, nb: int = 0):
         try:
@@ -226,6 +238,8 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write failed for {self.client_host}: {e}")
                     self.close()
+                finally:
+                    self._release_pending(nb)
             else:
                 should_close = False
                 with self._pending_lock:
@@ -283,6 +297,8 @@ class TelnetConnection(BaseConnection):
                 except Exception as e:
                     logger.debug(f"[Telnet] write/iac failed for {self.client_host}: {e}")
                     self.close()
+                finally:
+                    self._release_pending(nb)
             else:
                 if nb:
                     should_close = False

@@ -736,3 +736,27 @@ class TestCreationCooldownBypass:
         finally:
             CREATION_COOLDOWNS.clear()
             settings.CREATION_COOLDOWN = old_cd
+
+
+class TestCreatePasswordMasked:
+    def test_create_password_prompt_uses_mask(self, global_test_env, fixed_salt):
+        caller = MagicMock()
+        caller.session = MagicMock()
+        caller.session.account = None
+        caller.session.prompt = AsyncMock(side_effect=["maskuser", "validpass123"])
+        caller.msg = MagicMock()
+        caller.send_command = MagicMock()
+        caller.client_host = "10.0.0.99"
+        with patch("atheriz.commands.unloggedin.create.char_selection", new=AsyncMock()):
+            asyncio.run(CreateCommand().run(caller, None))
+        assert caller.session.account is not None
+        password_calls = []
+        for call in caller.session.prompt.await_args_list:
+            args, kwargs = call
+            text = args[0] if args else kwargs.get("text", "")
+            if "password" in str(text).lower():
+                password_calls.append(call)
+        assert password_calls, "password prompt was never issued"
+        for call in password_calls:
+            _args, kwargs = call
+            assert kwargs.get("mask") is True, f"password prompt must pass mask=True, got {call}"

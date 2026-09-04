@@ -208,7 +208,9 @@ class Account(Flags, DbOps):
 
     def __setstate__(self, state):
         object.__setattr__(self, "lock", RLock())
-        self.__dict__.update(state)
+        # Raw dict access: bulk restore must not trip the write-through
+        # __dict__ view (no per-key dirty-marking on the load path).
+        object.__getattribute__(self, "__dict__").update(state)
         object.__setattr__(self, "logged_in", False)
         object.__setattr__(self, "is_connected", False)
         for _name, _default in FLAG_DEFAULTS.items():

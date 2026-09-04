@@ -55,3 +55,99 @@ class TestPyBuilderGate:
 
     def test_player_denied(self, global_test_env):
         assert PyCommand().access(self._obj(settings.Privilege.Player)) is False
+
+
+class TestDeletePrivilegeGate:
+    def test_builder_cannot_delete_equal_or_higher_privilege_object(self, global_test_env):
+        """Builder delete must refuse equal/higher-privilege targets like set does.
+
+        `delete` only checks the `delete` access lock (which blocks just
+        self-delete), so a builder in the same room can delete an equal- or
+        higher-privilege object/PC. Mirror `set.py` `_privilege_denied`
+        (`t_priv >= c_priv`): refuse with a message and leave the target alive.
+        """
+        from unittest.mock import MagicMock
+
+        from atheriz.commands.loggedin.delete import DeleteCommand
+        from atheriz.globals.get import get_node_handler
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord, strip_ansi
+
+        room = Node(coord=Coord("privgatetest", 0, 0, 0))
+        get_node_handler().add_node(room)
+        caller = Object.create(None, "GateCaller")
+        caller.privilege_level = settings.Privilege.Builder
+        caller.quelled = False
+        caller.msg = MagicMock()
+        caller.location = room
+        equal_victim = Object.create(None, "GateEqualVictim")
+        equal_victim.privilege_level = settings.Privilege.Builder
+        equal_victim.move_to(room)
+        higher_victim = Object.create(None, "GateHigherVictim")
+        higher_victim.privilege_level = settings.Privilege.Admin
+        higher_victim.move_to(room)
+
+        cmd = DeleteCommand()
+        cmd.run(caller, cmd.parser.parse_args(["GateEqualVictim"]))
+        cmd.run(caller, cmd.parser.parse_args(["GateHigherVictim"]))
+
+        texts = [strip_ansi(str(a[0])) for a, _ in caller.msg.call_args_list]
+        assert any(
+            "equal or higher" in t or "permission" in t.lower() or "cannot delete" in t.lower()
+            for t in texts
+        ), f"expected privilege refusal, got {texts!r}"
+        assert equal_victim.id in _ALL_OBJECTS, "equal-privilege target must survive refused delete"
+        assert higher_victim.id in _ALL_OBJECTS, "higher-privilege target must survive refused delete"
+
+    def test_builder_can_delete_lower_privilege_object(self, global_test_env):
+        """The gate must only block equal-or-higher privilege, not all deletes."""
+        from unittest.mock import MagicMock
+
+        from atheriz.commands.loggedin.delete import DeleteCommand
+        from atheriz.globals.get import get_node_handler
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord, strip_ansi
+
+        room = Node(coord=Coord("privgatetest", 0, 0, 0))
+        get_node_handler().add_node(room)
+        caller = Object.create(None, "GateCaller2")
+        caller.privilege_level = settings.Privilege.Builder
+        caller.quelled = False
+        caller.msg = MagicMock()
+        caller.location = room
+        junior = Object.create(None, "GateJuniorVictim")
+        junior.privilege_level = settings.Privilege.Player
+        junior.move_to(room)
+
+        cmd = DeleteCommand()
+        cmd.run(caller, cmd.parser.parse_args(["GateJuniorVictim"]))
+
+        texts = [strip_ansi(str(a[0])) for a, _ in caller.msg.call_args_list]
+        assert any("Deleted" in t for t in texts), f"expected success, got {texts!r}"
+        assert junior.id not in _ALL_OBJECTS
+
+    def test_builder_can_delete_self(self, global_test_env):
+        """Self-delete is exempt from the privilege gate (mirrors set.py)."""
+        from unittest.mock import MagicMock
+
+        from atheriz.commands.loggedin.delete import DeleteCommand
+        from atheriz.globals.get import get_node_handler
+        from atheriz.globals.objects import _ALL_OBJECTS
+        from atheriz.objects.nodes import Node
+        from atheriz.utils import Coord, strip_ansi
+
+        room = Node(coord=Coord("privgatetest", 0, 0, 0))
+        get_node_handler().add_node(room)
+        caller = Object.create(None, "GateSelfDeleter")
+        caller.privilege_level = settings.Privilege.Builder
+        caller.quelled = False
+        caller.msg = MagicMock()
+        caller.location = room
+
+        cmd = DeleteCommand()
+        cmd.run(caller, cmd.parser.parse_args(["GateSelfDeleter"]))
+
+        texts = [strip_ansi(str(a[0])) for a, _ in caller.msg.call_args_list]
+        assert not any("equal or higher" in t for t in texts), f"self-delete must not hit privilege gate, got {texts!r}"

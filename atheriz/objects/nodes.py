@@ -19,7 +19,7 @@ from atheriz.globals.get import get_node_handler, get_async_ticker, get_map_hand
 from atheriz.commands.base_cmdset import CmdSet
 from atheriz.commands.loggedin.exit import ExitCommand
 from atheriz.objects.contents import filter_contents, group_by_name
-from atheriz.utils import wrap_truecolor, ensure_thread_safe
+from atheriz.utils import wrap_truecolor, ensure_thread_safe, _bind_tracked_stores
 from atheriz.logger import logger
 import atheriz.settings as settings
 from atheriz.objects.base_lock import AccessLock
@@ -151,6 +151,7 @@ class Node(Flags, AccessLock):
         self.hooks: dict[str, set[Callable]] = {}
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
+            _bind_tracked_stores(self)
         add_object(self)
 
     def __getstate__(self):
@@ -168,10 +169,14 @@ class Node(Flags, AccessLock):
 
     def __setstate__(self, state):
         object.__setattr__(self, "lock", RLock())
-        self.__dict__.update(state)
+        # Raw dict access: bulk restore must not trip the write-through
+        # __dict__ view (no per-key dirty-marking on the load path).
+        object.__getattribute__(self, "__dict__").update(state)
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "hooks", {})
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            _bind_tracked_stores(self)
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)

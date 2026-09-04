@@ -712,3 +712,101 @@ class TestServerLogRotation:
         assert 'open(log_file, "a"' not in src or "RotatingFileHandler" in src, (
             "plain append without rotation allows unbounded server.log"
         )
+
+
+class TestStaleAdminTokenRegenerated:
+    def test_stale_admin_token_is_regenerated_not_rejected(
+        self, global_test_env, monkeypatch, tmp_path
+    ):
+        """INTENT: a leftover admin token from a crashed run must not abort the
+        next boot — startup regenerates it, like stale PID files are replaced."""
+        import uvicorn
+
+        from atheriz import atheriz as az
+
+        secret = tmp_path / "secret"
+        secret.mkdir(parents=True, exist_ok=True)
+        (secret / "admin.token").write_text("stale-token-from-crash")
+
+        seen: dict = {}
+
+        class FakeConfig:
+            def __init__(self, *args, **kwargs):
+                pass
+
+        class FakeServer:
+            def __init__(self, config):
+                self.config = config
+
+            def run(self):
+                token_file = secret / "admin.token"
+                seen["exists_during_run"] = token_file.exists()
+                seen["value"] = (
+                    token_file.read_text(encoding="utf-8").strip()
+                    if token_file.exists()
+                    else None
+                )
+
+        monkeypatch.setattr(az, "setup_game_folder", lambda required=False: None)
+        monkeypatch.setattr(az, "setup_protocols", lambda: None)
+        monkeypatch.setattr(az, "do_startup", lambda: None)
+        monkeypatch.setattr(az, "setup_static_files", lambda: None)
+        monkeypatch.setattr(az, "do_shutdown", lambda: None)
+        monkeypatch.setattr(az.settings, "SAVE_PATH", str(tmp_path))
+        monkeypatch.setattr(az.settings, "SECRET_PATH", str(secret))
+        monkeypatch.setattr(az.settings, "WEBSOCKET_ENABLED", False)
+        monkeypatch.setattr(uvicorn, "Config", FakeConfig)
+        monkeypatch.setattr(uvicorn, "Server", FakeServer)
+        az.server_state.running = False
+        az.server_state.uvicorn_server = None
+        try:
+            az.start_server()
+        finally:
+            az.server_state.running = False
+            az.server_state.uvicorn_server = None
+
+        assert seen.get("exists_during_run") is True
+        fresh = seen.get("value")
+        assert fresh
+        assert fresh != "stale-token-from-crash"
+        assert len(fresh) == 64
+
+
+class TestSpawnDaemonChildLogRotationBounded:
+    def test_spawned_server_log_stream_enforces_byte_cap(self, global_test_env, tmp_path):
+        from atheriz.atheriz import spawn_daemon
+        args = MagicMock()
+        args.port = 8000
+        args.host = "127.0.0.1"
+        captured = {}
+
+        class FakeProc:
+            pid = 12345
+
+        def fake_popen(cmd, **kwargs):
+            captured.update(kwargs)
+            return FakeProc()
+
+        with patch("atheriz.settings.SAVE_PATH", str(tmp_path)), \
+             patch("atheriz.atheriz.setup_game_folder"), \
+             patch("subprocess.Popen", side_effect=fake_popen), \
+             patch("psutil.pid_exists", return_value=False):
+            spawn_daemon(args)
+        assert "stdout" in captured and "stderr" in captured
+        stream = captured["stdout"]
+        try:
+            has_cap = (
+                hasattr(stream, "maxBytes")
+                or hasattr(stream, "max_bytes")
+                or hasattr(stream, "rollover")
+                or hasattr(stream, "rotation")
+                or getattr(stream, "maxBytes", None) is not None
+            )
+            assert has_cap, (
+                f"child log stream {type(stream).__name__} enforces no byte cap"
+            )
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass

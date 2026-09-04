@@ -71,6 +71,374 @@ def msg_all(msg: str) -> None:
     get_connection_manager().broadcast(msg)
 
 
+def _notify_owner(owner) -> None:
+    """Mark a tracked store's owner modified under the owner's lock.
+
+    Best-effort: silently skips when the owner has no lock yet (mid-`__init__`
+    before the lock line) or the lock cannot be acquired.
+    """
+    try:
+        lock = object.__getattribute__(owner, "lock")
+    except AttributeError:
+        return
+    try:
+        with lock:
+            object.__setattr__(owner, "is_modified", True)
+    except Exception:
+        pass
+
+
+class _TrackedSet(set):
+    """A `set` that dirties its owner on any in-place mutation.
+
+    Preserves `set` identity (`isinstance(x, set)` stays true) so engine
+    isinstance guards keep working. The owner link is dropped on pickle/copy
+    (`__reduce__`); the owner's `__setstate__` rebinds it via
+    `_bind_tracked_stores`. An ownerless copy behaves like a plain set.
+    """
+
+    def __new__(cls, iterable=(), owner=None):
+        self = super().__new__(cls)
+        self._owner = owner
+        return self
+
+    def __init__(self, iterable=(), owner=None):
+        # NB: set.__new__ ignores the iterable; population happens here.
+        super().__init__(iterable)
+        self._owner = owner
+
+    def __reduce__(self):
+        return (_rebuild_tracked_set, (set(self),))
+
+    def _bind_owner(self, owner):
+        self._owner = owner
+
+    def _changed(self):
+        if self._owner is not None:
+            _notify_owner(self._owner)
+
+    def add(self, item):
+        super().add(item)
+        self._changed()
+
+    def discard(self, item):
+        super().discard(item)
+        self._changed()
+
+    def remove(self, item):
+        super().remove(item)
+        self._changed()
+
+    def pop(self):
+        item = super().pop()
+        self._changed()
+        return item
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def update(self, *others):
+        super().update(*others)
+        self._changed()
+
+    def intersection_update(self, *others):
+        super().intersection_update(*others)
+        self._changed()
+
+    def difference_update(self, *others):
+        super().difference_update(*others)
+        self._changed()
+
+    def symmetric_difference_update(self, other):
+        super().symmetric_difference_update(other)
+        self._changed()
+
+    def __ior__(self, other):
+        super().__ior__(other)
+        self._changed()
+        return self
+
+    def __iand__(self, other):
+        super().__iand__(other)
+        self._changed()
+        return self
+
+    def __ixor__(self, other):
+        super().__ixor__(other)
+        self._changed()
+        return self
+
+    def __isub__(self, other):
+        super().__isub__(other)
+        self._changed()
+        return self
+
+
+def _rebuild_tracked_set(items):
+    return _TrackedSet(items)
+
+
+class _TrackedDict(dict):
+    """A `dict` that dirties its owner on any in-place mutation.
+
+    Same pickle/copy contract as `_TrackedSet`.
+    """
+
+    def __init__(self, mapping=(), owner=None, **kwargs):
+        super().__init__(mapping, **kwargs)
+        self._owner = owner
+
+    def __reduce__(self):
+        return (_rebuild_tracked_dict, (dict(self),))
+
+    def _bind_owner(self, owner):
+        self._owner = owner
+
+    def _changed(self):
+        if self._owner is not None:
+            _notify_owner(self._owner)
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def pop(self, *args):
+        item = super().pop(*args)
+        self._changed()
+        return item
+
+    def popitem(self):
+        item = super().popitem()
+        self._changed()
+        return item
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def update(self, *args, **kwargs):
+        super().update(*args, **kwargs)
+        self._changed()
+
+    def setdefault(self, key, default=None):
+        if key not in self:
+            self._changed()
+        return super().setdefault(key, default)
+
+
+def _rebuild_tracked_dict(items):
+    return _TrackedDict(items)
+
+
+class _TrackedList(list):
+    """A `list` that dirties its owner on any in-place mutation.
+
+    Same pickle/copy contract as `_TrackedSet`.
+    """
+
+    def __init__(self, iterable=(), owner=None):
+        super().__init__(iterable)
+        self._owner = owner
+
+    def __reduce__(self):
+        return (_rebuild_tracked_list, (list(self),))
+
+    def _bind_owner(self, owner):
+        self._owner = owner
+
+    def _changed(self):
+        if self._owner is not None:
+            _notify_owner(self._owner)
+
+    def append(self, item):
+        super().append(item)
+        self._changed()
+
+    def extend(self, iterable):
+        super().extend(iterable)
+        self._changed()
+
+    def insert(self, index, item):
+        super().insert(index, item)
+        self._changed()
+
+    def remove(self, item):
+        super().remove(item)
+        self._changed()
+
+    def pop(self, *args):
+        item = super().pop(*args)
+        self._changed()
+        return item
+
+    def clear(self):
+        super().clear()
+        self._changed()
+
+    def __setitem__(self, key, value):
+        super().__setitem__(key, value)
+        self._changed()
+
+    def __delitem__(self, key):
+        super().__delitem__(key)
+        self._changed()
+
+    def __iadd__(self, iterable):
+        super().__iadd__(iterable)
+        self._changed()
+        return self
+
+    def __imul__(self, n):
+        super().__imul__(n)
+        self._changed()
+        return self
+
+    def sort(self, *args, **kwargs):
+        super().sort(*args, **kwargs)
+        self._changed()
+
+    def reverse(self):
+        super().reverse()
+        self._changed()
+
+
+def _rebuild_tracked_list(items):
+    return _TrackedList(items)
+
+
+# Engine-owned mutable stores: attr name -> (plain kind, tracked kind).
+# Reads stay live (no stale copies); in-place mutation notifies the owner.
+_TRACKED_ATTRS = {
+    "_contents": (set, _TrackedSet),
+    "hooks": (dict, _TrackedDict),
+    "links": (list, _TrackedList),
+    "nouns": (dict, _TrackedDict),
+}
+
+
+def _bind_tracked_stores(obj) -> None:
+    """(Re)bind the engine-owned stores of `obj` to tracked wrappers.
+
+    Plain collections are replaced by tracked copies; ownerless tracked
+    collections (fresh from pickle/copy) are rebound to `obj`. Uses raw
+    `object.__setattr__` so binding itself never dirties (load-path safe).
+    """
+    for name, (kind, tracked_cls) in _TRACKED_ATTRS.items():
+        try:
+            cur = object.__getattribute__(obj, name)
+        except AttributeError:
+            continue
+        if type(cur) is kind:
+            object.__setattr__(obj, name, tracked_cls(cur, owner=obj))
+        elif isinstance(cur, tracked_cls) and getattr(cur, "_owner", None) is not obj:
+            cur._bind_owner(obj)
+
+
+class _DictView(dict):
+    """Write-through view over an object's real `__dict__`.
+
+    Reads delegate live to the real dict (so `.copy()`, `vars()`, iteration,
+    and unpacking all behave); writes go through to the real dict and dirty
+    the owner, closing the `obj.__dict__[k] = v` bypass without breaking the
+    save machinery (which copies under the owner's lock and therefore keeps
+    receiving the live dict).
+    """
+
+    def __init__(self, real: dict, owner):
+        self._view_real = real
+        self._view_owner = owner
+
+    def __reduce__(self):
+        return (dict, (dict(self._view_real),))
+
+    def _changed(self):
+        _notify_owner(self._view_owner)
+
+    def __getitem__(self, key):
+        return self._view_real[key]
+
+    def __setitem__(self, key, value):
+        self._view_real[key] = value
+        self._changed()
+
+    def __delitem__(self, key):
+        del self._view_real[key]
+        self._changed()
+
+    def __iter__(self):
+        return iter(self._view_real)
+
+    def __len__(self):
+        return len(self._view_real)
+
+    def __contains__(self, key):
+        return key in self._view_real
+
+    def get(self, key, default=None):
+        return self._view_real.get(key, default)
+
+    def keys(self):
+        return self._view_real.keys()
+
+    def values(self):
+        return self._view_real.values()
+
+    def items(self):
+        return self._view_real.items()
+
+    def copy(self):
+        return dict(self._view_real)
+
+    def update(self, *args, **kwargs):
+        self._view_real.update(*args, **kwargs)
+        self._changed()
+
+    def pop(self, *args):
+        item = self._view_real.pop(*args)
+        self._changed()
+        return item
+
+    def popitem(self):
+        item = self._view_real.popitem()
+        self._changed()
+        return item
+
+    def clear(self):
+        self._view_real.clear()
+        self._changed()
+
+    def setdefault(self, key, default=None):
+        if key not in self._view_real:
+            self._changed()
+        return self._view_real.setdefault(key, default)
+
+    def __eq__(self, other):
+        if isinstance(other, _DictView):
+            other = other._view_real
+        return dict(self._view_real) == other
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __repr__(self):
+        return repr(self._view_real)
+
+    def __or__(self, other):
+        return dict(self._view_real) | other
+
+    def __ror__(self, other):
+        return other | dict(self._view_real)
+
+    def __ior__(self, other):
+        self.update(other)
+        return self
+
+
 def ensure_thread_safe(obj):
     """Patches the class of the provided object if not already patched."""
     cls = obj.__class__
@@ -84,10 +452,33 @@ def ensure_thread_safe(obj):
         orig_get = object.__getattribute__
         orig_set = object.__setattr__
 
+        def _held_count(lock) -> int:
+            try:
+                return lock._recursion_count()  # type: ignore[attr-defined]
+            except Exception:
+                return 1
+
         def __getattribute__(self, name):
             # always allow access to the lock itself and other essentials
-            if name in ("lock", "__dict__", "__class__", "__setstate__", "__getstate__"):
+            if name in ("lock", "__class__", "__setstate__", "__getstate__"):
                 return orig_get(self, name)
+
+            if name == "__dict__":
+                try:
+                    real = orig_get(self, "__dict__")
+                except AttributeError:
+                    raise
+                try:
+                    lock = orig_get(self, "lock")
+                except AttributeError:
+                    # Fresh __new__ object without a lock yet (e.g. a
+                    # detached save copy): hand out the live dict so bulk
+                    # restores via __dict__.update keep working.
+                    return real
+                with lock:
+                    if _held_count(lock) > 1:
+                        return real
+                    return _DictView(real, self)
 
             lock = orig_get(self, "lock")
 
@@ -109,11 +500,7 @@ def ensure_thread_safe(obj):
                         "objects",
                     ):
                         return val
-                    try:
-                        rc = lock._recursion_count()  # type: ignore[attr-defined]
-                    except Exception:
-                        rc = 1
-                    if rc > 1:
+                    if _held_count(lock) > 1:
                         return val
                     try:
                         return copy.copy(val)
@@ -131,6 +518,16 @@ def ensure_thread_safe(obj):
                 with orig_get(self, "lock"):
                     if name != "is_modified":
                         orig_set(self, "is_modified", True)
+                    tracked = _TRACKED_ATTRS.get(name)
+                    if tracked is not None and isinstance(value, (set, dict, list)):
+                        kind, tracked_cls = tracked
+                        if type(value) is kind:
+                            value = tracked_cls(value, owner=self)
+                        elif (
+                            isinstance(value, tracked_cls)
+                            and getattr(value, "_owner", None) is not self
+                        ):
+                            value._bind_owner(self)
                     orig_set(self, name, value)
 
         cls.__getattribute__ = __getattribute__

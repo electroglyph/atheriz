@@ -259,7 +259,7 @@ def verb_tense(verb):
     infinitive = verb_infinitive(verb)
     data = verb_tenses.get(infinitive)
     if not data:
-        return infinitive
+        return None
     for tense in verb_tenses_keys:
         if data[verb_tenses_keys[tense]] == verb:
             return tense

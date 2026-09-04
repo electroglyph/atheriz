@@ -122,3 +122,19 @@ def test_no_session_disconnect_still_closes(manager):
     manager.disconnect(c)
 
     assert "c1" not in manager._connections
+
+
+class TestPoolFullDefersTeardown:
+    def test_pool_full_disconnect_defers_teardown_off_loop(
+        self, global_test_env, manager, monkeypatch
+    ):
+        """INTENT: when the pool is full, teardown must be deferred/retried off
+        the calling thread — never executed synchronously inside disconnect."""
+        monkeypatch.setattr(manager.atp, "add_task", lambda *a, **k: False)
+        session = _RecordingSession()
+        connection = FakeConnection(session=session)
+        manager.register_connection("c1", connection)
+
+        manager.disconnect(connection)
+
+        assert session.calls == 0

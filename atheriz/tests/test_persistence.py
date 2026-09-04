@@ -890,3 +890,28 @@ class TestDepthTruncation:
         grid.add_node(n2)
         assert n2.id in _ALL_OBJECTS
         assert n1.id not in _ALL_OBJECTS, "overwritten node must be removed from registry"
+
+
+class TestDeleteMarksBeforeDbCommit:
+    def test_object_delete_marks_deleted_and_unregisters_before_db_delete(self, global_test_env, monkeypatch):
+        """SHOULD: at the moment delete_objects() executes the DELETE, the
+        object must already be marked is_deleted AND unregistered, so a
+        checkpoint racing the delete cannot INSERT OR REPLACE the row after
+        the DELETE and resurrect it on next load."""
+        import atheriz.objects.base_obj as base_obj_mod
+
+        caller = Object.create(None, "Caller")
+        victim = Object.create(None, "Victim")
+        real_delete = base_obj_mod.delete_objects
+        seen = {}
+
+        def spy(ops):
+            seen["is_deleted"] = victim.is_deleted
+            seen["registered"] = victim.id in _ALL_OBJECTS
+            return real_delete(ops)
+
+        monkeypatch.setattr(base_obj_mod, "delete_objects", spy)
+        victim.delete(caller)
+        assert seen, "delete_objects was never called"
+        assert seen["is_deleted"] is True, "object must be marked is_deleted before the DB DELETE executes"
+        assert seen["registered"] is False, "object must be unregistered before the DB DELETE executes"

@@ -278,3 +278,34 @@ class TestPasswordPolicy:
         from atheriz.commands.unloggedin.validation import validate_password
         assert validate_password("1234567") is not None
         assert validate_password("12345678") is None or "at least" not in validate_password("12345678")
+
+
+class TestAtCharCreateDuplicatePcRace:
+    def test_concurrent_duplicate_char_name_yields_single_pc(self, global_test_env, real_home_node, fixed_salt):
+        import threading
+        import atheriz.server_events as se
+        from atheriz.globals.objects import filter_by
+
+        real_filter = se.filter_by
+        barrier = threading.Barrier(2, timeout=2)
+
+        def rendezvous_filter(fn):
+            res = real_filter(fn)
+            try:
+                barrier.wait(timeout=2)
+            except threading.BrokenBarrierError:
+                pass
+            return res
+
+        with patch("atheriz.server_events.filter_by", side_effect=rendezvous_filter), \
+             patch("atheriz.server_events.save_objects"):
+            t1 = threading.Thread(target=se.at_char_create, args=("raceacct1", "RaceHero", "password123"))
+            t2 = threading.Thread(target=se.at_char_create, args=("raceacct2", "RaceHero", "password123"))
+            t1.start()
+            t2.start()
+            t1.join(timeout=2)
+            t2.join(timeout=2)
+            assert not t1.is_alive()
+            assert not t2.is_alive()
+        heroes = filter_by(lambda x: getattr(x, "is_pc", False) and x.name == "RaceHero")
+        assert len(heroes) == 1

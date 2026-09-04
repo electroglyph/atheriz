@@ -149,7 +149,9 @@ class Script(Flags, DbOps):
     def __setstate__(self, state):
         current_child = getattr(self, "child", None)
         object.__setattr__(self, "lock", RLock())
-        self.__dict__.update(state)
+        # Raw dict access: bulk restore must not trip the write-through
+        # __dict__ view (no per-key dirty-marking on the load path).
+        object.__getattribute__(self, "__dict__").update(state)
         # Preserve the live link during in-place hot reload; fresh deserialized
         # scripts still start without a child and are linked during resolution.
         object.__setattr__(self, "child", current_child)

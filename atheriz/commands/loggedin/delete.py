@@ -1,4 +1,5 @@
 from atheriz.commands.base_cmd import Command
+from atheriz.commands.loggedin.set import _privilege_denied
 from atheriz.objects.base_obj import Object
 from atheriz.globals.get import get_node_handler
 from atheriz.globals.objects import delete_objects
@@ -86,6 +87,10 @@ class DeleteCommand(Command):
 
         if not target.access(caller, "delete"):
             caller.msg("You do not have permission to delete that.")
+            return
+
+        if _privilege_denied(caller, target):
+            caller.msg("You cannot delete an object of equal or higher privilege.")
             return
 
         full_name = target.get_display_name(caller)

@@ -1242,3 +1242,28 @@ class TestIntegration:
             _safe_arith_eval("(10**10000)**9999")
 
         assert _safe_arith_eval("2**1000") is not None
+
+
+class TestYouUnknownKeyFallback:
+    def test_unknown_mapping_key_falls_back_to_caller(self, global_test_env):
+        """INTENT: an unknown $you() mapping key must degrade like $conj() —
+        falling back to the caller — instead of leaking the raw token."""
+        from atheriz.objects.base_obj import Object
+        from atheriz.objects.funcparser import FuncParser, ACTOR_STANCE_CALLABLES
+
+        alice = Object.create(None, "FallbackAlice")
+        bob = Object.create(None, "FallbackBob")
+        parser = FuncParser(ACTOR_STANCE_CALLABLES)
+        result = parser.parse(
+            "$you(badkey)", caller=alice, receiver=bob, mapping={"you": alice}
+        )
+        assert "$you(" not in result
+        assert result == alice.get_display_name(looker=bob)
+
+
+class TestSafeConvertZeroDivisionParsingError:
+    def test_safe_convert_division_by_zero_raises_parsing_error(self):
+        from atheriz.objects.funcparser_helpers import safe_convert_to_types
+
+        with pytest.raises(ParsingError):
+            safe_convert_to_types((("py",), {}), "1/0", raise_errors=True)

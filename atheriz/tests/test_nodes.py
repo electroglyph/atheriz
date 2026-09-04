@@ -195,3 +195,16 @@ class TestNodeNonRecursiveDeleteStranded:
             node.delete(caller, recursive=False)
         assert item.location is not node
         assert caller.location is not node
+
+
+class TestNodeGridOverwriteOccupants:
+    def test_overwrite_coord_retains_occupants_on_replacement_node(self, global_test_env):
+        grid = NodeGrid(area="test", z=0)
+        old_node = Node(coord=Coord("test", 0, 0, 0))
+        grid.add_node(old_node)
+        occupant = Object.create(None, "overwrite_occupant")
+        occupant.move_to(old_node)
+        assert occupant.location is old_node
+        new_node = Node(coord=Coord("test", 0, 0, 0))
+        grid.add_node(new_node)
+        assert occupant.location is new_node

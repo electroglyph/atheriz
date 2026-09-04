@@ -22,6 +22,7 @@ from atheriz.utils import (
     get_reverse_link,
     wrap_xterm256,
     ensure_thread_safe,
+    _bind_tracked_stores,
 )
 from typing import TYPE_CHECKING, Self
 from atheriz.logger import logger
@@ -114,6 +115,7 @@ class Object(Flags, DbOps, AccessLock):
         self.group_channel: int | None = None
         if settings.THREADSAFE_GETTERS_SETTERS:
             ensure_thread_safe(self)
+            _bind_tracked_stores(self)
 
     @classmethod
     def create(
@@ -557,13 +559,17 @@ class Object(Flags, DbOps, AccessLock):
         # Restore privilege_level as the proper IntEnum member
         if "privilege_level" in state:
             state["privilege_level"] = settings.Privilege(state["privilege_level"])
-        self.__dict__.update(state)
+        # Raw dict access: bulk restore must not trip the write-through
+        # __dict__ view (no per-key dirty-marking on the load path).
+        object.__getattribute__(self, "__dict__").update(state)
         if hasattr(self, "_contents") and not isinstance(self._contents, set):
             object.__setattr__(self, "_contents", set(self._contents))
         object.__setattr__(self, "session", None)
         object.__setattr__(self, "group_channel", None)
         object.__setattr__(self, "hooks", {})
         object.__setattr__(self, "is_connected", False)
+        if settings.THREADSAFE_GETTERS_SETTERS:
+            _bind_tracked_stores(self)
         for _name, _default in FLAG_DEFAULTS.items():
             if _name not in self.__dict__:
                 object.__setattr__(self, _name, _default() if _name == "tags" else _default)

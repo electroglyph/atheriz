@@ -201,8 +201,9 @@ def test_verb_tense_known():
 
 
 def test_verb_tense_unknown_returns_original():
-    """An unknown verb has no lemma, so the original verb is returned."""
-    assert c.verb_tense("xyzzy") == "xyzzy"
+    """An unknown verb has no tense, so None is returned (the caller falls
+    back to the verb itself)."""
+    assert c.verb_tense("xyzzy") is None
 
 
 def test_verb_tense_infinitive():
@@ -347,3 +348,54 @@ def test_verb_is_present_past_negated():
     assert verb_is_present("is", "3", negated=True) is False
     assert verb_is_past("wasn't", "1", negated=True) is True
     assert verb_is_past("was", "1", negated=True) is False
+
+
+class TestVerbTenseUnknownReturnsNone:
+    def test_verb_tense_unknown_returns_none(self):
+        assert c.verb_tense("xyzzy") is None
+
+
+class TestVerbDuplicateInfinitives:
+    def test_duplicate_infinitives_resolve_to_correct_forms(self):
+        """Last-wins duplicate rows in verbs.txt must not clobber correct forms."""
+        assert c.verb_conjugate("matter", "3rd singular present") == "matters"
+        assert c.verb_conjugate("leer", "3rd singular present") == "leers"
+        assert c.verb_conjugate("leer", "present participle") == "leering"
+        assert c.verb_conjugate("leer", "past") == "leered"
+        assert c.verb_conjugate("skewer", "3rd singular present") == "skewers"
+        assert c.verb_conjugate("draft", "present participle") == "drafting"
+        assert c.verb_conjugate("draft", "past") == "drafted"
+        assert c.verb_conjugate("lure", "3rd singular present") == "lures"
+
+    def test_merged_and_renamed_verbs_conjugate_correctly(self):
+        """Merged rows keep all tenses; misfiled rows live under their own headword."""
+        assert c.verb_conjugate("feed", "3rd singular present") == "feeds"
+        assert c.verb_conjugate("feed", "past") == "fed"
+        assert c.verb_conjugate("drag", "3rd singular present") == "drags"
+        assert c.verb_conjugate("drag", "present participle") == "dragging"
+        assert c.verb_conjugate("drag", "past") == "dragged"
+        assert c.verb_conjugate("lay", "past") == "laid"
+        assert c.verb_conjugate("low", "3rd singular present") == "lows"
+        assert c.verb_conjugate("rebind", "past") == "rebound"
+        assert c.verb_conjugate("wrap", "present participle") == "wrapping"
+        assert c.verb_conjugate("halt", "3rd singular present") == "halts"
+        assert c.verb_conjugate("skew", "3rd singular present") == "skews"
+        assert c.verb_conjugate("buff", "past") == "buffed"
+        assert c.verb_conjugate("numb", "past") == "numbed"
+        assert c.verb_conjugate("filigree", "past") == "filigreed"
+        assert c.verb_conjugate("founder", "3rd singular present") == "founders"
+        assert c.verb_conjugate("summons", "present participle") == "summoning"
+        assert c.verb_conjugate("rebound", "past") == "rebounded"
+        assert c.verb_conjugate("bound", "3rd singular present") == "bounds"
+
+    def test_verbs_txt_has_no_duplicate_infinitives(self):
+        """File-wide guard: every headword appears exactly once (last-wins
+        clobbering corrupted matter/leer/skewer/draft/lure)."""
+        import os
+        from collections import Counter
+
+        path = os.path.join(os.path.dirname(c.__file__), "verbs.txt")
+        with open(path, encoding="utf-8") as fil:
+            heads = [line.split(",")[0].strip() for line in fil if line.strip()]
+        dupes = sorted(k for k, n in Counter(heads).items() if n > 1)
+        assert dupes == [], f"duplicate infinitives in verbs.txt: {dupes}"

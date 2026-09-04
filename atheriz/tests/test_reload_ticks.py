@@ -171,3 +171,94 @@ class TestEngineCorosOnce:
 
 def _engine_marker():
     pass
+
+
+class TestHotReloadTickerOrdering:
+    def test_module_reload_swaps_classes_before_tick_reregistration(
+        self, global_test_env, tmp_path, monkeypatch
+    ):
+        """INTENT: tick re-registration must capture post-reload bound methods —
+        the module reload that swaps classes has to run before ticks are
+        re-registered, otherwise the ticker keeps stale pre-reload code."""
+        import asyncio
+        from types import SimpleNamespace
+
+        import atheriz.atheriz as az_mod
+        import atheriz.reloader as reloader_mod
+
+        order: list[str] = []
+        real_reregister = ss._reregister_ticks
+
+        def spy_reregister(*args, **kwargs):
+            order.append("reregister")
+            return real_reregister(*args, **kwargs)
+
+        def spy_reload(*args, **kwargs):
+            order.append("reload")
+            return "mocked reload"
+
+        monkeypatch.setattr(ss, "_reregister_ticks", spy_reregister)
+        monkeypatch.setattr(reloader_mod, "_reload_game_logic", spy_reload)
+        monkeypatch.setattr(ss, "get_server_channel", lambda: None)
+        monkeypatch.setattr(ss, "save_objects", lambda: None)
+        monkeypatch.setattr(ss, "start_autosave", lambda: None)
+        monkeypatch.setattr(ss, "stop_autosave", lambda: None)
+        monkeypatch.setattr(ss.settings, "TIME_SYSTEM_ENABLED", False)
+        monkeypatch.setattr(ss.settings, "AUTOSAVE_ON_RELOAD", False)
+
+        secret = tmp_path / "secret"
+        secret.mkdir(parents=True, exist_ok=True)
+        (secret / "admin.token").write_text("tok")
+        monkeypatch.setattr(az_mod.settings, "SECRET_PATH", str(secret))
+
+        request = SimpleNamespace(
+            headers={"X-Admin-Token": "tok"},
+            client=SimpleNamespace(host="127.0.0.1"),
+        )
+        with patch("atheriz.server_events", create=True):
+            result = asyncio.run(az_mod.hot_reload_endpoint(request))
+
+        assert result.get("status") == "ok"
+        assert order.index("reload") < order.index("reregister"), (
+            f"module reload must run before tick re-registration, got order {order}"
+        )
+
+
+class TestReloadCommandTickerRefresh:
+    def test_reload_command_refreshes_ticker_registrations(
+        self, global_test_env, monkeypatch
+    ):
+        """INTENT: the in-game reload command must refresh ticker registrations
+        so new tick code takes effect — not just swap classes."""
+        from unittest.mock import MagicMock
+
+        import atheriz.commands.loggedin.reload as reload_mod
+        from atheriz.globals.get import get_async_ticker
+
+        ticker = get_async_ticker()
+        calls: list[str] = []
+        real_clear = ticker.clear
+        real_add = ticker.add_coro
+
+        def spy_clear(*args, **kwargs):
+            calls.append("clear")
+            return real_clear(*args, **kwargs)
+
+        def spy_add(*args, **kwargs):
+            calls.append("add")
+            return real_add(*args, **kwargs)
+
+        monkeypatch.setattr(ticker, "clear", spy_clear)
+        monkeypatch.setattr(ticker, "add_coro", spy_add)
+        monkeypatch.setattr(reload_mod, "reload_game_logic", lambda: "reloaded")
+        monkeypatch.setattr(reload_mod, "get_server_channel", lambda: None)
+        monkeypatch.setattr(reload_mod, "server_events", MagicMock())
+
+        caller = MagicMock()
+        caller.name = "Reloader"
+        caller.id = 1
+        reload_mod.ReloadCommand().run(caller, MagicMock())
+
+        assert "clear" in calls or "add" in calls, (
+            "reload command must clear/re-register ticker registrations"
+        )
